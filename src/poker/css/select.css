@@ -1,0 +1,679 @@
+@charset "utf-8";
+*{
+  border: 1px red solid;
+}
+
+*{
+  font-weight: bold;
+  text-decoration: none;
+  box-sizing: border-box;
+
+}
+
+html{
+  width:100%;
+  height: 100%;
+}
+
+body{
+  background-color: cadetblue;
+  margin: 0;
+  height: 100%;
+}
+
+img{
+    width: 100%;
+    height: auto;
+    vertical-align: top;
+}
+
+/* ヘッダー部分 */
+header{
+    display: flex;
+    justify-content: space-around;
+    background-color: cadetblue;
+    width: 95%;
+    margin: auto;
+    height: 10%;
+}
+
+header p{
+  padding: 1% 0;
+  color: #D7000f;
+}
+
+/* ボタン */
+.button {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  width: 30%;
+  text-decoration: none;
+}
+
+.btn{
+  text-align: center;
+  width: 45%;
+  margin-top: 5%;
+
+}
+
+.btn a{
+  width: 100%;
+  background-color: azure;
+  display: inline-block;
+  border: solid 1px #2b2a27;
+  padding: 1% 3%;
+  text-decoration: none;
+  color: #000000;
+  border-radius: 3px;
+}
+
+
+/* 選択画面全体 */
+#choice{
+  margin: auto;
+  width: 95%;
+  height: 90%;
+}
+
+#choice table{
+height: 100%;
+margin: auto;
+}
+
+.col-1 td, .col-2 td, .col-3 td, .col-4 td{
+  height: 20%;
+
+}
+
+.col-1 td img, .col-2 td img, .col-3 td img, .col-4 td img{
+  height: 20%;
+}
+
+/* プレイヤー側・COM側選択画面共通 */
+.player, .com{
+  border: 2px solid black;
+}
+
+
+.playerAncer, .comAncer{
+  height: 85%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+#playerMain, #enemyMain{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#playerName, #enemyName{
+  /* display: block; */
+  width: 100%;
+  height: 15%;
+  background-color: bisque;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.875rem;
+}
+
+/* #choice .images{
+  width: 60%;
+  margin: 0;
+} */
+
+.status{
+  display: block;
+    width: 40%;
+    height: 100%;
+}
+
+.status table{
+  width: 100%;
+  /* border:1px solid  #232323; */
+  margin: 0;
+  border-spacing: 1%;
+}
+
+/* .status div{
+    margin: 2%;
+    text-align: center;
+    margin: auto;
+    height: calc(100% / 7 -4%);
+    
+} */
+/* 
+.status table{
+    width: 100%;
+    margin: 0;
+} */
+
+.status table td{
+    background-color: antiquewhite;
+    border: 2px solid black;
+}
+
+.status table tr{
+  background-color: aqua;
+height: calc(100% / 7) -1%;
+  margin: 0;
+}
+
+.status .word{
+  width: 70%;
+    text-align: center;
+    padding: 0;
+}
+
+.status .parameter{
+  width: 30%;
+    text-align: center;
+    padding: 0;
+}
+
+
+
+/* プレイヤー側選択画面 */
+.player{
+    margin: 0;
+    padding: 0;
+    background-color:  rgb(9,97,163);
+    align-items: flex-end;
+    position: relative;
+}
+
+.playerAncer {
+  position:absolute;
+  top:0;
+  left:0;
+  right: 0;
+  bottom: 15%;
+
+}
+
+#playerName{
+  text-align: center;
+  font-weight: bold;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.playerAncer #playerMain{
+  position: absolute;
+  width: 60%;
+  object-fit: cover;
+  top: 0;
+  left: 0;
+}
+
+.playerAncer  .status{
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 15%;  
+}
+
+/* COM側選択画面 */
+.com{
+    background-color: brown;
+    position: relative;
+}
+
+
+.comAncer  {
+  position:absolute;
+  top:0;
+  left:0;
+  right: 0;
+  bottom: 15%;
+  flex-direction: row-reverse;
+}
+
+.comAncer  .status{
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 15%;  
+}
+
+#enemyName {
+  text-align: center;
+  font-weight: bold;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+.comAncer #enemyMain{
+  position: absolute;
+  width: 60%;
+  object-fit: cover;
+  top: 0;
+  right: 0;
+}
+
+
+/* キャラクター一覧 */
+#a0, #a1, #a2, #a3, #a4, #a5 ,#a6, #a7, #a8, #a9, #a10,
+#a11, #a12, #a13, #a14, #a15, #a16, #a17, #a18, #a19, #a20,
+#a21, #a22, #a23, #a24, #a25, #a26, #a27, #a28, #a29, #a30,
+#a31 {
+    border: 2px solid black;
+    width: calc(100% / 11 );
+}
+
+
+#a0 img, #a1 img, #a2 img,  #a3 img, #a4 img, #a5 img ,#a6 img, #a7 img, #a8 img, #a9 img, #a10 img,
+#a11 img, #a12 img, #a13 img, #a14 img, #a15 img, #a16 img, #a17 img, #a18 img, #a19 img, #a20 img,
+#a21 img, #a22 img, #a23 img, #a24 img, #a25 img, #a26 img, #a27 img, #a28 img, #a29 img, #a30 img,
+#a31 img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.col-1, .col-2, .col-3, .col-4{
+    background-color: darkgrey;
+}
+
+.col-1 td, .col-2 td, .col-3 td, .col-4 td{
+    border-radius: 3px;
+}
+
+.col-1 td img, .col-2 td img, .col-3 td img, .col-4 td img{
+  height: 20%;
+}
+
+
+/* エフェクト部門 */
+.shiny {
+    position: relative;
+  max-width:100%;
+    color: #fff;
+    text-align: center;
+    text-decoration: none;
+    overflow: hidden;
+  transition: 300ms;
+}
+.shiny::before {
+    position: absolute;
+    content: '';
+    display: inline-block;
+    top: -180px;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #b5e7ff;
+    transition: 300ms;
+    animation: shinyshiny 2.5s ease-in-out infinite;
+}
+
+@-webkit-keyframes shinyshiny {
+    0% { -webkit-transform: scale(0) rotate(45deg); opacity: 0; }
+    80% { -webkit-transform: scale(0) rotate(45deg); opacity: 0.5; }
+    81% { -webkit-transform: scale(4) rotate(45deg); opacity: 1; }
+    100% { -webkit-transform: scale(50) rotate(45deg); opacity: 0; }
+}
+
+
+.animationa{
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    animation-duration: 1.45s;
+    max-width: 100%;
+  }
+
+
+  .animation{
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    animation-duration: 1.5s;
+    max-width: 100%;
+  }
+  .keyframe0{
+    animation-name: anim_po;
+    position: relative;
+  }
+  
+  @keyframes anim_po {
+    0% {
+      left: 0px;
+      top: 0px;
+    }
+    100% {
+        left: 5px;
+        top: 1px;
+    }
+  }
+
+  .keyframe5{
+    animation-name: anim_sc;
+    transform: scale(0.98,0.98);
+  }
+  
+  @keyframes anim_sc {
+    0% {
+        right: 0px;
+        top: 0px;
+      }
+    100% {
+        right: 5px;
+        top: 1px;
+      transform: scale(1,1);
+    }
+  }
+
+
+/* 選択後の選択不可用カバー */
+  /* #choice{
+    position: absolute;
+    left: 2.5%
+  } */
+
+#cover{
+    position: absolute;
+    width: 100%;
+    height: 90%;
+    z-index: 2;
+    background-color: black;
+    opacity: 50%;
+  }
+
+  .display{
+    display: none;
+}
+
+
+/* サイコロ部分 */
+#main{    
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    background-color: aquamarine;
+    position: absolute;
+    display: none;
+    z-index: 3;
+
+text-align: center;
+
+}
+
+#main #left img{
+  max-width: 450px;
+  background-color: rgb(9,97,163);
+}
+
+#main #center{
+  width: 30%;
+}
+
+#main #right img{
+  max-width: 450px;
+  background-color: brown;
+}
+
+#playerMainMirror, #enemyMainMirror {
+  width: 450px;
+  height: 400px;
+  object-fit: cover;
+
+}
+
+#diceBtn1{
+    position: absolute;
+    width: 50%;
+    height: 20%;
+    bottom: 20px;
+    left: 50%;
+    transform: translate(-50%);
+    border-radius: 10px;
+}
+#dice1{
+    position: absolute;
+    width: 30%;
+    top: 20px;
+    left: 20%;
+    transform: translate(-50%);
+}
+
+#dice2 {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    transform-style: preserve-3d;
+    animation: rotate-animation 2s linear infinite;
+  }
+
+  #dice3{
+    position: absolute;
+    width: 30%;
+    top: 20px;
+    right: -10%;
+    transform: translate(-50%);
+}
+
+#dice4 {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    transform-style: preserve-3d;
+    animation: rotate-animation 1s linear infinite;
+  }
+
+
+  #dice2 .item, #dice4 .item{
+    position: absolute;
+    left: 0;
+    right: 0;
+    border: 1px solid #333;
+    width: 100%;
+    height: 100%;
+  }
+  /* 1 */
+  #dice2 .item:nth-child(1) ,#dice4 .item:nth-child(1)  {
+    transform: translate3d(0, -15px, 0) rotateX(-90deg);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  /* 2 */
+  #dice2 .item:nth-child(2),  #dice2 .item:nth-child(2) {
+    transform: translate3d(0, 0, 15px);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  /* 3 */
+  #dice2 .item:nth-child(3) ,  #dice4 .item:nth-child(3){
+    transform: translate3d(15px, 0, 0) rotateY(90deg);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  /* 4 */
+  #dice2 .item:nth-child(4) , #dice4 .item:nth-child(4) {
+    transform: translate3d(-15px, 0, 0) rotateY(-90deg);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  /* 5 */
+  #dice2 .item:nth-child(5) , #dice4 .item:nth-child(5) {
+    transform: translate3d(0, 0, -15px) rotateY(180deg);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  /* 6 */
+  #dice2 .item:nth-child(6) , #dice4 .item:nth-child(6) {
+    transform: translate3d(0, 15px, 0) rotateX(-90deg);
+    background: url() no-repeat
+    center center / 100% 100%;
+  }
+  @keyframes rotate-animation {
+    from {
+      transform: rotate3d(1, 1, 1, 0deg);
+    }
+    25% {
+      transform: rotate3d(1, 1, 1, 90deg);
+    }
+    50% {
+      transform: rotate3d(1, 1, 1, 180deg);
+    }
+    75% {
+      transform: rotate3d(1, 1, 1, 270deg);
+    }
+    to {
+      transform: rotate3d(1, 1, 1, 360deg);
+    }
+  }
+
+
+
+  /* 先攻後攻決定 */
+  .speed p{
+    margin: 0;
+    padding: 1%;
+    width: 25%;
+
+  }
+
+  .speed .dicespeed{
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .speed .characterspeed{
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .speed .totalspeed{
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+
+#left, #right{
+  margin: auto;
+}
+
+#samenumberlog{
+  width: 100%;
+  text-align: center;
+}
+
+.advance{
+  background-color: gold;
+}
+
+.secondAttack{
+  background-color: cadetblue;
+}
+
+.somenumber{
+  background-color: dimgrey;
+}
+
+#center{
+  position: relative;
+}
+
+#gamestart{
+  display: none;
+  /* display: flex; */
+  justify-content: space-between;
+  background-color:darkgrey;
+  width: 160%;
+  height: 300px;
+  position: absolute;
+  right: -30%;
+  margin: auto;
+  z-index: 5;
+  border-radius: 5%;
+  border: 2px solid black;
+  
+}
+
+#gamestart button{
+  display: inline-block;
+  width: 40%;
+  height: 25%;
+  margin: 10%;
+
+}
+
+#playernumber{
+  display: none;
+}
+
+#comnumber{
+  display: none;
+}
+
+@media screen and (max-width:750px){
+  body{
+    background-color: aqua;
+    height: 80%;
+  }
+
+  .playerAncer #playerMain,.comAncer  #enemyMain {
+    width: 100%;
+  }
+
+  #playerName, #enemyName{
+    font-size: 3rem
+  }
+
+  #choice .images{
+    width: 100%;
+    height: 100%;
+  }
+
+  #choice .images img{
+    height: 100%;
+    object-fit: cover;
+
+  }
+
+  header{
+    padding: 2% 0;
+  }
+
+
+  .choice{
+    margin: 0;
+
+  }
+
+  /* #playerMain, #enemyMain{
+    height: auto;
+    aspect-ratio: 1 / 1;
+  } */
+
+  table .col-1 .player, table .col-1 .com{
+    align-items: center;
+  }
+
+  table .col-1 .player .status, table .col-1 .com .status{
+    display: none;
+  }
+
+  /* #battlstart, #redicision{
+    height: 50%;
+  } */
+
+  .col-1 td, .col-2 td, .col-3 td, .col-4 td{
+    height: auto;
+  }
+
+  .col-1 td img, .col-2 td img, .col-3 td img, .col-4 td img{
+    height: 20%;
+    aspect-ratio: 3 / 7;
+  }
+
+
+}
