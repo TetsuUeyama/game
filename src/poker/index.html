@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja" id="tbody">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker</title>
+    <link href="css/style.css" rel="stylesheet">
+</head>
+
+<body>
+    <!-- 画面左側 -->
+<div id="left">
+  <div class="comdiscard">
+     <table>
+        <tr>
+            <td>
+                <img src="images/red.png"  class="comcardfirst">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardfirst">
+            </td>
+            <td> 
+                <img src="images/red.png" class="comcardfirst">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardfirst">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardfirst">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <img src="images/red.png" class="comcardsecond">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardsecond">
+            </td>
+            <td> 
+                <img src="images/red.png" class="comcardsecond">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardsecond">
+            </td>
+            <td>
+                <img src="images/red.png" class="comcardsecond">
+            </td>
+        </tr>
+        <tr>
+            <td>
+               <img src="images/red.png"  class="comcardthird">
+            </td>
+            <td>
+                <img src="images/red.png"  class="comcardthird">
+            </td>
+            <td> 
+                <img src="images/red.png" class="comcardthird" >
+            </td>
+            <td>
+                <img src="images/red.png"  class="comcardthird">
+            </td>
+            <td>
+                <img src="images/red.png"  class="comcardthird">
+            </td>
+        </tr>
+      </table>
+ </div>
+    <!-- 体力バー -->
+    <div class="player">
+        <div class="life-player" class="player1">
+            <div id="life-frame-player">
+                <div id="life-bar-player"></div>
+                <div id="life-mark-player" stlye="width: 100%;"></div>
+            </div>
+          <div>
+             <dl class="life-point">
+               <dt>HP</dt>
+               <dd><p id="plifeNow">100</p><p>/</p><p id="pmaxHp">100</p></dd>
+             </dl>
+           </div>
+        </div>
+
+         <!-- イメージ図・名前 -->
+         <div class="playerimgpoint">
+            <img id = "playerimg" src="images/nigaoe_shibata_katsuie.png" class="keyframe0 animation">
+        </div>
+ 
+         <div class="player-character">
+            <div class ="name-parsonal">
+                <div><p id="player-name">柴田 勝家</p><p id="player-parsonality">むっつりスケベ</p></div>
+                    <p id="player-type">攻撃型</p>
+            </div>
+            <div>
+                <table>
+                    <tr>
+                        <td><p>攻撃</p></td>
+                        <td><p>守備</p></td>
+                        <td><p>速度</p></td>
+                        <td><p>知力</p></td>
+                    </tr>
+                    <tr>
+                        <td><p id="player-attack">A</p></td>
+                        <td><p id="player-diffence">B</p></td>
+                        <td><p id="player-speed">B</p></td>
+                        <td><p id="player-intelogence">C</p></td>
+                    </tr>
+                </table>
+                <p  id="character-type2">1</p>
+            </div>
+        </div> 
+    </div>
+</div>
+
+    <!-- 画面中央 -->
+<div id="center">
+
+        <!-- 相手側手札 -->
+        <div class="enemy-hands">
+            <div class="Erole bihind">
+                <p id="com-role">ここに役が入ります</p>
+                <div><p id="com-attack-action">　</p></div>
+                <div><p id="com-diffence-action">　</p></div>
+            </div>
+
+          <div class="hands">
+            <div class="cell">
+                <img src="images/red.png" class="card com" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/red.png" class="card com" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/red.png" class="card com" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/red.png" class="card com" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/red.png" class="card com" alt="">
+            </div>
+          </div>
+        </div>
+
+        <!-- 画面中央・中心部・コマンド・捨て札 -->
+    <div class="field">
+<!-- //////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+<!-- ビハインド部分 -->
+             <!-- 再戦ボタン -->
+        <div id="retry" class="bihind">
+            <div class="win-lose-img">
+                <div id="resultplayer">
+                    <img id="resultplayerimg" src="images/キャラクター画像/date_masamune.png" alt="">
+                    <div id="resultplayereffect">
+                        <span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+
+                <img id="winorlose" src="images/pose_win_boy.png" alt="">
+                <div id="resultcom">
+                    <img id="resultcomimg" src="images/キャラクター画像/ishida_mitsunari.png" alt="">
+                    <div id ="resultcomeffect">
+                        <span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+
+            </div>
+            <p id="settlement">勝負に勝ちました！</p>
+            <p>どうしますか？</p>
+
+            <div class="button">
+                <button id="replay">再戦</button>
+                <button id="reChoice">相手変更</button>
+                <!-- 本番用 -->
+                <button><a href="https://sharkteeth.xsrv.jp/poker/select.html">終了</a></button>
+                
+                <!-- 開発時用 -->
+                <!-- <button><a href="http://localhost/poker/select.html">終了</a></button> -->
+            </div>
+        </div>
+
+
+                <!-- テキストログ -->
+        <div id="log" class="bihind">
+            <!-- <div id="log"> -->
+                <p id="text1">あああああ</p>
+                <p id="text2">　</p>
+                <p id="text3">　</p>
+                <p id="text4">　</p>
+                <button id="textGo" disabled>進む</button>
+                </div>
+                <!-- //////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+     <table>
+        <tr class="enemy-field">
+               <td class=" btn">
+                <!-- <div id="cover" class="display"> -->
+                    <div id="cover">
+                </div>
+                    <select id ="ewhich2"  name="selectbox">
+                    <option value="10">バランス</option>
+                    <option value="9">RSフラッシュ</option>
+                    <option value="8">Sフラッシュ</option>
+                    <option value="7">フォーカード</option>
+                    <option value="6">フルハウス</option>
+                    <option value="5">フラッシュ</option>
+                    <option value="4">ストレート</option>
+                    <option value="3">スリーカード</option>
+                    <option value="2">ツーペア</option>
+                    <option value="1">ワンペア</option>
+                    <option value="0">役なし</option>
+            </select>
+            <img src="images/防御.png" alt="" class="com-comand">
+            </td>
+            <td>
+                    <select id ="ewhich"  name="selectbox">
+                    <option id ="ewhich3" value=""></option>
+                    <option value="0">バランス</option>
+                    <option value="1">全力攻撃</option>
+                    <option value="2">牽制攻撃</option>
+         </select>
+         <img src="images/攻撃.png" alt="" class="com-comand">
+         </td>
+            <td>
+                <p>交換</p>
+            </td>
+            <td class="enemy-thinking" colspan="2">
+                <p id ="com-character-condicion">ニヤニヤ</p> 
+            </td>
+         </tr>
+
+        <!-- 中央山札 -->
+        <tr class="middle-position">
+            <td class="middle-left" colspan="2">
+                <div class="enemybar bar">
+                    <div id="enemey-first" class="box shiny">　</div>
+                    <div id="enemey-second" class="box shiny">　</div>
+                    <div id="enemey-third" class="box shiny">　</div>
+                </div>
+            </td>
+
+            <td class="deck-of-cards">
+                    <img src="images/red.png" class="card stock">
+            </td>
+
+            <td  class="middle-right" colspan="2">
+                <button class="button" id ="choice" disabled>決定</button>
+                <div class="playerbar bar">
+                    <div id ="player-first" class="box shiny">　</div>
+                    <div id ="player-second" class="box shiny">　</div>
+                    <div id ="player-third" class="box shiny">　</div>
+                </div>
+            </td>
+        </tr>
+
+        <!-- プレイヤー側ログ・ボタン -->
+        <tr class="player-field">
+            <td colspan="2">
+                <p id ="player-character-condicion">ニヤニヤ</p>
+            </td>
+
+            <td>
+                <div id ="button-guard"  class="bihind"></div>
+                <button id = "draw1"  class="example"><img src="images/交換.jpeg" alt="" class="cahnge-comand"><p id="change-count">1回目</p></button>
+            </td>
+            <td class=" btn">
+                <img src="images/攻撃.png" alt="" class="comand">
+                <!-- <button class="button"> -->
+                    <select id ="which"  name="selectbox">
+                            <option value="0">バランス</option>
+                            <option value="1">全力攻撃</option>
+                            <option value="2">牽制攻撃</option>
+                </select>
+            <!-- </button> -->
+            </td>
+            <td class=" btn">
+                <img src="images/防御.png" alt="" class="comand">
+                <!-- <button class="button"> -->
+                    <select id ="which2"  name="selectbox">
+                    <option value="10">バランス</option>
+                    <option value="9">RSフラッシュ</option>
+                    <option value="8">Sフラッシュ</option>
+                    <option value="7">フォーカード</option>
+                    <option value="6">フルハウス</option>
+                    <option value="5">フラッシュ</option>
+                    <option value="4">ストレート</option>
+                    <option value="3">スリーカード</option>
+                    <option value="2">ツーペア</option>
+                    <option value="1">ワンペア</option>
+                    <option value="0">役なし</option>
+            </select>
+        <!-- </button> -->
+            </td>
+        </tr>
+     </table>
+    </div>    
+
+        <!-- プレイヤー側手札 -->
+    <div class="player-hands">
+
+           <!-- カットイン文字 -->
+            <div class="Prole bihind">
+                <p id="player-role">ここに役が入ります</p>
+                <div><p id="player-attack-action">　</p></div>
+                <div><p id="player-diffence-action">　</p></div>
+            </div>
+
+          <div class="hands">
+            <div id ="hand-guard"  class="bihind"></div>
+            <div class="cell">
+                <img src="images/blue.png" class="card you" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/blue.png" class="card you" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/blue.png" class="card you" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/blue.png" class="card you" alt="">
+            </div>
+            <div class="cell">
+                <img src="images/blue.png" class="card you" alt="">
+            </div>
+        </div>
+
+        </div>
+</div>
+
+
+    <!-- 画面右 -->
+<div id="right">
+
+    <!-- 体力バー -->
+ <div class="enemy">
+    <div class="life-enemy">
+        <div id="life-frame-enemy">
+            <div id="life-bar-enemy"></div>
+            <div id="life-mark-enemy"></div>
+        </div>
+        <div>
+            <dl class="life-point">
+             <dt>HP</dt>
+             <dd><p id="elifeNow">100</p><p>/</p><p id="emaxHp">100</p></dd>
+            </dl>
+        </div>
+   </div>
+
+   <!-- イメージ画 -->
+
+<div class="comimgpoint">
+    <img id="comimg" src="images/nigaoe_ryuuzouji_takanobu.png" class="keyframe0 animationa keyframe5">
+</div>
+ 
+        <div class="com-character">
+        <div class ="name-parsonal">
+            <div><p id="com-name">武田 信玄</p>
+            <p id="com-parsonality">むっつりスケベ</p></div>
+            <p id="com-type">守備型</p>
+           </div>
+         <table>
+            <tr>
+                <td><p>攻撃</p></td>
+                <td><p>守備</p></td>
+                <td><p>速度</p></td>
+                <td><p>知力</p></td>
+            </tr>
+            <tr>
+                <td><p id="com-attack">A</p></td>
+                <td><p id="com-diffence">B</p></td>
+                <td><p id="com-speed">B</p></td>
+                <td><p id="com-intelogence">C</p></td>
+            </tr>
+            <p id="character-type3">21</p>
+         </table>
+        </div>
+    </div>
+
+
+    <div class="playerdiscard">
+     <table>
+        <tr>
+            <td>
+                <img src="images/blue.png" class="playercardfirst">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardfirst">
+            </td>
+            <td> 
+                <img src="images/blue.png" class="playercardfirst">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardfirst">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardfirst">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <img src="images/blue.png" class="playercardsecond">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardsecond">
+            </td>
+            <td> 
+               <img src="images/blue.png" class="playercardsecond">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardsecond">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardsecond">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <img src="images/blue.png" class="playercardthird">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardthird">
+            </td>
+            <td> 
+                <img src="images/blue.png" class="playercardthird">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardthird">
+            </td>
+            <td>
+                <img src="images/blue.png" class="playercardthird">
+            </td>
+        </tr>
+     </table>
+   </div>
+</div>
+
+
+ <script type="module" src="js/app.js?value=20230930"></script>
+ <!-- <script src="js/lifebar.js"></script> -->
+</body>
+</html>

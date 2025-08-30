@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>START</title>
+    <link href="css/vs_view.css" rel="stylesheet">
+</head>
+
+
+
+<body>
+    <header>
+       <div> <P>○○連勝中</P></div>
+       <div><p></p></div>
+    </header>
+    <!-- サイコロ部分 -->
+    <div id="main" class="play">
+        
+        <section id="left">
+            <div id="playerturn">先攻</div>
+            <div>
+                <h3 id="playerNameMirror">柴田 勝家</h3><p id="playernumber">はげ</p>
+                <img id="playerMainMirror" src="images/nigaoe_shibata_katsuie.png" alt="">
+            </div>
+
+        </section>
+
+        <section id="center">
+            <div class="battleContent">
+                <div id="gamestart">
+                    <BUtton><a id="link" href="http://sharkteeth.xsrv.jp/poker/index.html">ゲーム<br>スタート</a></BUtton>
+                    <!-- <BUtton><a id="link" href="http://localhost/poker//index.html">ゲーム<br>スタート</a></BUtton> -->
+                    <BUtton id="reset" onclick="resetbuttonClick()"><a href="http://sharkteeth.xsrv.jp/poker/select.html">選びなおす</a></BUtton>
+                    <!-- <BUtton id="reset" onclick="resetbuttonClick()"><a href="http://localhost/poker//select.html">選びなおす</a></BUtton> -->
+                </div>
+            </div>
+            <img class="vs" src="images/vs.png" alt="">
+
+
+             <section class="diceContent">
+                <div class="dicetable">
+                 <div>
+                  <img id="dice1" src= "./images/サイコロ1.jpg" style="display: block;">
+                   <!-- <div id="dice2" style="display: none;"> -->
+                    <!-- <div id="dice2">
+                    <div class="item"><img src= "./images/サイコロ1.jpg" ></div>
+                    <div class="item"><img src= "./images/サイコロ2.jpg" ></div>
+                    <div class="item"><img src= "./images/サイコロ3.jpg" ></div>
+                    <div class="item"><img src= "./images/サイコロ4.jpg" ></div>
+                    <div class="item"><img src= "./images/サイコロ5.jpg" ></div>
+                    <div class="item"><img src= "./images/サイコロ6.jpg" ></div>
+                   </div> -->
+                 </div>
+
+                 <div>
+                    <img id="dice3" src= "./images/サイコロ1.jpg" style="display: block;">
+                    <!-- <div id="dice4" style="display: none;"> -->
+                    <!-- <div id="dice4">
+                        <div class="item"><img src= "./images/サイコロ1.jpg" ></div>
+                        <div class="item"><img src= "./images/サイコロ2.jpg" ></div>
+                        <div class="item"><img src= "./images/サイコロ3.jpg" ></div>
+                        <div class="item"><img src= "./images/サイコロ4.jpg" ></div>
+                        <div class="item"><img src= "./images/サイコロ5.jpg" ></div>
+                        <div class="item"><img src= "./images/サイコロ6.jpg" ></div>
+                    </div> -->
+                 </div>
+                </div>
+
+                <button type="button" id="diceBtn1">さいころを振る</button>
+            </section>
+
+            <!-- <div class="speed"> -->
+            <!-- <div class="dicespeed">
+                <p id="playerDicespeed">賽の目</p><p id="comDicespeed">賽の目</p>
+            </div>
+            <div class="characterspeed">
+                <P id="playercharacterspeed">速度</P><p id="comcharacterspeed">速度</p>
+            </div>
+            <div class="totalspeed">
+                <p id="playertotalspeed">合計</p><p id="comtotalspeed">合計</p>
+            </div>
+            <div class="samenumber">
+                <p id="samenumberlog">　</p>
+            </div>
+            </div> -->
+          </section>
+        
+          <section id="right">
+            <div id="comturn">後攻</div>
+            <div>
+             <h3 id="enemyNameMirror">武田 信玄</h3><p id="comnumber">でぶ</p>
+             <img  id="enemyMainMirror" src="images/nigaoe_ryuuzouji_takanobu.png" alt="">
+            </div>
+        </section>
+    </div>
+
+<!-- サイコロ部分終わり -->
+
+</div>
+<script  type="module" src="js/battle-style.js"></script>
+<!-- <script src="js/select.js"></script>
+<script src="js/character.js"></script> -->
+</body>
+</html>

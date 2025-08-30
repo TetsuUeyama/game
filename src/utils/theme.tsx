@@ -1,0 +1,26 @@
+
+export const colors = {
+  brand: "#FFD9F9",
+  border: "#E0E0E0",
+  text: "#5C5C5C",
+  plate: "#F5F5F5",
+  base: "#FFFFFF",
+  baseR: "#000000",
+  ButtonOne:"#F6C039",
+  ButtonTwo:"#F69A39",
+  ButtonThree:"#398BF6",
+  ButtonFour:"#B439F6",
+  ButtonBlue:"#a6d5ff",
+  ButtonPink:"#E8C4E3",
+  ButtonStart:"#F6C039",
+  HeaderBlue:"#6DB7DC",
+  ScoreBox:"#d69e89",
+  ProgressBar:"#ECECEC",
+  Red400:"red.400",
+  GRAY100: "gray.100",
+  GRAY400: "gray.400",
+  GRAY600: "gray.600",
+  RED400:"red",
+  BLUE500: "blue.500",
+  TextBlue: "#6DB7DC"
+};
