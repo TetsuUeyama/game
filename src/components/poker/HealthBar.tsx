@@ -15,8 +15,8 @@ export const HealthBar = ({ currentHp, maxHp, label = 'HP', size = 'md', hideLab
   const percentage = (currentHp / maxHp) * 100
   
   const barSizes = {
-    xs: { width: '50px', height: hideLabel ? '10px' : '8px' },
-    sm: { width: '150px', height: hideLabel ? '20px' : '15px' },
+    xs: { width: '45px', height: hideLabel ? '15px' : '8px' },
+    sm: { width: '57px', height: hideLabel ? '15px' : '8px' },
     md: { width: '200px', height: hideLabel ? '26px' : '20px' },
     lg: { width: '250px', height: hideLabel ? '33px' : '25px' }
   }
