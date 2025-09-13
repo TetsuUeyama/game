@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { CharacterSelect } from '@/components/poker/CharacterSelect'
 import { PokerBattleField } from '@/components/poker/PokerBattleField'
 import { GameResult } from '@/components/poker/GameResult'
-import { Character, GameState, GameAction, Card } from '@/types/poker/PokerGameTypes'
+import { Character, GameState, GameAction } from '@/types/poker/PokerGameTypes'
+import { createDeck, evaluateHand } from './CardFunction'
+import { initializePlayer } from './PlayerTmp'
+import { initializeEnemy } from './EnemyTmp'
 
 interface PokerGameTemplateProps {
   onExit: () => void
@@ -15,97 +18,6 @@ export const PokerGameTemplate = ({ onExit }: PokerGameTemplateProps) => {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [winner, setWinner] = useState<'player' | 'enemy' | null>(null)
 
-  // カードデッキを生成
-  const createDeck = (): Card[] => {
-    const suits: Array<'spades' | 'hearts' | 'diamonds' | 'clubs'> = ['spades', 'hearts', 'diamonds', 'clubs']
-    const deck: Card[] = []
-    
-    suits.forEach((suit, suitIndex) => {
-      for (let rank = 1; rank <= 13; rank++) {
-        deck.push({
-          id: suitIndex * 13 + rank,
-          suit,
-          rank,
-          image: `/poker/images/${suitIndex * 13 + rank}.png`
-        })
-      }
-    })
-    
-    // シャッフル
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[deck[i], deck[j]] = [deck[j], deck[i]]
-    }
-    
-    return deck
-  }
-
-  // HPを文字ランクから数値に変換
-  const rankToHp = (rank: string): number => {
-    switch (rank) {
-      case 'A': return 120
-      case 'B': return 100
-      case 'C': return 80
-      default: return 100
-    }
-  }
-
-  // ポーカーの役判定
-  const evaluateHand = (cards: Card[]): { role: string; strength: number } => {
-    if (!cards || cards.length !== 5) {
-      return { role: '役なし', strength: 0 }
-    }
-
-    const ranks = cards.map(card => card.rank).sort((a, b) => a - b)
-    const suits = cards.map(card => card.suit)
-    
-    // 同じスートかチェック
-    const isFlush = suits.every(suit => suit === suits[0])
-    
-    // ストレートかチェック
-    const isStraight = ranks.every((rank, index) => 
-      index === 0 || rank === ranks[index - 1] + 1
-    )
-    
-    // 各ランクの出現回数をカウント
-    const rankCounts = ranks.reduce((acc, rank) => {
-      acc[rank] = (acc[rank] || 0) + 1
-      return acc
-    }, {} as Record<number, number>)
-    
-    const counts = Object.values(rankCounts).sort((a, b) => b - a)
-    
-    // 役判定
-    if (isFlush && isStraight && ranks[0] === 10) {
-      return { role: 'ロイヤルストレートフラッシュ', strength: 10 }
-    }
-    if (isFlush && isStraight) {
-      return { role: 'ストレートフラッシュ', strength: 9 }
-    }
-    if (counts[0] === 4) {
-      return { role: 'フォーカード', strength: 8 }
-    }
-    if (counts[0] === 3 && counts[1] === 2) {
-      return { role: 'フルハウス', strength: 7 }
-    }
-    if (isFlush) {
-      return { role: 'フラッシュ', strength: 6 }
-    }
-    if (isStraight) {
-      return { role: 'ストレート', strength: 5 }
-    }
-    if (counts[0] === 3) {
-      return { role: 'スリーカード', strength: 4 }
-    }
-    if (counts[0] === 2 && counts[1] === 2) {
-      return { role: 'ツーペア', strength: 3 }
-    }
-    if (counts[0] === 2) {
-      return { role: 'ワンペア', strength: 2 }
-    }
-    
-    return { role: '役なし', strength: 1 }
-  }
 
   const handleStartGame = (playerCharacter: Character, enemyCharacter: Character) => {
     const deck = createDeck()
@@ -113,15 +25,15 @@ export const PokerGameTemplate = ({ onExit }: PokerGameTemplateProps) => {
     const enemyCards = deck.slice(5, 10)
     const remainingDeck = deck.slice(10)
 
-    const playerHp = rankToHp(playerCharacter.hp)
-    const enemyHp = rankToHp(enemyCharacter.hp)
+    const playerState = initializePlayer(playerCharacter)
+    const enemyState = initializeEnemy(enemyCharacter)
 
     const newGameState: GameState = {
       player: {
         character: playerCharacter,
         cards: playerCards,
-        currentHp: playerHp,
-        maxHp: playerHp,
+        currentHp: playerState.currentHp,
+        maxHp: playerState.maxHp,
         hand: evaluateHand(playerCards),
         attackAction: '',
         defenseAction: ''
@@ -129,8 +41,8 @@ export const PokerGameTemplate = ({ onExit }: PokerGameTemplateProps) => {
       enemy: {
         character: enemyCharacter,
         cards: enemyCards,
-        currentHp: enemyHp,
-        maxHp: enemyHp,
+        currentHp: enemyState.currentHp,
+        maxHp: enemyState.maxHp,
         hand: evaluateHand(enemyCards),
         attackAction: '',
         defenseAction: ''

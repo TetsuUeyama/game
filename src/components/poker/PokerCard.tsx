@@ -47,6 +47,17 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
     return rank.toString()
   }
 
+  const getCardImageNumber = (card: Card) => {
+    const suitBase = {
+      'spades': 0,    // 01-13
+      'clubs': 13,    // 14-26
+      'diamonds': 26, // 27-39
+      'hearts': 39    // 40-52
+    }
+    const imageNumber = suitBase[card.suit] + card.rank
+    return imageNumber.toString().padStart(2, '0')
+  }
+
   const handleDragStart = (event: React.DragEvent) => {
     if (card && isDraggable && !isDiscarded) {
       // ドラッグエフェクトを設定
@@ -114,7 +125,6 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
       <Box
         width={currentSize.width}
         height={currentSize.height}
-        bg="blue.600"
         border="2px solid"
         borderColor="gray.400"
         borderRadius="md"
@@ -122,12 +132,10 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
         _hover={onClick ? { transform: 'translateY(-5px)' } : {}}
         transition="all 0.2s"
         onClick={onClick}
-        display="flex"
-        alignItems="center"
-        justifyContent="center"
-        backgroundImage="url('/poker/images/red.png')"
+        backgroundImage="url('/images/card/red.png')"
         backgroundSize="cover"
         backgroundPosition="center"
+        backgroundRepeat="no-repeat"
       />
     )
   }
@@ -149,7 +157,6 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
     <Box
       width={currentSize.width}
       height={currentSize.height}
-      bg={isDiscarded ? "rgba(0, 0, 0, 0.8)" : "white"}
       border="2px solid"
       borderColor={isSelected ? 'blue.500' : 'gray.400'}
       borderRadius="md"
@@ -162,69 +169,24 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
       boxShadow={isSelected ? '0 4px 12px rgba(0,0,255,0.3)' : 'sm'}
       draggable={isDraggable && !isDiscarded}
       onDragStart={handleDragStart}
-      opacity={isDiscarded ? 0.6 : 1}
+      opacity={isDiscarded ? 0.3 : 1}
+      backgroundImage={`url('/images/card/${getCardImageNumber(card)}.png')`}
+      backgroundSize="cover"
+      backgroundPosition="center"
+      backgroundRepeat="no-repeat"
     >
-      {/* カード番号（左上） */}
-      <Box position="absolute" top="2px" left="2px">
-        <Text
-          text={getRankDisplay(card.rank)}
-          fontSize={size === 'lg' ? 16 : size === 'md' ? 12 : size === 'sm' ? 10 : 8}
-          fontWeight="bold"
-          color={isDiscarded ? "white" : getSuitColor(card.suit)}
+      {/* 捨てられたカードの場合はオーバーレイを表示 */}
+      {isDiscarded && (
+        <Box
+          position="absolute"
+          top="0"
+          left="0"
+          width="100%"
+          height="100%"
+          bg="rgba(0, 0, 0, 0.6)"
+          borderRadius="md"
         />
-      </Box>
-
-      {/* スート（左上） */}
-      <Box position="absolute" top={size === 'lg' ? '18px' : size === 'md' ? '14px' : '12px'} left="2px">
-        <Text
-          text={getSuitSymbol(card.suit)}
-          fontSize={size === 'lg' ? 14 : size === 'md' ? 10 : size === 'sm' ? 8 : 6}
-          color={isDiscarded ? "white" : getSuitColor(card.suit)}
-        />
-      </Box>
-
-      {/* 中央のスート */}
-      <Box
-        position="absolute"
-        top="50%"
-        left="50%"
-        transform="translate(-50%, -50%)"
-      >
-        <Text
-          text={getSuitSymbol(card.suit)}
-          fontSize={size === 'lg' ? 24 : size === 'md' ? 18 : size === 'sm' ? 14 : 10}
-          color={isDiscarded ? "white" : getSuitColor(card.suit)}
-        />
-      </Box>
-
-      {/* カード番号（右下・回転） */}
-      <Box
-        position="absolute"
-        bottom="2px"
-        right="2px"
-        transform="rotate(180deg)"
-      >
-        <Text
-          text={getRankDisplay(card.rank)}
-          fontSize={size === 'lg' ? 16 : size === 'md' ? 12 : size === 'sm' ? 10 : 8}
-          fontWeight="bold"
-          color={isDiscarded ? "white" : getSuitColor(card.suit)}
-        />
-      </Box>
-
-      {/* スート（右下・回転） */}
-      <Box
-        position="absolute"
-        bottom={size === 'lg' ? '18px' : size === 'md' ? '14px' : size === 'sm' ? '12px' : '10px'}
-        right="2px"
-        transform="rotate(180deg)"
-      >
-        <Text
-          text={getSuitSymbol(card.suit)}
-          fontSize={size === 'lg' ? 14 : size === 'md' ? 10 : size === 'sm' ? 8 : 6}
-          color={isDiscarded ? "white" : getSuitColor(card.suit)}
-        />
-      </Box>
+      )}
     </Box>
   )
 }
