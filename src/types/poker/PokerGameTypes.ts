@@ -43,6 +43,7 @@ export interface Character {
   speed: string
   intelligence: string
   image: string
+  backImage: string
 }
 
 export interface Card {

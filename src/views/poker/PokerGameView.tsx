@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Box } from '@chakra-ui/react'
+import { Box, Flex } from '@chakra-ui/react'
 import { CharacterSelect } from '@/components/poker/CharacterSelect'
 import { GameResult } from '@/components/poker/GameResult'
 import { Character, GameState, GameAction } from '@/types/poker/PokerGameTypes'
 import { createDeck, evaluateHand } from '@/templates/poker/CardFunction'
 import { initializePlayer } from '@/templates/poker/PlayerTmp'
 import { initializeEnemy } from '@/templates/poker/EnemyTmp'
-import { FieldTmp } from '@/templates/poker/FieldTmp'
+import { FieldTmp } from '@/templates/poker/Field/FieldTmp'
 import { colors } from '@/utils/theme'
 import { useRouter } from 'next/navigation'
+import { LeftFieldTmp } from '@/templates/poker/Field/LeftFieldTmp'
+import { RightFieldTmp } from '@/templates/poker/Field/RightFieldTmp'
 
 export const PokerGameView = () => {
   const router = useRouter()
@@ -137,10 +139,23 @@ export const PokerGameView = () => {
       
       case 'battle':
         return gameState ? (
-          <FieldTmp
-            gameState={gameState}
-            onAction={handleGameAction}
-          />
+          <Flex
+            width="100%"
+            minHeight="100vh"
+            bg="green.800"
+            backgroundImage="url('/poker/images/board.png')"
+            backgroundSize="cover"
+            backgroundPosition="center"
+            position="relative"
+            justifyContent={"center"}
+          >
+              <LeftFieldTmp player={gameState.player}/>
+            <FieldTmp
+              gameState={gameState}
+              onAction={handleGameAction}
+            />
+            <RightFieldTmp player={gameState.player}/>
+          </Flex>
         ) : null
       
       case 'result':

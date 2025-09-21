@@ -9,24 +9,37 @@ interface HealthBarProps {
   label?: string
   size?: 'xs' | 'sm' | 'md' | 'lg'
   hideLabel?: boolean
+  type?: 'hp' | 'mp'
 }
 
-export const HealthBar = ({ currentHp, maxHp, label = 'HP', size = 'md', hideLabel = false }: HealthBarProps) => {
+export const HealthBar = ({ currentHp, maxHp, label = 'HP', size = 'md', hideLabel = false, type = 'hp' }: HealthBarProps) => {
   const percentage = (currentHp / maxHp) * 100
   
   const barSizes = {
     xs: { width: '45px', height: hideLabel ? '15px' : '8px' },
     sm: { width: '57px', height: hideLabel ? '15px' : '8px' },
-    md: { width: '200px', height: hideLabel ? '26px' : '20px' },
+    md: { width: '100px', height: hideLabel ? '11px' : '20px' },
     lg: { width: '250px', height: hideLabel ? '33px' : '25px' }
   }
 
   const currentSize = barSizes[size]
 
   const getHealthColor = () => {
-    if (percentage > 60) return 'green.500'
-    if (percentage > 30) return 'yellow.500'
-    return 'red.500'
+    if (type === 'mp') {
+      // MPの場合は紫系
+      if (percentage > 60) return 'purple.500'
+      if (percentage > 30) return 'purple.400'
+      return 'purple.300'
+    } else {
+      // HPの場合は従来通り
+      if (percentage > 60) return 'green.500'
+      if (percentage > 30) return 'yellow.500'
+      return 'red.500'
+    }
+  }
+
+  const getBorderColor = () => {
+    return type === 'mp' ? 'purple.400' : 'gray.400'
   }
 
   return (
@@ -55,7 +68,7 @@ export const HealthBar = ({ currentHp, maxHp, label = 'HP', size = 'md', hideLab
         borderRadius="full"
         overflow="hidden"
         border="1px solid"
-        borderColor="gray.400"
+        borderColor={getBorderColor()}
       >
         <Box
           width={`${percentage}%`}

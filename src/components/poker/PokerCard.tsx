@@ -1,8 +1,8 @@
 'use client'
 
 import { Box } from '@chakra-ui/react'
-import { Text } from '@/components/Text'
 import { Card } from '@/types/poker/PokerGameTypes'
+import { setGlobalDraggedCard } from './DropZone'
 
 interface PokerCardProps {
   card?: Card
@@ -62,10 +62,14 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
     if (card && isDraggable && !isDiscarded) {
       // ドラッグエフェクトを設定
       event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('application/json', JSON.stringify({
+      const cardWithIndex = {
         ...card,
         cardIndex
-      }))
+      }
+      event.dataTransfer.setData('application/json', JSON.stringify(cardWithIndex))
+
+      // グローバル変数にカード情報を保存
+      setGlobalDraggedCard(cardWithIndex)
       
       // ドラッグ画像を作成
       const originalElement = event.currentTarget as HTMLElement
@@ -120,6 +124,11 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
     }
   }
 
+  const handleDragEnd = () => {
+    // ドラッグ終了時にグローバル変数をクリア
+    setGlobalDraggedCard(null)
+  }
+
   if (isBack) {
     return (
       <Box
@@ -169,6 +178,7 @@ export const PokerCard = ({ card, isBack = false, isSelected = false, onClick, s
       boxShadow={isSelected ? '0 4px 12px rgba(0,0,255,0.3)' : 'sm'}
       draggable={isDraggable && !isDiscarded}
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       opacity={isDiscarded ? 0.3 : 1}
       backgroundImage={`url('/images/card/${getCardImageNumber(card)}.png')`}
       backgroundSize="cover"
