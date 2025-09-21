@@ -1,0 +1,114 @@
+.bullet {
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.bullet-to-enemy {
+  /* プレイヤー側から開始 */
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: bulletToEnemy 1.5s linear;
+}
+
+.bullet-to-player {
+  /* 敵側から開始 */
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: bulletToPlayer 1.5s linear;
+}
+
+@keyframes bulletToEnemy {
+  0% {
+    /* プレイヤー側から */
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    /* 敵側へ直線移動 */
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) scale(1.2);
+  }
+}
+
+@keyframes bulletToPlayer {
+  0% {
+    /* 敵側から */
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    /* プレイヤー側へ直線移動 */
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) scale(1.2);
+  }
+}
+
+.hit-effect {
+  animation: hitShake 0.5s ease-in-out;
+}
+
+@keyframes hitShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+/* 各パターンのアニメーション */
+.bullet-guard {
+  animation: guardEffect 0.8s ease-out;
+}
+
+.bullet-dodge {
+  animation: dodgeEffect 0.8s ease-out;
+}
+
+.bullet-hit {
+  animation: hitEffect 0.8s ease-out;
+}
+
+.bullet-critical {
+  animation: criticalEffect 0.8s ease-out;
+}
+
+@keyframes guardEffect {
+  0% { transform: scale(1); }
+  25% { transform: scale(0.5); opacity: 0.8; }
+  50% { transform: scale(0.2); opacity: 0.5; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes dodgeEffect {
+  0% { transform: translateX(0) scale(1); opacity: 1; }
+  25% { transform: translateX(20px) scale(0.8); opacity: 0.8; }
+  50% { transform: translateX(-20px) scale(0.6); opacity: 0.6; }
+  75% { transform: translateX(15px) scale(0.4); opacity: 0.4; }
+  100% { transform: translateX(-30px) scale(0.2); opacity: 0; }
+}
+
+@keyframes hitEffect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes criticalEffect {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(2) rotate(90deg); }
+  50% { transform: scale(2.5) rotate(180deg); }
+  75% { transform: scale(3) rotate(270deg); }
+  100% { transform: scale(0) rotate(360deg); opacity: 0; }
+}

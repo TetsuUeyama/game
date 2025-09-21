@@ -12,6 +12,7 @@ export const characters: Character[] = [
     speed: "C",
     intelligence: "C",
     image: "images/character/benkei.png",
+    backImage: "images/character/benkei-back.png",
   },
   {
     id: 1,
@@ -24,6 +25,7 @@ export const characters: Character[] = [
     speed: "A",
     intelligence: "B",
     image: "images/character/date_masamune.png",
+    backImage: "images/character/date_masamune-back.png",
   },
   {
     id: 2,
@@ -36,6 +38,7 @@ export const characters: Character[] = [
     speed: "A",
     intelligence: "C",
     image: "images/character/ishida_mitsunari.png",
+    backImage: "images/character/ishida_mitsunari-back.png",
   },
   {
     id: 3,
@@ -48,6 +51,7 @@ export const characters: Character[] = [
     speed: "B",
     intelligence: "C",
     image: "/poker/4.jpg",
+    backImage: "/poker/4-back.jpg",
   },
   {
     id: 4,
@@ -60,6 +64,7 @@ export const characters: Character[] = [
     speed: "C",
     intelligence: "B",
     image: "/poker/5.jpg",
+    backImage: "/poker/5-back.jpg",
   },
   {
     id: 5,
@@ -72,6 +77,7 @@ export const characters: Character[] = [
     speed: "C",
     intelligence: "A",
     image: "/poker/1.jpg",
+    backImage: "/poker/1-back.jpg",
   },
   {
     id: 6,
@@ -84,6 +90,7 @@ export const characters: Character[] = [
     speed: "C",
     intelligence: "C",
     image: "/poker/2.jpg",
+    backImage: "/poker/2-back.jpg",
   },
   {
     id: 7,
@@ -96,6 +103,7 @@ export const characters: Character[] = [
     speed: "B",
     intelligence: "B",
     image: "/poker/3.jpg",
+    backImage: "/poker/3-back.jpg",
   },
   {
     id: 8,
@@ -108,6 +116,7 @@ export const characters: Character[] = [
     speed: "C",
     intelligence: "C",
     image: "/poker/4.jpg",
+    backImage: "/poker/4-back.jpg",
   },
   {
     id: 9,
@@ -120,6 +129,7 @@ export const characters: Character[] = [
     speed: "A",
     intelligence: "C",
     image: "/poker/5.jpg",
+    backImage: "/poker/5-back.jpg",
   },
   {
     id: 21,
@@ -132,6 +142,7 @@ export const characters: Character[] = [
     speed: "B",
     intelligence: "B",
     image: "/poker/1.jpg",
+    backImage: "/poker/1-back.jpg",
   },
   {
     id: 22,
@@ -144,6 +155,7 @@ export const characters: Character[] = [
     speed: "B",
     intelligence: "B",
     image: "/poker/2.jpg",
+    backImage: "/poker/2-back.jpg",
   },
 ];
 

@@ -2,10 +2,9 @@
 
 import { Box, VStack, HStack } from '@chakra-ui/react'
 import { PokerCard } from '@/components/poker/PokerCard'
-import { PlayerInfo } from '@/components/poker/PlayerInfo'
-import { CardDiscardArea } from '@/components/poker/CardDiscardArea'
 import { Character, Card, Player } from '@/types/poker/PokerGameTypes'
 import { SlotAttack } from '@/utils/cardExchange'
+import { CardDiscardArea } from '@/components/poker/CardDiscardArea'
 
 export interface EnemyState {
   character: Character
@@ -16,6 +15,9 @@ export interface EnemyState {
 export interface EnemyProps {
   enemy: Player
   enemyDiscardedCards: Card[][]
+  slotAttacks?: SlotAttack[]
+  slotProgresses?: number[]
+  isProcessing?: boolean
   onDropCard: (slotIndex: number, card: Card) => void
   onRemoveCard: (slotIndex: number) => void
   onAttackExecute: (slotIndex: number, attack: SlotAttack) => void
@@ -40,9 +42,12 @@ export const initializeEnemy = (enemyCharacter: Character): EnemyState => {
   }
 }
 
-export const EnemyTmp = ({ 
+export const EnemyTmp = ({
   enemy,
   enemyDiscardedCards,
+  slotAttacks,
+  slotProgresses,
+  isProcessing,
   onDropCard,
   onRemoveCard,
   onAttackExecute,
@@ -50,10 +55,10 @@ export const EnemyTmp = ({
 }: EnemyProps) => {
 
   return (
-    <>
+    <Box pt={2}>
       {/* 上部: 敵のカード表示 */}
       {showTopCards && (
-        <VStack padding={4} borderRadius="lg" margin={4} zIndex={5}>
+        <VStack>
           <HStack>
             {enemy.cards.map((_, index) => (
               <PokerCard key={index} isBack={true} size="md" />
@@ -63,27 +68,17 @@ export const EnemyTmp = ({
       )}
 
       {/* 相手情報 - 画面右上 */}
-      <Box position="absolute" top={"23%"} right={"40%"} zIndex={10}>
-        <PlayerInfo 
-          player={enemy} 
-          showRole={true}
-          rolePosition="below"
-        />
-      </Box>
-
-      {/* 相手のカード捨て場 - 画面左のやや上側 */}
-      <Box position="absolute" left="25%" top="5%" zIndex={10}>
+      <Box pt={4}>
         <CardDiscardArea
           cards={enemyDiscardedCards}
           onDrop={onDropCard}
           onRemoveCard={onRemoveCard}
-          showControls={true}
-          position="top"
-          attackType="balance"
-          defenseType="balance"
+          slotAttacks={slotAttacks}
+          slotProgresses={slotProgresses}
+          isProcessing={isProcessing}
           onAttackExecute={onAttackExecute}
         />
       </Box>
-    </>
+    </Box>
   )
 }

@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Box, VStack, HStack, Text } from '@chakra-ui/react'
-import { Button } from '@/components/ui/button'
+import { Box } from '@chakra-ui/react'
 import { GameState, GameAction, AttackType, DefenseType, Card } from '@/types/poker/PokerGameTypes'
-import { PlayerTmp } from './PlayerTmp'
-import { EnemyTmp } from './EnemyTmp'
+import { PlayerTmp } from '../PlayerTmp'
+import { EnemyTmp } from '../EnemyTmp'
 import { 
   SlotAttack, 
   handleCardExchange, 
@@ -13,6 +12,7 @@ import {
   handleRemoveCard, 
   handleReturnDiscardedCard 
 } from '@/utils/cardExchange'
+import { BattleAreaTmp } from '../BattleAreaTmp'
 
 
 interface FieldTmpProps {
@@ -204,127 +204,66 @@ export const FieldTmp = ({ gameState, onAction }: FieldTmpProps) => {
 
   return (
     <Box
-      width="100%"
+      // width="100%"
       minHeight="100vh"
       bg="green.800"
       backgroundImage="url('/poker/images/board.png')"
       backgroundSize="cover"
       backgroundPosition="center"
       position="relative"
+      display="flex"
+      flexDirection="column"
     >
       <Box
-        position="absolute"
+        // position="absolute"
         inset="0"
-        bg="rgba(0, 0, 0, 0.3)"
+        // bg="rgba(0, 0, 0, 0.3)"
         display="flex"
         flexDirection="column"
+        height="100vh"
+        px={4}
       >
-        {/* 上部: 敵関連をEnemyTmpに統一 */}
-        <EnemyTmp
-          enemy={{ ...enemy, currentHp: enemyCurrentHp }}
-          enemyDiscardedCards={enemyDiscardedCards}
-          onDropCard={handleEnemyDropCard}
-          onRemoveCard={handleEnemyRemoveCard}
-          onAttackExecute={handleEnemyAttackExecute}
-          showTopCards={true}
-        />
+        {/* 上面合わせ: 敵関連 */}
+        <Box flex="1" display="flex" alignItems="flex-start" justifyContent="center">
+          <EnemyTmp
+            enemy={{ ...enemy, currentHp: enemyCurrentHp }}
+            enemyDiscardedCards={enemyDiscardedCards}
+            onDropCard={handleEnemyDropCard}
+            onRemoveCard={handleEnemyRemoveCard}
+            onAttackExecute={handleEnemyAttackExecute}
+            showTopCards={true}
+          />
+        </Box>
+
+        {/* センター: BattleAreaTmp */}
+        <Box flex="1" display="flex" alignItems="center" justifyContent="center" bg="rgba(0, 0, 0, 0.3)">
+          <BattleAreaTmp />
+        </Box>
+
+        {/* 下面合わせ: プレイヤー関連 */}
+        <Box flex="1" display="flex" alignItems="flex-end" justifyContent="center">
+          <PlayerTmp
+            player={{ ...player, currentHp: playerCurrentHp, cards: playerCards }}
+            selectedCards={selectedCards}
+            discardedCardIndices={discardedCardIndices}
+            playerDiscardedCards={playerDiscardedCards}
+            attackType={attackType}
+            defenseType={defenseType}
+            slotAttacks={slotAttacks}
+            slotProgresses={slotProgresses}
+            isProcessing={isProcessing}
+            onCardSelect={handleCardSelect}
+            onExchange={handleExchange}
+            onDecide={handleDecide}
+            onDropCard={handlePlayerDropCard}
+            onRemoveCard={handlePlayerRemoveCard}
+            onAttackTypeChange={setAttackType}
+            onDefenseTypeChange={setDefenseType}
+            onAttackExecute={handlePlayerAttackExecute}
+            progressValue={progressValue}
+          />
+        </Box>
       </Box>
-
-      {/* 手札交換・決定ボタンとプログレスバー - 中央 */}
-      <Box position="absolute" bottom="30%" right="20.7%" transform="translate(-50%, -50%)" zIndex={15}>
-        <VStack>
-          {/* ボタン群 */}
-          <HStack>
-            <Button
-              onClick={handleExchange}
-              colorScheme="blue"
-              size="lg"
-              disabled={discardedCardIndices.size === 0 || isProcessing}
-            >
-              手札交換 ({discardedCardIndices.size}枚)
-            </Button>
-            
-            <Button
-              onClick={handleDecide}
-              colorScheme="red"
-              size="lg"
-              disabled={isProcessing}
-            >
-              決定
-            </Button>
-          </HStack>
-
-          {/* プログレスバー */}
-          {isProcessing && (
-            <Box width="400px" padding={4} bg="rgba(0, 0, 0, 0.8)" borderRadius="md">
-              <VStack>
-                <Text 
-                  fontSize={16} 
-                  fontWeight="bold" 
-                  color="white" 
-                  textAlign="center"
-                >
-                  攻撃処理中...
-                </Text>
-                <Box
-                  width="100%"
-                  height="16px"
-                  bg="rgba(255, 255, 255, 0.3)"
-                  borderRadius="md"
-                  overflow="hidden"
-                >
-                  <Box
-                    width={`${progressValue}%`}
-                    height="100%"
-                    bg="red.500"
-                    borderRadius="md"
-                    transition="width 0.05s linear"
-                  />
-                </Box>
-                <HStack justifyContent="space-between" width="100%">
-                  <Text 
-                    fontSize={14} 
-                    color="white" 
-                    textAlign="center"
-                  >
-                    {Math.round(progressValue)}%
-                  </Text>
-                  <Text 
-                    fontSize={12} 
-                    color="gray.300" 
-                    textAlign="center"
-                  >
-                    {Math.round((progressValue / 100) * 10000)}ms / 10000ms
-                  </Text>
-                </HStack>
-              </VStack>
-            </Box>
-          )}
-        </VStack>
-      </Box>
-
-      {/* プレイヤー関連をPlayerTmpに統一 */}
-      <PlayerTmp
-        player={{ ...player, currentHp: playerCurrentHp, cards: playerCards }}
-        selectedCards={selectedCards}
-        discardedCardIndices={discardedCardIndices}
-        playerDiscardedCards={playerDiscardedCards}
-        attackType={attackType}
-        defenseType={defenseType}
-        slotAttacks={slotAttacks}
-        slotProgresses={slotProgresses}
-        isProcessing={isProcessing}
-        onCardSelect={handleCardSelect}
-        onExchange={handleExchange}
-        onDecide={handleDecide}
-        onDropCard={handlePlayerDropCard}
-        onRemoveCard={handlePlayerRemoveCard}
-        onAttackTypeChange={setAttackType}
-        onDefenseTypeChange={setDefenseType}
-        onAttackExecute={handlePlayerAttackExecute}
-        progressValue={progressValue}
-      />
-
     </Box>
   )
 }

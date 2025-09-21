@@ -1,11 +1,9 @@
 'use client'
 
-import { Box, VStack, HStack, Image } from '@chakra-ui/react'
+import { Box, VStack, HStack } from '@chakra-ui/react'
 import { Text } from '@/components/Text'
 import { Button } from '@/components/ui/button'
 import { PokerCard } from './PokerCard'
-import { HealthBar } from './HealthBar'
-import { DropZone } from './DropZone'
 import { PlayerInfo } from './PlayerInfo'
 import { CardDiscardArea } from './CardDiscardArea'
 import { GameState, GameAction, AttackType, DefenseType, Card } from '@/types/poker/PokerGameTypes'
@@ -671,7 +669,7 @@ export const PokerBattleField = ({ gameState, onAction }: PokerBattleFieldProps)
 
       {/* 相手情報 - 画面右上 */}
       <Box position="absolute" top={4} right={4}>
-        <PlayerInfo player={{ ...enemy, currentHp: enemyCurrentHp }} />
+        <PlayerInfo player={{ ...enemy, currentHp: enemyCurrentHp }} isEnemy={true} />
       </Box>
 
       {/* プレイヤーのカード捨て場 - 画面右のやや下側 */}
