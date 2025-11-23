@@ -154,7 +154,7 @@ export const PokerGameView = () => {
               gameState={gameState}
               onAction={handleGameAction}
             />
-            <RightFieldTmp player={gameState.player}/>
+            <RightFieldTmp player={gameState.enemy}/>
           </Flex>
         ) : null
       

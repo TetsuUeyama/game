@@ -237,7 +237,10 @@ export const FieldTmp = ({ gameState, onAction }: FieldTmpProps) => {
 
         {/* センター: BattleAreaTmp */}
         <Box flex="1" display="flex" alignItems="center" justifyContent="center" bg="rgba(0, 0, 0, 0.3)">
-          <BattleAreaTmp />
+          <BattleAreaTmp
+            playerCharacter={player.character}
+            enemyCharacter={enemy.character}
+          />
         </Box>
 
         {/* 下面合わせ: プレイヤー関連 */}
