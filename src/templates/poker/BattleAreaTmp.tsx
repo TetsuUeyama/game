@@ -4,10 +4,14 @@ import { useState } from 'react'
 import { Box, Image } from '@chakra-ui/react'
 import { BulletAnimation } from '@/components/poker/BulletAnimation'
 import { AttackButton } from '@/components/poker/AttackButton'
+import { Character } from '@/types/poker/PokerGameTypes'
 import '@/components/poker/benkei-animation.css'
 import '@/components/poker/bullet-animation.css'
+import './transparent-background.css'
 
 interface BattleAreaTmpProps {
+  playerCharacter?: Character
+  enemyCharacter?: Character
   isPlayerAttacking?: boolean
   isEnemyAttacking?: boolean
   onPlayerAttackComplete?: () => void
@@ -21,6 +25,8 @@ interface BattleAreaTmpProps {
 type HitResult = 'guard' | 'dodge' | 'heavyHit' | 'lightHit' | 'heavyCritical' | 'lightCritical';
 
 export const BattleAreaTmp = ({
+  playerCharacter,
+  enemyCharacter,
   isPlayerAttacking = false,
   isEnemyAttacking = false,
   onPlayerAttackComplete = () => {},
@@ -174,13 +180,13 @@ export const BattleAreaTmp = ({
   }
 
   return (
-    <Box position="relative" width="100%" height="100%" display="flex" flexDirection="column" justifyContent="space-between">
+    <Box position="relative" width="100%" height="100%" display="flex" flexDirection="column" justifyContent="space-between" bg="transparent" className="battle-area-container">
       {/* Benkei画像表示 - 敵（上面合わせ） */}
-      <Box display="flex" justifyContent="center" alignItems="flex-start" pt={5} position="relative">
-        <Box position="relative">
+      <Box display="flex" justifyContent="center" alignItems="flex-start" pt={5} position="relative" bg="transparent">
+        <Box position="relative" bg="transparent">
           <Image
-            src="/images/character/benkei-back.png"
-            alt="弁慶（敵）"
+            src={enemyCharacter?.image || "/images/character/benkei.png"}
+            alt={enemyCharacter?.name || "敵"}
             width="50px"
             height="50px"
             objectFit="contain"
@@ -191,7 +197,8 @@ export const BattleAreaTmp = ({
               enemyEffect === 'lightCritical' ? 'light-hit-effect' :
               enemyEffect === 'dodge' ? 'dodge-effect' :
               isEnemyHit ? 'hit-effect' : ''
-            }`}
+              }`}
+            
           />
           {/* クリティカル時の赤いオーバーレイ */}
           {(enemyEffect === 'heavyCritical' || enemyEffect === 'lightCritical') && (
@@ -217,6 +224,7 @@ export const BattleAreaTmp = ({
         justifyContent="center"
         alignItems="center"
         position="relative"
+        bg="transparent"
       >
         {/* 弾丸アニメーション - プレイヤーから敵へ */}
         {actuallyPlayerAttacking && (
@@ -261,11 +269,11 @@ export const BattleAreaTmp = ({
       </Box>
 
       {/* Benkei画像表示 - プレイヤー（下面合わせ） */}
-      <Box display="flex" justifyContent="center" alignItems="flex-end" pb={4} position="relative">
+      <Box display="flex" justifyContent="center" alignItems="flex-end" pb={4} position="relative" bg="transparent">
         <Box position="relative">
           <Image
-            src="/images/character/benkei-back.png"
-            alt="弁慶（プレイヤー）"
+            src={playerCharacter?.backImage || "/images/character/benkei-back.png"}
+            alt={playerCharacter?.name || "プレイヤー"}
             width="50px"
             height="50px"
             objectFit="contain"

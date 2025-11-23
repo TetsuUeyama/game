@@ -27,9 +27,12 @@ let character_set = [];
     character_set [5] = new Character(5, "images/キャラクター画像/nigaoe_taikoubou.png", "太公望", "狡猾", "守備型", "C", "C", "B", "C", "A");
     character_set [6] = new Character(6, "images/キャラクター画像/nigaoe_buou_syuu.png", "武王", "まじめ", "攻撃型", "C", "C", "B", "C", "C");
     character_set [7] = new Character(7, "images/キャラクター画像/nigaoe_chingisuhan.png", "チンギス ハーン", "狡猾", "守備型", "A", "B", "B", "B", "B");
-    character_set [8] = new Character(8, "images/キャラクター画像/nigaoe_chouhi.png", "張飛", "まじめ", "守備型", "A", "A", "C", "C", "C");
-    character_set [9] = new Character(9, "images/キャラクター画像/nigaoe_daruma_taishi.png", "達磨大師", "熱血", "攻撃型", "C", "C", "C", "A", "C");
-    character_set [10] = new Character(10, "images/キャラクター画像/nigaoe_hattori_hanzou.png", "服部 半蔵", "狡猾", "守備型", "C", "C", "C", "A", "C");
+character_set[8] = new Character(8, "images/キャラクター画像/nigaoe_chouhi.png", "張飛", "まじめ", "守備型", "A", "A", "C", "C", "C");
+    
+character_set[9] = new Character(9, "images/キャラクター画像/nigaoe_daruma_taishi.png", "達磨大師", "熱血", "攻撃型", "C", "C", "C", "A", "C");
+    
+character_set[10] = new Character(10, "images/キャラクター画像/nigaoe_hattori_hanzou.png", "服部 半蔵", "狡猾", "守備型", "C", "C", "C", "A", "C");
+    
     character_set [11] = new Character(11, "images/キャラクター画像/nigaoe_hondatadakatsu.png", "本多 忠勝", "狡猾", "守備型", "A", "A", "A", "B", "C");
     character_set [12] = new Character(12, "images/キャラクター画像/nigaoe_sonken.png", "孫権", "まじめ", "攻撃型", "C", "C", "C", "B", "B");
     character_set [13] = new Character(13, "images/キャラクター画像/nigaoe_ishikawa_goemon.png", "石川 五右衛門", "狡猾", "守備型", "A", "B", "C", "C", "C");
