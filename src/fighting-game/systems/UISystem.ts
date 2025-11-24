@@ -7,6 +7,10 @@ export class UISystem {
   private player2HealthBar: Phaser.GameObjects.Graphics;
   private player1SpecialBar: Phaser.GameObjects.Graphics;
   private player2SpecialBar: Phaser.GameObjects.Graphics;
+  private player1GuardStaminaBar: Phaser.GameObjects.Graphics;
+  private player2GuardStaminaBar: Phaser.GameObjects.Graphics;
+  private player1CooldownBars: Phaser.GameObjects.Graphics;
+  private player2CooldownBars: Phaser.GameObjects.Graphics;
   private timerText: Phaser.GameObjects.Text;
   private roundText: Phaser.GameObjects.Text;
   private player1WinsText: Phaser.GameObjects.Text;
@@ -23,6 +27,10 @@ export class UISystem {
     this.player2HealthBar = scene.add.graphics();
     this.player1SpecialBar = scene.add.graphics();
     this.player2SpecialBar = scene.add.graphics();
+    this.player1GuardStaminaBar = scene.add.graphics();
+    this.player2GuardStaminaBar = scene.add.graphics();
+    this.player1CooldownBars = scene.add.graphics();
+    this.player2CooldownBars = scene.add.graphics();
 
     this.timerText = scene.add.text(
       scene.cameras.main.width / 2,
@@ -70,6 +78,10 @@ export class UISystem {
     this.player2HealthBar.setDepth(100);
     this.player1SpecialBar.setDepth(100);
     this.player2SpecialBar.setDepth(100);
+    this.player1GuardStaminaBar.setDepth(100);
+    this.player2GuardStaminaBar.setDepth(100);
+    this.player1CooldownBars.setDepth(100);
+    this.player2CooldownBars.setDepth(100);
     this.timerText.setDepth(100);
     this.roundText.setDepth(100);
     this.player1WinsText.setDepth(100);
@@ -182,6 +194,153 @@ export class UISystem {
     );
   }
 
+  updateGuardStaminaBars(player1: Fighter, player2: Fighter): void {
+    const barWidth = 300;
+    const barHeight = 8;
+    const barY = 108; // 必殺技バーの下
+    const padding = 50;
+
+    this.player1GuardStaminaBar.clear();
+    this.player2GuardStaminaBar.clear();
+
+    const player1GuardPercent = player1.guardStamina / player1.maxGuardStamina;
+    const player2GuardPercent = player2.guardStamina / player2.maxGuardStamina;
+
+    // Player1のガードスタミナバー
+    this.player1GuardStaminaBar.fillStyle(0x222222);
+    this.player1GuardStaminaBar.fillRect(padding, barY, barWidth, barHeight);
+
+    let p1Color = 0x00ffff; // シアン
+    if (player1GuardPercent < 0.3) {
+      p1Color = 0xff0000; // 低スタミナ: 赤
+    } else if (player1GuardPercent < 0.6) {
+      p1Color = 0xffaa00; // 中スタミナ: オレンジ
+    }
+
+    this.player1GuardStaminaBar.fillStyle(p1Color);
+    this.player1GuardStaminaBar.fillRect(
+      padding,
+      barY,
+      barWidth * player1GuardPercent,
+      barHeight
+    );
+
+    // Player2のガードスタミナバー
+    const player2BarX = this.scene.cameras.main.width - barWidth - padding;
+    this.player2GuardStaminaBar.fillStyle(0x222222);
+    this.player2GuardStaminaBar.fillRect(player2BarX, barY, barWidth, barHeight);
+
+    let p2Color = 0x00ffff; // シアン
+    if (player2GuardPercent < 0.3) {
+      p2Color = 0xff0000; // 低スタミナ: 赤
+    } else if (player2GuardPercent < 0.6) {
+      p2Color = 0xffaa00; // 中スタミナ: オレンジ
+    }
+
+    this.player2GuardStaminaBar.fillStyle(p2Color);
+    this.player2GuardStaminaBar.fillRect(
+      player2BarX + barWidth * (1 - player2GuardPercent),
+      barY,
+      barWidth * player2GuardPercent,
+      barHeight
+    );
+  }
+
+  updateCooldownBars(player1: Fighter, player2: Fighter): void {
+    const barWidth = 60;  // 横長にする
+    const barHeight = 12;
+    const spacing = 3;
+    const totalHeight = (barHeight + spacing) * 4 - spacing; // 4つのバーの総高さ
+    const barY = this.scene.cameras.main.height - totalHeight - 10; // 画面下部から少し上
+    const padding = 50;
+
+    this.player1CooldownBars.clear();
+    this.player2CooldownBars.clear();
+
+    // Player1のクールタイムバー（左下） - 攻撃4つのみ
+    const cooldownTypes: Array<{ key: 'light' | 'medium' | 'heavy' | 'special'; label: string; color: number }> = [
+      { key: 'light', label: 'L', color: 0x00ff00 },    // 緑
+      { key: 'medium', label: 'M', color: 0xffff00 },   // 黄色
+      { key: 'heavy', label: 'H', color: 0xff8800 },    // オレンジ
+      { key: 'special', label: 'S', color: 0xff00ff },  // マゼンタ
+    ];
+
+    cooldownTypes.forEach((type, index) => {
+      const y = barY + (barHeight + spacing) * index;
+      const cooldownPercent = 1 - player1.getCooldownPercent(type.key); // 使用可能度（0=使用不可、1=使用可能）
+      const isReady = player1.isCooldownReady(type.key);
+
+      // 背景
+      this.player1CooldownBars.fillStyle(0x222222);
+      this.player1CooldownBars.fillRect(padding, y, barWidth, barHeight);
+
+      // クールタイムバー（左から右に回復）
+      const barColor = isReady ? type.color : 0x666666;
+      this.player1CooldownBars.fillStyle(barColor);
+      const filledWidth = barWidth * cooldownPercent;
+      this.player1CooldownBars.fillRect(
+        padding,  // 左端から描画開始
+        y,
+        filledWidth,
+        barHeight
+      );
+
+      // 枠線
+      this.player1CooldownBars.lineStyle(2, isReady ? 0xffffff : 0x444444);
+      this.player1CooldownBars.strokeRect(padding, y, barWidth, barHeight);
+    });
+
+    // Player2のクールタイムバー（右下）
+    const player2StartX = this.scene.cameras.main.width - padding - barWidth;
+
+    cooldownTypes.forEach((type, index) => {
+      const y = barY + (barHeight + spacing) * index;
+      const cooldownPercent = 1 - player2.getCooldownPercent(type.key);
+      const isReady = player2.isCooldownReady(type.key);
+
+      // 背景
+      this.player2CooldownBars.fillStyle(0x222222);
+      this.player2CooldownBars.fillRect(player2StartX, y, barWidth, barHeight);
+
+      // クールタイムバー（右から左に回復）
+      const barColor = isReady ? type.color : 0x666666;
+      this.player2CooldownBars.fillStyle(barColor);
+      const filledWidth = barWidth * cooldownPercent;
+      this.player2CooldownBars.fillRect(
+        player2StartX + barWidth - filledWidth,  // 右端から描画開始
+        y,
+        filledWidth,
+        barHeight
+      );
+
+      // 枠線
+      this.player2CooldownBars.lineStyle(2, isReady ? 0xffffff : 0x444444);
+      this.player2CooldownBars.strokeRect(player2StartX, y, barWidth, barHeight);
+    });
+
+    // ラベルをテキストで追加（毎フレーム再生成されるため簡素化）
+    cooldownTypes.forEach((type, index) => {
+      const y = barY + (barHeight + spacing) * index + barHeight / 2;
+
+      const p1Label = this.scene.add.text(padding + 8, y, type.label, {
+        fontSize: '10px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setDepth(101);
+
+      const p2Label = this.scene.add.text(player2StartX + 8, y, type.label, {
+        fontSize: '10px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setDepth(101);
+
+      this.scene.time.delayedCall(50, () => {
+        p1Label.destroy();
+        p2Label.destroy();
+      });
+    });
+  }
+
   updateRound(roundNumber: number): void {
     this.roundText.setText(`ROUND ${roundNumber}`);
   }
@@ -216,6 +375,10 @@ export class UISystem {
     this.player2HealthBar.destroy();
     this.player1SpecialBar.destroy();
     this.player2SpecialBar.destroy();
+    this.player1GuardStaminaBar.destroy();
+    this.player2GuardStaminaBar.destroy();
+    this.player1CooldownBars.destroy();
+    this.player2CooldownBars.destroy();
     this.timerText.destroy();
     this.roundText.destroy();
     this.player1WinsText.destroy();

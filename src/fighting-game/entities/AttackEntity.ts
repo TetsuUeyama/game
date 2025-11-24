@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { ATTACK_TYPES } from '../config/gameConfig';
-import { AttackType } from './Fighter';
+import { AttackType, Fighter } from './Fighter';
 
 type AttackPhase = 'startup' | 'active' | 'recovery';
 
@@ -31,12 +31,37 @@ export class AttackEntity extends Phaser.GameObjects.Rectangle {
     // 攻撃要素を作成（向きに応じて位置を調整）
     const offsetX = facingRight ? attackData.range / 2 : -attackData.range / 2;
 
+    // 攻撃レベルに応じて縦位置と高さを調整
+    // キャラクターの全体高さを108ピクセル（54*2スケール）と仮定
+    const characterHeight = 108;
+    const segmentHeight = characterHeight / 3; // 各段が36ピクセル
+    let offsetY = 0;
+    let height = segmentHeight;
+
+    switch (attackData.level) {
+      case 'high':
+        // 上段: キャラクターの上1/3
+        offsetY = -characterHeight / 2 + segmentHeight / 2;
+        height = segmentHeight;
+        break;
+      case 'mid':
+        // 中段: キャラクターの中央1/3
+        offsetY = 0;
+        height = segmentHeight;
+        break;
+      case 'low':
+        // 下段: キャラクターの下1/3
+        offsetY = characterHeight / 2 - segmentHeight / 2;
+        height = segmentHeight;
+        break;
+    }
+
     super(
       scene,
       x + offsetX,
-      y,
+      y + offsetY,
       attackData.hitboxWidth,
-      attackData.hitboxHeight,
+      height,
       0xffffff,
       0
     );
@@ -94,13 +119,30 @@ export class AttackEntity extends Phaser.GameObjects.Rectangle {
 
   private followOwner(): void {
     // キャラクターの向きを取得
-    const fighter = this.owner as any;
+    const fighter = this.owner as Fighter;
     const facingRight = fighter.facingRight;
     const attackData = ATTACK_TYPES[this.attackType];
     const offsetX = facingRight ? attackData.range / 2 : -attackData.range / 2;
 
+    // 攻撃レベルに応じてY軸のオフセットを計算
+    const characterHeight = 108;
+    const segmentHeight = characterHeight / 3;
+    let offsetY = 0;
+
+    switch (attackData.level) {
+      case 'high':
+        offsetY = -characterHeight / 2 + segmentHeight / 2;
+        break;
+      case 'mid':
+        offsetY = 0;
+        break;
+      case 'low':
+        offsetY = characterHeight / 2 - segmentHeight / 2;
+        break;
+    }
+
     // キャラクターに追従
-    this.setPosition(this.owner.x + offsetX, this.owner.y);
+    this.setPosition(this.owner.x + offsetX, this.owner.y + offsetY);
   }
 
   private updateVisuals(): void {
