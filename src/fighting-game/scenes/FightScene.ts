@@ -3,7 +3,7 @@ import { Fighter } from '../entities/Fighter';
 import { InputSystem } from '../systems/InputSystem';
 import { UISystem } from '../systems/UISystem';
 import { AIController } from '../systems/AIController';
-import { CONTROLS, GAME_STATES, PLAYER_CONFIG, ATTACK_TYPES } from '../config/gameConfig';
+import { CONTROLS, GAME_STATES, ATTACK_TYPES, ATTACK_STRENGTH_MAP } from '../config/gameConfig';
 
 type GameState = typeof GAME_STATES[keyof typeof GAME_STATES];
 
@@ -234,10 +234,20 @@ export class FightScene extends Phaser.Scene {
     this.player1.updateAttack();
     this.player2.updateAttack();
 
+    // ガード要素の更新
+    this.player1.updateGuard();
+    this.player2.updateGuard();
+
+    // 当たり判定の可視化を更新
+    this.player1.updateHurtbox();
+    this.player2.updateHurtbox();
+
     this.checkAttackCollisions();
 
     this.uiSystem.updateHealthBars(this.player1, this.player2);
     this.uiSystem.updateSpecialBars(this.player1, this.player2);
+    this.uiSystem.updateGuardStaminaBars(this.player1, this.player2);
+    this.uiSystem.updateCooldownBars(this.player1, this.player2);
 
     if (this.player1.health <= 0 || this.player2.health <= 0) {
       this.uiSystem.stopTimer();
@@ -245,13 +255,11 @@ export class FightScene extends Phaser.Scene {
       this.handleRoundEnd(winner);
     }
 
-    const distance = Math.abs(this.player1.x - this.player2.x);
-    if (distance > 100) {
-      this.player1.facingRight = this.player1.x < this.player2.x;
-      this.player2.facingRight = this.player2.x < this.player1.x;
-      this.player1.setFlipX(!this.player1.facingRight);
-      this.player2.setFlipX(!this.player2.facingRight);
-    }
+    // 常に相手の方向を向くように更新（距離に関係なく）
+    this.player1.facingRight = this.player1.x < this.player2.x;
+    this.player2.facingRight = this.player2.x < this.player1.x;
+    this.player1.setFlipX(!this.player1.facingRight);
+    this.player2.setFlipX(!this.player2.facingRight);
   }
 
   private checkAttackCollisions(): void {
@@ -310,7 +318,10 @@ export class FightScene extends Phaser.Scene {
 
             // ノックバック方向を攻撃者の向きに基づいて設定
             const knockbackDirection = this.player1.facingRight ? attackEntity.knockback : -attackEntity.knockback;
-            this.player2.takeDamage(attackEntity.damage, knockbackDirection, attackData.level);
+
+            // 攻撃の強さを取得
+            const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
+            this.player2.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
 
             // 1回の攻撃で複数回ヒットしないようにフラグを立てる
             attackEntity.hasHit = true;
@@ -341,7 +352,10 @@ export class FightScene extends Phaser.Scene {
 
             // ノックバック方向を攻撃者の向きに基づいて設定
             const knockbackDirection = this.player2.facingRight ? attackEntity.knockback : -attackEntity.knockback;
-            this.player1.takeDamage(attackEntity.damage, knockbackDirection, attackData.level);
+
+            // 攻撃の強さを取得
+            const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
+            this.player1.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
 
             // 1回の攻撃で複数回ヒットしないようにフラグを立てる
             attackEntity.hasHit = true;

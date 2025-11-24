@@ -1,0 +1,16 @@
+export const colors = {
+  base: '#1a202c',
+  baseR: '#1a202c',
+  text: '#ffffff',
+  primary: '#3182ce',
+  secondary: '#805ad5',
+  success: '#38a169',
+  warning: '#dd6b20',
+  error: '#e53e3e',
+  GRAY100: '#f7fafc',
+  GRAY400: '#cbd5e0',
+  GRAY600: '#718096',
+  BLUE500: '#4299e1',
+  ProgressBar: '#e2e8f0',
+  ScoreBox: '#2d3748',
+}
