@@ -7,7 +7,7 @@ export const GAME_CONFIG = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: 1000 },
-      debug: false,
+      debug: true,  // デバッグモードを有効化
     },
   },
 };
@@ -20,6 +20,34 @@ export const PLAYER_CONFIG = {
   specialAttackDamage: 25,
   maxGuardStamina: 50,  // ガード用スタミナ
   guardStaminaRegenRate: 20, // 1秒あたりの回復量
+  dashStaminaCost: 10,  // ダッシュのスタミナ消費
+  jumpStaminaCost: 5,   // ジャンプのスタミナ消費
+  dodgeStaminaCost: 15, // 回避アクション（前転・ジャンプ避け）のスタミナ消費
+};
+
+// 移動システムの設定
+export const MOVEMENT_CONFIG = {
+  // 通常移動
+  walkSpeed: 200,
+
+  // フットワーク（小刻みな移動）
+  footworkSpeed: 120,            // フットワーク速度（walkSpeedの60%）
+  footworkEnabled: true,         // フットワークを有効化
+
+  // ダッシュ
+  dashSpeed: 400,           // ダッシュ速度
+  dashDuration: 300,        // ダッシュ持続時間（ミリ秒）
+  dashCooldown: 1000,       // ダッシュクールタイム（ミリ秒）
+
+  // ジャンプ
+  normalJumpVelocity: -500,      // 通常ジャンプの初速度
+  dashJumpVelocityY: -550,       // ダッシュジャンプの縦初速度（より高く）
+  dashJumpVelocityX: 300,        // ダッシュジャンプの横初速度（慣性）
+  airControlFactor: 0.3,         // 空中制御力（0-1, 1で完全制御）
+
+  // 移動の慣性
+  groundFriction: 0.15,          // 地上摩擦（減速率）
+  airResistance: 0.01,           // 空気抵抗（空中減速率）- 慣性がより長く続く
 };
 
 // クールタイム設定（ミリ秒）
@@ -29,6 +57,7 @@ export const COOLDOWNS = {
   medium: 1000,  // 中攻撃: 1秒
   heavy: 2000,   // 強攻撃: 2秒
   special: 3000, // 必殺技: 3秒
+  dodge: 2000,   // 回避アクション: 2秒
 };
 
 // ガードスタミナ消費設定
@@ -42,7 +71,7 @@ export const GUARD_STAMINA_COSTS = {
 };
 
 // 攻撃の強さカテゴリ
-export type AttackStrength = 'light' | 'medium' | 'heavy' | 'special';
+export type AttackStrength = 'light' | 'medium' | 'heavy' | 'special' | 'dodge';
 
 // 各攻撃がどの強さカテゴリに属するか
 export const ATTACK_STRENGTH_MAP: Record<keyof typeof ATTACK_TYPES, AttackStrength> = {
@@ -55,11 +84,15 @@ export const ATTACK_STRENGTH_MAP: Record<keyof typeof ATTACK_TYPES, AttackStreng
   heavyHigh: 'heavy',
   heavyMid: 'heavy',
   heavyLow: 'heavy',
-  special: 'special',
+  specialHighMid: 'special',
+  specialMidLow: 'special',
+  superSpecial: 'special',
+  roll: 'dodge',
+  jumpDodge: 'dodge',
 };
 
-// 攻撃の段階
-export type AttackLevel = 'high' | 'mid' | 'low';
+// 攻撃の段階（複数レーン対応）
+export type AttackLevel = 'high' | 'mid' | 'low' | 'highMid' | 'midLow' | 'all';
 
 // 攻撃の種類とパラメータ（フレームベース）
 // 1フレーム = 16.67ms (60fps想定)
@@ -178,18 +211,128 @@ export const ATTACK_TYPES = {
     hitboxHeight: 50,
   },
 
-  // 必殺技
-  special: {
-    damage: 35,           // 強力なダメージ（強攻撃の約2倍）
-    knockback: 128,       // キャラクター横幅の2倍
-    range: 140,           // 非常に長いリーチ
-    name: '必殺技',
-    level: 'mid' as AttackLevel,   // 中段攻撃
-    startupFrames: 15,    // 発生は遅め（見切りやすい）
-    activeFrames: 10,     // 持続は長め
-    recoveryFrames: 45,   // 外したら大きな隙
-    hitboxWidth: 100,     // 広い攻撃範囲
-    hitboxHeight: 70,     // 高さも広い
+  // 必殺技（クールダウン使用・2レーン攻撃）- 上段+中段
+  specialHighMid: {
+    damage: 25,           // 強力なダメージ
+    knockback: 100,       // 強いノックバック
+    range: 120,           // 長いリーチ
+    name: '必殺技(上中)',
+    level: 'highMid' as AttackLevel,   // 上段+中段攻撃
+    startupFrames: 12,    // 発生は遅め
+    activeFrames: 8,      // 持続は長め
+    recoveryFrames: 35,   // 外したら隙
+    hitboxWidth: 90,      // 広い攻撃範囲
+    hitboxHeight: 72,     // 2レーン分の高さ (36*2)
+  },
+  // 必殺技（クールダウン使用・2レーン攻撃）- 中段+下段
+  specialMidLow: {
+    damage: 25,           // 強力なダメージ
+    knockback: 100,       // 強いノックバック
+    range: 120,           // 長いリーチ
+    name: '必殺技(中下)',
+    level: 'midLow' as AttackLevel,   // 中段+下段攻撃
+    startupFrames: 12,    // 発生は遅め
+    activeFrames: 8,      // 持続は長め
+    recoveryFrames: 35,   // 外したら隙
+    hitboxWidth: 90,      // 広い攻撃範囲
+    hitboxHeight: 72,     // 2レーン分の高さ (36*2)
+  },
+  // 超必殺技（ゲージ使用・全レーン攻撃）
+  superSpecial: {
+    damage: 40,           // 非常に強力なダメージ
+    knockback: 150,       // 超強力なノックバック
+    range: 150,           // 非常に長いリーチ
+    name: '超必殺技',
+    level: 'all' as AttackLevel,      // 全レーン攻撃
+    startupFrames: 18,    // 発生は非常に遅い（見切りやすい）
+    activeFrames: 12,     // 持続は非常に長い
+    recoveryFrames: 50,   // 外したら非常に大きな隙
+    hitboxWidth: 110,     // 非常に広い攻撃範囲
+    hitboxHeight: 108,    // 3レーン全体の高さ (36*3)
+  },
+
+  // 前転（上段攻撃回避・相手の背後に回り込む）
+  roll: {
+    damage: 0,            // ダメージなし（回避アクション）
+    knockback: 0,
+    range: 0,
+    name: '前転',
+    level: 'low' as AttackLevel,  // 姿勢が低く、上段攻撃を避ける
+    startupFrames: 5,     // 発生
+    activeFrames: 10,     // 移動中（当たり判定縮小）
+    recoveryFrames: 8,    // 硬直
+    hitboxWidth: 40,      // 通常より小さい当たり判定
+    hitboxHeight: 30,     // 姿勢が低い
+    dodgeType: 'high' as AttackLevel,  // 上段攻撃を回避
+    moveDistance: 150,    // 前方への移動距離
+  },
+
+  // ジャンプ避け（下段攻撃回避・相手の背後に回り込む）
+  jumpDodge: {
+    damage: 0,            // ダメージなし（回避アクション）
+    knockback: 0,
+    range: 0,
+    name: 'ジャンプ避け',
+    level: 'high' as AttackLevel,  // 空中姿勢、下段攻撃を避ける
+    startupFrames: 4,     // 発生
+    activeFrames: 12,     // 移動中（当たり判定縮小）
+    recoveryFrames: 6,    // 硬直
+    hitboxWidth: 35,      // 通常より小さい当たり判定
+    hitboxHeight: 40,     // ジャンプ中
+    dodgeType: 'low' as AttackLevel,  // 下段攻撃を回避
+    moveDistance: 140,    // 前方への移動距離
+  },
+} as const;
+
+// 飛び道具の設定
+export const PROJECTILE_TYPES = {
+  // 基本飛び道具（ゲージ消費のみ）
+  projectileBase: {
+    damage: 8,        // 近距離攻撃より弱い
+    speed: 300,       // 中程度の速度
+    size: 20,         // サイズ
+    color: 0x00ffff,  // シアン
+    name: '飛び道具',
+  },
+  // 弱攻撃クールタイム使用（弾速特化）
+  projectileLight: {
+    damage: 6,        // 威力は低い
+    speed: 600,       // 非常に速い
+    size: 16,
+    color: 0xffff00,  // 黄色
+    name: '疾風弾',
+  },
+  // 中攻撃クールタイム使用（バランス）
+  projectileMedium: {
+    damage: 12,       // やや強化
+    speed: 400,       // やや速い
+    size: 24,
+    color: 0xff9900,  // オレンジ
+    name: '強化弾',
+  },
+  // 強攻撃クールタイム使用（威力特化）
+  projectileHeavy: {
+    damage: 18,       // 高威力
+    speed: 250,       // やや遅い
+    size: 32,
+    color: 0xff0000,  // 赤
+    name: '破壊弾',
+  },
+  // 必殺技クールタイム使用（最強）
+  projectileSpecial: {
+    damage: 20,       // 非常に高威力
+    speed: 450,       // 速い
+    size: 36,
+    color: 0xff00ff,  // マゼンタ
+    name: '究極弾',
+  },
+  // 超必殺技ゲージ使用（最高性能）
+  projectileSuper: {
+    damage: 30,       // 最高威力
+    speed: 500,       // 非常に速い
+    size: 40,
+    color: 0xffd700,  // 金色
+    name: '超究極弾',
   },
 } as const;
 

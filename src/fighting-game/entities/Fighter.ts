@@ -1,12 +1,19 @@
+
+
 import * as Phaser from 'phaser';
-import { PLAYER_CONFIG, ATTACK_TYPES, AttackLevel, COOLDOWNS, ATTACK_STRENGTH_MAP, AttackStrength, GUARD_STAMINA_COSTS } from '../config/gameConfig';
+import { PLAYER_CONFIG, ATTACK_TYPES, AttackLevel, COOLDOWNS, ATTACK_STRENGTH_MAP, AttackStrength, GUARD_STAMINA_COSTS, PROJECTILE_TYPES, MOVEMENT_CONFIG } from '../config/gameConfig';
 import { AttackEntity } from './AttackEntity';
 import { GuardEntity } from './GuardEntity';
+import { ProjectileEntity, ProjectileType } from './ProjectileEntity';
+import { MovementEntity } from './MovementEntity';
+import { DashEntity } from './DashEntity';
+import { JumpEntity } from './JumpEntity';
 
 export type AttackType = keyof typeof ATTACK_TYPES;
+export type ProjectileAttackType = ProjectileType;
 export type GuardType = 'high' | 'mid' | 'low' | 'highMid' | 'midLow' | 'all' | null;
 
-export type FighterState = 'idle' | 'walking' | 'jumping' | 'attacking' | 'blocking' | 'hit' | 'defeated';
+export type FighterState = 'idle' | 'walking' | 'jumping' | 'attacking' | 'blocking' | 'hit' | 'defeated' | 'dodging';
 
 export interface FighterControls {
   left: string;
@@ -18,6 +25,23 @@ export interface FighterControls {
   heavy: string;   // 強攻撃
   special: string;
   block: string;
+}
+
+// 性能値の型定義（数値形式: 25～150）
+export interface CharacterStats {
+  hp: number;           // 体力 (25 ~ 150)
+  attack: number;       // 攻撃力 (25 ~ 150)
+  attackSpeed: number;  // 攻撃速度 (25 ~ 150)
+  defense: number;      // 防御 (25 ~ 150)
+  specialAttack: number; // 特攻 (25 ~ 150)
+  specialDefense: number; // 特防 (25 ~ 150)
+  speed: number;        // 速度 (25 ~ 150)
+}
+
+// 数値を補正値に変換するヘルパー関数（100を基準に0.25～1.5倍）
+function statToMultiplier(stat: number): number {
+  // 25 → 0.25, 100 → 1.0, 150 → 1.5
+  return stat / 100;
 }
 
 export class Fighter extends Phaser.Physics.Arcade.Sprite {
@@ -36,6 +60,7 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   public controls: FighterControls;
   public playerNumber: number;
   public specialMeter: number;
+  public isAIControlled: boolean; // AI制御かどうか
   public currentAttack: AttackType | null;
   public lastAttackTime: number;
   private canMove: boolean;
@@ -43,9 +68,27 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   private lastGuardStaminaDrain: number; // ガードスタミナ消費用
   private hurtboxVisual: Phaser.GameObjects.Rectangle | null; // 当たり判定の可視化
   private lastSpecialMeterGain: number; // 必殺技ゲージの時間増加用
+  public isDodging: boolean; // 回避アクション中かどうか
+  public currentDodgeType: AttackLevel | null; // 回避できる攻撃タイプ
+  private dodgeStartX: number; // 回避開始時のX座標
+  private dodgeTargetX: number; // 回避目標X座標
+
+  // 移動エンティティ管理
+  public currentMovement: MovementEntity | null; // 現在の移動アクション
+  public isDashing: boolean; // ダッシュ中かどうか
+  public isJumping: boolean; // ジャンプ中かどうか
+  private dashCooldown: number; // ダッシュのクールタイム
+  private lastDashVelocity: number; // 最後のダッシュ速度（慣性ジャンプ用）
+  private lastDashEndTime: number; // 最後のダッシュ終了時刻（慣性ジャンプ用）
+  public landingLag: number; // 着地硬直時間（ミリ秒）
+  public landingLagEndTime: number; // 着地硬直終了時刻
+  public selectedJumpHeight: 'small' | 'medium' | 'large'; // 選択されたジャンプの高さ
 
   // クールタイム管理（攻撃のみ）
   public cooldowns: Record<AttackStrength, number>;
+
+  // 性能値補正
+  public stats: CharacterStats;
 
   constructor(
     scene: Phaser.Scene,
@@ -53,19 +96,37 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     y: number,
     texture: string,
     controls: FighterControls,
-    playerNumber: number
+    playerNumber: number,
+    stats?: CharacterStats
   ) {
     super(scene, x, y, texture);
 
     this.playerNumber = playerNumber;
-    this.health = PLAYER_CONFIG.maxHealth;
-    this.maxHealth = PLAYER_CONFIG.maxHealth;
+
+    // 性能値を設定（デフォルトは100）
+    this.stats = stats || {
+      hp: 100,
+      attack: 100,
+      attackSpeed: 100,
+      defense: 100,
+      specialAttack: 100,
+      specialDefense: 100,
+      speed: 100,
+    };
+
+    // console.log(`[Fighter] Player${playerNumber} 性能値:`, this.stats);
+
+    // HP補正を適用（数値を倍率に変換）
+    this.maxHealth = PLAYER_CONFIG.maxHealth * statToMultiplier(this.stats.hp);
+    this.health = this.maxHealth;
+    // console.log(`[Fighter] Player${playerNumber} maxHealth: ${this.maxHealth} (基準値: ${PLAYER_CONFIG.maxHealth}, 補正: ${statToMultiplier(this.stats.hp)}x)`);
     this.guardStamina = PLAYER_CONFIG.maxGuardStamina;
     this.maxGuardStamina = PLAYER_CONFIG.maxGuardStamina;
     this.state = 'idle';
     this.facingRight = playerNumber === 1;
     this.isAttacking = false;
     this.isBlocking = false;
+    this.isAIControlled = false; // デフォルトは人間プレイヤー
     this.currentGuardType = null;
     this.attackHitbox = null;
     this.currentAttackEntity = null;
@@ -79,13 +140,29 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     this.lastGuardStaminaDrain = 0;
     this.lastSpecialMeterGain = Date.now();
     this.hurtboxVisual = null;
+    this.isDodging = false;
+    this.currentDodgeType = null;
+    this.dodgeStartX = 0;
+    this.dodgeTargetX = 0;
 
-    // クールタイムを初期化（攻撃のみ）
+    // 移動エンティティを初期化
+    this.currentMovement = null;
+    this.isDashing = false;
+    this.isJumping = false;
+    this.dashCooldown = 0;
+    this.lastDashVelocity = 0;
+    this.lastDashEndTime = 0;
+    this.landingLag = 0;
+    this.landingLagEndTime = 0;
+    this.selectedJumpHeight = 'large'; // デフォルトは大ジャンプ
+
+    // クールタイムを初期化（攻撃と回避）
     this.cooldowns = {
       light: 0,
       medium: 0,
       heavy: 0,
       special: 0,
+      dodge: 0,
     };
 
     scene.add.existing(this);
@@ -93,22 +170,30 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
     this.setCollideWorldBounds(true);
     this.setBounce(0);
+
+    // スケールを先に適用
     this.setScale(2);
 
-    // 衝突判定用のボディサイズを設定
-    // スプライトは32x54で、表示されているキャラクター全体を当たり判定とする
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    if (body) {
-      // スプライトの元サイズ全体を使用（オフセットなし）
-      body.setSize(32, 54);
-      body.setOffset(0, 0);
-      body.setImmovable(false);
-      body.setMass(1);
-      body.pushable = true; // 押し合いを有効化
-    }
+    // 物理ボディを即座に設定
+    this.setupPhysicsBody();
 
     // 当たり判定の可視化を作成
     this.createHurtboxVisual();
+  }
+
+  /**
+   * 物理ボディのセットアップ（テクスチャロード後に実行）
+   */
+  private setupPhysicsBody(): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (body) {
+      // 元のスプライトサイズで設定（Phaserが自動的にスケールを適用）
+      this.setBodySize(32, 54, true);
+      body.setImmovable(false);
+      body.setMass(1);
+      body.pushable = true; // 押し合いを有効化
+      // console.log(`[Fighter setupPhysicsBody] Player${this.playerNumber} ボディサイズ: width=${body.width}, height=${body.height}`);
+    }
   }
 
   update(cursors: Map<string, Phaser.Input.Keyboard.Key>): void {
@@ -117,19 +202,30 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     // クールタイムを減少
     this.updateCooldowns();
 
+    // ダッシュクールタイムを減少
+    this.updateDashCooldown();
+
+    // 移動エンティティの更新
+    this.updateMovement();
+
     // ガードスタミナの自然回復
     this.regenerateGuardStamina();
 
     // 必殺技ゲージの時間経過による増加
     this.regenerateSpecialMeter();
 
+    // AI制御の場合、ここで入力処理を終了（クールタイムやスタミナ回復は上で完了済み）
+    if (this.isAIControlled) {
+      return;
+    }
+
     const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
 
-    // ヒットストップ中または攻撃中は入力を受け付けない（ノックバックは維持）
-    if (this.isInHitstun || this.isAttacking) {
+    // ヒットストップ中、攻撃中、回避中は入力を受け付けない（ノックバックは維持）
+    if (this.isInHitstun || this.isAttacking || this.isDodging) {
       // ヒットストップ中はノックバックを維持するため、速度をリセットしない
-      // 攻撃中は静止
-      if (this.isAttacking) {
+      // 攻撃中・回避中は別処理で制御
+      if (this.isAttacking && !this.isDodging) {
         this.setVelocityX(0);
       }
       return;
@@ -183,17 +279,19 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     }
 
     // 攻撃入力処理（方向キー + 攻撃ボタンで攻撃レベルを決定）
-    const upPressed = upKey?.isDown || false;
-    const downPressed = downKey?.isDown || false;
+    // ダッシュ中は攻撃を受け付けない
+    if (!this.isDashing) {
+      const upPressed = upKey?.isDown || false;
+      const downPressed = downKey?.isDown || false;
 
-    // 必殺技（方向キー不問）
-    if (Phaser.Input.Keyboard.JustDown(specialKey as Phaser.Input.Keyboard.Key) && this.specialMeter >= 100) {
-      this.specialAttack();
-      return;
-    }
+      // 必殺技（方向キー不問）
+      if (Phaser.Input.Keyboard.JustDown(specialKey as Phaser.Input.Keyboard.Key) && this.specialMeter >= 100) {
+        this.specialAttack();
+        return;
+      }
 
-    // パンチ（弱攻撃）
-    if (Phaser.Input.Keyboard.JustDown(punchKey as Phaser.Input.Keyboard.Key)) {
+      // パンチ（弱攻撃）
+      if (Phaser.Input.Keyboard.JustDown(punchKey as Phaser.Input.Keyboard.Key)) {
       if (upPressed) {
         this.performAttack('lightHigh');  // 上 + パンチ = 弱攻撃(上段)
       } else if (downPressed) {
@@ -216,46 +314,292 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // 強攻撃
-    if (Phaser.Input.Keyboard.JustDown(heavyKey as Phaser.Input.Keyboard.Key)) {
-      if (upPressed) {
-        this.performAttack('heavyHigh');  // 上 + 強攻撃 = 強攻撃(上段)
-      } else if (downPressed) {
-        this.performAttack('heavyLow');   // 下 + 強攻撃 = 強攻撃(下段)
-      } else {
-        this.performAttack('heavyMid');   // 強攻撃のみ = 強攻撃(中段)
+      // 強攻撃
+      if (Phaser.Input.Keyboard.JustDown(heavyKey as Phaser.Input.Keyboard.Key)) {
+        if (upPressed) {
+          this.performAttack('heavyHigh');  // 上 + 強攻撃 = 強攻撃(上段)
+        } else if (downPressed) {
+          this.performAttack('heavyLow');   // 下 + 強攻撃 = 強攻撃(下段)
+        } else {
+          this.performAttack('heavyMid');   // 強攻撃のみ = 強攻撃(中段)
+        }
+        return;
       }
-      return;
     }
 
-    if (leftKey?.isDown) {
-      this.setVelocityX(-PLAYER_CONFIG.speed);
-      this.facingRight = false;
-      this.setFlipX(true);
-      if (onGround) this.state = 'walking';
-    } else if (rightKey?.isDown) {
-      this.setVelocityX(PLAYER_CONFIG.speed);
-      this.facingRight = true;
-      this.setFlipX(false);
-      if (onGround) this.state = 'walking';
-    } else {
-      this.setVelocityX(0);
-      if (onGround) this.state = 'idle';
+    // ダッシュ入力（左右キー2度押し、またはShift+方向キー）
+    // 簡易実装: Shift + 方向キーでダッシュ
+    const shiftKey = cursors.get('SHIFT');
+    const isDashInput = shiftKey?.isDown;
+
+    // 着地硬直中は行動不能
+    if (Date.now() < this.landingLagEndTime) {
+      return; // 着地硬直中は何もできない
     }
 
-    if (Phaser.Input.Keyboard.JustDown(upKey as Phaser.Input.Keyboard.Key) && onGround) {
-      this.jump();
+    // ジャンプ入力（キーを離したときに実行、押下時間で高さを決定）
+    if (Phaser.Input.Keyboard.JustUp(upKey as Phaser.Input.Keyboard.Key)) {
+      if (onGround) {
+        // キー押下時間からジャンプの高さを決定
+        const keyDownDuration = (upKey as Phaser.Input.Keyboard.Key).getDuration();
+        let jumpHeight: 'small' | 'medium' | 'large';
+
+        if (keyDownDuration < 100) {
+          // 100ms未満: 小ジャンプ
+          jumpHeight = 'small';
+        } else if (keyDownDuration < 200) {
+          // 100-200ms: 中ジャンプ
+          jumpHeight = 'medium';
+        } else {
+          // 200ms以上: 大ジャンプ
+          jumpHeight = 'large';
+        }
+
+        this.selectedJumpHeight = jumpHeight;
+        // console.log(`[Input] ジャンプ高さ選択: ${jumpHeight} (押下時間:${keyDownDuration}ms)`);
+
+        // ダッシュ中ならダッシュジャンプ
+        if (this.isDashing && this.currentMovement instanceof DashEntity) {
+          this.performDashJump(this.currentMovement.getDashVelocity(), jumpHeight);
+          return; // ダッシュジャンプ後は他の処理をスキップ
+        }
+
+        // ダッシュ終了後300ms以内なら慣性ジャンプ
+        const timeSinceLastDash = Date.now() - this.lastDashEndTime;
+        const momentumWindow = 300; // 慣性が有効な時間（ミリ秒）
+
+        if (timeSinceLastDash < momentumWindow && Math.abs(this.lastDashVelocity) > 50) {
+          // console.log(`[Jump] ダッシュ慣性ジャンプ: 経過時間=${timeSinceLastDash}ms, 速度=${this.lastDashVelocity}`);
+          this.performDashJump(this.lastDashVelocity, jumpHeight);
+          return;
+        }
+
+        // 通常ジャンプ（方向入力を考慮）
+        // 左右入力があれば前ジャンプ/バックジャンプ
+        let jumpDirection = 0;
+        if (leftKey?.isDown) {
+          jumpDirection = -1;
+        } else if (rightKey?.isDown) {
+          jumpDirection = 1;
+        }
+
+        if (jumpDirection !== 0) {
+          // 前ジャンプ/バックジャンプ
+          const speedStat = this.stats?.speed || 100;
+          const speedMultiplier = 0.5 + (speedStat / 100);
+          const jumpSpeed = MOVEMENT_CONFIG.dashJumpVelocityX * speedMultiplier * 0.5; // ダッシュジャンプの半分の速度
+          const jumpVelocity = jumpSpeed * jumpDirection;
+
+          this.performDashJump(jumpVelocity, jumpHeight);
+          // console.log(`[Jump] ${jumpDirection > 0 ? '前' : 'バック'}ジャンプ: 速度=${jumpVelocity.toFixed(1)}`);
+        } else {
+          // 垂直ジャンプ
+          this.performNormalJump(jumpHeight);
+        }
+      }
     }
 
-    if (!onGround && this.state !== 'attacking') {
+    // 空中制御（ジャンプ中の左右移動）
+    if (!onGround && this.isJumping && this.currentMovement instanceof JumpEntity) {
+      let airDirection = 0;
+      if (leftKey?.isDown) {
+        airDirection = -1;
+      } else if (rightKey?.isDown) {
+        airDirection = 1;
+      }
+
+      if (airDirection !== 0) {
+        this.currentMovement.applyAirInput(airDirection);
+      }
+    }
+
+    // 地上移動（ダッシュ or 通常移動）
+    if (onGround && !this.isAttacking && !this.isDodging) {
+      if (leftKey?.isDown) {
+        if (isDashInput && !this.isDashing) {
+          // ダッシュ開始
+          this.performDash(-1);
+        } else if (!this.isDashing) {
+          // 通常移動（速度補正を適用）
+          const speed = MOVEMENT_CONFIG.walkSpeed * statToMultiplier(this.stats.speed);
+          this.setVelocityX(-speed);
+          // console.log(`[Fighter] Player${this.playerNumber} 移動速度: ${speed.toFixed(1)} (基準:${MOVEMENT_CONFIG.walkSpeed}, 速度値:${this.stats.speed}, 倍率:${statToMultiplier(this.stats.speed)}x)`);
+          this.facingRight = false;
+          this.setFlipX(true);
+          this.state = 'walking';
+        }
+      } else if (rightKey?.isDown) {
+        if (isDashInput && !this.isDashing) {
+          // ダッシュ開始
+          this.performDash(1);
+        } else if (!this.isDashing) {
+          // 通常移動（速度補正を適用）
+          const speed = MOVEMENT_CONFIG.walkSpeed * statToMultiplier(this.stats.speed);
+          this.setVelocityX(speed);
+          // console.log(`[Fighter] Player${this.playerNumber} 移動速度: ${speed.toFixed(1)} (基準:${MOVEMENT_CONFIG.walkSpeed}, 速度値:${this.stats.speed}, 倍率:${statToMultiplier(this.stats.speed)}x)`);
+          this.facingRight = true;
+          this.setFlipX(false);
+          this.state = 'walking';
+        }
+      } else if (!this.isDashing) {
+        // キー入力なし & ダッシュ中でなければ停止
+        this.setVelocityX(0);
+        this.state = 'idle';
+      }
+    }
+
+    // 空中状態の更新
+    if (!onGround && this.state !== 'attacking' && this.state !== 'dodging') {
       this.state = 'jumping';
     }
   }
 
+  // 旧互換性のため残す
   jump(): void {
-    this.setVelocityY(PLAYER_CONFIG.jumpVelocity);
+    this.performNormalJump();
+  }
+
+  // ダッシュクールタイムの更新
+  private updateDashCooldown(): void {
+    if (this.dashCooldown > 0) {
+      this.dashCooldown = Math.max(0, this.dashCooldown - (1000 / 60));
+    }
+  }
+
+  // 移動エンティティの更新
+  private updateMovement(): void {
+    if (this.currentMovement) {
+      const isFinished = this.currentMovement.update();
+
+      if (isFinished) {
+        // 移動終了
+        const movementType = this.currentMovement.movementType;
+        this.currentMovement = null;
+
+        if (movementType === 'dash') {
+          this.isDashing = false;
+        } else if (movementType === 'jump' || movementType === 'dashJump') {
+          this.isJumping = false;
+        }
+      }
+    }
+  }
+
+  // ダッシュを実行
+  performDash(direction: number): boolean {
+    // ダッシュクールタイムチェック
+    if (this.dashCooldown > 0) {
+      // console.log(`[Dash] クールタイム中: ${(this.dashCooldown / 1000).toFixed(1)}秒`);
+      return false;
+    }
+
+    // スタミナチェック
+    if (this.guardStamina < PLAYER_CONFIG.dashStaminaCost) {
+      // console.log(`[Dash] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.dashStaminaCost}`);
+      return false;
+    }
+
+    // 地上でのみダッシュ可能
+    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
+    if (!onGround) {
+      return false;
+    }
+
+    // スタミナ消費
+    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.dashStaminaCost);
+    // console.log(`[Dash] スタミナ消費: -${PLAYER_CONFIG.dashStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
+
+    // 既存の移動エンティティを終了
+    if (this.currentMovement) {
+      this.currentMovement.terminate();
+    }
+
+    // ダッシュエンティティを生成
+    this.currentMovement = new DashEntity(this.scene, this, direction);
+    this.isDashing = true;
+    this.dashCooldown = MOVEMENT_CONFIG.dashCooldown;
+
+    // 向きを更新
+    if (direction > 0) {
+      this.facingRight = true;
+      this.setFlipX(false);
+    } else {
+      this.facingRight = false;
+      this.setFlipX(true);
+    }
+
+    return true;
+  }
+
+  // 通常ジャンプを実行
+  performNormalJump(jumpHeight?: 'small' | 'medium' | 'large'): boolean {
+    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
+    if (!onGround) {
+      return false;
+    }
+
+    // スタミナチェック
+    if (this.guardStamina < PLAYER_CONFIG.jumpStaminaCost) {
+      // console.log(`[Jump] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.jumpStaminaCost}`);
+      return false;
+    }
+
+    // スタミナ消費
+    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.jumpStaminaCost);
+    // console.log(`[Jump] スタミナ消費: -${PLAYER_CONFIG.jumpStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
+
+    // 既存のジャンプエンティティを終了
+    if (this.currentMovement instanceof JumpEntity) {
+      this.currentMovement.terminate();
+    }
+
+    // ジャンプの高さを決定（指定がなければ選択された高さを使用）
+    const height = jumpHeight || this.selectedJumpHeight;
+
+    // 通常ジャンプエンティティを生成
+    this.currentMovement = new JumpEntity(this.scene, this, 'normal', 0, height);
+    this.isJumping = true;
     this.state = 'jumping';
     this.play(`${this.texture.key}_jump`, true);
+
+    return true;
+  }
+
+  // ダッシュジャンプを実行
+  performDashJump(dashVelocityX: number, jumpHeight?: 'small' | 'medium' | 'large'): boolean {
+    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
+    if (!onGround) {
+      return false;
+    }
+
+    // スタミナチェック（ダッシュジャンプは通常ジャンプと同じコスト）
+    if (this.guardStamina < PLAYER_CONFIG.jumpStaminaCost) {
+      // console.log(`[DashJump] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.jumpStaminaCost}`);
+      return false;
+    }
+
+    // スタミナ消費
+    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.jumpStaminaCost);
+    // console.log(`[DashJump] スタミナ消費: -${PLAYER_CONFIG.jumpStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
+
+    // ダッシュエンティティを終了
+    if (this.currentMovement instanceof DashEntity) {
+      this.currentMovement.terminate();
+      this.isDashing = false;
+    }
+
+    // ジャンプの高さを決定（指定がなければ選択された高さを使用）
+    const height = jumpHeight || this.selectedJumpHeight;
+
+    // ダッシュジャンプエンティティを生成
+    this.currentMovement = new JumpEntity(this.scene, this, 'dash', dashVelocityX, height);
+    this.isJumping = true;
+    this.state = 'jumping';
+    this.play(`${this.texture.key}_jump`, true);
+
+    // console.log(`[Fighter] Player${this.playerNumber} ダッシュジャンプ(${height})実行: 慣性=${dashVelocityX}`);
+
+    return true;
   }
 
   // クールタイムの更新（60fpsを想定）
@@ -294,7 +638,10 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   }
 
   // クールタイムをチェック
-  public isCooldownReady(type: AttackStrength): boolean {
+  public isCooldownReady(type: AttackStrength | 'dash'): boolean {
+    if (type === 'dash') {
+      return this.dashCooldown <= 0;
+    }
     return this.cooldowns[type] <= 0;
   }
 
@@ -320,19 +667,19 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
     // クールタイムチェック
     if (!this.isCooldownReady(attackStrength)) {
-      const remainingTime = (this.cooldowns[attackStrength] / 1000).toFixed(1);
-      console.log(`${attackStrength}攻撃はクールタイム中！ あと${remainingTime}秒`);
+      const _remainingTime = (this.cooldowns[attackStrength] / 1000).toFixed(1);
+      // console.log(`${attackStrength}攻撃はクールタイム中！ あと${_remainingTime}秒`);
       return;
     }
 
-    // 必殺技はゲージチェック
-    if (attackType === 'special' && this.specialMeter < 100) {
-      return;
+    // 超必殺技はゲージチェックとゲージ消費
+    if (attackType === 'superSpecial') {
+      if (this.specialMeter < 100) {
+        return;
+      }
+      this.specialMeter = 0;  // ゲージを全消費
     }
-
-    if (attackType === 'special') {
-      this.specialMeter = 0;
-    }
+    // 通常必殺技（specialHighMid, specialMidLow）はクールタイムのみで使用可能
 
     // クールタイム開始
     this.setCooldown(attackStrength);
@@ -368,6 +715,20 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     if (this.currentAttackEntity) {
       const isFinished = this.currentAttackEntity.updateFrame();
 
+      // 回避アクション中の移動処理
+      if (this.isDodging && this.currentAttackEntity.phase === 'active') {
+        // activeフレーム中に移動
+        const attackData = ATTACK_TYPES[this.currentAttackEntity.attackType];
+        const totalFrames = attackData.activeFrames;
+        // moveDistanceプロパティは回避アクション専用
+        const moveDistance = 'moveDistance' in attackData ? attackData.moveDistance : 0;
+        const movePerFrame = moveDistance / totalFrames;
+        const moveDirection = this.facingRight ? 1 : -1;
+
+        // 毎フレーム少しずつ移動
+        this.x += movePerFrame * moveDirection;
+      }
+
       if (isFinished) {
         // 全フレーム終了したら攻撃要素を破棄
         this.currentAttackEntity.destroy();
@@ -375,6 +736,13 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
         this.attackHitbox = null;
         this.isAttacking = false;
         this.currentAttack = null;
+
+        // 回避アクション終了処理
+        if (this.isDodging) {
+          this.isDodging = false;
+          this.currentDodgeType = null;
+          // console.log(`回避アクション終了: 最終位置 ${this.x}`);
+        }
 
         if ((this.body as Phaser.Physics.Arcade.Body).touching.down) {
           this.state = 'idle';
@@ -386,7 +754,195 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   // 便利メソッド（後方互換性のため残すが、新しい攻撃タイプに対応）
   punch(): void { this.performAttack('lightMid'); }
   kick(): void { this.performAttack('mediumMid'); }
-  specialAttack(): void { this.performAttack('special'); }
+  specialAttack(): void {
+    // ゲージ100の場合は超必殺技、それ以外はクールダウン必殺技（ランダムで上中or中下）
+    if (this.specialMeter >= 100 && this.isCooldownReady('special')) {
+      this.performAttack('superSpecial');
+    } else if (this.isCooldownReady('special')) {
+      // ランダムで上中または中下の必殺技を選択
+      const specialTypes: AttackType[] = ['specialHighMid', 'specialMidLow'];
+      const randomSpecial = specialTypes[Math.floor(Math.random() * specialTypes.length)];
+      this.performAttack(randomSpecial);
+    }
+  }
+
+  // 前転（上段攻撃回避・相手の背後に回り込む）
+  performRoll(): boolean {
+    // 回避中、攻撃中、空中ではできない
+    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
+    if (this.isDodging || this.isAttacking || !onGround) {
+      return false;
+    }
+
+    // クールタイムチェック
+    if (!this.isCooldownReady('dodge')) {
+      const _remainingTime = (this.cooldowns.dodge / 1000).toFixed(1);
+      // console.log(`回避アクションはクールタイム中！ あと${_remainingTime}秒`);
+      return false;
+    }
+
+    // スタミナチェック
+    if (this.guardStamina < PLAYER_CONFIG.dodgeStaminaCost) {
+      // console.log(`[Roll] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.dodgeStaminaCost}`);
+      return false;
+    }
+
+    // スタミナ消費
+    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.dodgeStaminaCost);
+    // console.log(`[Roll] スタミナ消費: -${PLAYER_CONFIG.dodgeStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
+
+    // クールタイム開始
+    this.setCooldown('dodge');
+
+    // 回避状態を設定
+    this.isDodging = true;
+    this.state = 'dodging';
+    this.currentDodgeType = 'high'; // 上段攻撃を回避
+    this.setVelocityX(0);
+
+    // 移動開始・目標位置を計算
+    const attackData = ATTACK_TYPES.roll;
+    this.dodgeStartX = this.x;
+    const moveDirection = this.facingRight ? 1 : -1;
+    const moveDistance = 'moveDistance' in attackData ? attackData.moveDistance : 150;
+    this.dodgeTargetX = this.x + (moveDistance * moveDirection);
+
+    // console.log(`前転開始: ${this.dodgeStartX} → ${this.dodgeTargetX}`);
+
+    // AttackEntityを生成（当たり判定縮小のため）
+    this.currentAttackEntity = new AttackEntity(
+      this.scene,
+      this.x,
+      this.y,
+      'roll',
+      this,
+      this.facingRight
+    );
+
+    // 後方互換性のため attackHitbox も設定
+    this.attackHitbox = this.currentAttackEntity;
+
+    return true;
+  }
+
+  // ジャンプ避け（下段攻撃回避・相手の背後に回り込む）
+  performJumpDodge(): boolean {
+    // 回避中、攻撃中、空中ではできない
+    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
+    if (this.isDodging || this.isAttacking || !onGround) {
+      return false;
+    }
+
+    // クールタイムチェック
+    if (!this.isCooldownReady('dodge')) {
+      const _remainingTime = (this.cooldowns.dodge / 1000).toFixed(1);
+      // console.log(`回避アクションはクールタイム中！ あと${_remainingTime}秒`);
+      return false;
+    }
+
+    // スタミナチェック
+    if (this.guardStamina < PLAYER_CONFIG.dodgeStaminaCost) {
+      // console.log(`[JumpDodge] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.dodgeStaminaCost}`);
+      return false;
+    }
+
+    // スタミナ消費
+    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.dodgeStaminaCost);
+    // console.log(`[JumpDodge] スタミナ消費: -${PLAYER_CONFIG.dodgeStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
+
+    // クールタイム開始
+    this.setCooldown('dodge');
+
+    // 回避状態を設定
+    this.isDodging = true;
+    this.state = 'dodging';
+    this.currentDodgeType = 'low'; // 下段攻撃を回避
+    this.setVelocityX(0);
+
+    // 移動開始・目標位置を計算
+    const attackData = ATTACK_TYPES.jumpDodge;
+    this.dodgeStartX = this.x;
+    const moveDirection = this.facingRight ? 1 : -1;
+    const moveDistance = 'moveDistance' in attackData ? attackData.moveDistance : 140;
+    this.dodgeTargetX = this.x + (moveDistance * moveDirection);
+
+    // console.log(`ジャンプ避け開始: ${this.dodgeStartX} → ${this.dodgeTargetX}`);
+
+    // AttackEntityを生成（当たり判定縮小のため）
+    this.currentAttackEntity = new AttackEntity(
+      this.scene,
+      this.x,
+      this.y,
+      'jumpDodge',
+      this,
+      this.facingRight
+    );
+
+    // 後方互換性のため attackHitbox も設定
+    this.attackHitbox = this.currentAttackEntity;
+
+    return true;
+  }
+
+  // 飛び道具発射（ゲージ消費 + 各クールタイムで性能変化）
+  shootProjectile(): ProjectileEntity | null {
+    // 攻撃中は発射できない
+    if (this.isAttacking) {
+      return null;
+    }
+
+    let projectileType: ProjectileType;
+    let usedCooldown: AttackStrength | null = null;
+
+    // 優先度: 超必殺技ゲージ > 必殺技 > 強 > 中 > 弱 > 基本
+    if (this.specialMeter >= 100) {
+      projectileType = 'projectileSuper';
+      this.specialMeter = 0;
+    } else if (this.specialMeter >= 20 && this.isCooldownReady('special')) {
+      projectileType = 'projectileSpecial';
+      this.specialMeter -= 20;
+      usedCooldown = 'special';
+    } else if (this.specialMeter >= 20 && this.isCooldownReady('heavy')) {
+      projectileType = 'projectileHeavy';
+      this.specialMeter -= 20;
+      usedCooldown = 'heavy';
+    } else if (this.specialMeter >= 20 && this.isCooldownReady('medium')) {
+      projectileType = 'projectileMedium';
+      this.specialMeter -= 20;
+      usedCooldown = 'medium';
+    } else if (this.specialMeter >= 20 && this.isCooldownReady('light')) {
+      projectileType = 'projectileLight';
+      this.specialMeter -= 20;
+      usedCooldown = 'light';
+    } else if (this.specialMeter >= 20) {
+      projectileType = 'projectileBase';
+      this.specialMeter -= 20;
+    } else {
+      // ゲージ不足
+      return null;
+    }
+
+    // クールタイム消費
+    if (usedCooldown) {
+      this.setCooldown(usedCooldown);
+    }
+
+    // 飛び道具を生成
+    const projectileData = PROJECTILE_TYPES[projectileType];
+    const offsetX = this.facingRight ? 50 : -50;
+    const projectile = new ProjectileEntity(
+      this.scene,
+      this.x + offsetX,
+      this.y,
+      projectileType,
+      projectileData,
+      this,
+      this.facingRight
+    );
+
+    // console.log(`飛び道具発射: ${projectileData.name} (威力:${projectileData.damage}, 速度:${projectileData.speed})`);
+    return projectile;
+  }
 
   block(guardType: GuardType = 'mid'): void {
     // guardTypeがnullの場合は処理しない
@@ -396,21 +952,23 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     if (!this.isBlocking) {
       // 最低限のスタミナがないとガードできない
       if (this.guardStamina < 5) {
-        console.log(`ガードスタミナ不足！`);
+        // console.log(`ガードスタミナ不足！`);
         return;
       }
       this.lastGuardStaminaDrain = Date.now();
     } else {
-      // ガード継続中のスタミナ消費
+      // ガード継続中のスタミナ消費（防御補正を適用）
       const now = Date.now();
       const timeSinceLastDrain = (now - this.lastGuardStaminaDrain) / 1000; // 秒単位
 
       if (timeSinceLastDrain >= 0.05) { // 50msごとにチェック
-        const drainAmount = GUARD_STAMINA_COSTS[guardType] * timeSinceLastDrain;
+        // 防御補正を適用（値が高いほどスタミナ消費が少ない）
+        const defensiveMultiplier = 1.0 / statToMultiplier(this.stats.defense);
+        const drainAmount = GUARD_STAMINA_COSTS[guardType] * timeSinceLastDrain * defensiveMultiplier;
 
         if (this.guardStamina < drainAmount) {
           // スタミナ切れでガード解除
-          console.log('ガードスタミナ切れ！');
+          // console.log('ガードスタミナ切れ！');
           this.stopBlocking();
           return;
         }
@@ -457,98 +1015,56 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(damage: number, knockback: number = 100, attackLevel?: AttackLevel, attackStrength?: AttackStrength): void {
-    let canGuard = false;
-    let actualGuardedLevel: AttackLevel | null = null;
+    // 回避中の判定：特定の攻撃レベルを無効化
+    if (this.isDodging && this.currentDodgeType && attackLevel) {
+      // 前転（currentDodgeType='high'）は上段攻撃を回避
+      // ジャンプ避け（currentDodgeType='low'）は下段攻撃を回避
+      let dodgeSuccess = false;
 
-    // ガード成功判定
-    if (this.isBlocking && attackLevel && this.currentGuardType) {
-      // 残スタミナ割合で成功率を計算（0-100%）
-      const staminaPercent = (this.guardStamina / this.maxGuardStamina) * 100;
-      const guardSuccessRoll = Math.random() * 100;
-
-      console.log(`ガード試行: スタミナ${staminaPercent.toFixed(1)}% vs ロール${guardSuccessRoll.toFixed(1)}`);
-
-      // ガードタイプに応じて防御できる攻撃レベルをリストアップ
-      let guardableLevels: AttackLevel[] = [];
-      switch (this.currentGuardType) {
-        case 'high':
-          guardableLevels = ['high'];
-          break;
-        case 'mid':
-          guardableLevels = ['mid'];
-          break;
-        case 'low':
-          guardableLevels = ['low'];
-          break;
-        case 'highMid':
-          guardableLevels = ['high', 'mid'];
-          break;
-        case 'midLow':
-          guardableLevels = ['mid', 'low'];
-          break;
-        case 'all':
-          guardableLevels = ['high', 'mid', 'low'];
-          break;
+      if (this.currentDodgeType === 'high' && (attackLevel === 'high' || attackLevel === 'highMid' || attackLevel === 'all')) {
+        // 前転中：上段、上中、全レーン攻撃を回避
+        dodgeSuccess = true;
+        // console.log(`前転で${attackLevel}攻撃を回避！`);
+      } else if (this.currentDodgeType === 'low' && (attackLevel === 'low' || attackLevel === 'midLow' || attackLevel === 'all')) {
+        // ジャンプ避け中：下段、中下、全レーン攻撃を回避
+        dodgeSuccess = true;
+        // console.log(`ジャンプ避けで${attackLevel}攻撃を回避！`);
       }
 
-      // スタミナ割合がロールより高ければ成功
-      if (guardSuccessRoll < staminaPercent) {
-        // 意図したガードが成功
-        if (guardableLevels.includes(attackLevel)) {
-          canGuard = true;
-          actualGuardedLevel = attackLevel;
-          console.log(`ガード成功！狙った箇所: ${attackLevel}`);
-        } else {
-          // 意図した箇所ではない場合、ランダムに別の箇所をガード
-          const otherLevels: AttackLevel[] = (['high', 'mid', 'low'] as AttackLevel[]).filter(
-            (level: AttackLevel) => !guardableLevels.includes(level)
-          );
-          if (otherLevels.length > 0) {
-            actualGuardedLevel = otherLevels[Math.floor(Math.random() * otherLevels.length)];
-            canGuard = actualGuardedLevel === attackLevel;
-            console.log(`ガード失敗→別箇所ガード: ${actualGuardedLevel} (攻撃: ${attackLevel})`);
-          }
-        }
-      } else {
-        // スタミナ不足でガード判定失敗 → ランダムに別の箇所をガード
-        const otherLevels: AttackLevel[] = (['high', 'mid', 'low'] as AttackLevel[]).filter(
-          (level: AttackLevel) => !guardableLevels.includes(level)
-        );
-        if (otherLevels.length > 0) {
-          actualGuardedLevel = otherLevels[Math.floor(Math.random() * otherLevels.length)];
-          canGuard = actualGuardedLevel === attackLevel;
-          console.log(`スタミナ不足→別箇所ガード: ${actualGuardedLevel} (攻撃: ${attackLevel})`);
-        }
+      if (dodgeSuccess) {
+        // 回避成功：ダメージなし、ノックバックなし
+        return;
       }
+      // 回避できない攻撃レベルの場合は通常通りダメージ処理へ
+      // console.log(`回避失敗：${this.currentDodgeType}回避中だが${attackLevel}攻撃は防げない`);
     }
 
-    if (canGuard) {
-      // ガード成功：ダメージとノックバックを大幅に軽減
-      damage = Math.floor(damage * 0.1);
-      knockback = Math.floor(knockback * 0.25);  // ヒット時の1/4
-      console.log(`ガード成功！(${this.currentGuardType}) knockback: ${knockback}`);
-    }
+    // ガード判定は物理エンジンで行うため、ここでは削除
+    // FightScene.tsで既にガード成功/失敗が判定され、適切なダメージ・ノックバックが渡される
 
     this.health = Math.max(0, this.health - damage);
 
-    if (!canGuard) {
-      // ガード失敗または非ガード時
+    // 削りダメージかどうかを判定（ダメージが元の10%程度なら削りダメージ = ガード成功）
+    const isChipDamage = damage <= 3; // 削りダメージは通常3以下
+
+    if (!isChipDamage) {
+      // 通常ヒット時
       this.state = 'hit';
       this.isInHitstun = true; // ヒットストップ開始
       this.play(`${this.texture.key}_hit`, true);
 
       // ノックバック（速度ベースで実装）
-      console.log(`ヒット！ knockback velocity: ${knockback}, damage: ${damage}`);
+      // console.log(`ヒット！ knockback velocity: ${knockback}, damage: ${damage}`);
 
       // ダメージに応じてヒットストップ時間を調整
       const hitStopTime = Math.min(400, 150 + damage * 8);
-      console.log(`ヒットストップ時間: ${hitStopTime}ms`);
+      // console.log(`ヒットストップ時間: ${hitStopTime}ms`);
 
       // ノックバックを即座に適用し、継続的に維持
       const body = this.body as Phaser.Physics.Arcade.Body;
       body.setVelocityX(knockback);
       body.setAllowGravity(true);
-      console.log(`実際の速度: ${body.velocity.x}`);
+      // console.log(`実際の速度: ${body.velocity.x}`);
 
       // 攻撃の強さに応じて振動の振幅を決定
       let shakeAmplitude = 2; // デフォルト（弱攻撃）
@@ -572,7 +1088,7 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       });
     } else {
       // ガード成功時は軽いノックバックと小さい振動
-      console.log(`ガード knockback velocity: ${knockback}`);
+      // console.log(`ガード knockback velocity: ${knockback}`);
       const body = this.body as Phaser.Physics.Arcade.Body;
       body.setVelocityX(knockback);
 
@@ -591,7 +1107,7 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       // ガード時も少し増える（軽減後のダメージに対して）
       const meterGain = Math.floor(damage * 1.5);
       this.specialMeter = Math.min(100, this.specialMeter + meterGain);
-      console.log(`必殺技ゲージ増加: +${meterGain} (現在: ${this.specialMeter})`);
+      // console.log(`必殺技ゲージ増加: +${meterGain} (現在: ${this.specialMeter})`);
     }
   }
 
@@ -600,12 +1116,74 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     this.canMove = false;
     this.setVelocityX(0);
     this.play(`${this.texture.key}_defeat`, true);
+
+    // ダウン演出: 後ろに倒れる
+    this.performKnockoutAnimation();
+  }
+
+  /**
+   * ノックアウト時のダウンアニメーション
+   */
+  private performKnockoutAnimation(): void {
+    const knockbackDirection = this.facingRight ? -1 : 1; // 向いている方向の逆に飛ぶ
+    const knockbackForce = 150;
+
+    // 後ろに吹っ飛ぶ
+    this.setVelocityX(knockbackDirection * knockbackForce);
+    this.setVelocityY(-200); // 少し浮く
+
+    // 回転しながら倒れる演出
+    const rotationDirection = knockbackDirection > 0 ? 1 : -1;
+    this.scene.tweens.add({
+      targets: this,
+      angle: rotationDirection * 90, // 90度回転して倒れる
+      duration: 500,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        // 回転完了後、物理ボディも回転させる（幅と高さを入れ替え）
+        const body = this.body as Phaser.Physics.Arcade.Body;
+        if (body) {
+          const originalWidth = body.width;
+          const originalHeight = body.height;
+
+          // 90度回転した状態のボディサイズ（幅と高さを入れ替え）
+          body.setSize(originalHeight, originalWidth);
+
+          // オフセットも調整（中心を維持）
+          const offsetX = (originalWidth - originalHeight) / 2;
+          const offsetY = (originalHeight - originalWidth) / 2;
+          body.setOffset(offsetX, offsetY);
+
+          // console.log(`[Fighter] Player${this.playerNumber} 物理ボディ回転: ${originalWidth}x${originalHeight} → ${originalHeight}x${originalWidth}`);
+        }
+      }
+    });
+
+    // 地面に落ちたら停止
+    const checkLanding = () => {
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      if (body.touching.down) {
+        // 速度を0に
+        this.setVelocityX(0);
+        this.setVelocityY(0);
+        // console.log(`[Fighter] Player${this.playerNumber} ノックアウト - ダウン完了`);
+      } else {
+        this.scene.time.delayedCall(16, checkLanding);
+      }
+    };
+
+    this.scene.time.delayedCall(16, checkLanding);
   }
 
   // ガード要素の更新（FightSceneから呼ばれる）
   updateGuard(): void {
     if (this.currentGuardEntity) {
       this.currentGuardEntity.update();
+    }
+
+    // ガード中は移動を完全に停止
+    if (this.isBlocking) {
+      this.setVelocityX(0);
     }
   }
 
@@ -678,6 +1256,7 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
   reset(x: number, y: number): void {
     this.setPosition(x, y);
+    this.setAngle(0); // 回転角度をリセット
     this.health = this.maxHealth;
     this.guardStamina = this.maxGuardStamina;
     this.specialMeter = 0;
@@ -686,17 +1265,40 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     this.isAttacking = false;
     this.isBlocking = false;
     this.isInHitstun = false;
+    this.isDodging = false;
+    this.isDashing = false;
+    this.isJumping = false;
     this.currentGuardType = null;
+    this.currentDodgeType = null;
     this.lastGuardStaminaDrain = 0;
     this.lastSpecialMeterGain = Date.now();
+    this.dodgeStartX = 0;
+    this.dodgeTargetX = 0;
+    this.dashCooldown = 0;
     this.setVelocity(0, 0);
 
-    // クールタイムをリセット（攻撃のみ）
+    // 当たり判定のサイズを再設定（コンストラクタと同じ設定）
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (body) {
+      // console.log(`[Fighter Reset] Player${this.playerNumber} ボディサイズ(リセット前): width=${body.width}, height=${body.height}`);
+      // 元のスプライトサイズで設定（Phaserが自動的にスケールを適用）
+      this.setBodySize(32, 54, true);
+      // console.log(`[Fighter Reset] Player${this.playerNumber} ボディサイズ(リセット後): width=${body.width}, height=${body.height}`);
+    }
+
+    // 移動エンティティをクリーンアップ
+    if (this.currentMovement) {
+      this.currentMovement.terminate();
+      this.currentMovement = null;
+    }
+
+    // クールタイムをリセット（攻撃と回避）
     this.cooldowns = {
       light: 0,
       medium: 0,
       heavy: 0,
       special: 0,
+      dodge: 0,
     };
 
     // 攻撃要素をクリーンアップ

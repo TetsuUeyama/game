@@ -54,6 +54,21 @@ export class AttackEntity extends Phaser.GameObjects.Rectangle {
         offsetY = characterHeight / 2 - segmentHeight / 2;
         height = segmentHeight;
         break;
+      case 'highMid':
+        // 上段+中段: キャラクターの上2/3
+        offsetY = -segmentHeight / 2;
+        height = segmentHeight * 2;
+        break;
+      case 'midLow':
+        // 中段+下段: キャラクターの下2/3
+        offsetY = segmentHeight / 2;
+        height = segmentHeight * 2;
+        break;
+      case 'all':
+        // 全レーン: キャラクター全体
+        offsetY = 0;
+        height = characterHeight;
+        break;
     }
 
     super(
@@ -71,13 +86,25 @@ export class AttackEntity extends Phaser.GameObjects.Rectangle {
     this.currentFrame = 0;
     this.phase = 'startup';
     this.hasHit = false;
-    this.damage = attackData.damage;
+
+    // 性能値補正を適用（数値を倍率に変換）
+    const fighterOwner = owner as Fighter;
+    const attackStat = fighterOwner.stats?.attack || 100;
+    const attackSpeedStat = fighterOwner.stats?.attackSpeed || 100;
+
+    // 数値を倍率に変換（25→0.25, 100→1.0, 150→1.5）
+    const attackMultiplier = attackStat / 100;
+    const attackSpeedMultiplier = attackSpeedStat / 100;
+
+    // 攻撃力補正を適用
+    this.damage = attackData.damage * attackMultiplier;
     this.knockback = attackData.knockback;
     this.isActive = false;
 
-    this.startupFrames = attackData.startupFrames;
-    this.activeFrames = attackData.activeFrames;
-    this.recoveryFrames = attackData.recoveryFrames;
+    // 攻撃速度補正を適用（値が大きいほど速くなる = フレーム数が少なくなる）
+    this.startupFrames = Math.max(1, Math.round(attackData.startupFrames / attackSpeedMultiplier));
+    this.activeFrames = Math.max(1, Math.round(attackData.activeFrames / attackSpeedMultiplier));
+    this.recoveryFrames = Math.max(1, Math.round(attackData.recoveryFrames / attackSpeedMultiplier));
     this.totalFrames = this.startupFrames + this.activeFrames + this.recoveryFrames;
 
     scene.add.existing(this);
@@ -138,6 +165,15 @@ export class AttackEntity extends Phaser.GameObjects.Rectangle {
         break;
       case 'low':
         offsetY = characterHeight / 2 - segmentHeight / 2;
+        break;
+      case 'highMid':
+        offsetY = -segmentHeight / 2;
+        break;
+      case 'midLow':
+        offsetY = segmentHeight / 2;
+        break;
+      case 'all':
+        offsetY = 0;
         break;
     }
 
