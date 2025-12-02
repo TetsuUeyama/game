@@ -3,14 +3,12 @@ import { MovementEntity } from './MovementEntity';
 import { Fighter } from './Fighter';
 import { MOVEMENT_CONFIG } from '../config/gameConfig';
 
-export type JumpType = 'normal' | 'dash';
 export type JumpHeight = 'small' | 'medium' | 'large';
 
 /**
  * JumpEntity - ジャンプ移動
  *
- * 通常ジャンプとダッシュジャンプを管理
- * ダッシュジャンプは慣性がつき、軌道が変化する
+ * 通常ジャンプを管理
  *
  * ジャンプの高さ:
  * - small: 50%の高さ、着地硬直10フレーム
@@ -18,7 +16,6 @@ export type JumpHeight = 'small' | 'medium' | 'large';
  * - large: 100%の高さ、着地硬直20フレーム
  */
 export class JumpEntity extends MovementEntity {
-  private jumpType: JumpType;
   private jumpHeight: JumpHeight;
   private initialVelocityX: number;
   private initialVelocityY: number;
@@ -29,13 +26,11 @@ export class JumpEntity extends MovementEntity {
   constructor(
     scene: Phaser.Scene,
     owner: Fighter,
-    jumpType: JumpType = 'normal',
-    dashVelocityX: number = 0,
-    jumpHeight: JumpHeight = 'large'
+    jumpHeight: JumpHeight = 'large',
+    inputDirection: number = 0  // -1: 後退, 0: 垂直, 1: 前進（キャラクターの向きに依存）
   ) {
-    super(scene, owner, jumpType === 'dash' ? 'dashJump' : 'jump', 0);
+    super(scene, owner, 'jump', 0);
 
-    this.jumpType = jumpType;
     this.jumpHeight = jumpHeight;
     this.hasLanded = false;
 
@@ -74,43 +69,89 @@ export class JumpEntity extends MovementEntity {
       this.gravityMultiplier = 1.0 + ((speedStat - 100) / 50);
     }
 
-    if (jumpType === 'dash') {
-      // ダッシュジャンプ: 高く飛び、横慣性が強い
-      // ジャンプの高さに応じて横移動距離も変化
-      this.initialVelocityY = MOVEMENT_CONFIG.dashJumpVelocityY * heightMultiplier;
-      this.initialVelocityX = dashVelocityX * jumpHeightMultiplier; // 横移動距離もジャンプの高さに応じて変化
-      this.hasMomentum = true;
+    // 通常ジャンプ: 角度をつけてジャンプ
+    // 地面に対する角度で計算
+    // large: 30度, medium: 60度, small: 垂直(90度)
 
-      // console.log(`[Jump] ダッシュジャンプ(${jumpHeight}): 速度値=${speedStat}, 高さ倍率=${heightMultiplier}x, 重力倍率=${this.gravityMultiplier}x, VelocityX=${this.initialVelocityX}, VelocityY=${this.initialVelocityY}, 着地硬直=${this.landingLag.toFixed(0)}ms`);
-    } else {
-      // 通常ジャンプ: 標準の高さ、慣性なし
-      this.initialVelocityY = MOVEMENT_CONFIG.normalJumpVelocity * heightMultiplier;
-      this.initialVelocityX = 0;
-      this.hasMomentum = false;
+    // 基礎速度
+    const baseVelocityY = MOVEMENT_CONFIG.normalJumpVelocity * heightMultiplier;
 
-      // console.log(`[Jump] 通常ジャンプ(${jumpHeight}): 速度値=${speedStat}, 高さ倍率=${heightMultiplier}x, 重力倍率=${this.gravityMultiplier}x, VelocityY=${this.initialVelocityY}, 着地硬直=${this.landingLag.toFixed(0)}ms`);
+    if (jumpHeight !== 'small') {
+      console.log(`[Jump DEBUG] jumpHeight=${jumpHeight}, inputDirection=${inputDirection}, baseVelocityY=${baseVelocityY}`);
     }
+
+    // 方向の決定
+    // inputDirection: -1(後退), 0(垂直), 1(前進)
+    // 前進/後退はキャラクターの向きに依存する
+    let worldDirection = 0; // ワールド座標での方向（-1: 左、1: 右）
+
+    if (inputDirection !== 0) {
+      // 入力方向がある場合: キャラクターの向きを考慮
+      const isFacingRight = owner.facingRight;
+      if (inputDirection > 0) {
+        // 前方向ジャンプ
+        worldDirection = isFacingRight ? 1 : -1;
+      } else {
+        // 後方向ジャンプ
+        worldDirection = isFacingRight ? -1 : 1;
+      }
+    }
+    // inputDirection === 0 の場合は worldDirection = 0 のまま（垂直）
+
+    if (jumpHeight === 'large') {
+      // 大ジャンプ: 地面に対して30度（垂直から60度傾く）
+      // tan(30°) = 0.577なので、横:縦 = 0.577:1
+      this.initialVelocityY = baseVelocityY;
+      this.initialVelocityX = baseVelocityY * 0.577 * worldDirection; // tan(30°) ≈ 0.577
+
+      console.log(`[Jump] ジャンプ(large): 地面から30度, inputDirection=${inputDirection}, worldDirection=${worldDirection}, VelocityX=${this.initialVelocityX.toFixed(1)}, VelocityY=${this.initialVelocityY.toFixed(1)}`);
+    } else if (jumpHeight === 'medium') {
+      // 中ジャンプ: 地面に対して60度（垂直から30度傾く）
+      // tan(60°) = 1.732なので、横:縦 = 1.732:1
+      this.initialVelocityY = baseVelocityY;
+      this.initialVelocityX = baseVelocityY * 1.732 * worldDirection; // tan(60°) ≈ 1.732
+
+      console.log(`[Jump] ジャンプ(medium): 地面から60度, inputDirection=${inputDirection}, worldDirection=${worldDirection}, VelocityX=${this.initialVelocityX.toFixed(1)}, VelocityY=${this.initialVelocityY.toFixed(1)}`);
+    } else {
+      // 小ジャンプ: 垂直
+      this.initialVelocityY = baseVelocityY;
+      this.initialVelocityX = 0;
+
+      console.log(`[Jump] ジャンプ(small): 垂直, VelocityX=0, VelocityY=${this.initialVelocityY.toFixed(1)}`);
+    }
+
+    this.hasMomentum = false;
 
     this.velocityX = this.initialVelocityX;
     this.velocityY = this.initialVelocityY;
 
+    if (jumpHeight !== 'small') {
+      console.log(`[Jump A] this.velocityX=${this.velocityX.toFixed(1)} に設定完了`);
+    }
+
     this.start();
+
+    if (jumpHeight !== 'small') {
+      console.log(`[Jump B] start()実行完了`);
+    }
   }
 
   start(): void {
+    console.log(`[Jump C] start()開始: this.velocityX=${this.velocityX.toFixed(1)}`);
+
     // ジャンプ速度を適用
     this.owner.setVelocityY(this.velocityY);
+    this.owner.setVelocityX(this.velocityX);
 
-    if (this.jumpType === 'dash') {
-      // ダッシュジャンプの場合、横方向の速度も設定
-      this.owner.setVelocityX(this.velocityX);
-    }
+    const body = this.owner.body as Phaser.Physics.Arcade.Body;
+    console.log(`[Jump D] 速度設定直後: body.velocity.x=${body.velocity.x.toFixed(1)}, body.velocity.y=${body.velocity.y.toFixed(1)}`);
 
     // 重力倍率を適用（速度100以上の場合）
     if (this.gravityMultiplier > 1.0) {
-      const body = this.owner.body as Phaser.Physics.Arcade.Body;
       body.setGravityY(1000 * (this.gravityMultiplier - 1.0));
     }
+
+    console.log(`[Jump E] start()終了`);
   }
 
   update(): boolean {
@@ -120,6 +161,15 @@ export class JumpEntity extends MovementEntity {
 
     const body = this.owner.body as Phaser.Physics.Arcade.Body;
 
+    // デバッグ: 速度を監視（medium/largeのみ）
+    if (this.jumpHeight !== 'small') {
+      if (Math.abs(body.velocity.x) < 1 && Math.abs(this.initialVelocityX) > 1) {
+        console.log(`[Jump update] 警告: 横速度が0になっています！ 初期値=${this.initialVelocityX.toFixed(1)}, 現在=${body.velocity.x.toFixed(1)}`);
+      } else if (Math.abs(body.velocity.x - this.initialVelocityX) > 10) {
+        console.log(`[Jump update] 警告: 横速度が変化しています！ 初期値=${this.initialVelocityX.toFixed(1)}, 現在=${body.velocity.x.toFixed(1)}, 差分=${(body.velocity.x - this.initialVelocityX).toFixed(1)}`);
+      }
+    }
+
     // 着地判定
     if (body.touching.down && !this.hasLanded) {
       this.hasLanded = true;
@@ -127,23 +177,8 @@ export class JumpEntity extends MovementEntity {
       return true;
     }
 
-    // 空中制御
-    if (!body.touching.down) {
-      this.applyAirControl();
-    }
-
-    // 空気抵抗による減速（ダッシュジャンプの横慣性）
-    if (this.jumpType === 'dash' && Math.abs(body.velocity.x) > 0) {
-      const resistance = MOVEMENT_CONFIG.airResistance;
-      const newVelocityX = body.velocity.x * (1 - resistance);
-
-      // 慣性が十分小さくなったら停止
-      if (Math.abs(newVelocityX) < 10) {
-        this.owner.setVelocityX(0);
-      } else {
-        this.owner.setVelocityX(newVelocityX);
-      }
-    }
+    // 放物線運動: 横方向は初期速度を維持、縦方向のみ重力の影響
+    // updateでは何もせず、Phaserの物理エンジンに任せる
 
     return false;
   }
@@ -167,14 +202,8 @@ export class JumpEntity extends MovementEntity {
       body.setGravityY(0);
     }
 
-    if (this.jumpType === 'dash' && Math.abs(body.velocity.x) > 50) {
-      // ダッシュジャンプの着地時、速度を減速
-      const friction = MOVEMENT_CONFIG.groundFriction;
-      this.owner.setVelocityX(body.velocity.x * (1 - friction));
-    } else {
-      // 通常ジャンプの着地時、速度をリセット
-      this.owner.setVelocityX(0);
-    }
+    // 着地時、横方向の速度をリセット
+    this.owner.setVelocityX(0);
 
     // 着地硬直を適用
     this.applyLandingLag();
@@ -192,13 +221,6 @@ export class JumpEntity extends MovementEntity {
   }
 
   /**
-   * ジャンプタイプを取得
-   */
-  public getJumpType(): JumpType {
-    return this.jumpType;
-  }
-
-  /**
    * 空中制御の入力を適用
    * @param direction -1: 左, 0: なし, 1: 右
    */
@@ -213,19 +235,14 @@ export class JumpEntity extends MovementEntity {
       const airControl = MOVEMENT_CONFIG.airControlFactor;
       const controlSpeed = MOVEMENT_CONFIG.walkSpeed * speedMultiplier * airControl;
 
-      // 空中制御: 通常速度の30%で左右移動可能
-      const targetVelocityX = controlSpeed * direction;
+      // 空中制御: 初期速度に空中制御を加算
+      const currentVelocityX = body.velocity.x;
+      const controlVelocityX = controlSpeed * direction;
 
-      // ダッシュジャンプの慣性と空中制御を合成
-      if (this.jumpType === 'dash') {
-        // 慣性方向と同じ方向なら加速、逆方向なら減速
-        const currentVelocity = body.velocity.x;
-        const blendedVelocity = currentVelocity + (targetVelocityX * 0.1);
-        this.owner.setVelocityX(blendedVelocity);
-      } else {
-        // 通常ジャンプは素直に空中制御
-        this.owner.setVelocityX(targetVelocityX);
-      }
+      // 初期ジャンプ速度と空中制御を合成（空中制御は弱めに適用）
+      const newVelocityX = currentVelocityX + (controlVelocityX - currentVelocityX) * 0.1;
+
+      this.owner.setVelocityX(newVelocityX);
     }
   }
 }

@@ -5,6 +5,8 @@ import { UISystem } from '../systems/UISystem';
 import { AIController } from '../systems/AIController';
 import { ProjectileEntity } from '../entities/ProjectileEntity';
 import { CONTROLS, GAME_STATES, ATTACK_TYPES, ATTACK_STRENGTH_MAP } from '../config/gameConfig';
+import { ActionExecutor } from '../systems/ActionExecutor';
+import { registerAllActions } from '../actions/ActionRegistry';
 
 type GameState = typeof GAME_STATES[keyof typeof GAME_STATES];
 
@@ -22,6 +24,17 @@ export class FightScene extends Phaser.Scene {
   private ground!: Phaser.GameObjects.Rectangle;
   private isAIMode: boolean;
   private projectiles: ProjectileEntity[] = [];
+
+  // アクション実行システム
+  public actionExecutor!: ActionExecutor;
+
+  // 行動意図表示UI
+  private player1IntentText!: Phaser.GameObjects.Text;
+  private player2IntentText!: Phaser.GameObjects.Text;
+  private player1GaugeBar!: Phaser.GameObjects.Rectangle;
+  private player2GaugeBar!: Phaser.GameObjects.Rectangle;
+  private player1GaugeBackground!: Phaser.GameObjects.Rectangle;
+  private player2GaugeBackground!: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super({ key: 'FightScene' });
@@ -89,6 +102,11 @@ export class FightScene extends Phaser.Scene {
       0x228B22
     );
     this.physics.add.existing(this.ground, true);
+
+    // アクション実行システムの初期化
+    this.actionExecutor = new ActionExecutor();
+    registerAllActions(this.actionExecutor);
+    console.log(`[FightScene] ActionExecutor initialized with ${this.actionExecutor.getRegisteredActionNames().length} actions`);
 
     this.inputSystem = new InputSystem(this);
     this.inputSystem.registerControls([CONTROLS.player1, CONTROLS.player2]);
@@ -181,6 +199,7 @@ export class FightScene extends Phaser.Scene {
     }
 
     this.createAnimations();
+    this.createIntentUI();
     this.startRound();
   }
 
@@ -199,6 +218,39 @@ export class FightScene extends Phaser.Scene {
         }
       });
     });
+  }
+
+  /**
+   * 行動意図表示UIの初期化
+   */
+  private createIntentUI(): void {
+    const screenWidth = this.cameras.main.width;
+
+    // Player1の読みゲージ（左上）
+    this.player1GaugeBackground = this.add.rectangle(20, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
+    this.player1GaugeBar = this.add.rectangle(20, 180, 120, 12, 0x00ff00).setOrigin(0, 0).setDepth(1001);
+
+    // Player1の表示（ゲージの下）
+    this.player1IntentText = this.add.text(20, 198, '', {
+      fontSize: '14px',
+      color: '#00ff00',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setDepth(1000);
+
+    // Player2の読みゲージ（右上）
+    this.player2GaugeBackground = this.add.rectangle(screenWidth - 140, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
+    this.player2GaugeBar = this.add.rectangle(screenWidth - 140, 180, 120, 12, 0xff0000).setOrigin(0, 0).setDepth(1001);
+
+    // Player2の表示（ゲージの下）
+    this.player2IntentText = this.add.text(screenWidth - 20, 198, '', {
+      fontSize: '14px',
+      color: '#ff0000',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(1, 0).setDepth(1000);
   }
 
   private startRound(): void {
@@ -332,8 +384,33 @@ export class FightScene extends Phaser.Scene {
     this.player1.setFlipX(!this.player1.facingRight);
     this.player2.setFlipX(!this.player2.facingRight);
 
+    // 行動意図UIの更新
+    this.updateIntentUI();
+
     // キャラクター同士の重なりを防ぐ
     this.preventCharacterOverlap();
+  }
+
+  /**
+   * 行動意図UIの更新
+   */
+  private updateIntentUI(): void {
+    // Player1の意図を表示（Player2から見た読み取り結果）
+    const p1ReadLevel = this.player2.readabilityGauge.getDisplayLevel();
+    const p1Intent = this.player1.actionIntent.getDisplayText(p1ReadLevel);
+    this.player1IntentText.setText(`P1: ${p1Intent.major}\n${p1Intent.minor}`);
+
+    // Player2の意図を表示（Player1から見た読み取り結果）
+    const p2ReadLevel = this.player1.readabilityGauge.getDisplayLevel();
+    const p2Intent = this.player2.actionIntent.getDisplayText(p2ReadLevel);
+    this.player2IntentText.setText(`P2: ${p2Intent.major}\n${p2Intent.minor}`);
+
+    // ゲージバー更新
+    const p1GaugeRatio = this.player1.readabilityGauge.getGauge() / this.player1.readabilityGauge.getMaxGauge();
+    const p2GaugeRatio = this.player2.readabilityGauge.getGauge() / this.player2.readabilityGauge.getMaxGauge();
+
+    this.player1GaugeBar.setScale(p1GaugeRatio, 1);
+    this.player2GaugeBar.setScale(p2GaugeRatio, 1);
   }
 
   private preventCharacterOverlap(): void {
@@ -405,12 +482,13 @@ export class FightScene extends Phaser.Scene {
     if (verticalOverlap) {
       // console.log(`[Overlap] ${topPlayer === this.player1 ? 'Player1' : 'Player2'}が相手の上に乗っている - ジャンプして回り込む`);
 
-      // ジャンプ
-      topPlayer.setVelocityY(-400);
+      // ジャンプ（やや低めに）
+      topPlayer.setVelocityY(-350);
 
-      // 相手の反対側に移動（背後に回り込む）
+      // 相手の反対側に強めに移動（背後に回り込む）
+      // 横方向の速度を強くして、確実に脱出できるようにする
       const moveDirection = topPlayer.x < bottomPlayer.x ? -1 : 1;
-      topPlayer.setVelocityX(moveDirection * -200); // 相手の反対方向に移動
+      topPlayer.setVelocityX(moveDirection * -300); // 相手の反対方向に強めに移動
     }
   }
 
@@ -458,46 +536,85 @@ export class FightScene extends Phaser.Scene {
       if (attackEntity.isActive && !attackEntity.hasHit && attackEntity.damage > 0) {
         const attackData = ATTACK_TYPES[this.player1.currentAttack];
 
-        // まず、ガードとの重なりをチェック
-        let isGuarded = false;
-        if (this.player2.currentGuardEntity) {
-          this.physics.overlap(attackEntity, this.player2.currentGuardEntity, () => {
-            // ガードエリアと攻撃が重なっている
-            isGuarded = true;
-            console.log(`P2 ガード成功！ ${attackData.name} (${attackData.level}) をガード [物理判定]`);
+        // 必殺技か通常攻撃かで判定エリアを選択
+        const isSpecialAttack = this.player1.currentAttack.includes('special') || this.player1.currentAttack.includes('Special');
+        const hitboxToCheck = isSpecialAttack ? attackEntity : attackEntity.hitboxTip;
 
-            // ガード成功時の処理（削りダメージとノックバック軽減）
-            const chipDamage = Math.floor(attackEntity.damage * 0.1);
-            const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
-            const knockbackDirection = this.player1.facingRight ? reducedKnockback : -reducedKnockback;
+        // 先端判定が存在しない（必殺技など）、または先端判定がある場合のみ処理
+        if (hitboxToCheck) {
+          // まず、ガードとの重なりをチェック
+          let isGuarded = false;
+          if (this.player2.currentGuardEntity) {
+            this.physics.overlap(hitboxToCheck, this.player2.currentGuardEntity, () => {
+              // ガードエリアと攻撃が物理的に重なっている
+              const guardEntity = this.player2.currentGuardEntity!;
 
-            this.player2.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
-            attackEntity.hasHit = true; // ガードされたので攻撃終了
-          });
-        }
+              // ガードがactiveフェーズでなければ無効
+              if (!guardEntity.isActive) {
+                console.log(`P2 ガード失敗！ ガードが${guardEntity.phase}フェーズ（activeではない）`);
+                return;
+              }
 
-        // ガードされていない場合のみ、プレイヤーへのヒット判定
-        if (!isGuarded) {
-          this.physics.overlap(attackEntity, this.player2, () => {
-            // 向きも確認（攻撃者が相手の方を向いているか）
-            const isHitting = this.player1.facingRight
-              ? this.player1.x < this.player2.x
-              : this.player1.x > this.player2.x;
+              // さらに、攻撃レベルとガードタイプのマッチングをチェック
+              const guardType = guardEntity.guardType;
+              if (!guardType) {
+                return;
+              }
+              const canBlock = this.canBlockAttack(attackData.level, guardType);
 
-            if (isHitting) {
-              console.log(`P1 Hit! ${attackData.name} (${attackData.level}) Frame:${attackEntity.currentFrame} Phase:${attackEntity.phase} Damage:${attackEntity.damage} Knockback:${attackEntity.knockback} [物理判定]`);
+              if (canBlock) {
+                isGuarded = true;
+                console.log(`P2 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
 
-              // ノックバック方向を攻撃者の向きに基づいて設定
-              const knockbackDirection = this.player1.facingRight ? attackEntity.knockback : -attackEntity.knockback;
+                // ガード成功時の処理（削りダメージとノックバック軽減）
+                const chipDamage = Math.floor(attackEntity.damage * 0.1);
+                const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
+                const knockbackDirection = this.player1.facingRight ? reducedKnockback : -reducedKnockback;
 
-              // 攻撃の強さを取得
-              const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
-              this.player2.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
+                this.player2.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
 
-              // 1回の攻撃で複数回ヒットしないようにフラグを立てる
-              attackEntity.hasHit = true;
-            }
-          });
+                // 攻撃を受けた側の読みゲージを消費
+                const p1Intent = this.player1.actionIntent.getCurrentIntent();
+                if (p1Intent) {
+                  this.player2.consumeGaugeOnHit({ major: p1Intent.major, minor: p1Intent.minor });
+                }
+
+                attackEntity.hasHit = true; // ガードされたので攻撃終了
+              } else {
+                console.log(`P2 ガード失敗！ ${attackData.name} (${attackData.level}) は ${guardEntity.guardType}ガードでは防げない`);
+              }
+            });
+          }
+
+          // ガードされていない場合のみ、プレイヤーへのヒット判定
+          if (!isGuarded) {
+            this.physics.overlap(hitboxToCheck, this.player2, () => {
+              // 向きも確認（攻撃者が相手の方を向いているか）
+              const isHitting = this.player1.facingRight
+                ? this.player1.x < this.player2.x
+                : this.player1.x > this.player2.x;
+
+              if (isHitting) {
+                console.log(`P1 Hit! ${attackData.name} (${attackData.level}) Frame:${attackEntity.currentFrame} Phase:${attackEntity.phase} Damage:${attackEntity.damage} Knockback:${attackEntity.knockback} [物理判定]`);
+
+                // ノックバック方向を攻撃者の向きに基づいて設定
+                const knockbackDirection = this.player1.facingRight ? attackEntity.knockback : -attackEntity.knockback;
+
+                // 攻撃の強さを取得
+                const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
+                this.player2.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
+
+                // 攻撃を受けた側の読みゲージを消費
+                const p1Intent = this.player1.actionIntent.getCurrentIntent();
+                if (p1Intent) {
+                  this.player2.consumeGaugeOnHit({ major: p1Intent.major, minor: p1Intent.minor });
+                }
+
+                // 1回の攻撃で複数回ヒットしないようにフラグを立てる
+                attackEntity.hasHit = true;
+              }
+            });
+          }
         }
       }
     }
@@ -511,46 +628,85 @@ export class FightScene extends Phaser.Scene {
       if (attackEntity.isActive && !attackEntity.hasHit && attackEntity.damage > 0) {
         const attackData = ATTACK_TYPES[this.player2.currentAttack];
 
-        // まず、ガードとの重なりをチェック
-        let isGuarded = false;
-        if (this.player1.currentGuardEntity) {
-          this.physics.overlap(attackEntity, this.player1.currentGuardEntity, () => {
-            // ガードエリアと攻撃が重なっている
-            isGuarded = true;
-            console.log(`P1 ガード成功！ ${attackData.name} (${attackData.level}) をガード [物理判定]`);
+        // 必殺技か通常攻撃かで判定エリアを選択
+        const isSpecialAttack = this.player2.currentAttack.includes('special') || this.player2.currentAttack.includes('Special');
+        const hitboxToCheck = isSpecialAttack ? attackEntity : attackEntity.hitboxTip;
 
-            // ガード成功時の処理（削りダメージとノックバック軽減）
-            const chipDamage = Math.floor(attackEntity.damage * 0.1);
-            const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
-            const knockbackDirection = this.player2.facingRight ? reducedKnockback : -reducedKnockback;
+        // 先端判定が存在しない（必殺技など）、または先端判定がある場合のみ処理
+        if (hitboxToCheck) {
+          // まず、ガードとの重なりをチェック
+          let isGuarded = false;
+          if (this.player1.currentGuardEntity) {
+            this.physics.overlap(hitboxToCheck, this.player1.currentGuardEntity, () => {
+              // ガードエリアと攻撃が物理的に重なっている
+              const guardEntity = this.player1.currentGuardEntity!;
 
-            this.player1.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
-            attackEntity.hasHit = true; // ガードされたので攻撃終了
-          });
-        }
+              // ガードがactiveフェーズでなければ無効
+              if (!guardEntity.isActive) {
+                console.log(`P1 ガード失敗！ ガードが${guardEntity.phase}フェーズ（activeではない）`);
+                return;
+              }
 
-        // ガードされていない場合のみ、プレイヤーへのヒット判定
-        if (!isGuarded) {
-          this.physics.overlap(attackEntity, this.player1, () => {
-            // 向きも確認（攻撃者が相手の方を向いているか）
-            const isHitting = this.player2.facingRight
-              ? this.player2.x < this.player1.x
-              : this.player2.x > this.player1.x;
+              // さらに、攻撃レベルとガードタイプのマッチングをチェック
+              const guardType = guardEntity.guardType;
+              if (!guardType) {
+                return;
+              }
+              const canBlock = this.canBlockAttack(attackData.level, guardType);
 
-            if (isHitting) {
-              console.log(`P2 Hit! ${attackData.name} (${attackData.level}) Frame:${attackEntity.currentFrame} Phase:${attackEntity.phase} Damage:${attackEntity.damage} Knockback:${attackEntity.knockback} [物理判定]`);
+              if (canBlock) {
+                isGuarded = true;
+                console.log(`P1 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
 
-              // ノックバック方向を攻撃者の向きに基づいて設定
-              const knockbackDirection = this.player2.facingRight ? attackEntity.knockback : -attackEntity.knockback;
+                // ガード成功時の処理（削りダメージとノックバック軽減）
+                const chipDamage = Math.floor(attackEntity.damage * 0.1);
+                const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
+                const knockbackDirection = this.player2.facingRight ? reducedKnockback : -reducedKnockback;
 
-              // 攻撃の強さを取得
-              const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
-              this.player1.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
+                this.player1.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
 
-              // 1回の攻撃で複数回ヒットしないようにフラグを立てる
-              attackEntity.hasHit = true;
-            }
-          });
+                // 攻撃を受けた側の読みゲージを消費
+                const p2Intent = this.player2.actionIntent.getCurrentIntent();
+                if (p2Intent) {
+                  this.player1.consumeGaugeOnHit({ major: p2Intent.major, minor: p2Intent.minor });
+                }
+
+                attackEntity.hasHit = true; // ガードされたので攻撃終了
+              } else {
+                console.log(`P1 ガード失敗！ ${attackData.name} (${attackData.level}) は ${guardEntity.guardType}ガードでは防げない`);
+              }
+            });
+          }
+
+          // ガードされていない場合のみ、プレイヤーへのヒット判定
+          if (!isGuarded) {
+            this.physics.overlap(hitboxToCheck, this.player1, () => {
+              // 向きも確認（攻撃者が相手の方を向いているか）
+              const isHitting = this.player2.facingRight
+                ? this.player2.x < this.player1.x
+                : this.player2.x > this.player1.x;
+
+              if (isHitting) {
+                console.log(`P2 Hit! ${attackData.name} (${attackData.level}) Frame:${attackEntity.currentFrame} Phase:${attackEntity.phase} Damage:${attackEntity.damage} Knockback:${attackEntity.knockback} [物理判定]`);
+
+                // ノックバック方向を攻撃者の向きに基づいて設定
+                const knockbackDirection = this.player2.facingRight ? attackEntity.knockback : -attackEntity.knockback;
+
+                // 攻撃の強さを取得
+                const attackStrength = ATTACK_STRENGTH_MAP[attackEntity.attackType];
+                this.player1.takeDamage(attackEntity.damage, knockbackDirection, attackData.level, attackStrength);
+
+                // 攻撃を受けた側の読みゲージを消費
+                const p2Intent = this.player2.actionIntent.getCurrentIntent();
+                if (p2Intent) {
+                  this.player1.consumeGaugeOnHit({ major: p2Intent.major, minor: p2Intent.minor });
+                }
+
+                // 1回の攻撃で複数回ヒットしないようにフラグを立てる
+                attackEntity.hasHit = true;
+              }
+            });
+          }
         }
       }
     }
@@ -577,16 +733,41 @@ export class FightScene extends Phaser.Scene {
       let isGuarded = false;
       if (target.currentGuardEntity) {
         this.physics.overlap(projectile, target.currentGuardEntity, () => {
-          // ガードエリアと飛び道具が重なっている
-          isGuarded = true;
-          console.log(`飛び道具ガード成功！ガードタイプ: ${target.currentGuardType} [物理判定]`);
+          // ガードエリアと飛び道具が物理的に重なっている
+          const guardEntity = target.currentGuardEntity!;
 
-          // ガード成功時の処理（削りダメージ）
-          const chipDamage = Math.floor(projectile.damage * 0.1);
-          target.takeDamage(chipDamage, 0, 'mid', 'light');
+          // ガードがactiveフェーズでなければ無効
+          if (!guardEntity.isActive) {
+            console.log(`飛び道具ガード失敗！ ガードが${guardEntity.phase}フェーズ（activeではない）`);
+            return;
+          }
 
-          // 飛び道具を消滅させる
-          projectile.onHit();
+          // 飛び道具は中段攻撃として扱う
+          const guardType = guardEntity.guardType;
+          if (!guardType) {
+            return;
+          }
+          const canBlock = this.canBlockAttack('mid', guardType);
+
+          if (canBlock) {
+            isGuarded = true;
+            console.log(`飛び道具ガード成功！ガードタイプ: ${guardEntity.guardType} [物理判定]`);
+
+            // ガード成功時の処理（削りダメージ）
+            const chipDamage = Math.floor(projectile.damage * 0.1);
+            target.takeDamage(chipDamage, 0, 'mid', 'light');
+
+            // 攻撃を受けた側の読みゲージを消費
+            const ownerIntent = projectile.owner.actionIntent.getCurrentIntent();
+            if (ownerIntent) {
+              target.consumeGaugeOnHit({ major: ownerIntent.major, minor: ownerIntent.minor });
+            }
+
+            // 飛び道具を消滅させる
+            projectile.onHit();
+          } else {
+            console.log(`飛び道具ガード失敗！ ${guardEntity.guardType}ガードでは防げない`);
+          }
         });
       }
 
@@ -595,6 +776,12 @@ export class FightScene extends Phaser.Scene {
         this.physics.overlap(projectile, target, () => {
           console.log(`飛び道具ヒット！ダメージ: ${projectile.damage} [物理判定]`);
           target.takeDamage(projectile.damage, 0, 'mid', 'light');
+
+          // 攻撃を受けた側の読みゲージを消費
+          const ownerIntent = projectile.owner.actionIntent.getCurrentIntent();
+          if (ownerIntent) {
+            target.consumeGaugeOnHit({ major: ownerIntent.major, minor: ownerIntent.minor });
+          }
 
           // 飛び道具を消滅させる
           projectile.onHit();
@@ -611,5 +798,44 @@ export class FightScene extends Phaser.Scene {
   // 飛び道具の配列を取得
   public getProjectiles(): ProjectileEntity[] {
     return this.projectiles;
+  }
+
+  /**
+   * 攻撃レベルとガードタイプのマッチングをチェック
+   * @param attackLevel 攻撃のレベル
+   * @param guardType ガードのタイプ
+   * @returns ガードが成功するかどうか
+   */
+  private canBlockAttack(attackLevel: string, guardType: string): boolean {
+    // 攻撃レベルに応じて、必要なガードタイプを判定
+    switch (attackLevel) {
+      case 'high':
+        // 上段攻撃: high, highMid, all のガードで防げる
+        return guardType === 'high' || guardType === 'highMid' || guardType === 'all';
+
+      case 'mid':
+        // 中段攻撃: mid, highMid, midLow, all のガードで防げる
+        return guardType === 'mid' || guardType === 'highMid' || guardType === 'midLow' || guardType === 'all';
+
+      case 'low':
+        // 下段攻撃: low, midLow, all のガードで防げる
+        return guardType === 'low' || guardType === 'midLow' || guardType === 'all';
+
+      case 'highMid':
+        // 上段+中段攻撃: highMid, all のガードでのみ防げる
+        return guardType === 'highMid' || guardType === 'all';
+
+      case 'midLow':
+        // 中段+下段攻撃: midLow, all のガードでのみ防げる
+        return guardType === 'midLow' || guardType === 'all';
+
+      case 'all':
+        // 全面攻撃: all のガードでのみ防げる
+        return guardType === 'all';
+
+      default:
+        // 不明な攻撃レベル: 防げない
+        return false;
+    }
   }
 }
