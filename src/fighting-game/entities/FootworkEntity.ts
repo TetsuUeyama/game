@@ -60,9 +60,8 @@ export class FootworkEntity extends MovementEntity {
       return false;
     }
 
-    // 攻撃中やガード中はフットワークを停止
-    if (this.owner.isAttacking || this.owner.isGuarding) {
-      this.owner.setVelocityX(0);
+    // ジャンプ中、攻撃中、ガード中はフットワークを停止
+    if (this.owner.isJumping || this.owner.isAttacking || this.owner.isBlocking) {
       return false;
     }
 

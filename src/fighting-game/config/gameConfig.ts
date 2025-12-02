@@ -89,6 +89,8 @@ export const ATTACK_STRENGTH_MAP: Record<keyof typeof ATTACK_TYPES, AttackStreng
   superSpecial: 'special',
   roll: 'dodge',
   jumpDodge: 'dodge',
+  airAttackDown: 'medium',
+  antiAir: 'medium',
 };
 
 // 攻撃の段階（複数レーン対応）
@@ -281,6 +283,34 @@ export const ATTACK_TYPES = {
     hitboxHeight: 40,     // ジャンプ中
     dodgeType: 'low' as AttackLevel,  // 下段攻撃を回避
     moveDistance: 140,    // 前方への移動距離
+  },
+
+  // 空中攻撃（ジャンプ中に斜め下を攻撃）
+  airAttackDown: {
+    damage: 12,
+    knockback: 80,
+    range: 70,
+    name: '空中攻撃(下)',
+    level: 'midLow' as AttackLevel,  // 中段+下段を攻撃
+    startupFrames: 6,
+    activeFrames: 8,
+    recoveryFrames: 15,
+    hitboxWidth: 60,  // 攻撃の伸びる距離（横）
+    hitboxHeight: 40,  // 攻撃の太さ（縦）
+  },
+
+  // 対空攻撃（地上から真上を攻撃）
+  antiAir: {
+    damage: 15,
+    knockback: 100,
+    range: 70,
+    name: '対空攻撃',
+    level: 'high' as AttackLevel,  // 上段を攻撃
+    startupFrames: 8,
+    activeFrames: 6,
+    recoveryFrames: 20,
+    hitboxWidth: 60,  // 攻撃の伸びる距離（横）
+    hitboxHeight: 40,  // 攻撃の太さ（縦）
   },
 } as const;
 

@@ -8,6 +8,8 @@ import { ProjectileEntity, ProjectileType } from './ProjectileEntity';
 import { MovementEntity } from './MovementEntity';
 import { DashEntity } from './DashEntity';
 import { JumpEntity } from './JumpEntity';
+import { ReadabilityGauge } from '../systems/ReadabilityGauge';
+import { ActionIntentDisplay, MajorAction, MinorAction } from '../systems/ActionIntent';
 
 export type AttackType = keyof typeof ATTACK_TYPES;
 export type ProjectileAttackType = ProjectileType;
@@ -78,17 +80,20 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   public isDashing: boolean; // ダッシュ中かどうか
   public isJumping: boolean; // ジャンプ中かどうか
   private dashCooldown: number; // ダッシュのクールタイム
-  private lastDashVelocity: number; // 最後のダッシュ速度（慣性ジャンプ用）
-  private lastDashEndTime: number; // 最後のダッシュ終了時刻（慣性ジャンプ用）
   public landingLag: number; // 着地硬直時間（ミリ秒）
   public landingLagEndTime: number; // 着地硬直終了時刻
   public selectedJumpHeight: 'small' | 'medium' | 'large'; // 選択されたジャンプの高さ
+  private lastJumpDirection: number; // ジャンプ時の最後の入力方向
 
   // クールタイム管理（攻撃のみ）
   public cooldowns: Record<AttackStrength, number>;
 
   // 性能値補正
   public stats: CharacterStats;
+
+  // 読みゲージと行動意図表示
+  public readabilityGauge: ReadabilityGauge;
+  public actionIntent: ActionIntentDisplay;
 
   constructor(
     scene: Phaser.Scene,
@@ -150,11 +155,14 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     this.isDashing = false;
     this.isJumping = false;
     this.dashCooldown = 0;
-    this.lastDashVelocity = 0;
-    this.lastDashEndTime = 0;
     this.landingLag = 0;
     this.landingLagEndTime = 0;
     this.selectedJumpHeight = 'large'; // デフォルトは大ジャンプ
+    this.lastJumpDirection = 0;
+
+    // 読みゲージと行動意図を初期化
+    this.readabilityGauge = new ReadabilityGauge();
+    this.actionIntent = new ActionIntentDisplay();
 
     // クールタイムを初期化（攻撃と回避）
     this.cooldowns = {
@@ -213,6 +221,13 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
     // 必殺技ゲージの時間経過による増加
     this.regenerateSpecialMeter();
+
+    // 読みゲージの回復（行動していない場合）
+    // 60fps想定で約16.67ms
+    const deltaTime = 1000 / 60;
+    if (!this.isAttacking && !this.isJumping && !this.isDashing && !this.isBlocking) {
+      this.readabilityGauge.recover(deltaTime);
+    }
 
     // AI制御の場合、ここで入力処理を終了（クールタイムやスタミナ回復は上で完了済み）
     if (this.isAIControlled) {
@@ -337,84 +352,32 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       return; // 着地硬直中は何もできない
     }
 
-    // ジャンプ入力（キーを離したときに実行、押下時間で高さを決定）
-    if (Phaser.Input.Keyboard.JustUp(upKey as Phaser.Input.Keyboard.Key)) {
-      if (onGround) {
-        // キー押下時間からジャンプの高さを決定
-        const keyDownDuration = (upKey as Phaser.Input.Keyboard.Key).getDuration();
-        let jumpHeight: 'small' | 'medium' | 'large';
-
-        if (keyDownDuration < 100) {
-          // 100ms未満: 小ジャンプ
-          jumpHeight = 'small';
-        } else if (keyDownDuration < 200) {
-          // 100-200ms: 中ジャンプ
-          jumpHeight = 'medium';
-        } else {
-          // 200ms以上: 大ジャンプ
-          jumpHeight = 'large';
-        }
-
-        this.selectedJumpHeight = jumpHeight;
-        // console.log(`[Input] ジャンプ高さ選択: ${jumpHeight} (押下時間:${keyDownDuration}ms)`);
-
-        // ダッシュ中ならダッシュジャンプ
-        if (this.isDashing && this.currentMovement instanceof DashEntity) {
-          this.performDashJump(this.currentMovement.getDashVelocity(), jumpHeight);
-          return; // ダッシュジャンプ後は他の処理をスキップ
-        }
-
-        // ダッシュ終了後300ms以内なら慣性ジャンプ
-        const timeSinceLastDash = Date.now() - this.lastDashEndTime;
-        const momentumWindow = 300; // 慣性が有効な時間（ミリ秒）
-
-        if (timeSinceLastDash < momentumWindow && Math.abs(this.lastDashVelocity) > 50) {
-          // console.log(`[Jump] ダッシュ慣性ジャンプ: 経過時間=${timeSinceLastDash}ms, 速度=${this.lastDashVelocity}`);
-          this.performDashJump(this.lastDashVelocity, jumpHeight);
-          return;
-        }
-
-        // 通常ジャンプ（方向入力を考慮）
-        // 左右入力があれば前ジャンプ/バックジャンプ
-        let jumpDirection = 0;
-        if (leftKey?.isDown) {
-          jumpDirection = -1;
-        } else if (rightKey?.isDown) {
-          jumpDirection = 1;
-        }
-
-        if (jumpDirection !== 0) {
-          // 前ジャンプ/バックジャンプ
-          const speedStat = this.stats?.speed || 100;
-          const speedMultiplier = 0.5 + (speedStat / 100);
-          const jumpSpeed = MOVEMENT_CONFIG.dashJumpVelocityX * speedMultiplier * 0.5; // ダッシュジャンプの半分の速度
-          const jumpVelocity = jumpSpeed * jumpDirection;
-
-          this.performDashJump(jumpVelocity, jumpHeight);
-          // console.log(`[Jump] ${jumpDirection > 0 ? '前' : 'バック'}ジャンプ: 速度=${jumpVelocity.toFixed(1)}`);
-        } else {
-          // 垂直ジャンプ
-          this.performNormalJump(jumpHeight);
-        }
-      }
-    }
-
-    // 空中制御（ジャンプ中の左右移動）
-    if (!onGround && this.isJumping && this.currentMovement instanceof JumpEntity) {
-      let airDirection = 0;
+    // ジャンプ入力（Phaserの標準的な方法：キーが押されている間に判定）
+    // ガード中はジャンプできない
+    if (Phaser.Input.Keyboard.JustDown(upKey as Phaser.Input.Keyboard.Key) && onGround && !this.isBlocking) {
+      // ジャンプキーを押した瞬間に、左右の入力を確認
+      let jumpDirection = 0;
       if (leftKey?.isDown) {
-        airDirection = -1;
+        jumpDirection = -1;
       } else if (rightKey?.isDown) {
-        airDirection = 1;
+        jumpDirection = 1;
       }
 
-      if (airDirection !== 0) {
-        this.currentMovement.applyAirInput(airDirection);
-      }
+      // ジャンプの高さは選択されたものを使用
+      const jumpHeight = this.selectedJumpHeight;
+
+      console.log(`[Input] ジャンプ実行: ${jumpHeight}, 方向=${jumpDirection === 0 ? '垂直' : jumpDirection > 0 ? '右' : '左'}`);
+
+      // 通常ジャンプを実行
+      this.performNormalJump(jumpHeight, jumpDirection);
     }
+
+    // 空中制御を無効化（放物線軌道を維持するため）
+    // 角度付きジャンプは初期速度のまま横方向に等速移動し、縦方向のみ重力の影響を受けて放物線を描く
 
     // 地上移動（ダッシュ or 通常移動）
-    if (onGround && !this.isAttacking && !this.isDodging) {
+    // ジャンプ中は横方向の速度を変更しない（放物線軌道を維持）
+    if (onGround && !this.isAttacking && !this.isDodging && !this.isJumping && !this.isBlocking) {
       if (leftKey?.isDown) {
         if (isDashInput && !this.isDashing) {
           // ダッシュ開始
@@ -509,6 +472,11 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.dashStaminaCost);
     // console.log(`[Dash] スタミナ消費: -${PLAYER_CONFIG.dashStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
 
+    // 行動意図を設定（AIの場合のみ）
+    if (this.isAIControlled) {
+      this.setDashIntent(direction);
+    }
+
     // 既存の移動エンティティを終了
     if (this.currentMovement) {
       this.currentMovement.terminate();
@@ -532,7 +500,7 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   }
 
   // 通常ジャンプを実行
-  performNormalJump(jumpHeight?: 'small' | 'medium' | 'large'): boolean {
+  performNormalJump(jumpHeight?: 'small' | 'medium' | 'large', inputDirection: number = 0): boolean {
     const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
     if (!onGround) {
       return false;
@@ -556,48 +524,18 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     // ジャンプの高さを決定（指定がなければ選択された高さを使用）
     const height = jumpHeight || this.selectedJumpHeight;
 
-    // 通常ジャンプエンティティを生成
-    this.currentMovement = new JumpEntity(this.scene, this, 'normal', 0, height);
+    // 行動意図を設定（AIの場合のみ）
+    if (this.isAIControlled) {
+      this.setJumpIntent(height, inputDirection);
+    }
+
+    // ジャンプフラグを先に立てる（JumpEntity生成前に、FootworkEntityの干渉を防ぐ）
     this.isJumping = true;
     this.state = 'jumping';
+
+    // 通常ジャンプエンティティを生成（入力方向を渡す）
+    this.currentMovement = new JumpEntity(this.scene, this, height, inputDirection);
     this.play(`${this.texture.key}_jump`, true);
-
-    return true;
-  }
-
-  // ダッシュジャンプを実行
-  performDashJump(dashVelocityX: number, jumpHeight?: 'small' | 'medium' | 'large'): boolean {
-    const onGround = (this.body as Phaser.Physics.Arcade.Body).touching.down;
-    if (!onGround) {
-      return false;
-    }
-
-    // スタミナチェック（ダッシュジャンプは通常ジャンプと同じコスト）
-    if (this.guardStamina < PLAYER_CONFIG.jumpStaminaCost) {
-      // console.log(`[DashJump] スタミナ不足: ${this.guardStamina.toFixed(1)}/${PLAYER_CONFIG.jumpStaminaCost}`);
-      return false;
-    }
-
-    // スタミナ消費
-    this.guardStamina = Math.max(0, this.guardStamina - PLAYER_CONFIG.jumpStaminaCost);
-    // console.log(`[DashJump] スタミナ消費: -${PLAYER_CONFIG.jumpStaminaCost} (残り: ${this.guardStamina.toFixed(1)})`);
-
-    // ダッシュエンティティを終了
-    if (this.currentMovement instanceof DashEntity) {
-      this.currentMovement.terminate();
-      this.isDashing = false;
-    }
-
-    // ジャンプの高さを決定（指定がなければ選択された高さを使用）
-    const height = jumpHeight || this.selectedJumpHeight;
-
-    // ダッシュジャンプエンティティを生成
-    this.currentMovement = new JumpEntity(this.scene, this, 'dash', dashVelocityX, height);
-    this.isJumping = true;
-    this.state = 'jumping';
-    this.play(`${this.texture.key}_jump`, true);
-
-    // console.log(`[Fighter] Player${this.playerNumber} ダッシュジャンプ(${height})実行: 慣性=${dashVelocityX}`);
 
     return true;
   }
@@ -660,8 +598,8 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
   performAttack(attackType: AttackType): void {
     const attackStrength = ATTACK_STRENGTH_MAP[attackType];
 
-    // 攻撃中は新しい攻撃を出せない
-    if (this.isAttacking) {
+    // 攻撃中またはガード中は新しい攻撃を出せない
+    if (this.isAttacking || this.isBlocking) {
       return;
     }
 
@@ -680,6 +618,11 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       this.specialMeter = 0;  // ゲージを全消費
     }
     // 通常必殺技（specialHighMid, specialMidLow）はクールタイムのみで使用可能
+
+    // 行動意図を設定（AIの場合のみ）
+    if (this.isAIControlled) {
+      this.setAttackIntent(attackType);
+    }
 
     // クールタイム開始
     this.setCooldown(attackStrength);
@@ -731,6 +674,12 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
       if (isFinished) {
         // 全フレーム終了したら攻撃要素を破棄
+        if (this.currentAttackEntity.motionBody) {
+          this.currentAttackEntity.motionBody.destroy();
+        }
+        if (this.currentAttackEntity.hitboxTip) {
+          this.currentAttackEntity.hitboxTip.destroy();
+        }
         this.currentAttackEntity.destroy();
         this.currentAttackEntity = null;
         this.attackHitbox = null;
@@ -944,6 +893,122 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     return projectile;
   }
 
+  /**
+   * 攻撃の行動意図を設定
+   */
+  private setAttackIntent(attackType: AttackType): void {
+    let major: MajorAction = 'attack';
+    let minor: MinorAction;
+
+    // 攻撃タイプに応じて小項目を設定
+    switch (attackType) {
+      case 'high':
+        minor = 'high-attack';
+        break;
+      case 'mid':
+        minor = 'mid-attack';
+        break;
+      case 'low':
+        minor = 'low-attack';
+        break;
+      case 'special1':
+      case 'specialHighMid':
+        minor = 'special1';
+        break;
+      case 'special2':
+      case 'specialMidLow':
+        minor = 'special2';
+        break;
+      case 'superSpecial':
+        minor = 'super-special';
+        break;
+      case 'antiAir':
+        minor = 'antiair-attack';
+        break;
+      case 'airAttackDown':
+        minor = 'air-attack';
+        break;
+      default:
+        minor = 'mid-attack';
+    }
+
+    this.actionIntent.setIntent(major, minor);
+  }
+
+  /**
+   * ジャンプの行動意図を設定
+   */
+  private setJumpIntent(height: 'small' | 'medium' | 'large', direction: number): void {
+    const major: MajorAction = 'jump';
+    let minor: MinorAction;
+
+    if (direction === 0) {
+      minor = 'vertical-jump';
+    } else if (direction > 0) {
+      minor = 'forward-jump';
+    } else {
+      minor = 'back-jump';
+    }
+
+    // 高さも情報に含める
+    const heightSuffix = height === 'small' ? '小' : height === 'medium' ? '中' : '大';
+
+    this.actionIntent.setIntent(major, minor);
+  }
+
+  /**
+   * ダッシュの行動意図を設定
+   */
+  private setDashIntent(direction: number): void {
+    const major: MajorAction = 'dash';
+    const minor: MinorAction = direction > 0 ? 'forward-dash' : 'backward-dash';
+
+    this.actionIntent.setIntent(major, minor);
+  }
+
+  /**
+   * ガードの行動意図を設定
+   */
+  private setGuardIntent(guardType: GuardType): void {
+    const major: MajorAction = 'guard';
+    let minor: MinorAction;
+
+    switch (guardType) {
+      case 'high':
+        minor = 'high-guard';
+        break;
+      case 'mid':
+        minor = 'mid-guard';
+        break;
+      case 'low':
+        minor = 'low-guard';
+        break;
+      case 'highMid':
+        minor = 'highmid-guard';
+        break;
+      case 'midLow':
+        minor = 'midlow-guard';
+        break;
+      case 'all':
+        minor = 'all-guard';
+        break;
+      default:
+        minor = 'mid-guard';
+    }
+
+    this.actionIntent.setIntent(major, minor);
+  }
+
+  /**
+   * 攻撃を受けた際に読みゲージを消費
+   * @param attackerIntent 攻撃者の行動意図
+   */
+  public consumeGaugeOnHit(attackerIntent: { major: string; minor: string }): void {
+    // 攻撃者の行動意図に基づいてゲージを消費
+    const actionKey = `${attackerIntent.major}-${attackerIntent.minor}`;
+    this.readabilityGauge.consumeGauge(actionKey);
+  }
+
   block(guardType: GuardType = 'mid'): void {
     // guardTypeがnullの場合は処理しない
     if (!guardType) return;
@@ -978,6 +1043,11 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
+    // 行動意図を設定（AIの場合のみ、ガード開始時のみ）
+    if (this.isAIControlled && !this.isBlocking) {
+      this.setGuardIntent(guardType);
+    }
+
     this.isBlocking = true;
     this.currentGuardType = guardType;
     this.state = 'blocking';
@@ -988,7 +1058,10 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     if (!this.currentGuardEntity || this.currentGuardEntity.guardType !== guardType) {
       // 既存のガード要素を削除
       if (this.currentGuardEntity) {
+        console.log(`[Guard] P${this.playerNumber} ガード変更: ${this.currentGuardEntity.guardType} → ${guardType}`);
         this.currentGuardEntity.destroy();
+      } else {
+        console.log(`[Guard] P${this.playerNumber} 新規ガード作成: ${guardType}`);
       }
 
       // 新しいガード要素を作成
@@ -1303,6 +1376,12 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
 
     // 攻撃要素をクリーンアップ
     if (this.currentAttackEntity) {
+      if (this.currentAttackEntity.motionBody) {
+        this.currentAttackEntity.motionBody.destroy();
+      }
+      if (this.currentAttackEntity.hitboxTip) {
+        this.currentAttackEntity.hitboxTip.destroy();
+      }
       this.currentAttackEntity.destroy();
       this.currentAttackEntity = null;
     }

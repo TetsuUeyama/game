@@ -1,9 +1,12 @@
 import * as Phaser from "phaser";
-import {Fighter, AttackType} from "../entities/Fighter";
+import {Fighter} from "../entities/Fighter";
 import {FightScene} from "../scenes/FightScene";
 import {ProjectileEntity} from "../entities/ProjectileEntity";
 import {FootworkEntity} from "../entities/FootworkEntity";
-import {ATTACK_TYPES, MOVEMENT_CONFIG} from "../config/gameConfig";
+import {MOVEMENT_CONFIG} from "../config/gameConfig";
+import {MajorAction, MinorAction} from "./ActionIntent";
+import {ActionContext} from "../actions/Action";
+import {ActionNames} from "../actions/ActionRegistry";
 
 // AIカスタマイズパラメータの型定義
 export interface AICustomization {
@@ -33,8 +36,6 @@ export class AIController {
   private shouldMaintainDistance: boolean; // 距離を保つべきか
   private footworkEntity: FootworkEntity | null; // フットワーク制御
   private currentIntention: "neutral" | "closing" | "retreating"; // 現在の意図
-  private shouldJumpAfterDash: boolean; // ダッシュ後にジャンプするフラグ
-  private dashStartTime: number; // ダッシュ開始時刻
 
   // AIカスタマイズパラメータ
   private aiCustomization: AICustomization;
@@ -59,8 +60,6 @@ export class AIController {
     this.shouldMaintainDistance = false; // 開幕は接近モード（積極的に近接戦）
     this.footworkEntity = null;
     this.currentIntention = "neutral";
-    this.shouldJumpAfterDash = false;
-    this.dashStartTime = 0;
 
     // AIカスタマイズパラメータを設定（デフォルト値あり）
     this.aiCustomization = aiCustomization || {
@@ -117,8 +116,8 @@ export class AIController {
     const distance = Math.abs(this.fighter.x - this.opponent.x);
     const toOpponent = this.fighter.x < this.opponent.x ? 1 : -1;
 
-    // 攻撃中、ガード中、ダッシュ中はフットワーク停止
-    if (this.fighter.isAttacking || this.isGuarding || this.fighter.isDashing) {
+    // ジャンプ中、攻撃中、ガード中、ダッシュ中はフットワーク停止
+    if (this.fighter.isJumping || this.fighter.isAttacking || this.isGuarding || this.fighter.isDashing) {
       this.footworkEntity.pause();
       return;
     }
@@ -151,38 +150,6 @@ export class AIController {
   update(time: number, keys: Map<string, Phaser.Input.Keyboard.Key>): void {
     if (this.fighter.state === "defeated") return;
 
-    // ダッシュ中のジャンプチェック
-    if (this.shouldJumpAfterDash) {
-      // console.log(`[AI-Update] ダッシュジャンプフラグON、isDashing=${this.fighter.isDashing}`);
-
-      if (this.fighter.isDashing) {
-        const timeSinceDash = time - this.dashStartTime;
-        // console.log(`[AI-Update] ダッシュ経過時間=${timeSinceDash.toFixed(0)}ms`);
-
-        // ダッシュ開始から50ms以上経過したらジャンプ
-        if (timeSinceDash >= 50 && timeSinceDash <= 250) {
-          if (this.fighter.currentMovement) {
-            const dashVel = (this.fighter.currentMovement as any).getDashVelocity?.();
-            // console.log(`[AI-Update] getDashVelocity結果=${dashVel}`);
-            if (dashVel) {
-              const jumpHeight = this.selectJumpHeight();
-              this.fighter.performDashJump(dashVel, jumpHeight);
-              // console.log(`[AI] ダッシュ中にジャンプしてダッシュジャンプへ移行 (経過:${timeSinceDash.toFixed(0)}ms, 高さ:${jumpHeight})`);
-              this.shouldJumpAfterDash = false;
-            }
-          }
-        } else if (timeSinceDash > 250) {
-          // タイミングを逃した
-          // console.log(`[AI-Update] ダッシュジャンプタイミング逃した (${timeSinceDash.toFixed(0)}ms)`);
-          this.shouldJumpAfterDash = false;
-        }
-      } else {
-        // ダッシュが既に終了している
-        // console.log(`[AI-Update] ダッシュ終了済みのためフラグリセット`);
-        this.shouldJumpAfterDash = false;
-      }
-    }
-
     // フットワーク更新
     if (this.footworkEntity && MOVEMENT_CONFIG.footworkEnabled) {
       this.updateFootwork();
@@ -190,6 +157,30 @@ export class AIController {
 
     // 戦略の動的変更
     this.updateStrategy();
+
+    const onGround = (this.fighter.body as Phaser.Physics.Arcade.Body).touching.down;
+    const opponentOnGround = (this.opponent.body as Phaser.Physics.Arcade.Body).touching.down;
+
+    // 空中攻撃の判定（自分がジャンプ中）
+    if (!onGround && !this.fighter.isAttacking && this.fighter.isCooldownReady('medium')) {
+      const distance = Math.abs(this.fighter.x - this.opponent.x);
+      // 相手が近くにいる場合（150px以内）、空中攻撃を使う
+      if (distance < 150 && Math.random() < 0.6) {
+        this.fighter.performAttack('airAttackDown');
+        return;
+      }
+    }
+
+    // 対空攻撃の判定（相手がジャンプ中、自分は地上）
+    if (onGround && !opponentOnGround && !this.fighter.isAttacking && this.fighter.isCooldownReady('medium')) {
+      const distance = Math.abs(this.fighter.x - this.opponent.x);
+      const heightDiff = this.opponent.y - this.fighter.y;
+      // 相手が上にいて近くにいる場合（横100px以内、上80px以内）
+      if (distance < 100 && heightDiff < -30 && Math.random() < 0.7) {
+        this.fighter.performAttack('antiAir');
+        return;
+      }
+    }
 
     // 飛び道具防御判定（最優先で確認）
     const projectiles = this.scene.getProjectiles();
@@ -224,7 +215,9 @@ export class AIController {
               // スタミナが極端に少ない場合（10%未満）のみジャンプ
               // console.log(`[AI-Update] スタミナ枯渇でジャンプ回避 (スタミナ:${(staminaPercent * 100).toFixed(0)}%)`);
               this.resetKeys(keys);
-              this.jump(keys, 0, this.selectJumpHeight());
+              const jumpHeight = this.selectJumpHeight();
+              const jumpDirection = (jumpHeight === 'small') ? 0 : (this.fighter.x < this.opponent.x ? 1 : -1);
+              this.jump(keys, jumpDirection, jumpHeight);
               return;
             } else {
               // 距離に応じて防御方法を選択
@@ -249,7 +242,9 @@ export class AIController {
               } else {
                 // console.log(`[AI-Update] ジャンプ回避 (距離:${Math.floor(projectileDistance)}, 確率:${((1 - guardChance) * 100).toFixed(0)}%)`);
                 this.resetKeys(keys);
-                this.jump(keys, 0, this.selectJumpHeight());
+                const jumpHeight = this.selectJumpHeight();
+                const jumpDirection = (jumpHeight === 'small') ? 0 : (this.fighter.x < this.opponent.x ? 1 : -1);
+                this.jump(keys, jumpDirection, jumpHeight);
                 return;
               }
             }
@@ -287,8 +282,12 @@ export class AIController {
         this.isGuarding = false;
         this.fighter.stopBlocking();
       } else {
-        // ガード継続中 - 毎フレームblock()を呼んでスタミナ消費を行う
-        this.fighter.block('mid');
+        // ガード継続中 - 現在のガードタイプを維持してスタミナ消費を行う
+        // Fighter.block()は同じガードタイプなら再作成しないので、これでOK
+        const currentGuard = this.fighter.currentGuardType;
+        if (currentGuard) {
+          this.fighter.block(currentGuard);
+        }
       }
       return; // ガード中は他の行動をしない
     }
@@ -360,65 +359,134 @@ export class AIController {
   }
 
   private guardAgainstAttack(keys: Map<string, Phaser.Input.Keyboard.Key>, time: number): void {
-    if (!this.opponent.currentAttack) return;
-
-    const attackData = ATTACK_TYPES[this.opponent.currentAttack];
+    // 既にガード中の場合、ガードタイプを変更しない（毎フレーム再決定しない）
+    if (this.isGuarding && this.fighter.currentGuardType) {
+      return;
+    }
 
     this.isGuarding = true;
     this.guardStartTime = time;
 
-    // スタミナ量に応じてガード範囲を決定
+    // 相手の行動意図を読み取る
+    const opponentIntent = this.readOpponentIntent();
+
+    // スタミナ量に応じてガード範囲を決定（ガード開始時のみ）
     const staminaPercent = (this.fighter.guardStamina / this.fighter.maxGuardStamina) * 100;
 
-    // スタミナが十分なら広範囲ガードを選択しやすく
-    const guardChoice = Math.random();
     let guardType: 'high' | 'mid' | 'low' | 'highMid' | 'midLow' | 'all' = 'mid';
 
-    if (staminaPercent > 60) {
-      // スタミナ豊富: 広範囲ガードを選択しやすく
-      if (guardChoice < 0.3) {
-        guardType = 'all';
-      } else if (guardChoice < 0.8) {
-        // 複合ガード（攻撃レベルに応じて）
-        if (attackData.level === 'high' || attackData.level === 'highMid') {
-          guardType = 'highMid';
-        } else if (attackData.level === 'low' || attackData.level === 'midLow') {
-          guardType = 'midLow';
-        } else {
-          guardType = Math.random() > 0.5 ? 'highMid' : 'midLow';
-        }
+    // 読みレベルに応じてガード判断を変える
+    if (opponentIntent.readLevel === 'hidden') {
+      // 相手の意図が全く読めない場合：スタミナに応じて保守的なガード
+      if (staminaPercent > 60) {
+        guardType = 'all'; // スタミナがあれば全面ガード
+      } else if (staminaPercent > 30) {
+        guardType = Math.random() > 0.5 ? 'highMid' : 'midLow'; // 複合ガード
       } else {
-        // 単一ガード
-        if (attackData.level === 'high') guardType = 'high';
-        else if (attackData.level === 'low') guardType = 'low';
-        else guardType = 'mid';
+        guardType = 'mid'; // スタミナが少なければ中段のみ
       }
-    } else if (staminaPercent > 30) {
-      // スタミナ中程度
-      if (guardChoice < 0.1) {
-        guardType = 'all';
-      } else if (guardChoice < 0.5) {
-        if (attackData.level === 'high' || attackData.level === 'highMid') {
-          guardType = 'highMid';
-        } else if (attackData.level === 'low' || attackData.level === 'midLow') {
-          guardType = 'midLow';
+    } else if (opponentIntent.readLevel === 'major-only') {
+      // 大項目のみ読める場合：「攻撃」かどうかだけわかる
+      if (opponentIntent.major === '攻撃') {
+        // 攻撃が来ることはわかるが、詳細不明
+        if (staminaPercent > 60) {
+          guardType = 'all'; // スタミナがあれば全面ガード
+        } else if (staminaPercent > 30) {
+          guardType = Math.random() > 0.5 ? 'highMid' : 'midLow';
         } else {
           guardType = 'mid';
         }
       } else {
-        if (attackData.level === 'high') guardType = 'high';
-        else if (attackData.level === 'low') guardType = 'low';
-        else guardType = 'mid';
+        // 攻撃以外（移動、ダッシュ、ジャンプなど）
+        // とりあえず中段ガード
+        guardType = 'mid';
       }
     } else {
-      // スタミナ低: 単一ガードのみ
-      if (attackData.level === 'high') guardType = 'high';
-      else if (attackData.level === 'low') guardType = 'low';
-      else guardType = 'mid';
+      // 詳細まで読める場合：小項目に応じて最適なガードを選択
+      guardType = this.selectGuardTypeFromIntent(opponentIntent.minor, staminaPercent);
     }
 
-    // Fighter.block()を直接呼ぶ
-    this.fighter.block(guardType);
+    // 新しいアクションシステムを使ってガードを実行
+    const context = this.createActionContext(keys);
+    const guardActionMap: Record<string, string> = {
+      'high': ActionNames.HIGH_GUARD,
+      'mid': ActionNames.MID_GUARD,
+      'low': ActionNames.LOW_GUARD,
+      'highMid': ActionNames.HIGH_MID_GUARD,
+      'midLow': ActionNames.MID_LOW_GUARD,
+      'all': ActionNames.ALL_GUARD
+    };
+
+    const guardAction = guardActionMap[guardType];
+    if (guardAction) {
+      const result = this.scene.actionExecutor.execute(guardAction, context);
+      if (!result.success) {
+        // アクションシステムで失敗した場合は従来のメソッドにフォールバック
+        this.fighter.block(guardType);
+      }
+    }
+  }
+
+  /**
+   * 相手の行動意図（小項目）から最適なガードタイプを選択
+   * 表示された内容に完全に合わせたガードを選択
+   */
+  private selectGuardTypeFromIntent(minorIntent: string, staminaPercent: number): 'high' | 'mid' | 'low' | 'highMid' | 'midLow' | 'all' {
+    let guardType: 'high' | 'mid' | 'low' | 'highMid' | 'midLow' | 'all' = 'mid';
+
+    // 小項目に応じて完全に一致するガードを選択
+    switch (minorIntent) {
+      case '上段攻撃':
+        guardType = 'high';
+        break;
+
+      case '中段攻撃':
+        guardType = 'mid';
+        break;
+
+      case '下段攻撃':
+        guardType = 'low';
+        break;
+
+      case '必殺技1':
+      case '必殺技2':
+        // 必殺技は複合攻撃の可能性が高いため、上中ガード
+        guardType = 'highMid';
+        break;
+
+      case '超必殺技':
+        // 超必殺技は全レーン攻撃の可能性が高いため、全面ガード
+        guardType = 'all';
+        break;
+
+      case '対空攻撃':
+        // 対空は上段
+        guardType = 'high';
+        break;
+
+      case '空中攻撃':
+        // 空中攻撃は中段
+        guardType = 'mid';
+        break;
+
+      case '???':
+        // 小項目が読めない場合：リスクを抑えるため広範囲ガード
+        if (staminaPercent > 60) {
+          guardType = 'all';
+        } else if (staminaPercent > 30) {
+          guardType = Math.random() > 0.5 ? 'highMid' : 'midLow';
+        } else {
+          guardType = 'mid';
+        }
+        break;
+
+      default:
+        // その他（攻撃以外の行動意図が表示されている場合）
+        guardType = 'mid';
+        break;
+    }
+
+    return guardType;
   }
 
 
@@ -482,8 +550,9 @@ export class AIController {
       if (Math.random() < 0.6 && onGround) {
         // console.log(`[AI] ジャンプで脱出`);
         // 相手方向に前ジャンプで飛び越える
-        const jumpDirection = this.fighter.x < this.opponent.x ? 1 : -1;
-        this.jump(keys, jumpDirection, this.selectJumpHeight());
+        const jumpHeight = this.selectJumpHeight();
+        const jumpDirection = (jumpHeight === 'small') ? 0 : 1;
+        this.jump(keys, jumpDirection, jumpHeight);
       } else {
         // 中央方向に移動
         // console.log(`[AI] 中央方向に移動`);
@@ -697,9 +766,10 @@ export class AIController {
           if (Math.random() < 0.6) {
             this.retreat(keys);
           } else {
-            // バックジャンプ（相手と反対方向）
-            const jumpDirection = this.fighter.x > this.opponent.x ? 1 : -1;
-            this.jump(keys, jumpDirection, this.selectJumpHeight());
+            // バックジャンプ（相手と反対方向 = 後方向）
+            const jumpHeight = this.selectJumpHeight();
+            const jumpDirection = (jumpHeight === 'small') ? 0 : -1;
+            this.jump(keys, jumpDirection, jumpHeight);
           }
         }
       } else if (this.currentStrategy === "defensive" && Math.random() > 0.4) {
@@ -771,38 +841,14 @@ export class AIController {
       useDashChance = 0;
     }
 
-    // ダッシュジャンプの選択肢を追加（中距離以上で有効）
-    // 確率を大幅に上げる: dashFrequency * jumpFrequency * 2.0
-    const useDashJumpChance = distance > 150 ? useDashChance * useJumpChance * 2.0 : 0;
-
-    if (Math.random() < useDashJumpChance && onGround && !this.fighter.isDashing) {
-      // ダッシュジャンプで一気に接近
-      const speedStat = this.fighter.stats?.speed || 100;
-      const speedMultiplier = 0.5 + (speedStat / 100);
-      const dashSpeed = MOVEMENT_CONFIG.dashSpeed * speedMultiplier;
-      const dashVelocity = dashSpeed * direction;
-      const jumpHeight = this.selectJumpHeight();
-
-      this.fighter.performDashJump(dashVelocity, jumpHeight);
-      // console.log(`[AI] ダッシュジャンプで一気に接近（距離:${Math.floor(distance)}, 高さ:${jumpHeight}）`);
-    } else if (Math.random() < useDashChance && onGround && !this.fighter.isDashing) {
+    if (Math.random() < useDashChance && onGround && !this.fighter.isDashing) {
       // ダッシュで一気に接近
-      const dashSuccess = this.fighter.performDash(direction);
+      const context = this.createActionContext(keys);
+      const dashAction = direction > 0 ? ActionNames.FORWARD_DASH : ActionNames.BACKWARD_DASH;
+      const result = this.scene.actionExecutor.execute(dashAction, context);
 
-      if (dashSuccess) {
+      if (result.success) {
         // console.log(`[AI] ダッシュで一気に接近（距離:${Math.floor(distance)}）`);
-
-        // ダッシュ開始直後、一定確率でジャンプしてダッシュジャンプに移行
-        // ダッシュ中のジャンプ確率: jumpFrequency * 0.6
-        const shouldJump = Math.random() < useJumpChance * 0.6;
-        // console.log(`[AI] ダッシュ実行、ジャンプ判定=${shouldJump} (確率:${(useJumpChance * 0.6 * 100).toFixed(1)}%)`);
-        if (shouldJump) {
-          this.shouldJumpAfterDash = true;
-          this.dashStartTime = this.scene.time.now;
-          // console.log(`[AI] ダッシュジャンプフラグ設定（接近）`);
-        }
-      } else {
-        // console.log(`[AI] ダッシュ失敗（クールタイム or スタミナ不足）`);
       }
     } else {
       // 通常移動で接近（速度補正を適用）
@@ -855,38 +901,14 @@ export class AIController {
       useDashChance = 0;
     }
 
-    // ダッシュジャンプの選択肢を追加（近距離で有効）
-    // 確率を大幅に上げる: dashFrequency * jumpFrequency * 1.5
-    const useDashJumpChance = distance < 150 ? useDashChance * useJumpChance * 1.5 : 0;
-
-    if (Math.random() < useDashJumpChance && onGround && !this.fighter.isDashing) {
-      // ダッシュジャンプで一気に後退
-      const speedStat = this.fighter.stats?.speed || 100;
-      const speedMultiplier = 0.5 + (speedStat / 100);
-      const dashSpeed = MOVEMENT_CONFIG.dashSpeed * speedMultiplier;
-      const dashVelocity = dashSpeed * direction;
-      const jumpHeight = this.selectJumpHeight();
-
-      this.fighter.performDashJump(dashVelocity, jumpHeight);
-      // console.log(`[AI] ダッシュジャンプで一気に後退（距離:${Math.floor(distance)}, 高さ:${jumpHeight}）`);
-    } else if (Math.random() < useDashChance && onGround && !this.fighter.isDashing) {
+    if (Math.random() < useDashChance && onGround && !this.fighter.isDashing) {
       // ダッシュで一気に後退して距離を取る
-      const dashSuccess = this.fighter.performDash(direction);
+      const context = this.createActionContext(keys);
+      const dashAction = direction > 0 ? ActionNames.FORWARD_DASH : ActionNames.BACKWARD_DASH;
+      const result = this.scene.actionExecutor.execute(dashAction, context);
 
-      if (dashSuccess) {
+      if (result.success) {
         // console.log(`[AI] ダッシュで一気に後退（距離:${Math.floor(distance)}）`);
-
-        // ダッシュ開始直後、一定確率でジャンプしてダッシュジャンプに移行
-        // ダッシュ中のジャンプ確率: jumpFrequency * 0.5
-        const shouldJump = Math.random() < useJumpChance * 0.5;
-        // console.log(`[AI] 後退ダッシュ実行、ジャンプ判定=${shouldJump} (確率:${(useJumpChance * 0.5 * 100).toFixed(1)}%)`);
-        if (shouldJump) {
-          this.shouldJumpAfterDash = true;
-          this.dashStartTime = this.scene.time.now;
-          // console.log(`[AI] ダッシュジャンプフラグ設定（後退）`);
-        }
-      } else {
-        // console.log(`[AI] 後退ダッシュ失敗（クールタイム or スタミナ不足）`);
       }
     } else {
       // 通常移動で後退（速度補正を適用）
@@ -904,34 +926,35 @@ export class AIController {
     }
   }
 
-  private jump(_keys: Map<string, Phaser.Input.Keyboard.Key>, direction: number = 0, jumpHeight?: 'small' | 'medium' | 'large'): void {
+  private jump(keys: Map<string, Phaser.Input.Keyboard.Key>, direction: number = 0, jumpHeight?: 'small' | 'medium' | 'large'): void {
     const onGround = (this.fighter.body as Phaser.Physics.Arcade.Body).touching.down;
-    if (onGround) {
-      const height = jumpHeight || this.selectJumpHeight();
+    if (!onGround) return;
 
-      // ダッシュ中ならダッシュジャンプを使用
-      if (this.fighter.isDashing && this.fighter.currentMovement) {
-        const dashVelocity = (this.fighter.currentMovement as any).getDashVelocity?.();
-        if (dashVelocity) {
-          this.fighter.performDashJump(dashVelocity, height);
-          // console.log(`[AI] ダッシュジャンプ実行 (高さ:${height})`);
-          return;
-        }
-      }
+    const height = jumpHeight || this.selectJumpHeight();
+    const context = this.createActionContext(keys);
 
-      // 方向指定がある場合は前ジャンプ/バックジャンプ
-      if (direction !== 0) {
-        const speedStat = this.fighter.stats?.speed || 100;
-        const speedMultiplier = 0.5 + (speedStat / 100);
-        const jumpSpeed = MOVEMENT_CONFIG.dashJumpVelocityX * speedMultiplier * 0.5;
-        const jumpVelocity = jumpSpeed * direction;
+    // 高さと方向に応じてアクション名を選択
+    let actionName: string;
 
-        this.fighter.performDashJump(jumpVelocity, height);
-        // console.log(`[AI] ${direction > 0 ? '前' : 'バック'}ジャンプ実行: 速度=${jumpVelocity.toFixed(1)}, 高さ=${height}`);
-      } else {
-        // 垂直ジャンプ
-        this.fighter.performNormalJump(height);
-      }
+    if (height === 'small' && direction === 0) {
+      actionName = ActionNames.SMALL_VERTICAL_JUMP;
+    } else if (height === 'medium' && direction > 0) {
+      actionName = ActionNames.MEDIUM_FORWARD_JUMP;
+    } else if (height === 'medium' && direction < 0) {
+      actionName = ActionNames.BACKWARD_JUMP;
+    } else if (height === 'large' && direction > 0) {
+      actionName = ActionNames.LARGE_FORWARD_JUMP;
+    } else if (height === 'medium' && direction === 0) {
+      actionName = ActionNames.SMALL_VERTICAL_JUMP; // fallback
+    } else {
+      // その他の組み合わせはperformNormalJumpで処理
+      this.fighter.performNormalJump(direction, height);
+      return;
+    }
+
+    const result = this.scene.actionExecutor.execute(actionName, context);
+    if (result.success) {
+      console.log(`[AI] Player${this.fighter.playerNumber} ジャンプ実行: ${actionName}`);
     }
   }
 
@@ -942,27 +965,32 @@ export class AIController {
   private selectJumpHeight(): 'small' | 'medium' | 'large' {
     const distance = Math.abs(this.fighter.x - this.opponent.x);
 
+    let height: 'small' | 'medium' | 'large';
+
     // 近距離（100未満）: 小ジャンプが有利（着地硬直が短い）
     if (distance < 100) {
       const rand = Math.random();
-      if (rand < 0.6) return 'small';      // 60%
-      else if (rand < 0.9) return 'medium'; // 30%
-      else return 'large';                  // 10%
+      if (rand < 0.6) height = 'small';      // 60%
+      else if (rand < 0.9) height = 'medium'; // 30%
+      else height = 'large';                  // 10%
     }
     // 中距離（100-200）: 中ジャンプがバランス良い
     else if (distance < 200) {
       const rand = Math.random();
-      if (rand < 0.2) return 'small';      // 20%
-      else if (rand < 0.7) return 'medium'; // 50%
-      else return 'large';                  // 30%
+      if (rand < 0.2) height = 'small';      // 20%
+      else if (rand < 0.7) height = 'medium'; // 50%
+      else height = 'large';                  // 30%
     }
     // 遠距離（200以上）: 大ジャンプで距離を稼ぐ
     else {
       const rand = Math.random();
-      if (rand < 0.1) return 'small';      // 10%
-      else if (rand < 0.4) return 'medium'; // 30%
-      else return 'large';                  // 60%
+      if (rand < 0.1) height = 'small';      // 10%
+      else if (rand < 0.4) height = 'medium'; // 30%
+      else height = 'large';                  // 60%
     }
+
+    console.log(`[AI] ジャンプ高さ選択: ${height} (距離: ${distance.toFixed(0)})`);
+    return height;
   }
 
 
@@ -970,6 +998,9 @@ export class AIController {
     const onGround = (this.fighter.body as Phaser.Physics.Arcade.Body).touching.down;
 
     if (!onGround) return;
+
+    // ActionContextを作成
+    const context = this.createActionContext(_keys);
 
     // 体力と戦略に応じて攻撃を選択
     const healthPercent = this.fighter.health / this.fighter.maxHealth;
@@ -1018,128 +1049,86 @@ export class AIController {
     }
 
     // 超必殺技（ゲージ100）が使える場合、戦略的に使用
-    // specialMeterThreshold以上、かつゲージ維持値を残せる場合
     const canUseSuperSpecial = this.fighter.specialMeter >= 100 &&
                                this.fighter.specialMeter >= this.aiCustomization.specialMeterThreshold;
 
-    if (canUseSuperSpecial && this.fighter.isCooldownReady("special")) {
-      // 超必殺技の間合いチェック（range: 150）
+    if (canUseSuperSpecial) {
       const SUPER_SPECIAL_RANGE = 150 + 30;
 
       if (distance <= SUPER_SPECIAL_RANGE) {
-        let useSuperSpecialChance = 0.5; // 基本50%
+        let useSuperSpecialChance = 0.5;
 
-        // 相手の体力が少ない場合、決定打として使いやすい
         if (opponentHealthPercent < 0.3) {
-          useSuperSpecialChance = 0.8; // 80%
+          useSuperSpecialChance = 0.8;
         } else if (opponentHealthPercent < 0.5) {
-          useSuperSpecialChance = 0.65; // 65%
+          useSuperSpecialChance = 0.65;
         }
 
-        // 自分の体力が少ない場合、逆転を狙って使う
         if (healthPercent < 0.3) {
-          useSuperSpecialChance = Math.max(useSuperSpecialChance, 0.7); // 最低70%
+          useSuperSpecialChance = Math.max(useSuperSpecialChance, 0.7);
         }
 
         if (Math.random() < useSuperSpecialChance) {
-          // console.log(`[AI-Attack] 超必殺技発動！ 距離:${Math.floor(distance)}`);
-          this.fighter.performAttack("superSpecial");
-          return;
+          const result = this.scene.actionExecutor.execute(ActionNames.SUPER_SPECIAL, context);
+          if (result.success) {
+            return;
+          }
         }
       }
     }
 
     // 通常必殺技（クールタイムのみ）を使う判定
-    // specialMeterThreshold以上で使用可能
     const canUseSpecial = this.fighter.specialMeter >= this.aiCustomization.specialMeterThreshold;
 
-    if (canUseSpecial && this.fighter.isCooldownReady("special") && distance <= SPECIAL_ATTACK_RANGE) {
-      let useSpecialChance = 0.3; // 基本30%
+    if (canUseSpecial && distance <= SPECIAL_ATTACK_RANGE) {
+      let useSpecialChance = 0.3;
 
-      // 相手の体力が少ない場合
       if (opponentHealthPercent < 0.4) {
-        useSpecialChance = 0.5; // 50%
+        useSpecialChance = 0.5;
       }
 
       if (Math.random() < useSpecialChance) {
         // ランダムで上中または中下の必殺技を選択
-        const specialTypes: AttackType[] = ["specialHighMid", "specialMidLow"];
-        const randomSpecial = specialTypes[Math.floor(Math.random() * specialTypes.length)];
-        // console.log(`[AI-Attack] 通常必殺技発動: ${randomSpecial} 距離:${Math.floor(distance)}`);
-        this.fighter.performAttack(randomSpecial);
-        return;
-      }
-    }
-
-    // 通常攻撃：距離に応じて適切な攻撃を選択
-    let attackChoice: AttackType;
-
-    // 攻撃レベル（上段・中段・下段）をランダムに選択
-    const levels: Array<"High" | "Mid" | "Low"> = ["High", "Mid", "Low"];
-    const level = levels[Math.floor(Math.random() * levels.length)];
-
-    // 距離に応じた攻撃選択
-    if (distance <= LIGHT_ATTACK_RANGE) {
-      // 最近接距離：全ての攻撃が届く
-      // console.log(`[AI-Attack] 最近接距離（${Math.floor(distance)} <= ${LIGHT_ATTACK_RANGE}）`);
-
-      if (this.currentStrategy === "aggressive") {
-        // 攻撃的: 強攻撃→中攻撃→弱攻撃の優先順位
-        if (this.fighter.isCooldownReady("heavy")) {
-          attackChoice = `heavy${level}` as AttackType;
-        } else if (this.fighter.isCooldownReady("medium")) {
-          attackChoice = `medium${level}` as AttackType;
-        } else if (this.fighter.isCooldownReady("light")) {
-          attackChoice = `light${level}` as AttackType;
-        } else {
-          return; // 全てクールタイム中
-        }
-      } else if (this.currentStrategy === "defensive") {
-        // 防御的: 弱攻撃で素早く
-        if (this.fighter.isCooldownReady("light")) {
-          attackChoice = `light${level}` as AttackType;
-        } else if (this.fighter.isCooldownReady("medium")) {
-          attackChoice = `medium${level}` as AttackType;
-        } else {
-          return;
-        }
-      } else {
-        // バランス: 中攻撃中心
-        const rand = Math.random();
-        if (rand > 0.7 && this.fighter.isCooldownReady("heavy")) {
-          attackChoice = `heavy${level}` as AttackType;
-        } else if (rand > 0.3 && this.fighter.isCooldownReady("medium")) {
-          attackChoice = `medium${level}` as AttackType;
-        } else if (this.fighter.isCooldownReady("light")) {
-          attackChoice = `light${level}` as AttackType;
-        } else {
+        const specialActions = [ActionNames.SPECIAL_HIGH_MID, ActionNames.SPECIAL_MID_LOW];
+        const randomSpecial = specialActions[Math.floor(Math.random() * specialActions.length)];
+        const result = this.scene.actionExecutor.execute(randomSpecial, context);
+        if (result.success) {
           return;
         }
       }
-    } else if (distance <= MEDIUM_ATTACK_RANGE) {
-      // 中距離：中攻撃と強攻撃が届く
-      // console.log(`[AI-Attack] 中距離（${Math.floor(distance)} <= ${MEDIUM_ATTACK_RANGE}）`);
-
-      if (this.fighter.isCooldownReady("heavy")) {
-        attackChoice = `heavy${level}` as AttackType;
-      } else if (this.fighter.isCooldownReady("medium")) {
-        attackChoice = `medium${level}` as AttackType;
-      } else {
-        return; // 弱攻撃は届かないので攻撃しない
-      }
-    } else {
-      // 遠距離：強攻撃のみ届く
-      // console.log(`[AI-Attack] 遠距離（${Math.floor(distance)} <= ${HEAVY_ATTACK_RANGE}）`);
-
-      if (this.fighter.isCooldownReady("heavy")) {
-        attackChoice = `heavy${level}` as AttackType;
-      } else {
-        return; // 強攻撃以外は届かないので攻撃しない
-      }
     }
 
-    // console.log(`[AI-Attack] 攻撃実行: ${attackChoice} 距離:${Math.floor(distance)}`);
-    this.fighter.performAttack(attackChoice);
+    // 通常攻撃：ActionExecutorを使って利用可能な攻撃を取得
+    const availableAttacks = this.scene.actionExecutor.getAvailableActions('attack', context);
+
+    if (availableAttacks.length === 0) {
+      return; // 実行可能な攻撃がない
+    }
+
+    // 戦略に応じて攻撃を選択
+    let selectedAttack = availableAttacks[0]; // デフォルトは優先度最高の攻撃
+
+    if (this.currentStrategy === "aggressive") {
+      // 攻撃的戦略：強攻撃を優先
+      const heavyAttacks = availableAttacks.filter(a => a.name.startsWith('heavy'));
+      if (heavyAttacks.length > 0) {
+        selectedAttack = heavyAttacks[0];
+      }
+    } else if (this.currentStrategy === "defensive") {
+      // 防御的戦略：弱攻撃を優先（素早い）
+      const lightAttacks = availableAttacks.filter(a => a.name.startsWith('light'));
+      if (lightAttacks.length > 0) {
+        selectedAttack = lightAttacks[0];
+      }
+    }
+    // balanced戦略の場合は優先度順のまま（中攻撃が中心になる）
+
+    // 選択した攻撃を実行
+    const result = this.scene.actionExecutor.execute(selectedAttack.name, context);
+
+    if (result.success) {
+      console.log(`[AI-Attack] ${this.fighter.playerNumber === 1 ? 'P1' : 'P2'} 攻撃実行: ${selectedAttack.name} 距離:${Math.floor(distance)}`);
+    }
   }
 
   private resetKeys(keys: Map<string, Phaser.Input.Keyboard.Key>): void {
@@ -1179,5 +1168,31 @@ export class AIController {
         this.actionDelay = 200;
         break;
     }
+  }
+
+  /**
+   * 相手の行動意図を読み取る
+   */
+  private readOpponentIntent(): { major: string; minor: string; readLevel: 'full' | 'major-only' | 'hidden' } {
+    const readLevel = this.opponent.readabilityGauge.getDisplayLevel();
+    const intent = this.opponent.actionIntent.getDisplayText(readLevel);
+
+    return {
+      major: intent.major,
+      minor: intent.minor,
+      readLevel
+    };
+  }
+
+  /**
+   * ActionContextを作成
+   */
+  private createActionContext(keys?: Map<string, Phaser.Input.Keyboard.Key>): ActionContext {
+    return {
+      fighter: this.fighter,
+      opponent: this.opponent,
+      scene: this.scene,
+      keys
+    };
   }
 }
