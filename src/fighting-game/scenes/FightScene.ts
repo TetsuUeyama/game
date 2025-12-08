@@ -11,38 +11,95 @@ import { registerAllActions } from '../actions/ActionRegistry';
 type GameState = typeof GAME_STATES[keyof typeof GAME_STATES];
 
 export class FightScene extends Phaser.Scene {
-  private player1!: Fighter;
-  private player2!: Fighter;
-  private inputSystem!: InputSystem;
-  private uiSystem!: UISystem;
-  private ai1!: AIController;
-  private ai2!: AIController;
-  private gameState: GameState;
-  private currentRound: number;
-  private player1Wins: number;
-  private player2Wins: number;
-  private ground!: Phaser.GameObjects.Rectangle;
-  private isAIMode: boolean;
-  private projectiles: ProjectileEntity[] = [];
+  // プレイヤーエンティティ
+  private player1!: Fighter;  // プレイヤー1（左側・緑）
+  private player2!: Fighter;  // プレイヤー2（右側・赤）
 
-  // アクション実行システム
-  public actionExecutor!: ActionExecutor;
+  // システム
+  private inputSystem!: InputSystem;  // キー入力管理
+  private uiSystem!: UISystem;  // UI表示管理（体力バー、必殺技ゲージなど）
+  private ai1!: AIController;  // プレイヤー1のAI制御
+  private ai2!: AIController;  // プレイヤー2のAI制御
 
-  // 行動意図表示UI
-  private player1IntentText!: Phaser.GameObjects.Text;
-  private player2IntentText!: Phaser.GameObjects.Text;
-  private player1GaugeBar!: Phaser.GameObjects.Rectangle;
-  private player2GaugeBar!: Phaser.GameObjects.Rectangle;
-  private player1GaugeBackground!: Phaser.GameObjects.Rectangle;
-  private player2GaugeBackground!: Phaser.GameObjects.Rectangle;
+  // ゲーム状態
+  private gameState: GameState;  // 現在のゲーム状態（READY, FIGHTING, ROUND_END, GAME_OVER）
+  private currentRound: number;  // 現在のラウンド番号
+  private player1Wins: number;  // プレイヤー1の勝利数
+  private player2Wins: number;  // プレイヤー2の勝利数
+
+  // 環境オブジェクト
+  private ground!: Phaser.GameObjects.Rectangle;  // 地面（静的な物理オブジェクト）
+
+  // モード設定
+  private isAIMode: boolean;  // AI対AI自動対戦モード（true = AI同士、false = 手動操作可能）
+
+  // 飛び道具管理
+  private projectiles: ProjectileEntity[] = [];  // 発射された全飛び道具の配列
+
+  // アクション実行システム（Command Pattern実装）
+  public actionExecutor!: ActionExecutor;  // 全アクション（攻撃・移動・防御）を統括管理
+
+  // 行動意図表示UI（読みゲージシステム）
+  private player1IntentText!: Phaser.GameObjects.Text;  // P1の行動意図テキスト
+  private player2IntentText!: Phaser.GameObjects.Text;  // P2の行動意図テキスト
+  private player1GaugeBar!: Phaser.GameObjects.Rectangle;  // P1の読みゲージバー
+  private player2GaugeBar!: Phaser.GameObjects.Rectangle;  // P2の読みゲージバー
+  private _player1GaugeBackground!: Phaser.GameObjects.Rectangle;  // P1ゲージ背景（表示のみ）
+  private _player2GaugeBackground!: Phaser.GameObjects.Rectangle;  // P2ゲージ背景（表示のみ）
 
   constructor() {
     super({ key: 'FightScene' });
-    this.gameState = GAME_STATES.READY;
-    this.currentRound = 1;
-    this.player1Wins = 0;
-    this.player2Wins = 0;
-    this.isAIMode = true; // AI対AI自動対戦モード
+    // 初期ゲーム状態の設定
+    this.gameState = GAME_STATES.READY;  // ラウンド開始前の準備状態
+    this.currentRound = 1;  // 第1ラウンドから開始
+    this.player1Wins = 0;  // 勝利数リセット
+    this.player2Wins = 0;  // 勝利数リセット
+    this.isAIMode = true;  // AI対AI自動対戦モード（falseで手動操作可能）
+  }
+
+  /**
+   * プレイヤー設定を取得（window.getPlayerConfigsまたはデフォルト値）
+   * 設定の読み込みを一元管理（常に最新の値を取得）
+   */
+  private getPlayerConfigs() {
+    // window.getPlayerConfigs関数が存在すれば実行（React側の最新値を取得）
+    if (typeof window !== 'undefined' && window.getPlayerConfigs) {
+      return window.getPlayerConfigs();
+    }
+
+    // デフォルト設定を返す（スタンドアロン動作時）
+    return {
+      player1: {
+        characterId: 1,
+        stats: { hp: 100, attack: 100, attackSpeed: 100, defense: 100, specialAttack: 100, specialDefense: 100, speed: 100 },
+        aiCustomization: {
+          preferredDistance: 200,
+          closeRangeAggression: 0.7,
+          longRangeAggression: 0.5,
+          jumpFrequency: 0.3,
+          dashFrequency: 0.5,
+          specialMeterThreshold: 80,
+          specialMeterReserve: 30,
+          staminaThreshold: 30,
+          staminaReserve: 10,
+        },
+      },
+      player2: {
+        characterId: 2,
+        stats: { hp: 100, attack: 100, attackSpeed: 100, defense: 100, specialAttack: 100, specialDefense: 100, speed: 100 },
+        aiCustomization: {
+          preferredDistance: 200,
+          closeRangeAggression: 0.7,
+          longRangeAggression: 0.5,
+          jumpFrequency: 0.3,
+          dashFrequency: 0.5,
+          specialMeterThreshold: 80,
+          specialMeterReserve: 30,
+          staminaThreshold: 30,
+          staminaReserve: 10,
+        },
+      },
+    };
   }
 
   preload(): void {
@@ -92,73 +149,46 @@ export class FightScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 背景色設定（空色）
     this.cameras.main.setBackgroundColor('#87CEEB');
 
+    // 地面の作成（画面下部の緑の矩形）
     this.ground = this.add.rectangle(
-      this.cameras.main.width / 2,
-      this.cameras.main.height - 50,
-      this.cameras.main.width,
-      100,
-      0x228B22
+      this.cameras.main.width / 2,  // X座標: 画面中央
+      this.cameras.main.height - 50,  // Y座標: 画面下部から50px上
+      this.cameras.main.width,  // 幅: 画面全体
+      100,  // 高さ: 100px
+      0x228B22  // 色: 緑
     );
-    this.physics.add.existing(this.ground, true);
+    this.physics.add.existing(this.ground, true);  // 物理エンジンに静的オブジェクトとして追加
 
-    // アクション実行システムの初期化
-    this.actionExecutor = new ActionExecutor();
-    registerAllActions(this.actionExecutor);
+    // アクション実行システムの初期化（Command Pattern）
+    this.actionExecutor = new ActionExecutor();  // アクション実行エンジン作成
+    registerAllActions(this.actionExecutor);  // 全26個のアクション（攻撃12 + 移動8 + 防御6）を登録
     console.log(`[FightScene] ActionExecutor initialized with ${this.actionExecutor.getRegisteredActionNames().length} actions`);
 
-    this.inputSystem = new InputSystem(this);
-    this.inputSystem.registerControls([CONTROLS.player1, CONTROLS.player2]);
+    // 入力システムの初期化
+    this.inputSystem = new InputSystem(this);  // キーボード入力管理システム
+    this.inputSystem.registerControls([CONTROLS.player1, CONTROLS.player2]);  // 両プレイヤーのキー設定登録
 
-    // window.playerConfigsから設定を読み込む（型安全）
-    // console.log('[FightScene] window.playerConfigs:', typeof window !== 'undefined' ? window.playerConfigs : 'undefined');
-    const playerConfigs = (typeof window !== 'undefined' && window.playerConfigs) ? window.playerConfigs : {
-      player1: {
-        characterId: 1,
-        stats: { hp: 100, attack: 100, attackSpeed: 100, defense: 100, specialAttack: 100, specialDefense: 100, speed: 100 },
-        aiCustomization: {
-          preferredDistance: 200,
-          closeRangeAggression: 0.7,
-          longRangeAggression: 0.5,
-          jumpFrequency: 0.3,
-          dashFrequency: 0.5,
-          specialMeterThreshold: 80,
-          specialMeterReserve: 30,
-          staminaThreshold: 30,
-          staminaReserve: 10,
-        },
-      },
-      player2: {
-        characterId: 2,
-        stats: { hp: 100, attack: 100, attackSpeed: 100, defense: 100, specialAttack: 100, specialDefense: 100, speed: 100 },
-        aiCustomization: {
-          preferredDistance: 200,
-          closeRangeAggression: 0.7,
-          longRangeAggression: 0.5,
-          jumpFrequency: 0.3,
-          dashFrequency: 0.5,
-          specialMeterThreshold: 80,
-          specialMeterReserve: 30,
-          staminaThreshold: 30,
-          staminaReserve: 10,
-        },
-      },
-    };
+    // プレイヤー設定の読み込み（一元管理された関数から取得）
+    const playerConfigs = this.getPlayerConfigs();
 
+    // プレイヤー1の生成（左側スタート）
     this.player1 = new Fighter(
-      this,
-      200,
-      this.cameras.main.height - 200,
-      'player1',
-      CONTROLS.player1,
-      1,
-      playerConfigs.player1.stats
+      this,  // シーンインスタンス
+      200,  // 初期X座標（左寄り）
+      this.cameras.main.height - 200,  // 初期Y座標
+      'player1',  // テクスチャキー
+      CONTROLS.player1,  // 操作キー設定
+      1,  // プレイヤー番号
+      playerConfigs.player1.stats  // ステータス
     );
 
+    // プレイヤー2の生成（右側スタート）
     this.player2 = new Fighter(
       this,
-      this.cameras.main.width - 200,
+      this.cameras.main.width - 200,  // 初期X座標（右寄り）
       this.cameras.main.height - 200,
       'player2',
       CONTROLS.player2,
@@ -166,26 +196,25 @@ export class FightScene extends Phaser.Scene {
       playerConfigs.player2.stats
     );
 
-    this.physics.add.collider(this.player1, this.ground);
-    this.physics.add.collider(this.player2, this.ground);
+    // 物理衝突判定の設定
+    this.physics.add.collider(this.player1, this.ground);  // P1と地面
+    this.physics.add.collider(this.player2, this.ground);  // P2と地面
+    this.physics.add.collider(this.player1, this.player2);  // P1とP2の押し合い
 
-    // プレイヤー同士の衝突判定を追加
-    this.physics.add.collider(this.player1, this.player2);
-
-    // 攻撃判定のオーバーラップは毎フレームupdateで動的にチェック
+    // 攻撃判定は毎フレームupdate()内で動的にチェック
     // （AttackEntityが動的に生成・破棄されるため、ここでは設定しない）
 
-    // 初回のボディサイズを強制的に設定（テクスチャロード後に確実に設定）
+    // 初回のボディサイズを強制的に設定（テクスチャロード後に確実に適用）
     this.time.delayedCall(10, () => {
       const _body1 = this.player1.body as Phaser.Physics.Arcade.Body;
       const _body2 = this.player2.body as Phaser.Physics.Arcade.Body;
       if (_body1 && _body2) {
-        this.player1.setBodySize(32, 54, true);
+        this.player1.setBodySize(32, 54, true);  // キャラクター当たり判定サイズ
         this.player2.setBodySize(32, 54, true);
-        // console.log(`[FightScene Create] 初回ボディサイズ強制設定: Player1=${_body1.width}x${_body1.height}, Player2=${_body2.width}x${_body2.height}`);
       }
     });
 
+    // UIシステムの初期化（体力バー、ゲージ、タイマーなど）
     this.uiSystem = new UISystem(this);
 
     // AIコントローラーの初期化
@@ -194,13 +223,53 @@ export class FightScene extends Phaser.Scene {
       this.player1.isAIControlled = true;
       this.player2.isAIControlled = true;
 
+      // AI1: player1を制御、player2を対戦相手として認識
       this.ai1 = new AIController(this.player1, this.player2, this, 'medium', playerConfigs.player1.aiCustomization);
+      // AI2: player2を制御、player1を対戦相手として認識
       this.ai2 = new AIController(this.player2, this.player1, this, 'medium', playerConfigs.player2.aiCustomization);
     }
 
-    this.createAnimations();
-    this.createIntentUI();
-    this.startRound();
+    this.createAnimations();  // アニメーション定義作成
+    this.createIntentUI();  // 行動意図表示UIの作成
+
+    // UI設定変更イベントのリスナー登録
+    this.setupConfigUpdateListener();
+
+    this.startRound();  // ラウンド開始
+  }
+
+  /**
+   * UI設定変更イベントのリスナーを登録
+   * React側から設定変更が通知されたらリアルタイム反映
+   */
+  private setupConfigUpdateListener(): void {
+    if (typeof window === 'undefined') return;
+
+    // カスタムイベントリスナー
+    const handleConfigUpdate = () => {
+      const configs = this.getPlayerConfigs();
+
+      // ステータス更新
+      this.player1.updateStats(configs.player1.stats);
+      this.player2.updateStats(configs.player2.stats);
+
+      // AIカスタマイズ更新
+      if (this.ai1) {
+        this.ai1.updateCustomization(configs.player1.aiCustomization);
+      }
+      if (this.ai2) {
+        this.ai2.updateCustomization(configs.player2.aiCustomization);
+      }
+
+      console.log('[FightScene] 設定をリアルタイム反映しました');
+    };
+
+    window.addEventListener('playerConfigsUpdated', handleConfigUpdate);
+
+    // クリーンアップ用（シーン破棄時）
+    this.events.on('shutdown', () => {
+      window.removeEventListener('playerConfigsUpdated', handleConfigUpdate);
+    });
   }
 
   private createAnimations(): void {
@@ -227,7 +296,7 @@ export class FightScene extends Phaser.Scene {
     const screenWidth = this.cameras.main.width;
 
     // Player1の読みゲージ（左上）
-    this.player1GaugeBackground = this.add.rectangle(20, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
+    this._player1GaugeBackground = this.add.rectangle(20, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
     this.player1GaugeBar = this.add.rectangle(20, 180, 120, 12, 0x00ff00).setOrigin(0, 0).setDepth(1001);
 
     // Player1の表示（ゲージの下）
@@ -240,7 +309,7 @@ export class FightScene extends Phaser.Scene {
     }).setDepth(1000);
 
     // Player2の読みゲージ（右上）
-    this.player2GaugeBackground = this.add.rectangle(screenWidth - 140, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
+    this._player2GaugeBackground = this.add.rectangle(screenWidth - 140, 180, 120, 12, 0x333333).setOrigin(0, 0).setDepth(1000);
     this.player2GaugeBar = this.add.rectangle(screenWidth - 140, 180, 120, 12, 0xff0000).setOrigin(0, 0).setDepth(1001);
 
     // Player2の表示（ゲージの下）
@@ -314,7 +383,10 @@ export class FightScene extends Phaser.Scene {
           3000
         );
         this.time.delayedCall(3000, () => {
-          this.resetGame();
+          // マッチ終了イベントを発火してキャラクター選択画面に戻る
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('matchEnd'));
+          }
         });
       });
     } else {
@@ -334,82 +406,87 @@ export class FightScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    // FIGHTING状態以外では更新処理をスキップ
     if (this.gameState !== GAME_STATES.FIGHTING) return;
 
+    // キー入力状態の取得
     const keys = this.inputSystem.getKeys();
 
     // AIモードの場合、AIコントローラーを更新
     if (this.isAIMode) {
-      this.ai1.update(time, keys);
-      this.ai2.update(time, keys);
+      this.ai1.update(time, keys);  // AI1の行動決定・実行
+      this.ai2.update(time, keys);  // AI2の行動決定・実行
     }
 
-    // Fighter.update()でクールタイムやスタミナ回復を実行
-    // AI制御の場合は、Fighter内部で入力処理をスキップする
+    // Fighterの状態更新（クールタイム、スタミナ回復など）
+    // AI制御の場合、Fighter内部で入力処理はスキップされる
     this.player1.update(keys);
     this.player2.update(keys);
 
-    // 攻撃要素のフレーム更新
+    // 攻撃エンティティのフレーム更新（startup→active→recoveryのフェーズ管理）
     this.player1.updateAttack();
     this.player2.updateAttack();
 
-    // ガード要素の更新
+    // ガードエンティティの更新
     this.player1.updateGuard();
     this.player2.updateGuard();
 
-    // 当たり判定の可視化を更新
+    // ハートボックス（やられ判定）の可視化更新
     this.player1.updateHurtbox();
     this.player2.updateHurtbox();
 
+    // 攻撃ヒット判定チェック
     this.checkAttackCollisions();
 
-    // 飛び道具の更新と衝突判定
+    // 飛び道具の移動・寿命管理と衝突判定
     this.updateProjectiles();
     this.checkProjectileCollisions();
 
+    // UIの更新（体力、必殺技ゲージ、ガードスタミナ、クールダウン）
     this.uiSystem.updateHealthBars(this.player1, this.player2);
     this.uiSystem.updateSpecialBars(this.player1, this.player2);
     this.uiSystem.updateGuardStaminaBars(this.player1, this.player2);
     this.uiSystem.updateCooldownBars(this.player1, this.player2);
 
+    // KO判定
     if (this.player1.health <= 0 || this.player2.health <= 0) {
       this.uiSystem.stopTimer();
       const winner = this.player1.health > 0 ? 1 : 2;
       this.handleRoundEnd(winner);
     }
 
-    // 常に相手の方向を向くように更新（距離に関係なく）
+    // キャラクターの向き自動更新（常に相手の方を向く）
     this.player1.facingRight = this.player1.x < this.player2.x;
     this.player2.facingRight = this.player2.x < this.player1.x;
-    this.player1.setFlipX(!this.player1.facingRight);
+    this.player1.setFlipX(!this.player1.facingRight);  // スプライトの反転
     this.player2.setFlipX(!this.player2.facingRight);
 
-    // 行動意図UIの更新
+    // 行動意図UI（読みゲージ・意図テキスト）の更新
     this.updateIntentUI();
 
-    // キャラクター同士の重なりを防ぐ
+    // キャラクター同士の重なり防止処理
     this.preventCharacterOverlap();
   }
 
   /**
-   * 行動意図UIの更新
+   * 行動意図UIの更新（読みゲージシステム）
    */
   private updateIntentUI(): void {
-    // Player1の意図を表示（Player2から見た読み取り結果）
-    const p1ReadLevel = this.player2.readabilityGauge.getDisplayLevel();
-    const p1Intent = this.player1.actionIntent.getDisplayText(p1ReadLevel);
-    this.player1IntentText.setText(`P1: ${p1Intent.major}\n${p1Intent.minor}`);
+    // Player1の行動意図を表示（Player2から見た読み取りレベルに応じて詳細度が変わる）
+    const p1ReadLevel = this.player2.readabilityGauge.getDisplayLevel();  // P2の読み能力
+    const p1Intent = this.player1.actionIntent.getDisplayText(p1ReadLevel);  // P1の意図取得
+    this.player1IntentText.setText(`P1: ${p1Intent.major}\n${p1Intent.minor}`);  // 大分類・小分類
 
-    // Player2の意図を表示（Player1から見た読み取り結果）
-    const p2ReadLevel = this.player1.readabilityGauge.getDisplayLevel();
-    const p2Intent = this.player2.actionIntent.getDisplayText(p2ReadLevel);
+    // Player2の行動意図を表示（Player1から見た読み取りレベルに応じて詳細度が変わる）
+    const p2ReadLevel = this.player1.readabilityGauge.getDisplayLevel();  // P1の読み能力
+    const p2Intent = this.player2.actionIntent.getDisplayText(p2ReadLevel);  // P2の意図取得
     this.player2IntentText.setText(`P2: ${p2Intent.major}\n${p2Intent.minor}`);
 
-    // ゲージバー更新
+    // ゲージバーの幅を更新（ゲージ量に応じて伸縮）
     const p1GaugeRatio = this.player1.readabilityGauge.getGauge() / this.player1.readabilityGauge.getMaxGauge();
     const p2GaugeRatio = this.player2.readabilityGauge.getGauge() / this.player2.readabilityGauge.getMaxGauge();
 
-    this.player1GaugeBar.setScale(p1GaugeRatio, 1);
+    this.player1GaugeBar.setScale(p1GaugeRatio, 1);  // 横方向スケール調整
     this.player2GaugeBar.setScale(p2GaugeRatio, 1);
   }
 
@@ -422,9 +499,14 @@ export class FightScene extends Phaser.Scene {
 
     if (!body1 || !body2) return;
 
-    // 相手の上に乗っているかチェック
-    this.checkAndHandleStandingOnOpponent(this.player1, this.player2, body1, body2);
-    this.checkAndHandleStandingOnOpponent(this.player2, this.player1, body2, body1);
+    // 相手の上に乗っているかチェック（判定のみ、行動は別で処理）
+    // 将来的にAIなどで使用するため判定を実行（現在は結果を保持のみ）
+    const _p1OnP2 = this.isStandingOnOpponent(this.player1, this.player2, body1, body2);
+    const _p2OnP1 = this.isStandingOnOpponent(this.player2, this.player1, body2, body1);
+
+    // デバッグ用（必要に応じてコメントアウト解除）
+    // if (_p1OnP2) console.log('[Overlap] Player1が相手の上に乗っている');
+    // if (_p2OnP1) console.log('[Overlap] Player2が相手の上に乗っている');
 
     // 水平方向の距離をチェック
     const distance = Math.abs(this.player1.x - this.player2.x);
@@ -456,40 +538,29 @@ export class FightScene extends Phaser.Scene {
   }
 
   /**
-   * キャラクターが相手の上に乗っているかチェックし、乗っていたらジャンプして背後に回り込む
+   * キャラクターが相手の上に乗っているか判定（判定のみ、行動処理なし）
+   * @returns 乗っている場合true
    */
-  private checkAndHandleStandingOnOpponent(
+  private isStandingOnOpponent(
     topPlayer: Fighter,
     bottomPlayer: Fighter,
     topBody: Phaser.Physics.Arcade.Body,
     bottomBody: Phaser.Physics.Arcade.Body
-  ): void {
+  ): boolean {
     // 上のキャラクターが地上にいるかチェック（相手の上に立っている状態）
-    if (!topBody.touching.down) return;
+    if (!topBody.touching.down) return false;
 
-    // 水平方向の距離
+    // 水平方向の重なり
     const horizontalDistance = Math.abs(topPlayer.x - bottomPlayer.x);
     const horizontalOverlap = horizontalDistance < (topBody.width + bottomBody.width) / 2;
-
-    if (!horizontalOverlap) return;
+    if (!horizontalOverlap) return false;
 
     // 垂直方向の位置関係（topPlayerが上にいるか）
     const topPlayerBottom = topPlayer.y + topBody.height / 2;
     const bottomPlayerTop = bottomPlayer.y - bottomBody.height / 2;
     const verticalOverlap = Math.abs(topPlayerBottom - bottomPlayerTop) < 10; // 許容誤差10px
 
-    // 相手の上に乗っている場合
-    if (verticalOverlap) {
-      // console.log(`[Overlap] ${topPlayer === this.player1 ? 'Player1' : 'Player2'}が相手の上に乗っている - ジャンプして回り込む`);
-
-      // ジャンプ（やや低めに）
-      topPlayer.setVelocityY(-350);
-
-      // 相手の反対側に強めに移動（背後に回り込む）
-      // 横方向の速度を強くして、確実に脱出できるようにする
-      const moveDirection = topPlayer.x < bottomPlayer.x ? -1 : 1;
-      topPlayer.setVelocityX(moveDirection * -300); // 相手の反対方向に強めに移動
-    }
+    return verticalOverlap;
   }
 
   private checkAttackCollisions(): void {
@@ -555,34 +626,24 @@ export class FightScene extends Phaser.Scene {
                 return;
               }
 
-              // さらに、攻撃レベルとガードタイプのマッチングをチェック
-              const guardType = guardEntity.guardType;
-              if (!guardType) {
-                return;
+              // 物理的に重なっている時点でガード成功（ガードエリアは攻撃レベルに応じた位置に生成済み）
+              isGuarded = true;
+              console.log(`P2 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
+
+              // ガード成功時の処理（削りダメージとノックバック軽減）
+              const chipDamage = Math.floor(attackEntity.damage * 0.1);
+              const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
+              const knockbackDirection = this.player1.facingRight ? reducedKnockback : -reducedKnockback;
+
+              this.player2.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
+
+              // 攻撃を受けた側の読みゲージを消費
+              const p1Intent = this.player1.actionIntent.getCurrentIntent();
+              if (p1Intent) {
+                this.player2.consumeGaugeOnHit({ major: p1Intent.major, minor: p1Intent.minor });
               }
-              const canBlock = this.canBlockAttack(attackData.level, guardType);
 
-              if (canBlock) {
-                isGuarded = true;
-                console.log(`P2 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
-
-                // ガード成功時の処理（削りダメージとノックバック軽減）
-                const chipDamage = Math.floor(attackEntity.damage * 0.1);
-                const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
-                const knockbackDirection = this.player1.facingRight ? reducedKnockback : -reducedKnockback;
-
-                this.player2.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
-
-                // 攻撃を受けた側の読みゲージを消費
-                const p1Intent = this.player1.actionIntent.getCurrentIntent();
-                if (p1Intent) {
-                  this.player2.consumeGaugeOnHit({ major: p1Intent.major, minor: p1Intent.minor });
-                }
-
-                attackEntity.hasHit = true; // ガードされたので攻撃終了
-              } else {
-                console.log(`P2 ガード失敗！ ${attackData.name} (${attackData.level}) は ${guardEntity.guardType}ガードでは防げない`);
-              }
+              attackEntity.hasHit = true; // ガードされたので攻撃終了
             });
           }
 
@@ -647,34 +708,24 @@ export class FightScene extends Phaser.Scene {
                 return;
               }
 
-              // さらに、攻撃レベルとガードタイプのマッチングをチェック
-              const guardType = guardEntity.guardType;
-              if (!guardType) {
-                return;
+              // 物理的に重なっている時点でガード成功（ガードエリアは攻撃レベルに応じた位置に生成済み）
+              isGuarded = true;
+              console.log(`P1 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
+
+              // ガード成功時の処理（削りダメージとノックバック軽減）
+              const chipDamage = Math.floor(attackEntity.damage * 0.1);
+              const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
+              const knockbackDirection = this.player2.facingRight ? reducedKnockback : -reducedKnockback;
+
+              this.player1.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
+
+              // 攻撃を受けた側の読みゲージを消費
+              const p2Intent = this.player2.actionIntent.getCurrentIntent();
+              if (p2Intent) {
+                this.player1.consumeGaugeOnHit({ major: p2Intent.major, minor: p2Intent.minor });
               }
-              const canBlock = this.canBlockAttack(attackData.level, guardType);
 
-              if (canBlock) {
-                isGuarded = true;
-                console.log(`P1 ガード成功！ ${attackData.name} (${attackData.level}) を ${guardEntity.guardType}ガードで防御 [物理判定]`);
-
-                // ガード成功時の処理（削りダメージとノックバック軽減）
-                const chipDamage = Math.floor(attackEntity.damage * 0.1);
-                const reducedKnockback = Math.floor(attackEntity.knockback * 0.25);
-                const knockbackDirection = this.player2.facingRight ? reducedKnockback : -reducedKnockback;
-
-                this.player1.takeDamage(chipDamage, knockbackDirection, attackData.level, ATTACK_STRENGTH_MAP[attackEntity.attackType]);
-
-                // 攻撃を受けた側の読みゲージを消費
-                const p2Intent = this.player2.actionIntent.getCurrentIntent();
-                if (p2Intent) {
-                  this.player1.consumeGaugeOnHit({ major: p2Intent.major, minor: p2Intent.minor });
-                }
-
-                attackEntity.hasHit = true; // ガードされたので攻撃終了
-              } else {
-                console.log(`P1 ガード失敗！ ${attackData.name} (${attackData.level}) は ${guardEntity.guardType}ガードでは防げない`);
-              }
+              attackEntity.hasHit = true; // ガードされたので攻撃終了
             });
           }
 
@@ -742,32 +793,22 @@ export class FightScene extends Phaser.Scene {
             return;
           }
 
-          // 飛び道具は中段攻撃として扱う
-          const guardType = guardEntity.guardType;
-          if (!guardType) {
-            return;
+          // 物理的に重なっている時点でガード成功（飛び道具は中段、ガードエリアは適切な位置に生成済み）
+          isGuarded = true;
+          console.log(`飛び道具ガード成功！ガードタイプ: ${guardEntity.guardType} [物理判定]`);
+
+          // ガード成功時の処理（削りダメージ）
+          const chipDamage = Math.floor(projectile.damage * 0.1);
+          target.takeDamage(chipDamage, 0, 'mid', 'light');
+
+          // 攻撃を受けた側の読みゲージを消費
+          const ownerIntent = projectile.owner.actionIntent.getCurrentIntent();
+          if (ownerIntent) {
+            target.consumeGaugeOnHit({ major: ownerIntent.major, minor: ownerIntent.minor });
           }
-          const canBlock = this.canBlockAttack('mid', guardType);
 
-          if (canBlock) {
-            isGuarded = true;
-            console.log(`飛び道具ガード成功！ガードタイプ: ${guardEntity.guardType} [物理判定]`);
-
-            // ガード成功時の処理（削りダメージ）
-            const chipDamage = Math.floor(projectile.damage * 0.1);
-            target.takeDamage(chipDamage, 0, 'mid', 'light');
-
-            // 攻撃を受けた側の読みゲージを消費
-            const ownerIntent = projectile.owner.actionIntent.getCurrentIntent();
-            if (ownerIntent) {
-              target.consumeGaugeOnHit({ major: ownerIntent.major, minor: ownerIntent.minor });
-            }
-
-            // 飛び道具を消滅させる
-            projectile.onHit();
-          } else {
-            console.log(`飛び道具ガード失敗！ ${guardEntity.guardType}ガードでは防げない`);
-          }
+          // 飛び道具を消滅させる
+          projectile.onHit();
         });
       }
 
@@ -800,42 +841,4 @@ export class FightScene extends Phaser.Scene {
     return this.projectiles;
   }
 
-  /**
-   * 攻撃レベルとガードタイプのマッチングをチェック
-   * @param attackLevel 攻撃のレベル
-   * @param guardType ガードのタイプ
-   * @returns ガードが成功するかどうか
-   */
-  private canBlockAttack(attackLevel: string, guardType: string): boolean {
-    // 攻撃レベルに応じて、必要なガードタイプを判定
-    switch (attackLevel) {
-      case 'high':
-        // 上段攻撃: high, highMid, all のガードで防げる
-        return guardType === 'high' || guardType === 'highMid' || guardType === 'all';
-
-      case 'mid':
-        // 中段攻撃: mid, highMid, midLow, all のガードで防げる
-        return guardType === 'mid' || guardType === 'highMid' || guardType === 'midLow' || guardType === 'all';
-
-      case 'low':
-        // 下段攻撃: low, midLow, all のガードで防げる
-        return guardType === 'low' || guardType === 'midLow' || guardType === 'all';
-
-      case 'highMid':
-        // 上段+中段攻撃: highMid, all のガードでのみ防げる
-        return guardType === 'highMid' || guardType === 'all';
-
-      case 'midLow':
-        // 中段+下段攻撃: midLow, all のガードでのみ防げる
-        return guardType === 'midLow' || guardType === 'all';
-
-      case 'all':
-        // 全面攻撃: all のガードでのみ防げる
-        return guardType === 'all';
-
-      default:
-        // 不明な攻撃レベル: 防げない
-        return false;
-    }
-  }
 }

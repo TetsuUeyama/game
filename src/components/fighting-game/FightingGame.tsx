@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type Phaser from 'phaser';
+import CharacterSelect from './CharacterSelect';
+import { getCharacterConfig } from '@/fighting-game/config/characterConfig';
 
-// Window型の拡張
+// Window型の拡張（関数として定義）
 declare global {
   interface Window {
-    playerConfigs?: {
+    getPlayerConfigs?: () => {
       player1: PlayerConfig;
       player2: PlayerConfig;
     };
@@ -47,6 +49,11 @@ interface PlayerConfig {
 export default function FightingGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ゲーム状態管理
+  const [gameState, setGameState] = useState<'SELECT' | 'PLAYING'>('SELECT');
+  const [selectedPlayer1Id, setSelectedPlayer1Id] = useState<number>(1);
+  const [selectedPlayer2Id, setSelectedPlayer2Id] = useState<number>(2);
 
   // デフォルト設定
   const defaultPlayer1Config: PlayerConfig = {
@@ -97,52 +104,57 @@ export default function FightingGame() {
     },
   };
 
-  // localStorageから設定を読み込む
-  const loadConfig = (key: string, defaultConfig: PlayerConfig): PlayerConfig => {
-    if (typeof window === 'undefined') return defaultConfig;
-    try {
-      const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : defaultConfig;
-    } catch {
-      return defaultConfig;
-    }
+  // プレイヤー設定（キャラクター選択後に更新）
+  const [player1Config, setPlayer1Config] = useState<PlayerConfig>(defaultPlayer1Config);
+  const [player2Config, setPlayer2Config] = useState<PlayerConfig>(defaultPlayer2Config);
+
+  // キャラクター選択完了時の処理
+  const handleCharacterSelect = (player1Id: number, player2Id: number) => {
+    const p1Char = getCharacterConfig(player1Id);
+    const p2Char = getCharacterConfig(player2Id);
+
+    setPlayer1Config({
+      characterId: p1Char.id,
+      stats: p1Char.stats,
+      aiCustomization: p1Char.aiCustomization,
+    });
+
+    setPlayer2Config({
+      characterId: p2Char.id,
+      stats: p2Char.stats,
+      aiCustomization: p2Char.aiCustomization,
+    });
+
+    setSelectedPlayer1Id(player1Id);
+    setSelectedPlayer2Id(player2Id);
+    setGameState('PLAYING');
   };
 
-  // プレイヤー1の設定
-  const [player1Config, setPlayer1Config] = useState<PlayerConfig>(() =>
-    loadConfig('player1Config', defaultPlayer1Config)
-  );
-
-  // プレイヤー2の設定
-  const [player2Config, setPlayer2Config] = useState<PlayerConfig>(() =>
-    loadConfig('player2Config', defaultPlayer2Config)
-  );
-
-  // 設定変更時にlocalStorageに保存
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('player1Config', JSON.stringify(player1Config));
+  // 2勝した時の処理（キャラクター選択画面に戻る）
+  const handleMatchEnd = () => {
+    if (gameRef.current) {
+      gameRef.current.destroy(true);
+      gameRef.current = null;
     }
-  }, [player1Config]);
+    setGameState('SELECT');
+  };
 
+  // ゲーム初期化（PLAYING状態になった時）
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('player2Config', JSON.stringify(player2Config));
-    }
-  }, [player2Config]);
-
-  // ゲーム初期化（初回のみ）
-  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
     if (typeof window === 'undefined') return;
 
     const initGame = async () => {
-      // グローバルに設定を保存（FightSceneから参照できるように、ゲーム初期化前に設定）
-      window.playerConfigs = {
+      // グローバルに設定取得関数を登録（常に最新の値を返す）
+      window.getPlayerConfigs = () => ({
         player1: player1Config,
         player2: player2Config,
-      };
+      });
 
-      console.log('[FightingGame] ゲーム初期化時の設定:', window.playerConfigs);
+      // マッチ終了イベントリスナー登録
+      window.addEventListener('matchEnd', handleMatchEnd);
+
+      console.log('[FightingGame] ゲーム初期化: 設定取得関数を登録');
 
       const Phaser = await import('phaser');
       const { FightScene } = await import('@/fighting-game/scenes/FightScene');
@@ -163,55 +175,65 @@ export default function FightingGame() {
     initGame();
 
     return () => {
+      window.removeEventListener('matchEnd', handleMatchEnd);
       if (gameRef.current) {
         gameRef.current.destroy(true);
         gameRef.current = null;
       }
     };
-  }, []); // 依存配列を空にして初回のみ実行
+  }, [gameState, player1Config, player2Config]); // PLAYING状態になった時に実行
 
-  // 設定変更時にwindow.playerConfigsを更新（ゲームは再起動しない）
+  // 設定変更時にイベント発火（関数は既に登録済みなので、通知のみ）
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.playerConfigs = {
-        player1: player1Config,
-        player2: player2Config,
-      };
-      console.log('[FightingGame] 設定更新:', window.playerConfigs);
+    if (typeof window !== 'undefined' && window.getPlayerConfigs) {
+      // Phaser側に設定変更を通知
+      window.dispatchEvent(new Event('playerConfigsUpdated'));
+
+      console.log('[FightingGame] 設定更新通知:', window.getPlayerConfigs());
     }
   }, [player1Config, player2Config]);
 
   return (
-    <div className="flex items-start justify-center min-h-screen bg-gray-900 p-4 gap-4">
-      {/* Player 1 設定フォーム */}
-      <PlayerConfigForm
-        playerNumber={1}
-        config={player1Config}
-        onChange={setPlayer1Config}
-      />
+    <>
+      {/* キャラクター選択画面 */}
+      {gameState === 'SELECT' && (
+        <CharacterSelect onStart={handleCharacterSelect} />
+      )}
 
       {/* ゲーム画面 */}
-      <div className="flex flex-col items-center gap-2">
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition-colors"
-        >
-          設定を反映（ページリロード）
-        </button>
-        <div
-          ref={containerRef}
-          id="fighting-game-container"
-          className="border-4 border-purple-500 rounded-lg shadow-2xl"
-        />
-      </div>
+      {gameState === 'PLAYING' && (
+        <div className="flex items-start justify-center min-h-screen bg-gray-900 p-4 gap-4">
+          {/* Player 1 設定フォーム */}
+          <PlayerConfigForm
+            playerNumber={1}
+            config={player1Config}
+            onChange={setPlayer1Config}
+          />
 
-      {/* Player 2 設定フォーム */}
-      <PlayerConfigForm
-        playerNumber={2}
-        config={player2Config}
-        onChange={setPlayer2Config}
-      />
-    </div>
+          {/* ゲーム画面 */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition-colors"
+            >
+              設定を反映（ページリロード）
+            </button>
+            <div
+              ref={containerRef}
+              id="fighting-game-container"
+              className="border-4 border-purple-500 rounded-lg shadow-2xl"
+            />
+          </div>
+
+          {/* Player 2 設定フォーム */}
+          <PlayerConfigForm
+            playerNumber={2}
+            config={player2Config}
+            onChange={setPlayer2Config}
+          />
+        </div>
+      )}
+    </>
   );
 }
 
