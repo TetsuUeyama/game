@@ -1401,4 +1401,26 @@ export class Fighter extends Phaser.Physics.Arcade.Sprite {
     }
     this.createHurtboxVisual();
   }
+
+  /**
+   * ステータス（性能値）をリアルタイム更新
+   * UIからの変更を即座に反映
+   */
+  public updateStats(newStats: CharacterStats): void {
+    // 最大体力の変更（現在体力の割合を維持）
+    const healthRatio = this.health / this.maxHealth;
+    const oldMaxHealth = this.maxHealth;
+    this.maxHealth = PLAYER_CONFIG.maxHealth * statToMultiplier(newStats.hp);
+
+    // 体力を割合維持して更新（ただし最大値は超えない）
+    this.health = Math.min(this.maxHealth * healthRatio, this.maxHealth);
+
+    // デバッグログ（最大体力が変更された場合のみ）
+    if (oldMaxHealth !== this.maxHealth) {
+      console.log(`[Fighter P${this.playerNumber}] HP更新: ${oldMaxHealth.toFixed(1)} → ${this.maxHealth.toFixed(1)} (現在: ${this.health.toFixed(1)})`);
+    }
+
+    // ステータスを更新
+    this.stats = { ...newStats };
+  }
 }

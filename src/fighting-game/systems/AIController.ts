@@ -3,8 +3,7 @@ import {Fighter} from "../entities/Fighter";
 import {FightScene} from "../scenes/FightScene";
 import {ProjectileEntity} from "../entities/ProjectileEntity";
 import {FootworkEntity} from "../entities/FootworkEntity";
-import {MOVEMENT_CONFIG} from "../config/gameConfig";
-import {MajorAction, MinorAction} from "./ActionIntent";
+import {MOVEMENT_CONFIG, ATTACK_TYPES} from "../config/gameConfig";
 import {ActionContext} from "../actions/Action";
 import {ActionNames} from "../actions/ActionRegistry";
 
@@ -1194,5 +1193,13 @@ export class AIController {
       scene: this.scene,
       keys
     };
+  }
+
+  /**
+   * AIカスタマイズパラメータをリアルタイム更新
+   * UIからの変更を即座に反映
+   */
+  public updateCustomization(newCustomization: AICustomization): void {
+    this.aiCustomization = { ...newCustomization };
   }
 }
