@@ -259,9 +259,121 @@ export class GameScene {
   }
 
   /**
+   * プレイヤーがコートの境界内に収まるように位置を制限
+   */
+  private constrainPlayerToBounds(player: Player): void {
+    const position = player.getPosition();
+    const radius = PLAYER_CONFIG.radius;
+    const height = PLAYER_CONFIG.height;
+
+    // 壁の境界
+    const minX = -COURT_CONFIG.width / 2 + radius;
+    const maxX = COURT_CONFIG.width / 2 - radius;
+    const minZ = -COURT_CONFIG.length / 2 + radius;
+    const maxZ = COURT_CONFIG.length / 2 - radius;
+
+    // 天井の高さ
+    const ceilingHeight = COURT_CONFIG.rimHeight + 2;
+    const maxY = ceilingHeight - height / 2;
+
+    // 位置を境界内に制限
+    const clampedPosition = new Vector3(
+      Math.max(minX, Math.min(maxX, position.x)),
+      Math.max(height / 2, Math.min(maxY, position.y)),
+      Math.max(minZ, Math.min(maxZ, position.z))
+    );
+
+    // 位置が変わった場合のみ更新
+    if (!position.equals(clampedPosition)) {
+      player.setPosition(clampedPosition);
+    }
+  }
+
+  /**
+   * ボールがコートの境界内に収まるように位置を制限
+   */
+  private constrainBallToBounds(): void {
+    const position = this.ball.getPosition();
+    const radius = BALL_CONFIG.radius;
+
+    // 壁の境界
+    const minX = -COURT_CONFIG.width / 2 + radius;
+    const maxX = COURT_CONFIG.width / 2 - radius;
+    const minZ = -COURT_CONFIG.length / 2 + radius;
+    const maxZ = COURT_CONFIG.length / 2 - radius;
+
+    // 天井の高さ
+    const ceilingHeight = COURT_CONFIG.rimHeight + 2;
+    const maxY = ceilingHeight - radius;
+
+    // 位置を境界内に制限
+    const clampedPosition = new Vector3(
+      Math.max(minX, Math.min(maxX, position.x)),
+      Math.max(radius, Math.min(maxY, position.y)),
+      Math.max(minZ, Math.min(maxZ, position.z))
+    );
+
+    // 位置が変わった場合のみ更新
+    if (!position.equals(clampedPosition)) {
+      this.ball.setPosition(clampedPosition);
+    }
+  }
+
+  /**
+   * プレイヤー同士の衝突を処理
+   */
+  private handlePlayerCollision(): void {
+    const player1Pos = this.player1.getPosition();
+    const player2Pos = this.player2.getPosition();
+
+    // プレイヤー同士の距離を計算
+    const dx = player2Pos.x - player1Pos.x;
+    const dz = player2Pos.z - player1Pos.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    // 衝突判定（プレイヤー1の半径 + プレイヤー2の半径）
+    const collisionDistance = PLAYER_CONFIG.radius * 2;
+
+    if (distance < collisionDistance && distance > 0) {
+      // 重なっている！お互いを押し離す
+
+      // プレイヤー1からプレイヤー2への方向ベクトル
+      const directionX = dx / distance;
+      const directionZ = dz / distance;
+
+      // 重なりの深さ
+      const overlap = collisionDistance - distance;
+
+      // 両プレイヤーを半分ずつ押し離す
+      const pushDistance = overlap / 2;
+
+      // プレイヤー1を後ろに押す
+      const newPlayer1Pos = new Vector3(
+        player1Pos.x - directionX * pushDistance,
+        player1Pos.y,
+        player1Pos.z - directionZ * pushDistance
+      );
+      this.player1.setPosition(newPlayer1Pos);
+
+      // プレイヤー2を前に押す
+      const newPlayer2Pos = new Vector3(
+        player2Pos.x + directionX * pushDistance,
+        player2Pos.y,
+        player2Pos.z + directionZ * pushDistance
+      );
+      this.player2.setPosition(newPlayer2Pos);
+    }
+  }
+
+  /**
    * プレイヤーとボールの衝突を処理
    */
   private handleBallCollision(player: Player, deltaTime: number): void {
+    // ボールが既に誰かに保持されている場合は何もしない
+    if (!this.ball.isFree()) {
+      return;
+    }
+
     const playerPosition = player.getPosition();
     const ballPosition = this.ball.getPosition();
 
@@ -274,22 +386,10 @@ export class GameScene {
     const collisionDistance = PLAYER_CONFIG.radius + BALL_CONFIG.radius;
 
     if (distance < collisionDistance) {
-      // 衝突した！ボールを弾き飛ばす
-
-      // プレイヤーからボールへの方向ベクトル
-      const pushDirectionX = dx / distance;
-      const pushDirectionZ = dz / distance;
-
-      // ボールを押す速度（m/s）
-      const pushSpeed = 3.0;
-
-      // ボールの新しい位置を計算
-      const newBallX = playerPosition.x + pushDirectionX * (collisionDistance + pushSpeed * deltaTime);
-      const newBallZ = playerPosition.z + pushDirectionZ * (collisionDistance + pushSpeed * deltaTime);
-
-      this.ball.setPosition(new Vector3(newBallX, ballPosition.y, newBallZ));
-
-      console.log(`[GameScene] Player ${player.id} hit the ball!`);
+      // 衝突した！ボールを保持する
+      player.grabBall();
+      this.ball.pickUp(player.id);
+      console.log(`[GameScene] Player ${player.id} picked up the ball!`);
     }
   }
 
@@ -299,21 +399,45 @@ export class GameScene {
   private update(deltaTime: number): void {
     const ballPosition = this.ball.getPosition();
 
-    // プレイヤー1の視野判定と移動
-    if (this.player1.canSeeBall(ballPosition)) {
-      this.player1.moveTowards(ballPosition, deltaTime);
+    // ボールがフリーの場合のみ、プレイヤーがボールに向かって移動
+    if (this.ball.isFree()) {
+      // プレイヤー1の視野判定と移動
+      if (this.player1.canSeeBall(ballPosition)) {
+        this.player1.moveTowards(ballPosition, deltaTime);
+      }
+
+      // プレイヤー2の視野判定と移動
+      if (this.player2.canSeeBall(ballPosition)) {
+        this.player2.moveTowards(ballPosition, deltaTime);
+      }
     }
 
-    // プレイヤー2の視野判定と移動
-    if (this.player2.canSeeBall(ballPosition)) {
-      this.player2.moveTowards(ballPosition, deltaTime);
-    }
+    // プレイヤー同士の衝突処理
+    this.handlePlayerCollision();
 
     // プレイヤー1とボールの衝突処理
     this.handleBallCollision(this.player1, deltaTime);
 
     // プレイヤー2とボールの衝突処理
     this.handleBallCollision(this.player2, deltaTime);
+
+    // ボールを保持しているプレイヤーがいる場合、ボール位置を更新
+    if (this.player1.hasBall) {
+      const ballHoldPosition = this.player1.getBallHoldPosition();
+      this.ball.setPosition(ballHoldPosition);
+    } else if (this.player2.hasBall) {
+      const ballHoldPosition = this.player2.getBallHoldPosition();
+      this.ball.setPosition(ballHoldPosition);
+    }
+
+    // プレイヤーを境界内に制限（壁・天井との衝突）
+    this.constrainPlayerToBounds(this.player1);
+    this.constrainPlayerToBounds(this.player2);
+
+    // ボールがフリーの場合のみ、境界内に制限（保持中は頭の上なので制限不要）
+    if (this.ball.isFree()) {
+      this.constrainBallToBounds();
+    }
   }
 
   /**

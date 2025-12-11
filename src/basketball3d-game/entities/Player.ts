@@ -34,6 +34,7 @@ export class Player {
 
   public id: number;
   public name: string;
+  public hasBall: boolean = false; // ボールを保持しているか
   public direction: number = 0; // 向き（ラジアン、Y軸周り）
   private currentPose: HandPose = HandPose.NEUTRAL;
 
@@ -328,6 +329,38 @@ export class Player {
     return true;
   }
 
+  /**
+   * ボールを保持する
+   */
+  grabBall(): void {
+    this.hasBall = true;
+  }
+
+  /**
+   * ボールを手放す
+   */
+  releaseBall(): void {
+    this.hasBall = false;
+  }
+
+  /**
+   * ボールを保持している際のボール位置を取得（体の前）
+   * @returns ボールの位置
+   */
+  getBallHoldPosition(): Vector3 {
+    const playerPosition = this.getPosition();
+
+    // プレイヤーの前方方向を計算
+    const forwardX = Math.sin(this.direction);
+    const forwardZ = Math.cos(this.direction);
+
+    // 体の前、高さは身長の半分、横は横幅の半分
+    return new Vector3(
+      playerPosition.x + forwardX * PLAYER_CONFIG.radius, // 前方に横幅の半分
+      playerPosition.y, // 身長の半分（プレイヤーの中心位置）
+      playerPosition.z + forwardZ * PLAYER_CONFIG.radius
+    );
+  }
 
   /**
    * 手のポーズを変更（上腕と前腕の関節を制御）
