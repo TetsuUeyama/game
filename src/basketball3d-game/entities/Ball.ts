@@ -14,6 +14,7 @@ import { BALL_CONFIG } from '../config/gameConfig';
 export class Ball {
   private scene: Scene;
   public mesh: Mesh;
+  public owner: number | null = null; // 所持者のプレイヤーID（null = フリー）
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -68,6 +69,27 @@ export class Ball {
     );
 
     this.mesh.position = clampedPosition;
+  }
+
+  /**
+   * ボールがフリー（所持されていない）か
+   */
+  isFree(): boolean {
+    return this.owner === null;
+  }
+
+  /**
+   * ボールを取得
+   */
+  pickUp(playerId: number): void {
+    this.owner = playerId;
+  }
+
+  /**
+   * ボールを手放す
+   */
+  release(): void {
+    this.owner = null;
   }
 
   /**

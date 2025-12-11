@@ -15,12 +15,16 @@ export class Court {
   private scene: Scene;
   private floorMesh: Mesh;
   private lines: Mesh[] = [];
+  private walls: Mesh[] = [];
+  private ceiling: Mesh | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.floorMesh = this.createFloor();
     this.createLines();
     this.createGoals();
+    this.createWalls();
+    this.createCeiling();
   }
 
   /**
@@ -245,11 +249,135 @@ export class Court {
   }
 
   /**
+   * 透明な壁を作成（四方）
+   */
+  private createWalls(): void {
+    // 壁の高さ = ゴールの高さ（3.05m）+ 2m = 5.05m
+    const wallHeight = COURT_CONFIG.rimHeight + 2;
+    const wallThickness = 0.1; // 壁の厚さ
+
+    // 透明な壁のマテリアル
+    const wallMaterial = new StandardMaterial('wall-material', this.scene);
+    wallMaterial.diffuseColor = new Color3(0.8, 0.8, 1.0); // 薄い青白
+    wallMaterial.alpha = 0.1; // ほぼ透明
+    wallMaterial.specularColor = new Color3(0.5, 0.5, 0.5);
+
+    // 左壁（-X方向）
+    const leftWall = MeshBuilder.CreateBox(
+      'left-wall',
+      {
+        width: wallThickness,
+        height: wallHeight,
+        depth: COURT_CONFIG.length,
+      },
+      this.scene
+    );
+    leftWall.position = new Vector3(
+      -COURT_CONFIG.width / 2,
+      wallHeight / 2,
+      0
+    );
+    leftWall.material = wallMaterial;
+    this.walls.push(leftWall);
+
+    // 右壁（+X方向）
+    const rightWall = MeshBuilder.CreateBox(
+      'right-wall',
+      {
+        width: wallThickness,
+        height: wallHeight,
+        depth: COURT_CONFIG.length,
+      },
+      this.scene
+    );
+    rightWall.position = new Vector3(
+      COURT_CONFIG.width / 2,
+      wallHeight / 2,
+      0
+    );
+    rightWall.material = wallMaterial;
+    this.walls.push(rightWall);
+
+    // 前壁（-Z方向）
+    const frontWall = MeshBuilder.CreateBox(
+      'front-wall',
+      {
+        width: COURT_CONFIG.width,
+        height: wallHeight,
+        depth: wallThickness,
+      },
+      this.scene
+    );
+    frontWall.position = new Vector3(
+      0,
+      wallHeight / 2,
+      -COURT_CONFIG.length / 2
+    );
+    frontWall.material = wallMaterial;
+    this.walls.push(frontWall);
+
+    // 後壁（+Z方向）
+    const backWall = MeshBuilder.CreateBox(
+      'back-wall',
+      {
+        width: COURT_CONFIG.width,
+        height: wallHeight,
+        depth: wallThickness,
+      },
+      this.scene
+    );
+    backWall.position = new Vector3(
+      0,
+      wallHeight / 2,
+      COURT_CONFIG.length / 2
+    );
+    backWall.material = wallMaterial;
+    this.walls.push(backWall);
+
+    console.log('[Court] 透明な壁を4面作成しました（高さ: ' + wallHeight + 'm）');
+  }
+
+  /**
+   * 透明な天井を作成
+   */
+  private createCeiling(): void {
+    // 天井の高さ = ゴールの高さ（3.05m）+ 2m = 5.05m
+    const ceilingHeight = COURT_CONFIG.rimHeight + 2;
+
+    // 透明な天井のマテリアル
+    const ceilingMaterial = new StandardMaterial('ceiling-material', this.scene);
+    ceilingMaterial.diffuseColor = new Color3(0.8, 0.8, 1.0); // 薄い青白
+    ceilingMaterial.alpha = 0.05; // ほぼ見えない
+    ceilingMaterial.specularColor = new Color3(0.3, 0.3, 0.3);
+
+    // 天井（水平な板）
+    this.ceiling = MeshBuilder.CreateBox(
+      'ceiling',
+      {
+        width: COURT_CONFIG.width,
+        height: 0.1, // 薄い板
+        depth: COURT_CONFIG.length,
+      },
+      this.scene
+    );
+    this.ceiling.position = new Vector3(0, ceilingHeight, 0);
+    this.ceiling.material = ceilingMaterial;
+
+    console.log('[Court] 透明な天井を作成しました（高さ: ' + ceilingHeight + 'm）');
+  }
+
+  /**
    * 破棄
    */
   dispose(): void {
     this.floorMesh.dispose();
     this.lines.forEach((line) => line.dispose());
     this.lines = [];
+    this.walls.forEach((wall) => wall.dispose());
+    this.walls = [];
+    if (this.ceiling) {
+      this.ceiling.dispose();
+      this.ceiling = null;
+    }
   }
 }
