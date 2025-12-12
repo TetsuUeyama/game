@@ -13,10 +13,11 @@ export const COURT_CONFIG = {
 
   // ゴール設定
   rimHeight: 3.05, // リムの高さ（m）
-  rimDiameter: 0.45, // リムの直径（m）
+  rimDiameter: 0.61, // リムの内径（m）0.92の2/3 = 0.613（デフォルメ版）
   backboardHeight: 1.05, // バックボードの高さ（m）
   backboardWidth: 1.8, // バックボードの幅（m）
   backboardDistance: 1.2, // エンドラインからバックボードまでの距離（m）
+  rimOffset: 0.4, // バックボードからリム中心までの距離（m）
 };
 
 // プレイヤー設定
@@ -29,11 +30,17 @@ export const PLAYER_CONFIG = {
   // 視野設定
   visionAngle: 120, // 視野角（度）
   visionRange: 10, // 視野範囲（m）
+
+  // ディフェンス設定
+  defenseDistance: 1.5, // オフェンスとの理想的な距離（m）
+  defenseMinDistance: 0.8, // オフェンスに近づける最小距離（m）
+  defenseMaxDistance: 3.0, // オフェンスから離れる最大距離（m）
+  defenseBias: 0.6, // オフェンスとゴールの間のどこに位置取るか（0=オフェンス側、1=ゴール側）
 };
 
-// ボール設定
+// ボール設定（デフォルメサイズ）
 export const BALL_CONFIG = {
-  radius: 0.25, // ボールの半径（m）
+  radius: 0.25, // ボールの半径（m）= 直径50cm（デフォルメ）
   mass: 0.6, // ボールの質量（kg）
   bounciness: 0.7, // 反発係数
   friction: 0.5, // 摩擦係数
