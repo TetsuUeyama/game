@@ -235,10 +235,11 @@ export class Court {
       this.scene
     );
 
+    // リムの位置：バックボードからrimOffset分だけコート内側に配置
     rim.position = new Vector3(
       0,
       COURT_CONFIG.rimHeight,
-      zPosition + (side === 'left' ? 0.15 : -0.15)
+      zPosition + (side === 'left' ? COURT_CONFIG.rimOffset : -COURT_CONFIG.rimOffset)
     );
     // リムは水平（地面に平行）なので回転不要
 
@@ -252,8 +253,8 @@ export class Court {
    * 透明な壁を作成（四方）
    */
   private createWalls(): void {
-    // 壁の高さ = ゴールの高さ（3.05m）+ 2m = 5.05m
-    const wallHeight = COURT_CONFIG.rimHeight + 2;
+    // 壁の高さ = ゴールの高さ（3.05m）+ 10m = 13.05m
+    const wallHeight = COURT_CONFIG.rimHeight + 10;
     const wallThickness = 0.1; // 壁の厚さ
 
     // 透明な壁のマテリアル
@@ -341,8 +342,8 @@ export class Court {
    * 透明な天井を作成
    */
   private createCeiling(): void {
-    // 天井の高さ = ゴールの高さ（3.05m）+ 2m = 5.05m
-    const ceilingHeight = COURT_CONFIG.rimHeight + 2;
+    // 天井の高さ = ゴールの高さ（3.05m）+ 10m = 13.05m
+    const ceilingHeight = COURT_CONFIG.rimHeight + 10;
 
     // 透明な天井のマテリアル
     const ceilingMaterial = new StandardMaterial('ceiling-material', this.scene);

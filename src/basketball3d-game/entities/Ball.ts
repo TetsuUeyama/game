@@ -15,6 +15,7 @@ export class Ball {
   private scene: Scene;
   public mesh: Mesh;
   public owner: number | null = null; // 所持者のプレイヤーID（null = フリー）
+  public velocity: Vector3 = Vector3.Zero(); // ボールの速度（m/s）
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -90,6 +91,67 @@ export class Ball {
    */
   release(): void {
     this.owner = null;
+  }
+
+  /**
+   * 速度を設定
+   */
+  setVelocity(velocity: Vector3): void {
+    this.velocity = velocity.clone();
+  }
+
+  /**
+   * 速度を取得
+   */
+  getVelocity(): Vector3 {
+    return this.velocity.clone();
+  }
+
+  /**
+   * 物理演算の更新（ボールの転がりと減速）
+   * @param deltaTime フレーム時間（秒）
+   */
+  updatePhysics(deltaTime: number): void {
+    // ボールが所持されている場合は物理演算しない
+    if (this.owner !== null) {
+      this.velocity = Vector3.Zero();
+      return;
+    }
+
+    // 速度が非常に小さく、地面にいる場合は停止
+    const speed = this.velocity.length();
+    const currentPosition = this.getPosition();
+    const isOnGround = currentPosition.y <= BALL_CONFIG.radius + 0.01;
+
+    if (speed < 0.01 && isOnGround) {
+      this.velocity = Vector3.Zero();
+      return;
+    }
+
+    // 重力を適用（Y軸方向）
+    const gravity = -9.81; // m/s²
+    this.velocity.y += gravity * deltaTime;
+
+    // 地面にいる場合は摩擦を適用
+    if (isOnGround) {
+      const frictionCoefficient = 0.9; // 1フレームあたりの速度維持率
+      this.velocity.x *= Math.pow(frictionCoefficient, deltaTime * 60);
+      this.velocity.z *= Math.pow(frictionCoefficient, deltaTime * 60);
+    }
+
+    // 位置を更新
+    const movement = this.velocity.scale(deltaTime);
+    const newPosition = this.getPosition().add(movement);
+    this.setPosition(newPosition);
+
+    // 地面との衝突（バウンド）
+    if (newPosition.y <= BALL_CONFIG.radius && this.velocity.y < 0) {
+      // バウンド（反発係数0.7）
+      this.velocity.y = -this.velocity.y * BALL_CONFIG.bounciness;
+
+      // 位置を地面に補正
+      this.setPosition(new Vector3(newPosition.x, BALL_CONFIG.radius, newPosition.z));
+    }
   }
 
   /**
