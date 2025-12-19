@@ -14,6 +14,7 @@ export interface PlayerStats {
   // フィジカル
   strength: number; // 接触時の強さ (0-100)
   stamina: number; // スタミナ（将来の実装用） (0-100)
+  weight: number; // 体重（kg） - 移動の慣性と衝突時の押し合いに影響
 }
 
 /**
@@ -27,6 +28,7 @@ export const DEFAULT_PLAYER_STATS: PlayerStats = {
   defense: 50,
   strength: 50,
   stamina: 100,
+  weight: 80, // デフォルト体重: 80kg
 };
 
 /**

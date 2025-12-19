@@ -1,37 +1,24 @@
 import {Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh} from "@babylonjs/core";
 import {PLAYER_CONFIG} from "../config/gameConfig";
 import {PlayerStats, DEFAULT_PLAYER_STATS} from "./PlayerStats";
+import {PlayerMovement} from "./PlayerMovement";
+import {Arm, HandPose} from "./Arm";
 
-/**
- * 手のポーズタイプ
- */
-export enum HandPose {
-  NEUTRAL = "neutral", // 通常（両サイド）
-  DRIBBLE = "dribble", // ドリブル（片手前）
-  DEFEND = "defend", // ディフェンス（両手前に広げる）
-  SHOOT = "shoot", // シュート（両手上）
-}
+// HandPoseを再エクスポート（他のファイルからアクセス可能にする）
+export {HandPose};
 
 /**
  * 3Dプレイヤーエンティティ
  */
 export class Player {
-  private scene: Scene;
+  public scene: Scene; // シーン（PlayerMovementなど外部からアクセスするためpublic）
   public mesh: Mesh; // 体（カプセル）
   public neckMesh: Mesh; // 首（ゴールを見上げる時に傾ける）
   private faceMesh: Mesh; // 顔（白い板）
 
-  // 左腕（上腕 + 前腕）
-  private leftUpperArmMesh: Mesh; // 左上腕
-  private leftForearmMesh: Mesh; // 左前腕
-
-  // 右腕（上腕 + 前腕）
-  private rightUpperArmMesh: Mesh; // 右上腕
-  private rightForearmMesh: Mesh; // 右前腕
-
-  // 手
-  public leftHand: Mesh; // 左手（衝突判定用）
-  public rightHand: Mesh; // 右手（衝突判定用）
+  // 腕（1本の長いカプセル、ポーズに応じて角度を変える）
+  public leftArm: Arm; // 左腕（衝突判定用にpublic）
+  public rightArm: Arm; // 右腕（衝突判定用にpublic）
 
   // 視野
   private visionConeMesh: Mesh; // 視野コーン（可視化用）
@@ -44,6 +31,11 @@ export class Player {
   public direction: number = 0; // 向き（ラジアン、Y軸周り）
   private currentPose: HandPose = HandPose.NEUTRAL;
 
+  // ドリブル関連
+  public isDribbling: boolean = false; // ドリブル中か
+  private dribbleTimer: number = 0; // ドリブルタイマー（秒）
+  private readonly DRIBBLE_INTERVAL = 0.6; // ドリブル間隔（秒）
+
   // ジャンプ状態
   public isJumping: boolean = false; // ジャンプ中か
   public jumpVelocity: number = 0; // 垂直方向の速度（m/s）
@@ -51,6 +43,9 @@ export class Player {
 
   // プレイヤーの能力値
   public stats: PlayerStats;
+
+  // 移動管理
+  private movement: PlayerMovement;
 
   constructor(scene: Scene, id: number, name: string, position: Vector3, color: Color3, stats?: PlayerStats) {
     this.scene = scene;
@@ -65,20 +60,15 @@ export class Player {
     this.visionRange = PLAYER_CONFIG.visionRange;
 
     this.mesh = this.createPlayer(position, color);
+
+    // 移動管理を初期化（meshを作成した後に初期化）
+    this.movement = new PlayerMovement(this);
     this.neckMesh = this.createNeck();
     this.faceMesh = this.createFace();
 
-    // 左腕の作成
-    this.leftUpperArmMesh = this.createUpperArm("left");
-    this.leftForearmMesh = this.createForearm("left");
-
-    // 右腕の作成
-    this.rightUpperArmMesh = this.createUpperArm("right");
-    this.rightForearmMesh = this.createForearm("right");
-
-    // 手の作成
-    this.leftHand = this.createHand("left");
-    this.rightHand = this.createHand("right");
+    // 腕の作成（Armクラスを使用）
+    this.leftArm = new Arm(this.scene, "left", this.id, color);
+    this.rightArm = new Arm(this.scene, "right", this.id, color);
 
     // 視野コーンの作成
     this.visionConeMesh = this.createVisionCone(color);
@@ -86,20 +76,15 @@ export class Player {
     // 顔を首に親子関係で紐付け
     this.faceMesh.parent = this.neckMesh;
 
-    // 上腕を体に紐付け
-    this.leftUpperArmMesh.parent = this.mesh;
-    this.rightUpperArmMesh.parent = this.mesh;
-
-    // 前腕を上腕に紐付け（関節構造）
-    this.leftForearmMesh.parent = this.leftUpperArmMesh;
-    this.rightForearmMesh.parent = this.rightUpperArmMesh;
-
-    // 手を前腕に紐付け
-    this.leftHand.parent = this.leftForearmMesh;
-    this.rightHand.parent = this.rightForearmMesh;
+    // 腕を体に紐付け
+    this.leftArm.mesh.parent = this.mesh;
+    this.rightArm.mesh.parent = this.mesh;
 
     // 視野コーンを首に紐付け（首の傾きに連動）
     this.visionConeMesh.parent = this.neckMesh;
+
+    // 初期ポーズを設定
+    this.setHandPose(HandPose.NEUTRAL);
   }
 
   /**
@@ -124,6 +109,7 @@ export class Player {
     material.diffuseColor = color;
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     material.emissiveColor = color.scale(0.1); // 少し光る
+    material.alpha = 0.5; // 半透明
     capsule.material = material;
 
     return capsule;
@@ -147,7 +133,7 @@ export class Player {
     // 首の位置（体の上部）
     neck.position = new Vector3(
       0,
-      PLAYER_CONFIG.height / 2 - 0.35, // 頭の少し下
+      PLAYER_CONFIG.height / 2 - 1.0, // 頭の少し下
       0,
     );
 
@@ -188,45 +174,6 @@ export class Player {
     face.material = material;
 
     return face;
-  }
-
-  /**
-   * 上腕（shoulder to elbow）を作成
-   */
-  private createUpperArm(side: "left" | "right"): Mesh {
-    const upperArm = MeshBuilder.CreateCapsule(
-      `upper-arm-${side}-${this.id}`,
-      {
-        radius: 0.15, // 太くした
-        height: 0.6, // 上腕の長さ
-        tessellation: 8,
-      },
-      this.scene,
-    );
-
-    // 上腕の初期位置（肩の位置）
-    const xOffset = side === "left" ? -0.35 : 0.35;
-    upperArm.position = new Vector3(
-      xOffset,
-      0.3, // 肩の高さ
-      0,
-    );
-
-    // 初期角度：10度斜め下に傾ける
-    const angleDown = Math.PI / 18; // 10度 = π/18 ラジアン
-    upperArm.rotation = new Vector3(
-      0,
-      0,
-      side === "left" ? -angleDown : angleDown, // 左は左斜め下、右は右斜め下
-    );
-
-    // マテリアル（体と同じ色）
-    const material = new StandardMaterial(`upper-arm-material-${side}-${this.id}`, this.scene);
-    material.diffuseColor = this.mesh.material ? (this.mesh.material as StandardMaterial).diffuseColor.clone() : new Color3(0.5, 0.5, 0.5);
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    upperArm.material = material;
-
-    return upperArm;
   }
 
   /**
@@ -287,66 +234,6 @@ export class Player {
     return visionCone;
   }
 
-  /**
-   * 前腕（elbow to wrist）を作成
-   */
-  private createForearm(side: "left" | "right"): Mesh {
-    const forearm = MeshBuilder.CreateCapsule(
-      `forearm-${side}-${this.id}`,
-      {
-        radius: 0.13, // 前腕は少し細い
-        height: 0.6, // 前腕の長さ
-        tessellation: 8,
-      },
-      this.scene,
-    );
-
-    // 前腕の初期位置（上腕の下端、肘の位置）
-    // 親が上腕なので、ローカル座標で指定
-    forearm.position = new Vector3(
-      0,
-      -0.3, // 上腕の下端
-      0,
-    );
-
-    // マテリアル（体と同じ色）
-    const material = new StandardMaterial(`forearm-material-${side}-${this.id}`, this.scene);
-    material.diffuseColor = this.mesh.material ? (this.mesh.material as StandardMaterial).diffuseColor.clone() : new Color3(0.5, 0.5, 0.5);
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    forearm.material = material;
-
-    return forearm;
-  }
-
-  /**
-   * 手（hand）を作成（衝突判定用）
-   */
-  private createHand(side: "left" | "right"): Mesh {
-    const hand = MeshBuilder.CreateSphere(
-      `hand-${side}-${this.id}`,
-      {
-        diameter: 0.2, // 手のサイズ
-        segments: 8,
-      },
-      this.scene,
-    );
-
-    // 手の初期位置（前腕の先端）
-    // 親が前腕なので、ローカル座標で指定
-    hand.position = new Vector3(
-      0,
-      -0.35, // 前腕の先端（前腕の長さ0.6の半分 + 手の半径）
-      0,
-    );
-
-    // マテリアル（体と同じ色）
-    const material = new StandardMaterial(`hand-material-${side}-${this.id}`, this.scene);
-    material.diffuseColor = this.mesh.material ? (this.mesh.material as StandardMaterial).diffuseColor.clone() : new Color3(0.5, 0.5, 0.5);
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    hand.material = material;
-
-    return hand;
-  }
 
   /**
    * 位置を取得
@@ -373,8 +260,7 @@ export class Player {
    * 向きを設定（ラジアン）
    */
   setDirection(angle: number): void {
-    this.direction = angle;
-    this.mesh.rotation.y = angle;
+    this.movement.setDirection(angle);
   }
 
   /**
@@ -384,42 +270,16 @@ export class Player {
    * @returns 移動したかどうか
    */
   moveTowards(targetPosition: Vector3, deltaTime: number): boolean {
-    const currentPosition = this.getPosition();
+    return this.movement.moveTowards(targetPosition, deltaTime);
+  }
 
-    // 水平方向（XZ平面）のみの方向ベクトルを計算（Y座標は無視）
-    const dx = targetPosition.x - currentPosition.x;
-    const dz = targetPosition.z - currentPosition.z;
-    const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-
-    // すでに十分近い場合は移動しない
-    if (horizontalDistance < 0.5) {
-      return false;
-    }
-
-    // 水平方向の単位ベクトル
-    const directionX = dx / horizontalDistance;
-    const directionZ = dz / horizontalDistance;
-
-    // 移動速度を計算（m/s）
-    const speed = PLAYER_CONFIG.speed;
-    const moveDistance = speed * deltaTime;
-
-    // 実際の移動距離を制限（ターゲットを超えないように）
-    const actualMoveDistance = Math.min(moveDistance, horizontalDistance);
-
-    // 新しい位置を計算（Y座標は現在の値を保持）
-    const newPosition = new Vector3(
-      currentPosition.x + directionX * actualMoveDistance,
-      currentPosition.y, // Y座標は変更しない（ジャンプ中の高さを保持）
-      currentPosition.z + directionZ * actualMoveDistance
-    );
-    this.setPosition(newPosition);
-
-    // プレイヤーの向きを移動方向に設定
-    const angle = Math.atan2(directionX, directionZ);
-    this.setDirection(angle);
-
-    return true;
+  /**
+   * 左右に移動（ストレイフ）
+   * @param direction 移動方向（"left" または "right"）
+   * @param deltaTime フレーム時間（秒）
+   */
+  moveSideways(direction: "left" | "right", deltaTime: number): void {
+    this.movement.moveSideways(direction, deltaTime);
   }
 
   /**
@@ -460,11 +320,20 @@ export class Player {
       this.mesh.position.y = this.groundY;
       this.isJumping = false;
       this.jumpVelocity = 0;
+
+      // ブロック・レイアップポーズから通常ポーズに戻す
+      if (this.currentPose === HandPose.BLOCK || this.currentPose === HandPose.LAYUP) {
+        this.setHandPose(HandPose.NEUTRAL);
+      }
+
       console.log(`[Player ${this.id}] 着地！`);
     } else {
       this.mesh.position.y = newY;
       console.log(`[Player ${this.id} JUMP] Set mesh.position.y to ${this.mesh.position.y.toFixed(2)}`);
     }
+
+    // 重心デバッグメッシュを更新（ジャンプ時のY座標変化を反映）
+    this.movement.updateDebugMesh();
   }
 
   /**
@@ -494,6 +363,45 @@ export class Player {
    */
   releaseBall(): void {
     this.hasBall = false;
+    this.isDribbling = false;
+  }
+
+  /**
+   * ドリブル更新（外部から呼ぶ）
+   * @returns ボールをバウンドさせるべきか
+   */
+  updateDribble(deltaTime: number): boolean {
+    if (!this.hasBall || this.currentPose !== HandPose.DRIBBLE) {
+      this.isDribbling = false;
+      this.dribbleTimer = 0;
+      return false;
+    }
+
+    this.isDribbling = true;
+    this.dribbleTimer += deltaTime;
+
+    // ドリブル間隔に達したらバウンド
+    if (this.dribbleTimer >= this.DRIBBLE_INTERVAL) {
+      this.dribbleTimer = 0;
+      return true; // ボールをバウンドさせる
+    }
+
+    return false;
+  }
+
+  /**
+   * ドリブル時のボール速度を取得
+   */
+  getDribbleBallVelocity(): Vector3 {
+    // プレイヤーの移動速度を取得
+    const playerVelocity = this.movement.getCenterOfMassVelocity();
+
+    // 下向きの速度 + プレイヤーの水平速度
+    return new Vector3(
+      playerVelocity.x, // 水平方向X（プレイヤーと一緒に移動）
+      -4.0,             // 垂直方向（下向き）
+      playerVelocity.z  // 水平方向Z（プレイヤーと一緒に移動）
+    );
   }
 
   /**
@@ -501,6 +409,12 @@ export class Player {
    * @returns ボールの位置
    */
   getBallHoldPosition(): Vector3 {
+    // ドリブル、シュート、レイアップポーズの場合は右手の先端位置
+    if (this.currentPose === HandPose.DRIBBLE || this.currentPose === HandPose.SHOOT || this.currentPose === HandPose.LAYUP) {
+      return this.rightArm.getTipPosition();
+    }
+
+    // それ以外は体の前
     const playerPosition = this.getPosition();
 
     // プレイヤーの前方方向を計算
@@ -516,71 +430,12 @@ export class Player {
   }
 
   /**
-   * 手のポーズを変更（上腕と前腕の関節を制御）
+   * 手のポーズを変更（腕の角度を制御）
    */
   setHandPose(pose: HandPose): void {
     this.currentPose = pose;
-
-    switch (pose) {
-      case HandPose.NEUTRAL:
-        // 通常：両サイド、軽く曲げた状態
-        // 左上腕
-        this.leftUpperArmMesh.position = new Vector3(-0.35, 0.3, 0);
-        this.leftUpperArmMesh.rotation = new Vector3(0, 0, Math.PI / 8);
-        // 左前腕（肘で少し曲げる）
-        this.leftForearmMesh.rotation = new Vector3(0, 0, Math.PI / 6);
-
-        // 右上腕
-        this.rightUpperArmMesh.position = new Vector3(0.35, 0.3, 0);
-        this.rightUpperArmMesh.rotation = new Vector3(0, 0, -Math.PI / 8);
-        // 右前腕（肘で少し曲げる）
-        this.rightForearmMesh.rotation = new Vector3(0, 0, -Math.PI / 6);
-        break;
-
-      case HandPose.DRIBBLE:
-        // ドリブル：右手を前に出して肘を曲げる、左手はサイド
-        // 左上腕（サイド）
-        this.leftUpperArmMesh.position = new Vector3(-0.35, 0.3, 0);
-        this.leftUpperArmMesh.rotation = new Vector3(0, 0, Math.PI / 8);
-        this.leftForearmMesh.rotation = new Vector3(0, 0, Math.PI / 6);
-
-        // 右上腕（前方に伸ばす）
-        this.rightUpperArmMesh.position = new Vector3(0.2, 0.15, 0);
-        this.rightUpperArmMesh.rotation = new Vector3(Math.PI / 3, 0, -Math.PI / 12);
-        // 右前腕（肘を大きく曲げてドリブル）
-        this.rightForearmMesh.rotation = new Vector3(Math.PI / 2, 0, 0);
-        break;
-
-      case HandPose.DEFEND:
-        // ディフェンス：両手を前に広げて、肘を少し曲げる
-        // 左上腕（前方＆左）
-        this.leftUpperArmMesh.position = new Vector3(-0.4, 0.35, 0);
-        this.leftUpperArmMesh.rotation = new Vector3(Math.PI / 6, 0, Math.PI / 6);
-        // 左前腕（肘で少し曲げる）
-        this.leftForearmMesh.rotation = new Vector3(Math.PI / 8, 0, Math.PI / 8);
-
-        // 右上腕（前方＆右）
-        this.rightUpperArmMesh.position = new Vector3(0.4, 0.35, 0);
-        this.rightUpperArmMesh.rotation = new Vector3(Math.PI / 6, 0, -Math.PI / 6);
-        // 右前腕（肘で少し曲げる）
-        this.rightForearmMesh.rotation = new Vector3(Math.PI / 8, 0, -Math.PI / 8);
-        break;
-
-      case HandPose.SHOOT:
-        // シュート：両手を上に上げて、肘を曲げる
-        // 左上腕（上に上げる）
-        this.leftUpperArmMesh.position = new Vector3(-0.25, 0.4, 0);
-        this.leftUpperArmMesh.rotation = new Vector3(-Math.PI / 4, 0, Math.PI / 12);
-        // 左前腕（肘を曲げてボールを持つ）
-        this.leftForearmMesh.rotation = new Vector3(-Math.PI / 3, 0, 0);
-
-        // 右上腕（上に上げる）
-        this.rightUpperArmMesh.position = new Vector3(0.25, 0.4, 0);
-        this.rightUpperArmMesh.rotation = new Vector3(-Math.PI / 4, 0, -Math.PI / 12);
-        // 右前腕（肘を曲げてボールを持つ）
-        this.rightForearmMesh.rotation = new Vector3(-Math.PI / 3, 0, 0);
-        break;
-    }
+    this.leftArm.setPose(pose);
+    this.rightArm.setPose(pose);
   }
 
   /**
@@ -645,9 +500,12 @@ export class Player {
 
   /**
    * ボールが視野内にあるかを判定
+   * ボールは常に位置を把握できるため、常にtrueを返す
+   * （視野コーンは相手プレイヤーの把握用）
    */
-  canSeeBall(ballPosition: Vector3): boolean {
-    return this.isInVision(ballPosition);
+  canSeeBall(_ballPosition: Vector3): boolean {
+    // ボールの位置は常に把握している
+    return true;
   }
 
   /**
@@ -658,17 +516,42 @@ export class Player {
   }
 
   /**
+   * 重心のデバッグ表示を設定
+   */
+  setMovementDebugMode(enabled: boolean): void {
+    this.movement.setDebugMode(enabled, this.scene);
+  }
+
+  /**
+   * 移動可能範囲の表示を設定
+   */
+  setReachableRangeVisible(enabled: boolean): void {
+    this.movement.setReachableRangeVisible(enabled, this.scene);
+  }
+
+  /**
+   * ダッシュを開始
+   */
+  startDash(): boolean {
+    return this.movement.startDash();
+  }
+
+  /**
+   * ダッシュ中かどうかを取得
+   */
+  isDashing(): boolean {
+    return this.movement.getIsDashing();
+  }
+
+  /**
    * 破棄
    */
   dispose(): void {
+    this.movement.dispose();
     this.visionConeMesh.dispose();
     this.faceMesh.dispose();
-    this.leftUpperArmMesh.dispose();
-    this.leftForearmMesh.dispose();
-    this.rightUpperArmMesh.dispose();
-    this.rightForearmMesh.dispose();
-    this.leftHand.dispose();
-    this.rightHand.dispose();
+    this.leftArm.dispose(); // Armクラスのdisposeを呼ぶ
+    this.rightArm.dispose(); // Armクラスのdisposeを呼ぶ
     this.mesh.dispose();
   }
 }

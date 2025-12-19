@@ -18,6 +18,14 @@ export const COURT_CONFIG = {
   backboardWidth: 1.8, // バックボードの幅（m）
   backboardDistance: 1.2, // エンドラインからバックボードまでの距離（m）
   rimOffset: 0.4, // バックボードからリム中心までの距離（m）
+
+  // ネット設定
+  netSegmentsVertical: 10, // ネットの縦方向セグメント数
+  netSegmentsCircular: 16, // ネットの円周方向セグメント数
+  netLength: 0.45, // ネットの長さ（m）
+  netStiffness: 0.8, // ネットの硬さ（0-1）
+  netDamping: 0.85, // ネットの減衰（0-1）
+  netColor: '#FFFFFF', // ネットの色（白）
 };
 
 // プレイヤー設定
@@ -32,10 +40,14 @@ export const PLAYER_CONFIG = {
   visionRange: 10, // 視野範囲（m）
 
   // ディフェンス設定
-  defenseDistance: 1.5, // オフェンスとの理想的な距離（m）
-  defenseMinDistance: 0.8, // オフェンスに近づける最小距離（m）
+  defenseDistance: 1.22, // オフェンスとの理想的な距離（m）
+  defenseMinDistance: 0.5, // オフェンスに近づける最小距離（m）
   defenseMaxDistance: 3.0, // オフェンスから離れる最大距離（m）
   defenseBias: 0.6, // オフェンスとゴールの間のどこに位置取るか（0=オフェンス側、1=ゴール側）
+
+  // オフェンス設定
+  offenseMinDistanceToDefender: 1.1, // ディフェンダーに近づける最小距離（m）
+  offenseStopDistanceToDefender: 2.5, // この距離以下ならゴールへの直進を止める（m）
 };
 
 // ボール設定（デフォルメサイズ）
