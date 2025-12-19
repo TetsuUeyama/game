@@ -7,6 +7,7 @@ import {
   Mesh,
 } from '@babylonjs/core';
 import { COURT_CONFIG } from '../config/gameConfig';
+import { Net } from './Net';
 
 /**
  * 3Dバスケットボールコートクラス
@@ -17,6 +18,7 @@ export class Court {
   private lines: Mesh[] = [];
   private walls: Mesh[] = [];
   private ceiling: Mesh | null = null;
+  public nets: Net[] = []; // ネットの配列（public for GameScene access）
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -247,6 +249,11 @@ export class Court {
     rimMaterial.diffuseColor = new Color3(1, 0.4, 0);
     rimMaterial.emissiveColor = new Color3(0.2, 0.08, 0);
     rim.material = rimMaterial;
+
+    // ネット
+    const rimCenter = rim.position.clone();
+    const net = new Net(this.scene, rimCenter, side);
+    this.nets.push(net);
   }
 
   /**
@@ -368,6 +375,15 @@ export class Court {
   }
 
   /**
+   * 更新（ネットの物理シミュレーション）
+   */
+  update(deltaTime: number): void {
+    for (const net of this.nets) {
+      net.update(deltaTime);
+    }
+  }
+
+  /**
    * 破棄
    */
   dispose(): void {
@@ -380,5 +396,7 @@ export class Court {
       this.ceiling.dispose();
       this.ceiling = null;
     }
+    this.nets.forEach((net) => net.dispose());
+    this.nets = [];
   }
 }

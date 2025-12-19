@@ -16,6 +16,10 @@ export class Ball {
   public mesh: Mesh;
   public owner: number | null = null; // 所持者のプレイヤーID（null = フリー）
   public velocity: Vector3 = Vector3.Zero(); // ボールの速度（m/s）
+  public lastShooter: number | null = null; // 最後にシュートしたプレイヤーID
+  public timeSinceRelease: number = 0; // リリース後の経過時間（秒）
+  public isPass: boolean = false; // パス中かどうか
+  public isDribbling: boolean = false; // ドリブル中かどうか
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -80,17 +84,76 @@ export class Ball {
   }
 
   /**
+   * ボールがアクティブなシュート中かどうか
+   * （ブロック可能な状態）
+   */
+  isActiveShot(): boolean {
+    if (!this.isFree()) {
+      return false;
+    }
+
+    // パスの場合はシュートではない
+    if (this.isPass) {
+      return false;
+    }
+
+    const speed = this.velocity.length();
+    const height = this.mesh.position.y;
+
+    // 速度が速い、または高い位置を飛んでいる
+    return speed > 3.0 || height > 1.5;
+  }
+
+  /**
+   * ボールが拾える状態かどうか
+   * （地面付近、リバウンド後、転がっているなど）
+   */
+  isPickupable(): boolean {
+    if (!this.isFree()) {
+      return false;
+    }
+
+    // アクティブなシュート中は拾えない
+    if (this.isActiveShot()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * ボールを取得
    */
   pickUp(playerId: number): void {
     this.owner = playerId;
+    this.lastShooter = null; // ボールを拾ったらシューター情報をリセット
+    this.timeSinceRelease = 0;
+    this.isPass = false; // パスフラグをリセット
   }
 
   /**
-   * ボールを手放す
+   * ボールを手放す（シュート時）
    */
-  release(): void {
+  release(isPass: boolean = false): void {
+    this.lastShooter = this.owner; // リリース前の所持者を記録
     this.owner = null;
+    this.timeSinceRelease = 0; // リリース後の経過時間をリセット
+    this.isPass = isPass; // パスかどうかを記録
+    this.isDribbling = false;
+  }
+
+  /**
+   * ドリブル開始（所有者を保持したままボールを自由に動かす）
+   */
+  startDribble(): void {
+    this.isDribbling = true;
+  }
+
+  /**
+   * ドリブル停止（ボールを再び固定）
+   */
+  stopDribble(): void {
+    this.isDribbling = false;
   }
 
   /**
@@ -112,11 +175,14 @@ export class Ball {
    * @param deltaTime フレーム時間（秒）
    */
   updatePhysics(deltaTime: number): void {
-    // ボールが所持されている場合は物理演算しない
-    if (this.owner !== null) {
+    // ボールが所持されている場合は物理演算しない（ただしドリブル中は例外）
+    if (this.owner !== null && !this.isDribbling) {
       this.velocity = Vector3.Zero();
       return;
     }
+
+    // リリース後の経過時間をカウント
+    this.timeSinceRelease += deltaTime;
 
     // 速度が非常に小さく、地面にいる場合は停止
     const speed = this.velocity.length();
