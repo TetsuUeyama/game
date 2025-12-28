@@ -19,6 +19,7 @@ export class Court {
   private walls: Mesh[] = [];
   private ceiling: Mesh | null = null;
   public nets: Net[] = []; // ネットの配列（public for GameScene access）
+  public backboards: Mesh[] = []; // バックボードの配列（public for collision detection）
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -225,6 +226,9 @@ export class Court {
     backboardMaterial.diffuseColor = new Color3(1, 1, 1);
     backboardMaterial.alpha = 0.5;
     backboard.material = backboardMaterial;
+
+    // バックボードを配列に追加（衝突判定用）
+    this.backboards.push(backboard);
 
     // リム（輪）
     const rim = MeshBuilder.CreateTorus(

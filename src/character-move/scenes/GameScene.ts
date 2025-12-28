@@ -1,0 +1,278 @@
+import {
+  Scene,
+  Engine,
+  ArcRotateCamera,
+  HemisphericLight,
+  DirectionalLight,
+  Vector3,
+  Color3,
+  Color4,
+} from "@babylonjs/core";
+import { Character } from "../entities/Character";
+import { Field } from "../entities/Field";
+import { InputController } from "../controllers/InputController";
+// import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
+import {
+  CAMERA_CONFIG,
+  LIGHT_CONFIG,
+  CHARACTER_CONFIG,
+  // MODEL_CONFIG, // 一旦無効化
+} from "../config/gameConfig";
+
+/**
+ * character-moveゲームのメインシーン
+ */
+export class GameScene {
+  private engine: Engine;
+  private scene: Scene;
+  private camera: ArcRotateCamera;
+  private field: Field;
+  private character: Character;
+  private inputController: InputController;
+
+  private lastFrameTime: number = Date.now();
+
+  // 3Dモデルロード状態
+  private modelLoaded: boolean = false;
+
+  constructor(canvas: HTMLCanvasElement) {
+    // WebGLサポートチェック
+    if (!canvas.getContext("webgl") && !canvas.getContext("webgl2")) {
+      throw new Error(
+        "WebGL is not supported in this browser. Please use a modern browser that supports WebGL."
+      );
+    }
+
+    // エンジンの作成
+    try {
+      this.engine = new Engine(canvas, true, {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      });
+    } catch (error) {
+      console.error("[GameScene] Engine creation failed:", error);
+      throw new Error(`Failed to create Babylon.js engine: ${error}`);
+    }
+
+    // シーンの作成
+    this.scene = new Scene(this.engine);
+    this.scene.clearColor = new Color4(0.5, 0.7, 0.9, 1.0); // 空色の背景
+
+    // カメラの設定
+    this.camera = this.createCamera(canvas);
+
+    // ライトの設定
+    this.createLights();
+
+    // フィールドの作成
+    this.field = new Field(this.scene);
+
+    // キャラクターの作成
+    this.character = this.createCharacter();
+
+    // 入力コントローラーの初期化
+    this.inputController = new InputController(this.scene, this.character);
+
+    // 3Dモデルのロード（オプション）
+    // this.loadCharacterModel(); // 一旦無効化
+
+    // レンダーループの開始
+    this.startRenderLoop();
+
+    // ウィンドウリサイズ対応
+    window.addEventListener("resize", () => {
+      this.engine.resize();
+    });
+
+    console.log("[GameScene] character-moveゲーム初期化完了");
+  }
+
+  /**
+   * カメラを作成
+   */
+  private createCamera(canvas: HTMLCanvasElement): ArcRotateCamera {
+    // アークローテートカメラ（キャラクターを中心に回転）
+    const camera = new ArcRotateCamera(
+      "camera",
+      -Math.PI / 2, // 初期水平角度（キャラクターの後ろ）
+      Math.PI / 3, // 初期垂直角度（やや上から見下ろす）
+      10, // 初期距離
+      Vector3.Zero(), // 初期ターゲット
+      this.scene
+    );
+
+    // カメラの制限
+    camera.lowerRadiusLimit = 3; // 最小距離
+    camera.upperRadiusLimit = 30; // 最大距離
+    camera.lowerBetaLimit = 0.1; // 最小垂直角度（真上を防ぐ）
+    camera.upperBetaLimit = Math.PI / 2.2; // 最大垂直角度（真下を防ぐ）
+
+    // マウス操作を有効化
+    camera.attachControl(canvas, true);
+
+    return camera;
+  }
+
+  /**
+   * ライトを作成
+   */
+  private createLights(): void {
+    // 環境光（Hemispheric Light）
+    const hemisphericLight = new HemisphericLight(
+      "hemispheric-light",
+      new Vector3(0, 1, 0),
+      this.scene
+    );
+    hemisphericLight.intensity = LIGHT_CONFIG.ambient.intensity;
+
+    // 太陽光（Directional Light）
+    const directionalLight = new DirectionalLight(
+      "directional-light",
+      new Vector3(
+        LIGHT_CONFIG.directional.direction.x,
+        LIGHT_CONFIG.directional.direction.y,
+        LIGHT_CONFIG.directional.direction.z
+      ),
+      this.scene
+    );
+    directionalLight.intensity = LIGHT_CONFIG.directional.intensity;
+  }
+
+  /**
+   * キャラクターを作成
+   */
+  private createCharacter(): Character {
+    // 初期位置（フィールドの中央）
+    const initialPosition = new Vector3(0, CHARACTER_CONFIG.height / 2, 0);
+
+    const character = new Character(this.scene, initialPosition);
+
+    console.log("[GameScene] キャラクター作成完了");
+
+    return character;
+  }
+
+  /**
+   * 3Dモデルをロード（オプション）
+   * 現在は無効化中（@babylonjs/loadersパッケージが必要）
+   */
+  /*
+  private async loadCharacterModel(): Promise<void> {
+    try {
+      console.log("[GameScene] 3Dモデルのロードを試行中...");
+
+      // モデルパスを取得
+      const modelPath = MODEL_CONFIG.defaultModelPath;
+
+      // モデルをロード
+      const model = await ModelLoader.loadGLTF(this.scene, modelPath);
+
+      // スケールを設定
+      ModelLoader.setScale(model, MODEL_CONFIG.scale);
+
+      // 回転を設定
+      ModelLoader.setRotation(
+        model,
+        MODEL_CONFIG.rotationOffset.x,
+        MODEL_CONFIG.rotationOffset.y,
+        MODEL_CONFIG.rotationOffset.z
+      );
+
+      // キャラクターにモデルを設定
+      this.character.setModel(model);
+
+      this.modelLoaded = true;
+      console.log("[GameScene] 3Dモデルのロードに成功しました");
+    } catch (error) {
+      console.warn(
+        "[GameScene] 3Dモデルのロードに失敗しました。仮のメッシュを使用します。",
+        error
+      );
+      // モデルのロードに失敗した場合は、仮のメッシュをそのまま使用
+      this.modelLoaded = false;
+    }
+  }
+  */
+
+  /**
+   * レンダーループを開始
+   */
+  private startRenderLoop(): void {
+    this.engine.runRenderLoop(() => {
+      // デルタタイムを計算
+      const currentTime = Date.now();
+      const deltaTime = (currentTime - this.lastFrameTime) / 1000;
+      this.lastFrameTime = currentTime;
+
+      // 更新処理
+      this.update(deltaTime);
+
+      // シーンをレンダリング
+      this.scene.render();
+    });
+  }
+
+  /**
+   * 更新処理（毎フレーム）
+   */
+  private update(deltaTime: number): void {
+    // 入力コントローラーを更新
+    this.inputController.update(deltaTime);
+
+    // キャラクターを更新
+    this.character.update(deltaTime);
+
+    // カメラをキャラクターに追従させる
+    this.updateCamera(deltaTime);
+  }
+
+  /**
+   * カメラの追従更新
+   */
+  private updateCamera(deltaTime: number): void {
+    // キャラクターの位置を取得
+    const characterPosition = this.character.getPosition();
+
+    // カメラのターゲットをスムーズに移動
+    const followSpeed = CAMERA_CONFIG.followSpeed;
+
+    this.camera.target.x +=
+      (characterPosition.x - this.camera.target.x) * followSpeed;
+    this.camera.target.y +=
+      (characterPosition.y - this.camera.target.y) * followSpeed;
+    this.camera.target.z +=
+      (characterPosition.z - this.camera.target.z) * followSpeed;
+  }
+
+  /**
+   * シーンを取得（外部からアクセス用）
+   */
+  public getScene(): Scene {
+    return this.scene;
+  }
+
+  /**
+   * エンジンを取得（外部からアクセス用）
+   */
+  public getEngine(): Engine {
+    return this.engine;
+  }
+
+  /**
+   * キャラクターを取得（外部からアクセス用）
+   */
+  public getCharacter(): Character {
+    return this.character;
+  }
+
+  /**
+   * 破棄
+   */
+  public dispose(): void {
+    this.inputController.dispose();
+    this.character.dispose();
+    this.field.dispose();
+    this.scene.dispose();
+    this.engine.dispose();
+  }
+}

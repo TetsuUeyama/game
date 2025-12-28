@@ -10,6 +10,8 @@ export enum HandPose {
   SHOOT = "shoot", // シュート（両手上）
   BLOCK = "block", // ブロック（両手を真上に伸ばす）
   LAYUP = "layup", // レイアップ（片手を高く上げる）
+  BALL_KEEP_LEFT = "ball_keep_left", // ボールキープ（左側）
+  BALL_KEEP_RIGHT = "ball_keep_right", // ボールキープ（右側）
 }
 
 /**
@@ -79,13 +81,15 @@ export class Arm {
         if (this.side === "left") {
           this.mesh.rotation = new Vector3(0, 0, 0); // 左手は真下
         } else {
-          this.mesh.rotation = new Vector3(Math.PI / -3, 0, 0); // 右手は前方60度
+          // this.mesh.rotation = new Vector3(Math.PI / -3, 0, 0); // 右手は前方60度
+          this.mesh.rotation = new Vector3(0, 0, 0);
         }
         break;
 
       case HandPose.DEFEND:
         // ディフェンス：両手を前に伸ばしてスティールを狙う
-        this.mesh.rotation = new Vector3(Math.PI / -4, 0, 0); // 前方45度
+        // this.mesh.rotation = new Vector3(Math.PI / -4, 0, 0); // 前方45度
+        this.mesh.rotation = new Vector3(0, 0, 0); // 左手は真下
         break;
 
       case HandPose.SHOOT:
@@ -108,6 +112,24 @@ export class Arm {
           this.mesh.rotation = new Vector3(0, Math.PI / 2, 0); // 左手は横に広げる
         } else {
           this.mesh.rotation = new Vector3(-Math.PI / 1, 0, 0); // 右手を高く上げる（約150度）
+        }
+        break;
+
+      case HandPose.BALL_KEEP_LEFT:
+        // ボールキープ（左側）：左手でボールを守り、右手は体の前
+        if (this.side === "left") {
+          this.mesh.rotation = new Vector3(Math.PI / -6, Math.PI / 3, 0); // 左手：やや前方、横に広げる
+        } else {
+          this.mesh.rotation = new Vector3(Math.PI / -4, 0, 0); // 右手：前方45度で守る
+        }
+        break;
+
+      case HandPose.BALL_KEEP_RIGHT:
+        // ボールキープ（右側）：右手でボールを守り、左手は体の前
+        if (this.side === "left") {
+          this.mesh.rotation = new Vector3(Math.PI / -4, 0, 0); // 左手：前方45度で守る
+        } else {
+          this.mesh.rotation = new Vector3(Math.PI / -6, -Math.PI / 3, 0); // 右手：やや前方、横に広げる
         }
         break;
     }

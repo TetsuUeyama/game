@@ -133,7 +133,7 @@ export class ShootController {
   }
 
   /**
-   * シュート可能かチェック（距離条件のみ）
+   * シュート可能かチェック（距離条件 + 向き条件）
    */
   shouldShoot(playerId: number, player: Player, goalZ: number): {
     shouldShoot: boolean;
@@ -142,12 +142,47 @@ export class ShootController {
   } {
     const shootCooldown = playerId === 1 ? this.player1ShootCooldown : this.player2ShootCooldown;
 
-    // 距離条件のみでシュート判定（時間条件は削除）
+    // 距離条件のチェック
     const canShootByDistance = shootCooldown <= 0 && this.canShoot(player, goalZ);
     const canShootByTime = false; // 時間条件は使用しない
-    const shouldShoot = canShootByDistance;
+
+    // プレイヤーの向きがゴール方向を向いているかチェック
+    const isFacingGoal = this.isFacingGoal(player, goalZ);
+
+    // 距離条件と向き条件の両方を満たす場合のみシュート可能
+    const shouldShoot = canShootByDistance && isFacingGoal;
 
     return {shouldShoot, canShootByDistance, canShootByTime};
+  }
+
+  /**
+   * プレイヤーがゴール方向を向いているかチェック
+   */
+  private isFacingGoal(player: Player, goalZ: number): boolean {
+    const playerPosition = player.getPosition();
+    const playerDirection = player.direction; // プレイヤーの向き（ラジアン）
+
+    // ゴールへの方向ベクトルを計算
+    const toGoalX = 0 - playerPosition.x;
+    const toGoalZ = goalZ - playerPosition.z;
+    const angleToGoal = Math.atan2(toGoalX, toGoalZ);
+
+    // プレイヤーの向きとゴールへの方向の角度差を計算
+    let angleDifference = angleToGoal - playerDirection;
+
+    // 角度差を -π ~ π の範囲に正規化
+    while (angleDifference > Math.PI) angleDifference -= Math.PI * 2;
+    while (angleDifference < -Math.PI) angleDifference += Math.PI * 2;
+
+    // 角度差が±90度以内ならゴール方向を向いている
+    const MAX_ANGLE_DIFFERENCE = Math.PI / 2; // 90度
+    const isFacing = Math.abs(angleDifference) <= MAX_ANGLE_DIFFERENCE;
+
+    if (!isFacing) {
+      console.log(`[SHOOT] Player ${player.id} NOT facing goal! Angle difference: ${(angleDifference * 180 / Math.PI).toFixed(1)}°`);
+    }
+
+    return isFacing;
   }
 
   /**

@@ -38,3 +38,26 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+
+  新しいキー配置:
+
+  移動操作:
+  - W: 前進
+  - A: 左移動
+  - S: 後退
+  - D: 右移動
+  - Q: 左回転
+  - E: 右回転
+
+  アクション:
+  - 1: NEUTRAL ポーズ
+  - 2: DRIBBLE ポーズ
+  - 3: DEFEND ポーズ
+  - 4: SHOOT ポーズ
+  - 5: LAYUP ポーズ
+  - 6: ジャンプ
+  - 7: ダッシュ
+
+  デバッグ:
+  - 8: 重心デバッグモード切り替え
+  - 9: 移動可能範囲表示切り替え

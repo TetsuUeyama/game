@@ -3,6 +3,7 @@ import {PLAYER_CONFIG} from "../config/gameConfig";
 import {PlayerStats, DEFAULT_PLAYER_STATS} from "./PlayerStats";
 import {PlayerMovement} from "./PlayerMovement";
 import {Arm, HandPose} from "./Arm";
+import {StateManager} from "../states/StateManager";
 
 // HandPoseを再エクスポート（他のファイルからアクセス可能にする）
 export {HandPose};
@@ -47,6 +48,13 @@ export class Player {
   // 移動管理
   private movement: PlayerMovement;
 
+  // 状態管理（新システム）
+  public stateManager: StateManager;
+
+  // 状態インジケーター（頭上の球）
+  private stateIndicator: Mesh;
+  private stateIndicatorMaterial: StandardMaterial;
+
   constructor(scene: Scene, id: number, name: string, position: Vector3, color: Color3, stats?: PlayerStats) {
     this.scene = scene;
     this.id = id;
@@ -73,6 +81,9 @@ export class Player {
     // 視野コーンの作成
     this.visionConeMesh = this.createVisionCone(color);
 
+    // 状態インジケーター球の作成
+    this.stateIndicator = this.createStateIndicator();
+
     // 顔を首に親子関係で紐付け
     this.faceMesh.parent = this.neckMesh;
 
@@ -83,8 +94,14 @@ export class Player {
     // 視野コーンを首に紐付け（首の傾きに連動）
     this.visionConeMesh.parent = this.neckMesh;
 
+    // 状態インジケーターを体に紐付け
+    this.stateIndicator.parent = this.mesh;
+
     // 初期ポーズを設定
     this.setHandPose(HandPose.NEUTRAL);
+
+    // 状態管理を初期化（新システム）
+    this.stateManager = new StateManager(this);
   }
 
   /**
@@ -234,6 +251,45 @@ export class Player {
     return visionCone;
   }
 
+  /**
+   * 状態インジケーター球を作成
+   */
+  private createStateIndicator(): Mesh {
+    // 小さな球を作成
+    const sphere = MeshBuilder.CreateSphere(
+      `state-indicator-${this.id}`,
+      {
+        diameter: 0.3, // 直径30cm
+        segments: 16,
+      },
+      this.scene
+    );
+
+    // プレイヤーの頭上に配置
+    const headTopY = PLAYER_CONFIG.height / 2 + 0.3; // 頭頂部から30cm上
+    sphere.position = new Vector3(0, headTopY, 0);
+
+    // マテリアルを作成（初期色はグレー）
+    this.stateIndicatorMaterial = new StandardMaterial(`state-indicator-material-${this.id}`, this.scene);
+    this.stateIndicatorMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5); // グレー
+    this.stateIndicatorMaterial.emissiveColor = new Color3(0.3, 0.3, 0.3); // 発光
+    sphere.material = this.stateIndicatorMaterial;
+
+    // 衝突判定を無効化
+    sphere.isPickable = false;
+    sphere.checkCollisions = false;
+
+    return sphere;
+  }
+
+  /**
+   * 状態インジケーターの色を設定
+   * @param color 色
+   */
+  public setStateIndicatorColor(color: Color3): void {
+    this.stateIndicatorMaterial.diffuseColor = color;
+    this.stateIndicatorMaterial.emissiveColor = color.scale(0.6); // 発光色は少し暗めに
+  }
 
   /**
    * 位置を取得
@@ -337,6 +393,14 @@ export class Player {
   }
 
   /**
+   * ダッシュ状態を更新（クールダウン管理）
+   * @param deltaTime フレーム時間（秒）
+   */
+  updateDash(deltaTime: number): void {
+    this.movement.updateDash(deltaTime);
+  }
+
+  /**
    * 腕を伸ばした時のボール保持位置の高さを取得
    * @returns ボール保持位置（腕を上に伸ばした状態）
    */
@@ -411,6 +475,16 @@ export class Player {
   getBallHoldPosition(): Vector3 {
     // ドリブル、シュート、レイアップポーズの場合は右手の先端位置
     if (this.currentPose === HandPose.DRIBBLE || this.currentPose === HandPose.SHOOT || this.currentPose === HandPose.LAYUP) {
+      return this.rightArm.getTipPosition();
+    }
+
+    // ボールキープ（左）の場合は左手の先端位置
+    if (this.currentPose === HandPose.BALL_KEEP_LEFT) {
+      return this.leftArm.getTipPosition();
+    }
+
+    // ボールキープ（右）の場合は右手の先端位置
+    if (this.currentPose === HandPose.BALL_KEEP_RIGHT) {
       return this.rightArm.getTipPosition();
     }
 
