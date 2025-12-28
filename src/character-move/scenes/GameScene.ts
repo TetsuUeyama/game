@@ -5,12 +5,12 @@ import {
   HemisphericLight,
   DirectionalLight,
   Vector3,
-  Color3,
   Color4,
 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Field } from "../entities/Field";
 import { InputController } from "../controllers/InputController";
+// import { JointController } from "../controllers/JointController"; // UIコントロールパネルを使用するため無効化
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -29,6 +29,7 @@ export class GameScene {
   private field: Field;
   private character: Character;
   private inputController: InputController;
+  // private jointController: JointController; // UIコントロールパネルを使用するため無効化
 
   private lastFrameTime: number = Date.now();
 
@@ -49,9 +50,10 @@ export class GameScene {
         preserveDrawingBuffer: true,
         stencil: true,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("[GameScene] Engine creation failed:", error);
-      throw new Error(`Failed to create Babylon.js engine: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to create Babylon.js engine: ${errorMessage}`);
     }
 
     // シーンの作成
@@ -72,6 +74,9 @@ export class GameScene {
 
     // 入力コントローラーの初期化
     this.inputController = new InputController(this.scene, this.character);
+
+    // 関節操作コントローラーの初期化（UIコントロールパネルを使用するため無効化）
+    // this.jointController = new JointController(this.scene, this.character);
 
     // 3Dモデルのロード（オプション）
     // this.loadCharacterModel(); // 一旦無効化
@@ -155,8 +160,7 @@ export class GameScene {
   /**
    * 3Dモデルをロード（オプション）
    * 現在は無効化中（@babylonjs/loadersパッケージが必要）
-   */
-  /*
+
   private async loadCharacterModel(): Promise<void> {
     try {
       console.log("[GameScene] 3Dモデルのロードを試行中...");
@@ -219,6 +223,9 @@ export class GameScene {
     // 入力コントローラーを更新
     this.inputController.update(deltaTime);
 
+    // 関節操作コントローラーを更新（UIコントロールパネルを使用するため無効化）
+    // this.jointController.update(deltaTime);
+
     // キャラクターを更新
     this.character.update(deltaTime);
 
@@ -229,7 +236,7 @@ export class GameScene {
   /**
    * カメラの追従更新
    */
-  private updateCamera(deltaTime: number): void {
+  private updateCamera(_deltaTime: number): void {
     // キャラクターの位置を取得
     const characterPosition = this.character.getPosition();
 
@@ -270,6 +277,7 @@ export class GameScene {
    */
   public dispose(): void {
     this.inputController.dispose();
+    // this.jointController.dispose(); // UIコントロールパネルを使用するため無効化
     this.character.dispose();
     this.field.dispose();
     this.scene.dispose();

@@ -3,6 +3,13 @@
  */
 import { GameScene } from "./scenes/GameScene";
 
+// グローバルスコープの型定義
+declare global {
+  interface Window {
+    gameScene?: GameScene;
+  }
+}
+
 // DOMContentLoadedイベントを待つ
 window.addEventListener("DOMContentLoaded", () => {
   // キャンバス要素を取得
@@ -20,7 +27,7 @@ window.addEventListener("DOMContentLoaded", () => {
     console.log("[Main] character-moveゲームを起動しました");
 
     // グローバルスコープにゲームシーンを保存（デバッグ用）
-    (window as any).gameScene = gameScene;
+    window.gameScene = gameScene;
   } catch (error) {
     console.error("[Main] ゲームシーンの作成に失敗しました:", error);
 

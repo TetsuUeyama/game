@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
+import { JointControlPanel } from './JointControlPanel';
 
 /**
  * Character Moveゲームコンポーネント
@@ -10,6 +11,7 @@ export default function CharacterMoveGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameSceneRef = useRef<GameScene | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gameSceneReady, setGameSceneReady] = useState<boolean>(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -19,6 +21,7 @@ export default function CharacterMoveGame() {
       gameSceneRef.current = new GameScene(canvasRef.current);
 
       setError(null);
+      setGameSceneReady(true);
     } catch (err) {
       console.error('[CharacterMoveGame] Initialization failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize 3D game');
@@ -93,6 +96,9 @@ export default function CharacterMoveGame() {
             <li><strong>ホイール</strong>: ズーム</li>
           </ul>
         </div>
+
+        {/* 関節コントロールパネル */}
+        {gameSceneReady && <JointControlPanel gameScene={gameSceneRef.current} />}
       </div>
 
       {/* フッター */}
