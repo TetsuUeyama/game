@@ -13,6 +13,12 @@ interface JointRotation {
   z: number;
 }
 
+interface JointPosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
 interface JointLimits {
   x: { min: number; max: number };
   y: { min: number; max: number };
@@ -34,7 +40,7 @@ const JOINT_LIMITS: { [key: string]: JointLimits } = {
   lowerBody: {
     x: { min: -30, max: 30 },
     y: { min: -80, max: 80 },
-    z: { min: -30, max: 30 },
+    z: { min: -40, max: 40 },
   },
   leftShoulder: {
     x: { min: -180, max: 180 }, // 前後に振る
@@ -95,12 +101,20 @@ const JOINTS = [
 export function JointControlPanel({ gameScene }: JointControlPanelProps) {
   const [selectedJoint, setSelectedJoint] = useState<string>("leftShoulder");
   const [rotation, setRotation] = useState<JointRotation>({ x: 0, y: 0, z: 0 });
+  const [position, setPosition] = useState<JointPosition>({ x: 0, y: 0, z: 0 });
 
   // 現在選択されている関節の可動域を取得
   const currentLimits = JOINT_LIMITS[selectedJoint] || {
     x: { min: -180, max: 180 },
     y: { min: -180, max: 180 },
     z: { min: -180, max: 180 },
+  };
+
+  // 下半身の接続位置制限（下半身のwidth 0.35m内: ±17.5cm）
+  const lowerBodyConnectionLimits = {
+    x: { min: -0.175, max: 0.175 }, // 左右に最大17.5cm
+    y: { min: 0, max: 0 },          // Y軸は固定
+    z: { min: 0, max: 0 },          // Z軸（depth）は中心を維持
   };
 
   const handleRotationChange = (axis: "x" | "y" | "z", value: number) => {
@@ -127,10 +141,31 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
     }
   };
 
+  const handlePositionChange = (axis: "x" | "y" | "z", value: number) => {
+    // 値を制限（下半身の接続位置のみ）
+    const clampedValue = Math.max(
+      lowerBodyConnectionLimits[axis].min,
+      Math.min(lowerBodyConnectionLimits[axis].max, value)
+    );
+
+    const newPosition = { ...position, [axis]: clampedValue };
+    setPosition(newPosition);
+
+    // ゲームシーンの関節を更新（下半身のみ）
+    if (gameScene && selectedJoint === "lowerBody") {
+      const character = gameScene.getCharacter();
+      // 下半身のオフセットは下半身ボックスメッシュのローカル座標で調整
+      const lowerBodyMesh = character.getLowerBodyMesh();
+      if (lowerBodyMesh) {
+        lowerBodyMesh.position[axis] = clampedValue;
+      }
+    }
+  };
+
   const handleJointChange = (jointName: string) => {
     setSelectedJoint(jointName);
 
-    // 現在の関節の回転値を取得
+    // 現在の関節の回転値と位置を取得
     if (gameScene) {
       const character = gameScene.getCharacter();
       const joint = character.getJoint(jointName);
@@ -140,12 +175,29 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
           y: (joint.rotation.y * 180) / Math.PI,
           z: (joint.rotation.z * 180) / Math.PI,
         });
+
+        // 下半身の場合は、下半身ボックスメッシュの位置を取得
+        if (jointName === "lowerBody") {
+          const lowerBodyMesh = character.getLowerBodyMesh();
+          setPosition({
+            x: lowerBodyMesh.position.x,
+            y: lowerBodyMesh.position.y,
+            z: lowerBodyMesh.position.z,
+          });
+        } else {
+          setPosition({
+            x: joint.position.x,
+            y: joint.position.y,
+            z: joint.position.z,
+          });
+        }
       }
     }
   };
 
   const resetRotation = () => {
     setRotation({ x: 0, y: 0, z: 0 });
+    setPosition({ x: 0, y: 0, z: 0 });
     if (gameScene) {
       const character = gameScene.getCharacter();
       const joint = character.getJoint(selectedJoint);
@@ -153,6 +205,12 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
         joint.rotation.x = 0;
         joint.rotation.y = 0;
         joint.rotation.z = 0;
+        // 下半身の場合は、下半身ボックスメッシュの位置もリセット
+        if (selectedJoint === "lowerBody") {
+          const lowerBodyMesh = character.getLowerBodyMesh();
+          lowerBodyMesh.position.x = 0;
+          // Y軸とZ軸は維持（元の位置から変更しない）
+        }
       }
     }
   };
@@ -295,6 +353,56 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
           }}
         />
       </div>
+
+      {/* 下半身の接続位置制御（下半身が選択されている場合のみ表示） */}
+      {selectedJoint === "lowerBody" && (
+        <>
+          <div
+            style={{
+              marginTop: "20px",
+              marginBottom: "16px",
+              padding: "12px",
+              backgroundColor: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "4px",
+            }}
+          >
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "16px" }}>接続位置オフセット</h4>
+
+            {/* X軸位置（左右） */}
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ display: "block", marginBottom: "4px" }}>
+                左右オフセット: {(position.x * 100).toFixed(1)}cm (範囲: -17.5cm ～ 17.5cm)
+              </label>
+              <input
+                type="range"
+                min={lowerBodyConnectionLimits.x.min * 100}
+                max={lowerBodyConnectionLimits.x.max * 100}
+                step={0.5}
+                value={position.x * 100}
+                onChange={(e) => handlePositionChange("x", Number(e.target.value) / 100)}
+                style={{ width: "100%" }}
+              />
+              <input
+                type="number"
+                min={lowerBodyConnectionLimits.x.min * 100}
+                max={lowerBodyConnectionLimits.x.max * 100}
+                step={0.5}
+                value={(position.x * 100).toFixed(1)}
+                onChange={(e) => handlePositionChange("x", Number(e.target.value) / 100)}
+                style={{
+                  width: "100%",
+                  padding: "4px",
+                  marginTop: "4px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: "#333",
+                  color: "white",
+                }}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* リセットボタン */}
       <button

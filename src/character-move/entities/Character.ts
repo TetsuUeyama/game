@@ -14,6 +14,7 @@ export class Character {
   private upperBodyMesh: Mesh; // 胴体上半身
   private lowerBodyMesh: Mesh; // 胴体下半身
   private waistJointMesh: Mesh; // 腰関節（上半身と下半身の接続）
+  private lowerBodyConnectionMesh: Mesh; // 下半身の接続点（回転可能）
   private leftShoulderMesh: Mesh; // 左肩
   private rightShoulderMesh: Mesh; // 右肩
   private leftUpperArmMesh: Mesh; // 左上腕
@@ -55,9 +56,10 @@ export class Character {
 
     // 身体パーツを作成
     this.headMesh = this.createHead();
-    this.lowerBodyMesh = this.createLowerBody();
     this.waistJointMesh = this.createWaistJoint();
     this.upperBodyMesh = this.createUpperBody();
+    this.lowerBodyConnectionMesh = this.createLowerBodyConnection();
+    this.lowerBodyMesh = this.createLowerBody();
     this.leftShoulderMesh = this.createShoulder("left");
     this.rightShoulderMesh = this.createShoulder("right");
     this.leftUpperArmMesh = this.createUpperArm("left");
@@ -85,14 +87,17 @@ export class Character {
     this.mouthMesh = this.createMouth();
 
     // パーツの親子関係を設定
-    // 下半身はルートの子
-    this.lowerBodyMesh.parent = this.mesh;
-
-    // 腰関節はルートの子（下半身の上に配置）
+    // 腰関節はルートの子（接続位置、固定）
     this.waistJointMesh.parent = this.mesh;
 
     // 上半身は腰関節の子（腰関節を回転すると上半身全体が回転）
     this.upperBodyMesh.parent = this.waistJointMesh;
+
+    // 下半身の接続点もルートの子（上半身とは独立してY回転可能）
+    this.lowerBodyConnectionMesh.parent = this.mesh;
+
+    // 下半身ボックスは接続点の子（ローカルXでオフセット）
+    this.lowerBodyMesh.parent = this.lowerBodyConnectionMesh;
 
     // 頭：上半身に固定
     this.headMesh.parent = this.upperBodyMesh;
@@ -258,6 +263,33 @@ export class Character {
   }
 
   /**
+   * 下半身の接続点を作成（回転可能な接続点）
+   */
+  private createLowerBodyConnection(): Mesh {
+    const connectionRadius = 0.08;
+
+    const connection = MeshBuilder.CreateSphere(
+      "character-lower-body-connection",
+      { diameter: connectionRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 腰関節と同じ位置（親がルートなので絶対位置）
+    const headSize = 0.25;
+    const upperBodyHeight = 0.6;
+    const waistY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight;
+    connection.position = new Vector3(0, waistY, 0);
+
+    // マテリアル（暗い茶色）
+    const material = new StandardMaterial("lower-body-connection-material", this.scene);
+    material.diffuseColor = new Color3(0.35, 0.25, 0.15); // 暗い茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    connection.material = material;
+
+    return connection;
+  }
+
+  /**
    * 胴体上半身を作成
    */
   private createUpperBody(): Mesh {
@@ -297,11 +329,10 @@ export class Character {
       this.scene
     );
 
-    // 位置: 上半身の下
-    const headSize = 0.25;
-    const upperBodyHeight = 0.6;
-    const lowerBodyY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight - height / 2;
-    lowerBody.position = new Vector3(0, lowerBodyY, 0);
+    // 位置: 接続点からの相対位置（親が接続点）
+    // 下半身の上端が接続点に来るように、Y = -height / 2
+    // X = 0 がデフォルト（オフセットはUIで調整）
+    lowerBody.position = new Vector3(0, -height / 2, 0);
 
     // マテリアル（茶色いズボン）
     const material = new StandardMaterial("lower-body-material", this.scene);
@@ -316,7 +347,7 @@ export class Character {
    * 肩を作成
    */
   private createShoulder(side: "left" | "right"): Mesh {
-    const shoulderRadius = 0.10;
+    const shoulderRadius = 0.08;
     const upperBodyHeight = 0.4;
 
     const shoulder = MeshBuilder.CreateSphere(
@@ -616,6 +647,13 @@ export class Character {
   }
 
   /**
+   * 下半身ボックスメッシュを取得（オフセット調整用）
+   */
+  public getLowerBodyMesh(): Mesh {
+    return this.lowerBodyMesh;
+  }
+
+  /**
    * 関節メッシュを取得
    */
   public getJoint(jointName: string): Mesh | null {
@@ -626,7 +664,8 @@ export class Character {
         // 上半身を動かす = 腰関節を回転させる
         return this.waistJointMesh;
       case "lowerBody":
-        return this.lowerBodyMesh;
+        // 下半身を動かす = 接続点を回転させる
+        return this.lowerBodyConnectionMesh;
       case "leftShoulder":
         return this.leftShoulderMesh;
       case "rightShoulder":
