@@ -43,7 +43,7 @@ export class Field {
       gridMaterial.opacity = 1.0;
 
       ground.material = gridMaterial;
-    } catch (error) {
+    } catch {
       // GridMaterialが使えない場合は標準マテリアルを使用
       console.warn("[Field] GridMaterialが使用できません。StandardMaterialにフォールバックします。");
       const material = new StandardMaterial("field-material", this.scene);

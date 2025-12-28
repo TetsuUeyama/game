@@ -6,8 +6,39 @@ import { CHARACTER_CONFIG } from "../config/gameConfig";
  */
 export class Character {
   public scene: Scene;
-  public mesh: Mesh; // ルートメッシュ（カプセルまたは3Dモデル）
+  public mesh: Mesh; // ルートメッシュ（親メッシュ）
   public model: AbstractMesh | null = null; // 読み込んだ3Dモデル
+
+  // 身体パーツ
+  private headMesh: Mesh; // 頭
+  private upperBodyMesh: Mesh; // 胴体上半身
+  private lowerBodyMesh: Mesh; // 胴体下半身
+  private waistJointMesh: Mesh; // 腰関節（上半身と下半身の接続）
+  private leftShoulderMesh: Mesh; // 左肩
+  private rightShoulderMesh: Mesh; // 右肩
+  private leftUpperArmMesh: Mesh; // 左上腕
+  private rightUpperArmMesh: Mesh; // 右上腕
+  private leftElbowMesh: Mesh; // 左肘
+  private rightElbowMesh: Mesh; // 右肘
+  private leftForearmMesh: Mesh; // 左前腕
+  private rightForearmMesh: Mesh; // 右前腕
+  private leftHandMesh: Mesh; // 左手のひら
+  private rightHandMesh: Mesh; // 右手のひら
+  private leftHipMesh: Mesh; // 左股関節
+  private rightHipMesh: Mesh; // 右股関節
+  private leftThighMesh: Mesh; // 左太もも
+  private rightThighMesh: Mesh; // 右太もも
+  private leftKneeMesh: Mesh; // 左膝
+  private rightKneeMesh: Mesh; // 右膝
+  private leftShinMesh: Mesh; // 左すね
+  private rightShinMesh: Mesh; // 右すね
+  private leftFootMesh: Mesh; // 左足
+  private rightFootMesh: Mesh; // 右足
+
+  // 顔のパーツ
+  private leftEyeMesh: Mesh; // 左目
+  private rightEyeMesh: Mesh; // 右目
+  private mouthMesh: Mesh; // 口
 
   public position: Vector3; // 位置
   public rotation: number = 0; // Y軸周りの回転（ラジアン）
@@ -19,34 +50,526 @@ export class Character {
     this.scene = scene;
     this.position = position.clone();
 
-    // 初期状態では仮のカプセルメッシュを作成
-    this.mesh = this.createPlaceholderMesh();
+    // ルートメッシュを作成（透明な親メッシュ）
+    this.mesh = this.createRootMesh();
+
+    // 身体パーツを作成
+    this.headMesh = this.createHead();
+    this.lowerBodyMesh = this.createLowerBody();
+    this.waistJointMesh = this.createWaistJoint();
+    this.upperBodyMesh = this.createUpperBody();
+    this.leftShoulderMesh = this.createShoulder("left");
+    this.rightShoulderMesh = this.createShoulder("right");
+    this.leftUpperArmMesh = this.createUpperArm("left");
+    this.rightUpperArmMesh = this.createUpperArm("right");
+    this.leftElbowMesh = this.createElbow("left");
+    this.rightElbowMesh = this.createElbow("right");
+    this.leftForearmMesh = this.createForearm("left");
+    this.rightForearmMesh = this.createForearm("right");
+    this.leftHandMesh = this.createHand("left");
+    this.rightHandMesh = this.createHand("right");
+    this.leftHipMesh = this.createHip("left");
+    this.rightHipMesh = this.createHip("right");
+    this.leftThighMesh = this.createThigh("left");
+    this.rightThighMesh = this.createThigh("right");
+    this.leftKneeMesh = this.createKnee("left");
+    this.rightKneeMesh = this.createKnee("right");
+    this.leftShinMesh = this.createShin("left");
+    this.rightShinMesh = this.createShin("right");
+    this.leftFootMesh = this.createFoot("left");
+    this.rightFootMesh = this.createFoot("right");
+
+    // 顔のパーツを作成
+    this.leftEyeMesh = this.createEye("left");
+    this.rightEyeMesh = this.createEye("right");
+    this.mouthMesh = this.createMouth();
+
+    // パーツの親子関係を設定
+    // 下半身はルートの子
+    this.lowerBodyMesh.parent = this.mesh;
+
+    // 腰関節はルートの子（下半身の上に配置）
+    this.waistJointMesh.parent = this.mesh;
+
+    // 上半身は腰関節の子（腰関節を回転すると上半身全体が回転）
+    this.upperBodyMesh.parent = this.waistJointMesh;
+
+    // 頭：上半身に固定
+    this.headMesh.parent = this.upperBodyMesh;
+
+    // 顔のパーツ：頭に固定
+    this.leftEyeMesh.parent = this.headMesh;
+    this.rightEyeMesh.parent = this.headMesh;
+    this.mouthMesh.parent = this.headMesh;
+
+    // 左腕：肩を上半身に固定し、肩を基点とした階層構造
+    this.leftShoulderMesh.parent = this.upperBodyMesh; // 上半身の子
+    this.leftUpperArmMesh.parent = this.leftShoulderMesh; // 肩の子
+    this.leftElbowMesh.parent = this.leftShoulderMesh; // 肩の子
+    this.leftForearmMesh.parent = this.leftElbowMesh; // 肘の子
+    this.leftHandMesh.parent = this.leftForearmMesh; // 前腕の子
+
+    // 右腕：肩を上半身に固定し、肩を基点とした階層構造
+    this.rightShoulderMesh.parent = this.upperBodyMesh; // 上半身の子
+    this.rightUpperArmMesh.parent = this.rightShoulderMesh; // 肩の子
+    this.rightElbowMesh.parent = this.rightShoulderMesh; // 肩の子
+    this.rightForearmMesh.parent = this.rightElbowMesh; // 肘の子
+    this.rightHandMesh.parent = this.rightForearmMesh; // 前腕の子
+
+    // 左脚：股関節を下半身に固定し、股関節を基点とした階層構造
+    this.leftHipMesh.parent = this.lowerBodyMesh; // 下半身の子
+    this.leftThighMesh.parent = this.leftHipMesh; // 股関節の子
+    this.leftKneeMesh.parent = this.leftHipMesh; // 股関節の子
+    this.leftShinMesh.parent = this.leftKneeMesh; // 膝の子
+    this.leftFootMesh.parent = this.leftShinMesh; // すねの子
+
+    // 右脚：股関節を下半身に固定し、股関節を基点とした階層構造
+    this.rightHipMesh.parent = this.lowerBodyMesh; // 下半身の子
+    this.rightThighMesh.parent = this.rightHipMesh; // 股関節の子
+    this.rightKneeMesh.parent = this.rightHipMesh; // 股関節の子
+    this.rightShinMesh.parent = this.rightKneeMesh; // 膝の子
+    this.rightFootMesh.parent = this.rightShinMesh; // すねの子
   }
 
   /**
-   * 仮のメッシュを作成（3Dモデルロード前の表示用）
+   * ルートメッシュを作成（透明な親メッシュ）
    */
-  private createPlaceholderMesh(): Mesh {
-    // カプセル形状でキャラクターを表現
-    const capsule = MeshBuilder.CreateCapsule(
-      "character-placeholder",
-      {
-        radius: CHARACTER_CONFIG.radius,
-        height: CHARACTER_CONFIG.height,
-        tessellation: 16,
-      },
+  private createRootMesh(): Mesh {
+    const root = MeshBuilder.CreateBox(
+      "character-root",
+      { size: 0.1 },
+      this.scene
+    );
+    root.position = this.position;
+    root.isVisible = false; // 透明にする
+    return root;
+  }
+
+  /**
+   * 頭を作成
+   */
+  private createHead(): Mesh {
+    const headSize = 0.25;
+    const upperBodyHeight = 0.4;
+
+    const head = MeshBuilder.CreateSphere(
+      "character-head",
+      { diameter: headSize, segments: 16 },
       this.scene
     );
 
-    capsule.position = this.position;
+    // 位置: 上半身からの相対位置（親が上半身）
+    head.position = new Vector3(0, upperBodyHeight / 2 + headSize / 2, 0);
 
-    // マテリアル
-    const material = new StandardMaterial("character-material", this.scene);
-    material.diffuseColor = new Color3(0.3, 0.6, 0.9); // 青色
+    // マテリアル（肌色）
+    const material = new StandardMaterial("head-material", this.scene);
+    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
     material.specularColor = new Color3(0.2, 0.2, 0.2);
-    capsule.material = material;
+    head.material = material;
 
-    return capsule;
+    return head;
+  }
+
+  /**
+   * 目を作成
+   */
+  private createEye(side: "left" | "right"): Mesh {
+    const eyeRadius = 0.03;
+    const headSize = 0.25;
+
+    const eye = MeshBuilder.CreateSphere(
+      `character-eye-${side}`,
+      { diameter: eyeRadius * 2, segments: 8 },
+      this.scene
+    );
+
+    // 位置: 頭の前面（Z方向に突き出す）
+    const eyeX = side === "left" ? -0.04 : 0.04;
+    const eyeY = 0.03; // 少し上
+    const eyeZ = headSize / 2 - 0.01; // 頭の半径から少し前
+
+    eye.position = new Vector3(eyeX, eyeY, eyeZ);
+
+    // マテリアル（黒い目）
+    const material = new StandardMaterial(`eye-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.1, 0.1, 0.1); // 濃い灰色
+    material.specularColor = new Color3(0.5, 0.5, 0.5);
+    eye.material = material;
+
+    return eye;
+  }
+
+  /**
+   * 口を作成
+   */
+  private createMouth(): Mesh {
+    const mouthWidth = 0.06;
+    const mouthHeight = 0.02;
+    const mouthDepth = 0.02;
+    const headSize = 0.25;
+
+    const mouth = MeshBuilder.CreateBox(
+      "character-mouth",
+      { width: mouthWidth, height: mouthHeight, depth: mouthDepth },
+      this.scene
+    );
+
+    // 位置: 頭の前面下部
+    const mouthY = -0.04; // 少し下
+    const mouthZ = headSize / 2 - 0.01; // 頭の半径から少し前
+
+    mouth.position = new Vector3(0, mouthY, mouthZ);
+
+    // マテリアル（赤い口）
+    const material = new StandardMaterial("mouth-material", this.scene);
+    material.diffuseColor = new Color3(0.8, 0.2, 0.2); // 赤色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    mouth.material = material;
+
+    return mouth;
+  }
+
+  /**
+   * 腰関節を作成（上半身と下半身の接続点）
+   */
+  private createWaistJoint(): Mesh {
+    const waistRadius = 0.12;
+
+    const waistJoint = MeshBuilder.CreateSphere(
+      "character-waist-joint",
+      { diameter: waistRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 下半身の上部（上半身と下半身の間）
+    const headSize = 0.25;
+    const upperBodyHeight = 0.6;
+    const waistY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight;
+
+    waistJoint.position = new Vector3(0, waistY, 0);
+
+    // マテリアル（茶色いベルト）
+    const material = new StandardMaterial("waist-joint-material", this.scene);
+    material.diffuseColor = new Color3(0.4, 0.3, 0.2); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    waistJoint.material = material;
+
+    return waistJoint;
+  }
+
+  /**
+   * 胴体上半身を作成
+   */
+  private createUpperBody(): Mesh {
+    const width = 0.38;
+    const height = 0.4;
+    const depth = 0.20;
+
+    const upperBody = MeshBuilder.CreateBox(
+      "character-upper-body",
+      { width, height, depth },
+      this.scene
+    );
+
+    // 位置: 腰関節からの相対位置（親が腰関節）
+    upperBody.position = new Vector3(0, height / 2, 0);
+
+    // マテリアル（青いシャツ）
+    const material = new StandardMaterial("upper-body-material", this.scene);
+    material.diffuseColor = new Color3(0.2, 0.4, 0.8); // 青色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    upperBody.material = material;
+
+    return upperBody;
+  }
+
+  /**
+   * 胴体下半身を作成
+   */
+  private createLowerBody(): Mesh {
+    const width = 0.35;
+    const height = 0.2; // 半分の長さに変更
+    const depth = 0.20;
+
+    const lowerBody = MeshBuilder.CreateBox(
+      "character-lower-body",
+      { width, height, depth },
+      this.scene
+    );
+
+    // 位置: 上半身の下
+    const headSize = 0.25;
+    const upperBodyHeight = 0.6;
+    const lowerBodyY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight - height / 2;
+    lowerBody.position = new Vector3(0, lowerBodyY, 0);
+
+    // マテリアル（茶色いズボン）
+    const material = new StandardMaterial("lower-body-material", this.scene);
+    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    lowerBody.material = material;
+
+    return lowerBody;
+  }
+
+  /**
+   * 肩を作成
+   */
+  private createShoulder(side: "left" | "right"): Mesh {
+    const shoulderRadius = 0.10;
+    const upperBodyHeight = 0.4;
+
+    const shoulder = MeshBuilder.CreateSphere(
+      `character-shoulder-${side}`,
+      { diameter: shoulderRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 上半身からの相対位置（親が上半身）
+    const shoulderY = upperBodyHeight / 2 - upperBodyHeight / 6;
+    const shoulderX = side === "left" ? -0.25 : 0.25;
+
+    shoulder.position = new Vector3(shoulderX, shoulderY, 0);
+
+    // マテリアル（青いシャツと同じ色）
+    const material = new StandardMaterial(`shoulder-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.2, 0.4, 0.8); // 青色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    shoulder.material = material;
+
+    return shoulder;
+  }
+
+  /**
+   * 上腕を作成
+   */
+  private createUpperArm(side: "left" | "right"): Mesh {
+    const radius = 0.06;
+    const height = 0.3; // 腕を半分に
+
+    const upperArm = MeshBuilder.CreateCapsule(
+      `character-upper-arm-${side}`,
+      { radius, height, tessellation: 8 },
+      this.scene
+    );
+
+    // 位置: 肩からの相対位置（親が肩）
+    upperArm.position = new Vector3(0, -height / 2, 0);
+
+    // マテリアル（肌色）
+    const material = new StandardMaterial(`upper-arm-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    upperArm.material = material;
+
+    return upperArm;
+  }
+
+  /**
+   * 肘を作成
+   */
+  private createElbow(side: "left" | "right"): Mesh {
+    const elbowRadius = 0.06;
+    const upperArmHeight = 0.3;
+
+    const elbow = MeshBuilder.CreateSphere(
+      `character-elbow-${side}`,
+      { diameter: elbowRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 肩からの相対位置（親が肩）
+    elbow.position = new Vector3(0, -upperArmHeight, 0);
+
+    // マテリアル（肌色）
+    const material = new StandardMaterial(`elbow-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    elbow.material = material;
+
+    return elbow;
+  }
+
+  /**
+   * 前腕を作成
+   */
+  private createForearm(side: "left" | "right"): Mesh {
+    const radius = 0.05;
+    const height = 0.3; // 腕を半分に
+
+    const forearm = MeshBuilder.CreateCapsule(
+      `character-forearm-${side}`,
+      { radius, height, tessellation: 8 },
+      this.scene
+    );
+
+    // 位置: 肘からの相対位置（親が肘）
+    forearm.position = new Vector3(0, -height / 2, 0);
+
+    // マテリアル（肌色）
+    const material = new StandardMaterial(`forearm-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    forearm.material = material;
+
+    return forearm;
+  }
+
+  /**
+   * 手のひらを作成
+   */
+  private createHand(side: "left" | "right"): Mesh {
+    const handRadius = 0.07;
+    const forearmHeight = 0.3;
+
+    const hand = MeshBuilder.CreateSphere(
+      `character-hand-${side}`,
+      { diameter: handRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 前腕からの相対位置（親が前腕）
+    hand.position = new Vector3(0, -forearmHeight / 2, 0);
+
+    // マテリアル（肌色）
+    const material = new StandardMaterial(`hand-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    hand.material = material;
+
+    return hand;
+  }
+
+  /**
+   * 股関節を作成
+   */
+  private createHip(side: "left" | "right"): Mesh {
+    const hipRadius = 0.09;
+    const lowerBodyHeight = 0.2;
+
+    const hip = MeshBuilder.CreateSphere(
+      `character-hip-${side}`,
+      { diameter: hipRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 下半身からの相対位置（親が下半身）
+    const hipY = -lowerBodyHeight / 2;
+    const hipX = side === "left" ? -0.1 : 0.1;
+
+    hip.position = new Vector3(hipX, hipY, 0);
+
+    // マテリアル（茶色いズボン）
+    const material = new StandardMaterial(`hip-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    hip.material = material;
+
+    return hip;
+  }
+
+  /**
+   * 太ももを作成
+   */
+  private createThigh(side: "left" | "right"): Mesh {
+    const radius = 0.08;
+    const height = 0.4; // 足を半分に
+
+    const thigh = MeshBuilder.CreateCapsule(
+      `character-thigh-${side}`,
+      { radius, height, tessellation: 8 },
+      this.scene
+    );
+
+    // 位置: 股関節からの相対位置（親が股関節）
+    thigh.position = new Vector3(0, -height / 2, 0);
+
+    // マテリアル（茶色いズボン）
+    const material = new StandardMaterial(`thigh-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    thigh.material = material;
+
+    return thigh;
+  }
+
+  /**
+   * 膝を作成
+   */
+  private createKnee(side: "left" | "right"): Mesh {
+    const kneeRadius = 0.08;
+    const thighHeight = 0.4;
+
+    const knee = MeshBuilder.CreateSphere(
+      `character-knee-${side}`,
+      { diameter: kneeRadius * 2, segments: 12 },
+      this.scene
+    );
+
+    // 位置: 股関節からの相対位置（親が股関節）
+    knee.position = new Vector3(0, -thighHeight, 0);
+
+    // マテリアル（茶色いズボン）
+    const material = new StandardMaterial(`knee-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    knee.material = material;
+
+    return knee;
+  }
+
+  /**
+   * すねを作成
+   */
+  private createShin(side: "left" | "right"): Mesh {
+    const radius = 0.07;
+    const height = 0.4; // 足を半分に
+
+    const shin = MeshBuilder.CreateCapsule(
+      `character-shin-${side}`,
+      { radius, height, tessellation: 8 },
+      this.scene
+    );
+
+    // 位置: 膝からの相対位置（親が膝）
+    shin.position = new Vector3(0, -height / 2, 0);
+
+    // マテリアル（茶色いズボン）
+    const material = new StandardMaterial(`shin-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    shin.material = material;
+
+    return shin;
+  }
+
+  /**
+   * 足を作成
+   */
+  private createFoot(side: "left" | "right"): Mesh {
+    const radius = 0.06;
+    const height = 0.2; // 前後に長い
+    const shinHeight = 0.4;
+
+    const foot = MeshBuilder.CreateCapsule(
+      `character-foot-${side}`,
+      { radius, height, tessellation: 8 },
+      this.scene
+    );
+
+    // カプセルを横向きに回転（Z軸方向に伸びるように）
+    foot.rotation.x = Math.PI / 2;
+
+    // 位置: すねからの相対位置（親がすね）
+    foot.position = new Vector3(0, -shinHeight / 2 + radius, height / 4); // 少し前に出す
+
+    // マテリアル（茶色い靴）
+    const material = new StandardMaterial(`foot-${side}-material`, this.scene);
+    material.diffuseColor = new Color3(0.2, 0.15, 0.1); // 濃い茶色
+    material.specularColor = new Color3(0.2, 0.2, 0.2);
+    foot.material = material;
+
+    return foot;
   }
 
   /**
@@ -54,10 +577,34 @@ export class Character {
    * @param model ロードした3Dモデル
    */
   public setModel(model: AbstractMesh): void {
-    // 既存の仮メッシュを非表示に
-    if (this.mesh) {
-      this.mesh.isVisible = false;
-    }
+    // 既存の身体パーツを非表示に
+    this.headMesh.isVisible = false;
+    this.leftEyeMesh.isVisible = false;
+    this.rightEyeMesh.isVisible = false;
+    this.mouthMesh.isVisible = false;
+    this.upperBodyMesh.isVisible = false;
+    this.lowerBodyMesh.isVisible = false;
+    this.waistJointMesh.isVisible = false;
+    this.leftShoulderMesh.isVisible = false;
+    this.rightShoulderMesh.isVisible = false;
+    this.leftUpperArmMesh.isVisible = false;
+    this.rightUpperArmMesh.isVisible = false;
+    this.leftElbowMesh.isVisible = false;
+    this.rightElbowMesh.isVisible = false;
+    this.leftForearmMesh.isVisible = false;
+    this.rightForearmMesh.isVisible = false;
+    this.leftHandMesh.isVisible = false;
+    this.rightHandMesh.isVisible = false;
+    this.leftHipMesh.isVisible = false;
+    this.rightHipMesh.isVisible = false;
+    this.leftThighMesh.isVisible = false;
+    this.rightThighMesh.isVisible = false;
+    this.leftKneeMesh.isVisible = false;
+    this.rightKneeMesh.isVisible = false;
+    this.leftShinMesh.isVisible = false;
+    this.rightShinMesh.isVisible = false;
+    this.leftFootMesh.isVisible = false;
+    this.rightFootMesh.isVisible = false;
 
     // モデルをルートメッシュの子として追加
     this.model = model;
@@ -66,6 +613,39 @@ export class Character {
     // モデルの位置をルートメッシュの中心に配置
     // （3Dモデルの原点がキャラクターの足元にある場合は調整が必要）
     this.model.position = new Vector3(0, -CHARACTER_CONFIG.height / 2, 0);
+  }
+
+  /**
+   * 関節メッシュを取得
+   */
+  public getJoint(jointName: string): Mesh | null {
+    switch (jointName) {
+      case "head":
+        return this.headMesh;
+      case "upperBody":
+        // 上半身を動かす = 腰関節を回転させる
+        return this.waistJointMesh;
+      case "lowerBody":
+        return this.lowerBodyMesh;
+      case "leftShoulder":
+        return this.leftShoulderMesh;
+      case "rightShoulder":
+        return this.rightShoulderMesh;
+      case "leftElbow":
+        return this.leftElbowMesh;
+      case "rightElbow":
+        return this.rightElbowMesh;
+      case "leftHip":
+        return this.leftHipMesh;
+      case "rightHip":
+        return this.rightHipMesh;
+      case "leftKnee":
+        return this.leftKneeMesh;
+      case "rightKnee":
+        return this.rightKneeMesh;
+      default:
+        return null;
+    }
   }
 
   /**
@@ -181,9 +761,9 @@ export class Character {
 
   /**
    * 更新
-   * @param deltaTime フレーム時間（秒）
+   * @param _deltaTime フレーム時間（秒）
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     // 現在は特に処理なし
     // 将来的にアニメーション更新などを追加可能
   }
@@ -192,9 +772,41 @@ export class Character {
    * 破棄
    */
   public dispose(): void {
+    // 身体パーツを破棄
+    this.headMesh.dispose();
+    this.leftEyeMesh.dispose();
+    this.rightEyeMesh.dispose();
+    this.mouthMesh.dispose();
+    this.upperBodyMesh.dispose();
+    this.lowerBodyMesh.dispose();
+    this.waistJointMesh.dispose();
+    this.leftShoulderMesh.dispose();
+    this.rightShoulderMesh.dispose();
+    this.leftUpperArmMesh.dispose();
+    this.rightUpperArmMesh.dispose();
+    this.leftElbowMesh.dispose();
+    this.rightElbowMesh.dispose();
+    this.leftForearmMesh.dispose();
+    this.rightForearmMesh.dispose();
+    this.leftHandMesh.dispose();
+    this.rightHandMesh.dispose();
+    this.leftHipMesh.dispose();
+    this.rightHipMesh.dispose();
+    this.leftThighMesh.dispose();
+    this.rightThighMesh.dispose();
+    this.leftKneeMesh.dispose();
+    this.rightKneeMesh.dispose();
+    this.leftShinMesh.dispose();
+    this.rightShinMesh.dispose();
+    this.leftFootMesh.dispose();
+    this.rightFootMesh.dispose();
+
+    // 3Dモデルを破棄
     if (this.model) {
       this.model.dispose();
     }
+
+    // ルートメッシュを破棄
     if (this.mesh) {
       this.mesh.dispose();
     }
