@@ -41,12 +41,12 @@ export const PLAYER_CONFIG = {
 
   // ディフェンス設定
   defenseDistance: 1.22, // オフェンスとの理想的な距離（m）
-  defenseMinDistance: 0.5, // オフェンスに近づける最小距離（m）
-  defenseMaxDistance: 3.0, // オフェンスから離れる最大距離（m）
+  defenseMinDistance: 2.0, // オフェンスに近づける最小距離（m）
+  defenseMaxDistance: 3.5, // オフェンスから離れる最大距離（m）
   defenseBias: 0.6, // オフェンスとゴールの間のどこに位置取るか（0=オフェンス側、1=ゴール側）
 
   // オフェンス設定
-  offenseMinDistanceToDefender: 1.1, // ディフェンダーに近づける最小距離（m）
+  offenseMinDistanceToDefender: 1.3, // ディフェンダーに近づける最小距離（m）
   offenseStopDistanceToDefender: 2.5, // この距離以下ならゴールへの直進を止める（m）
 };
 

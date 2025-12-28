@@ -1,4 +1,4 @@
-import {Vector3} from "@babylonjs/core";
+import {Vector3, Mesh} from "@babylonjs/core";
 import {Player, HandPose} from "../entities/Player";
 import {Ball} from "../entities/Ball";
 import {COURT_CONFIG, BALL_CONFIG, PLAYER_CONFIG} from "../config/gameConfig";
@@ -12,6 +12,7 @@ export class CollisionHandler {
   private player1: Player;
   private player2: Player;
   private player2Enabled: boolean;
+  private backboards: Mesh[]; // バックボードの配列
 
   // リム判定用
   private ballPreviousY: number = 0;
@@ -28,6 +29,7 @@ export class CollisionHandler {
     player1: Player,
     player2: Player,
     player2Enabled: boolean,
+    backboards: Mesh[],
     onGoalScored?: (goalOwner: number) => void,
     onBallPickedUp?: (playerId: number) => void
   ) {
@@ -35,6 +37,7 @@ export class CollisionHandler {
     this.player1 = player1;
     this.player2 = player2;
     this.player2Enabled = player2Enabled;
+    this.backboards = backboards;
     this.onGoalScored = onGoalScored;
     this.onBallPickedUp = onBallPickedUp;
     this.ballPreviousY = ball.getPosition().y;
@@ -348,11 +351,10 @@ export class CollisionHandler {
       return;
     }
 
-    // ディフェンダーの腕・体とボールの衝突判定
+    // ディフェンダーの腕とボールの衝突判定（体の接触は除外）
     const isArmContact = defense.leftArm.mesh.intersectsMesh(this.ball.mesh, false) || defense.rightArm.mesh.intersectsMesh(this.ball.mesh, false);
-    const isBodyContact = defense.mesh.intersectsMesh(this.ball.mesh, false);
 
-    if (isArmContact || isBodyContact) {
+    if (isArmContact) {
       // ドリブル中のボールに接触した場合は即座にスティール成功
       if (this.ball.isDribbling) {
         console.log(`[STEAL] Player ${defense.id} stole the dribbling ball from Player ${offense.id}!`);
@@ -497,6 +499,92 @@ export class CollisionHandler {
       console.log(
         `[CONTACT] New: (${newVelocity.x.toFixed(2)}, ${newVelocity.y.toFixed(2)}, ${newVelocity.z.toFixed(2)})`
       );
+    }
+  }
+
+  /**
+   * バックボードとボールの衝突判定
+   */
+  handleBackboardCollisions(): void {
+    if (!this.ball.isFree()) {
+      return; // ボールが保持されている場合は衝突判定しない
+    }
+
+    const ballPosition = this.ball.getPosition();
+    const ballVelocity = this.ball.getVelocity();
+    const ballRadius = BALL_CONFIG.radius;
+
+    for (const backboard of this.backboards) {
+      // バックボードとの衝突判定（メッシュベース）
+      if (backboard.intersectsMesh(this.ball.mesh, false)) {
+        console.log(`[BACKBOARD] Ball hit backboard!`);
+
+        // バックボードの位置とサイズを取得
+        const backboardPos = backboard.position;
+        const backboardDepth = 0.05;
+
+        // バックボードの前面・背面のZ座標
+        const backboardFrontZ = backboardPos.z - backboardDepth / 2;
+        const backboardBackZ = backboardPos.z + backboardDepth / 2;
+
+        // ボールがバックボードのどちら側から来たか判定
+        const isFromFront = ballVelocity.z > 0; // 正の方向（前から）
+        const isFromBack = ballVelocity.z < 0; // 負の方向（後ろから）
+
+        // Z軸方向の速度を反転（反射）
+        const newVelocity = ballVelocity.clone();
+        newVelocity.z = -ballVelocity.z * BALL_CONFIG.bounciness;
+
+        this.ball.setVelocity(newVelocity);
+
+        // ボールをバックボードから離す
+        if (isFromFront) {
+          this.ball.setPosition(new Vector3(ballPosition.x, ballPosition.y, backboardFrontZ - ballRadius));
+        } else if (isFromBack) {
+          this.ball.setPosition(new Vector3(ballPosition.x, ballPosition.y, backboardBackZ + ballRadius));
+        }
+
+        console.log(`[BACKBOARD] Ball bounced! New velocity: (${newVelocity.x.toFixed(2)}, ${newVelocity.y.toFixed(2)}, ${newVelocity.z.toFixed(2)})`);
+        break; // 1フレームで1つのバックボードのみ処理
+      }
+    }
+  }
+
+  /**
+   * バックボードとプレイヤーの衝突判定
+   */
+  handlePlayerBackboardCollisions(): void {
+    for (const backboard of this.backboards) {
+      const backboardPos = backboard.position;
+      const backboardDepth = 0.05;
+
+      // Player1との衝突判定
+      const player1Pos = this.player1.getPosition();
+      const distanceToBackboard1 = Math.abs(player1Pos.z - backboardPos.z);
+
+      if (distanceToBackboard1 < PLAYER_CONFIG.radius + backboardDepth / 2) {
+        // プレイヤーをバックボードから押し出す
+        if (player1Pos.z < backboardPos.z) {
+          this.player1.setPosition(new Vector3(player1Pos.x, player1Pos.y, backboardPos.z - backboardDepth / 2 - PLAYER_CONFIG.radius));
+        } else {
+          this.player1.setPosition(new Vector3(player1Pos.x, player1Pos.y, backboardPos.z + backboardDepth / 2 + PLAYER_CONFIG.radius));
+        }
+      }
+
+      // Player2との衝突判定
+      if (this.player2Enabled) {
+        const player2Pos = this.player2.getPosition();
+        const distanceToBackboard2 = Math.abs(player2Pos.z - backboardPos.z);
+
+        if (distanceToBackboard2 < PLAYER_CONFIG.radius + backboardDepth / 2) {
+          // プレイヤーをバックボードから押し出す
+          if (player2Pos.z < backboardPos.z) {
+            this.player2.setPosition(new Vector3(player2Pos.x, player2Pos.y, backboardPos.z - backboardDepth / 2 - PLAYER_CONFIG.radius));
+          } else {
+            this.player2.setPosition(new Vector3(player2Pos.x, player2Pos.y, backboardPos.z + backboardDepth / 2 + PLAYER_CONFIG.radius));
+          }
+        }
+      }
     }
   }
 }

@@ -7,6 +7,9 @@ import {ShootController} from "../controllers/ShootController";
 import {CollisionHandler} from "../controllers/CollisionHandler";
 import {MovementController} from "../controllers/MovementController";
 import {DEFAULT_PLAYER_STATS} from "../entities/PlayerStats";
+import {GameContextHelper} from "../actions/GameContextHelper";
+import {DashAction} from "../actions/movement/DashAction";
+import {JumpAction} from "../actions/movement/JumpAction";
 
 /**
  * 3Dバスケットゲームのメインシーン
@@ -28,6 +31,20 @@ export class GameScene {
   private shootController: ShootController;
   private collisionHandler: CollisionHandler;
   private movementController: MovementController;
+
+  // プレイヤー1の手動アクション
+  private player1DashAction: DashAction;
+  private player1DashRequested: boolean = false;
+  private player1JumpAction: JumpAction;
+  private player1JumpRequested: boolean = false;
+
+  // プレイヤー1の移動キー状態
+  private keyW: boolean = false;
+  private keyA: boolean = false;
+  private keyS: boolean = false;
+  private keyD: boolean = false;
+  private keyQ: boolean = false;
+  private keyE: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     // WebGLサポートチェック
@@ -73,12 +90,17 @@ export class GameScene {
       this.player1,
       this.player2,
       this.player2Enabled,
+      this.court.backboards,
       (_goalOwner) => this.resetBallToCenter(),
       (_playerId) => {
         // ボール拾得時のコールバック（必要に応じて処理を追加）
       }
     );
     this.movementController = new MovementController(this.player1, this.player2, this.player2Enabled);
+
+    // プレイヤー1のアクション初期化
+    this.player1DashAction = new DashAction(Vector3.Zero(), HandPose.NEUTRAL);
+    this.player1JumpAction = new JumpAction(HandPose.NEUTRAL);
 
     // レンダーループの開始
     this.startRenderLoop();
@@ -106,6 +128,28 @@ export class GameScene {
     this.scene.onKeyboardObservable.add((kbInfo) => {
       switch (kbInfo.type) {
         case 1: // KEYDOWN
+          switch (kbInfo.event.key.toLowerCase()) {
+            // 移動キー（WASD）
+            case "w":
+              this.keyW = true;
+              break;
+            case "a":
+              this.keyA = true;
+              break;
+            case "s":
+              this.keyS = true;
+              break;
+            case "d":
+              this.keyD = true;
+              break;
+            // 回転キー（QE）
+            case "q":
+              this.keyQ = true;
+              break;
+            case "e":
+              this.keyE = true;
+              break;
+          }
           switch (kbInfo.event.key) {
             case "1":
               // 通常ポーズ
@@ -137,28 +181,117 @@ export class GameScene {
               this.player2.setHandPose(HandPose.LAYUP);
               console.log("[GameScene] Hand Pose: LAYUP");
               break;
-            case "Shift":
-              // ダッシュ（Player1とPlayer2）
-              const dash1 = this.player1.startDash();
-              const dash2 = this.player2Enabled ? this.player2.startDash() : false;
-              if (dash1 || dash2) {
-                console.log("[GameScene] DASH activated!");
+            case "6":
+              // ジャンプ（Player1のみ、フレーム管理付き）
+              if (!this.player1JumpAction.isInProgress()) {
+                this.player1JumpRequested = true;
+                console.log("[GameScene] JUMP requested!");
               }
               break;
-            case "d":
-            case "D":
+            case "7":
+              // ダッシュ（Player1のみ、フレーム管理付き）
+              if (!this.player1DashAction.isInProgress()) {
+                this.player1DashRequested = true;
+                console.log("[GameScene] DASH requested!");
+              }
+              break;
+            case "8":
               // 重心デバッグモードの切り替え
               this.toggleMovementDebugMode();
               break;
-            case "r":
-            case "R":
+            case "9":
               // 移動可能範囲表示の切り替え
               this.toggleReachableRangeMode();
               break;
           }
           break;
+        case 2: // KEYUP
+          switch (kbInfo.event.key.toLowerCase()) {
+            // 移動キー（WASD）
+            case "w":
+              this.keyW = false;
+              break;
+            case "a":
+              this.keyA = false;
+              break;
+            case "s":
+              this.keyS = false;
+              break;
+            case "d":
+              this.keyD = false;
+              break;
+            // 回転キー（QE）
+            case "q":
+              this.keyQ = false;
+              break;
+            case "e":
+              this.keyE = false;
+              break;
+          }
+          break;
       }
     });
+  }
+
+  /**
+   * Player1の手動移動処理（WASDQE）
+   */
+  private handlePlayer1ManualMovement(deltaTime: number): void {
+    const rotationSpeed = 3.0; // 回転速度（ラジアン/秒）
+
+    // 回転処理（Q: 左回転、E: 右回転）
+    if (this.keyQ) {
+      const currentDirection = this.player1.direction;
+      this.player1.setDirection(currentDirection + rotationSpeed * deltaTime);
+    }
+    if (this.keyE) {
+      const currentDirection = this.player1.direction;
+      this.player1.setDirection(currentDirection - rotationSpeed * deltaTime);
+    }
+
+    // 移動処理（WASD）
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (this.keyW) {
+      // 前進（プレイヤーの向いている方向）
+      moveX += Math.sin(this.player1.direction);
+      moveZ += Math.cos(this.player1.direction);
+    }
+    if (this.keyS) {
+      // 後退（プレイヤーの向いている方向の逆）
+      moveX -= Math.sin(this.player1.direction);
+      moveZ -= Math.cos(this.player1.direction);
+    }
+    if (this.keyA) {
+      // 左移動（プレイヤーの向いている方向の左）
+      moveX -= Math.cos(this.player1.direction);
+      moveZ += Math.sin(this.player1.direction);
+    }
+    if (this.keyD) {
+      // 右移動（プレイヤーの向いている方向の右）
+      moveX += Math.cos(this.player1.direction);
+      moveZ -= Math.sin(this.player1.direction);
+    }
+
+    // 移動がある場合、目標位置を計算して移動
+    if (moveX !== 0 || moveZ !== 0) {
+      // 移動ベクトルを正規化
+      const magnitude = Math.sqrt(moveX * moveX + moveZ * moveZ);
+      moveX /= magnitude;
+      moveZ /= magnitude;
+
+      // 目標位置を計算（現在位置から少し先）
+      const currentPos = this.player1.getPosition();
+      const targetPos = new Vector3(
+        currentPos.x + moveX * 10.0, // 10m先を目標に設定
+        currentPos.y,
+        currentPos.z + moveZ * 10.0
+      );
+
+      // 移動
+      this.player1.moveTowards(targetPos, deltaTime);
+    }
   }
 
   /**
@@ -392,104 +525,85 @@ export class GameScene {
       this.player2.updateJump(deltaTime);
     }
 
+    // プレイヤーのダッシュ状態を更新（クールダウン管理）
+    this.player1.updateDash(deltaTime);
+    if (this.player2Enabled) {
+      this.player2.updateDash(deltaTime);
+    }
+
     // レイアップジャンプ中の処理
     this.shootController.updateLayupJump(this.player1, 1, this.shootController.getLayupGoalZ(1));
     if (this.player2Enabled) {
       this.shootController.updateLayupJump(this.player2, 2, this.shootController.getLayupGoalZ(2));
     }
 
-    // プレイヤーのポーズを自動切り替え
-    this.updatePlayerPoses();
+    // ========================================
+    // 新システム：状態ベースの移動とアクション
+    // ========================================
 
-    // プレイヤーの移動判定
-    if (this.ball.isFree()) {
-      // ボールがフリーの場合：ボールに向かって移動
-      this.movementController.updateMoveToFreeBall(this.player1, ballPosition, this.shootController.getShootCooldown(1), deltaTime);
+    // Player1用のGameContextを作成
+    const player1GoalZ = this.movementController.getRimCenterZ("player2");
+    const player1OpponentGoalZ = this.movementController.getRimCenterZ("player1");
+    const player1Context = GameContextHelper.create(
+      this.player1,
+      this.player2Enabled ? this.player2 : null,
+      this.ball,
+      player1GoalZ,
+      player1OpponentGoalZ,
+      deltaTime,
+      this.player2Enabled
+    );
 
-      if (this.player2Enabled) {
-        this.movementController.updateMoveToFreeBall(this.player2, ballPosition, this.shootController.getShootCooldown(2), deltaTime);
+    // Player1の状態を更新（移動とアクションを自動実行）
+    this.player1.stateManager.update(player1Context);
+
+    // Player1の手動ダッシュ処理
+    if (this.player1DashRequested || this.player1DashAction.isInProgress()) {
+      // ダッシュ先の目標位置を設定（進行方向に5m先）
+      const player1Pos = this.player1.getPosition();
+      const direction = this.player1.direction;
+      const dashTargetPos = new Vector3(
+        player1Pos.x + Math.sin(direction) * 5.0,
+        player1Pos.y,
+        player1Pos.z + Math.cos(direction) * 5.0
+      );
+      this.player1DashAction.setTarget(dashTargetPos);
+
+      // ダッシュアクションを実行
+      if (this.player1DashAction.canExecute(this.player1, player1Context)) {
+        this.player1DashAction.execute(this.player1, player1Context);
+        this.player1DashRequested = false;
       }
-    } else {
-      // ボールが保持されている場合：オフェンス・ディフェンスの動き
-      if (this.player1.hasBall) {
-        // ボール保持時間をカウント
-        this.shootController.updateBallHoldTime(1, deltaTime);
+    }
 
-        // Player1が狙うゴール（+Z方向、Player2側）- リムリング中心の位置
-        const player1GoalZ = this.movementController.getRimCenterZ("player2");
-
-        // 相手（Player2）が視野内にいるかチェック
-        const canSeeOpponent = this.player2Enabled && this.player1.canSeePlayer(this.player2);
-
-        // シュート判定（距離チェックまたは保持時間で判定）
-        const shootCheck = this.shootController.shouldShoot(1, this.player1, player1GoalZ);
-
-        // デバッグ用（1秒ごとに表示）
-        const ballHoldTime = this.shootController.getBallHoldTime(1);
-        if (Math.floor(ballHoldTime * 10) % 10 === 0) {
-          console.log(`[P1] HoldTime: ${ballHoldTime.toFixed(1)}s, CanShootDist: ${shootCheck.canShootByDistance}, CanShootTime: ${shootCheck.canShootByTime}`);
-        }
-
-        if (shootCheck.shouldShoot) {
-          // Player2がディフェンダー
-          const defender = this.player2Enabled ? this.player2 : null;
-          this.shootController.performShoot(this.player1, player1GoalZ, defender);
-          this.shootController.resetBallHoldTime(1);
-        } else if (!this.shootController.isLayupInProgress(1)) {
-          // レイアップジャンプ中でない場合のみ移動
-          const defensePlayer = this.player2Enabled ? this.player2 : null;
-          this.movementController.updateOffenseMovement(this.player1, defensePlayer, player1GoalZ, deltaTime, false);
-          this.movementController.updatePlayerOrientation(this.player1, player1GoalZ, canSeeOpponent);
-        }
-
-        // Player2がディフェンス：Player1とゴールの間に位置取る
-        if (this.player2Enabled) {
-          const player2GoalZ = this.movementController.getRimCenterZ("player2");
-          this.movementController.updateDefenseMovement(this.player2, this.player1, player2GoalZ, deltaTime);
-        }
-      } else {
-        // ボールを持っていない場合はタイマーと首の向き、レイアップ状態をリセット
-        const ballHoldTime = this.shootController.getBallHoldTime(1);
-        if (ballHoldTime > 0) {
-          console.log(`[DEBUG] P1 lost ball! HoldTime was ${ballHoldTime.toFixed(2)}s`);
-        }
-        this.shootController.resetBallHoldTime(1);
-        this.player1.neckMesh.rotation.x = 0; // 首を水平に戻す
-        this.shootController.resetLayupState(1);
+    // Player1の手動ジャンプ処理
+    if (this.player1JumpRequested || this.player1JumpAction.isInProgress()) {
+      // ジャンプアクションを実行
+      if (this.player1JumpAction.canExecute(this.player1, player1Context)) {
+        this.player1JumpAction.execute(this.player1, player1Context);
+        this.player1JumpRequested = false;
       }
+    }
 
-      if (this.player2Enabled && this.player2.hasBall) {
-        // ボール保持時間をカウント
-        this.shootController.updateBallHoldTime(2, deltaTime);
+    // Player1の手動移動処理（WASDQE）
+    this.handlePlayer1ManualMovement(deltaTime);
 
-        // Player2が狙うゴール（-Z方向、Player1側）- リムリング中心の位置
-        const player2GoalZ = this.movementController.getRimCenterZ("player1");
+    // Player2用のGameContextを作成（Player2が有効な場合のみ）
+    if (this.player2Enabled) {
+      const player2GoalZ = this.movementController.getRimCenterZ("player1");
+      const player2OpponentGoalZ = this.movementController.getRimCenterZ("player2");
+      const player2Context = GameContextHelper.create(
+        this.player2,
+        this.player1,
+        this.ball,
+        player2GoalZ,
+        player2OpponentGoalZ,
+        deltaTime,
+        this.player2Enabled
+      );
 
-        // 相手（Player1）が視野内にいるかチェック
-        const canSeeOpponent = this.player2.canSeePlayer(this.player1);
-
-        // シュート判定（距離チェックまたは保持時間で判定）
-        const shootCheck = this.shootController.shouldShoot(2, this.player2, player2GoalZ);
-
-        if (shootCheck.shouldShoot) {
-          // Player1がディフェンダー
-          this.shootController.performShoot(this.player2, player2GoalZ, this.player1);
-          this.shootController.resetBallHoldTime(2);
-        } else if (!this.shootController.isLayupInProgress(2)) {
-          // レイアップジャンプ中でない場合のみ移動
-          this.movementController.updateOffenseMovement(this.player2, this.player1, player2GoalZ, deltaTime, false);
-          this.movementController.updatePlayerOrientation(this.player2, player2GoalZ, canSeeOpponent);
-        }
-
-        // Player1がディフェンス：Player2とゴールの間に位置取る
-        const player1GoalZ = this.movementController.getRimCenterZ("player1");
-        this.movementController.updateDefenseMovement(this.player1, this.player2, player1GoalZ, deltaTime);
-      } else {
-        // ボールを持っていない場合はタイマーと首の向き、レイアップ状態をリセット
-        this.shootController.resetBallHoldTime(2);
-        this.player2.neckMesh.rotation.x = 0;
-        this.shootController.resetLayupState(2);
-      }
+      // Player2の状態を更新（移動とアクションを自動実行）
+      this.player2.stateManager.update(player2Context);
     }
 
     // プレイヤー同士の衝突処理（Player2が有効な場合のみ）
@@ -533,6 +647,11 @@ export class GameScene {
       this.collisionHandler.handleRimCollisions();
     }
 
+    // バックボードとの衝突判定（ボールがフリーの場合のみ）
+    if (this.ball.isFree()) {
+      this.collisionHandler.handleBackboardCollisions();
+    }
+
     // 空中のボールとプレイヤーの物理的接触判定（シュートブロック）
     this.collisionHandler.handleBallPhysicalContact();
 
@@ -545,6 +664,9 @@ export class GameScene {
     // プレイヤーを境界内に制限（壁・天井との衝突）
     this.collisionHandler.constrainPlayerToBounds(this.player1);
     this.collisionHandler.constrainPlayerToBounds(this.player2);
+
+    // プレイヤーとバックボードの衝突判定
+    this.collisionHandler.handlePlayerBackboardCollisions();
 
     // ボールがフリーの場合のみ、境界内に制限（保持中は頭の上なので制限不要）
     if (this.ball.isFree()) {
@@ -584,45 +706,6 @@ export class GameScene {
         this.ball.stopDribble();
         this.ball.setVelocity(Vector3.Zero());
         console.log(`[DRIBBLE] Ball caught after bounce`);
-      }
-    }
-  }
-
-  /**
-   * プレイヤーのポーズを自動的に切り替え
-   */
-  private updatePlayerPoses(): void {
-    // Player1のポーズ（ジャンプ中はポーズを変更しない）
-    if (!this.player1.isJumping) {
-      if (this.shootController.getShootCooldown(1) > 0) {
-        // シュートクールダウン中はシュートポーズを維持
-        this.player1.setHandPose(HandPose.SHOOT);
-      } else if (this.player1.hasBall) {
-        // ボール保持中はドリブルポーズ
-        this.player1.setHandPose(HandPose.DRIBBLE);
-      } else if (this.player2Enabled && this.player2.hasBall) {
-        // 相手がボール保持中はディフェンドポーズ
-        this.player1.setHandPose(HandPose.DEFEND);
-      } else {
-        // ボールがフリーの場合はニュートラル
-        this.player1.setHandPose(HandPose.NEUTRAL);
-      }
-    }
-
-    // Player2のポーズ（Player2が有効な場合のみ、ジャンプ中はポーズを変更しない）
-    if (this.player2Enabled && !this.player2.isJumping) {
-      if (this.shootController.getShootCooldown(2) > 0) {
-        // シュートクールダウン中はシュートポーズを維持
-        this.player2.setHandPose(HandPose.SHOOT);
-      } else if (this.player2.hasBall) {
-        // ボール保持中はドリブルポーズ
-        this.player2.setHandPose(HandPose.DRIBBLE);
-      } else if (this.player1.hasBall) {
-        // 相手がボール保持中はディフェンドポーズ
-        this.player2.setHandPose(HandPose.DEFEND);
-      } else {
-        // ボールがフリーの場合はニュートラル
-        this.player2.setHandPose(HandPose.NEUTRAL);
       }
     }
   }
