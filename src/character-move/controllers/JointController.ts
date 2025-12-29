@@ -1,4 +1,4 @@
-import { Scene, Mesh, PointerEventTypes, PointerInfo, Vector3, Quaternion } from "@babylonjs/core";
+import { Scene, Mesh, PointerEventTypes, PointerInfo, Vector3, StandardMaterial } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 
 /**
@@ -124,7 +124,7 @@ export class JointController {
   private highlightJoint(mesh: Mesh, highlight: boolean): void {
     if (mesh.material) {
       // エミッシブカラーで強調表示
-      const material = mesh.material as any;
+      const material = mesh.material as StandardMaterial;
       if (material.emissiveColor) {
         if (highlight) {
           material.emissiveColor.set(0.3, 0.3, 0.0); // 黄色く光らせる

@@ -1,5 +1,7 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh } from "@babylonjs/core";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
+import { MotionController } from "../controllers/MotionController";
+import { MotionData } from "../types/MotionTypes";
 
 /**
  * 3Dキャラクターエンティティ
@@ -46,6 +48,9 @@ export class Character {
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
   private groundY: number = CHARACTER_CONFIG.height / 2; // 地面のY座標
+
+  // モーションコントローラー
+  private motionController: MotionController;
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -134,6 +139,9 @@ export class Character {
     this.rightKneeMesh.parent = this.rightHipMesh; // 股関節の子
     this.rightShinMesh.parent = this.rightKneeMesh; // 膝の子
     this.rightFootMesh.parent = this.rightShinMesh; // すねの子
+
+    // モーションコントローラーを初期化
+    this.motionController = new MotionController(this);
   }
 
   /**
@@ -802,9 +810,66 @@ export class Character {
    * 更新
    * @param _deltaTime フレーム時間（秒）
    */
-  public update(_deltaTime: number): void {
-    // 現在は特に処理なし
-    // 将来的にアニメーション更新などを追加可能
+  public update(deltaTime: number): void {
+    // モーションコントローラーを更新
+    this.motionController.update(deltaTime);
+  }
+
+  /**
+   * モーションを再生
+   */
+  public playMotion(motion: MotionData, speed: number = 1.0, blendDuration: number = 0.3): void {
+    this.motionController.play(motion, speed, blendDuration);
+  }
+
+  /**
+   * 位置オフセットをスケールしてモーションを再生
+   */
+  public playMotionWithScale(motion: MotionData, positionScale: number, speed: number = 1.0, blendDuration: number = 0.3): void {
+    this.motionController.playWithScale(motion, positionScale, speed, blendDuration);
+  }
+
+  /**
+   * モーションを停止
+   */
+  public stopMotion(): void {
+    this.motionController.stop();
+  }
+
+  /**
+   * モーションを一時停止
+   */
+  public pauseMotion(): void {
+    this.motionController.pause();
+  }
+
+  /**
+   * モーションを再開
+   */
+  public resumeMotion(): void {
+    this.motionController.resume();
+  }
+
+  /**
+   * モーションの再生時間を直接設定
+   * @param time 設定する時間（秒）
+   */
+  public setMotionTime(time: number): void {
+    this.motionController.setCurrentTime(time);
+  }
+
+  /**
+   * モーションが再生中かどうか
+   */
+  public isPlayingMotion(): boolean {
+    return this.motionController.isPlaying();
+  }
+
+  /**
+   * 現在再生中のモーション名を取得
+   */
+  public getCurrentMotionName(): string | null {
+    return this.motionController.getCurrentMotionName();
   }
 
   /**

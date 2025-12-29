@@ -53,12 +53,12 @@ const JOINT_LIMITS: { [key: string]: JointLimits } = {
     z: { min: -180, max: 180 },
   },
   leftElbow: {
-    x: { min: 0, max: 150 },    // 曲げる（0度が真っ直ぐ）
+    x: { min: -150, max: 0 },    // 曲げる（0度が真っ直ぐ）
     y: { min: -10, max: 10 },   // ほぼ動かない
     z: { min: -90, max: 90 },   // 前腕の回転
   },
   rightElbow: {
-    x: { min: 0, max: 150 },
+    x: { min: -150, max: 0 },
     y: { min: -10, max: 10 },
     z: { min: -90, max: 90 },
   },
