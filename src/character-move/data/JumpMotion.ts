@@ -1,114 +1,80 @@
 import { MotionData, MotionConfig } from "../types/MotionTypes";
+import { buildKeyframes } from "../utils/MotionUtils";
 
 /**
  * ジャンプモーション
  *
  * キーフレーム構成：
- * - 0.0秒: しゃがむ姿勢（準備）
- * - 0.15秒: ジャンプ開始（腕を振り上げる）
- * - 0.3秒: 空中姿勢（ピーク）
- * - 0.45秒: 着地準備
- * - 0.6秒: 着地完了
+ * - T0: しゃがむ姿勢（準備）
+ * - T1: ジャンプ開始（腕を振り上げる）
+ * - T2: 空中姿勢（ピーク）
+ * - T3: 着地準備
+ * - T4: 着地完了
  */
+
+const T0 = 0.0;
+const T1 = 0.15;
+const T2 = 0.3;
+const T3 = 0.45;
+const T4 = 0.6;
+
+const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  upperBodyX: {[T0]: 20, [T1]: -10, [T2]: 0, [T3]: 15, [T4]: 10},
+  upperBodyY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  upperBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  lowerBodyX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  lowerBodyY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  lowerBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  headX: {[T0]: -10, [T1]: 5, [T2]: 0, [T3]: -10, [T4]: -5},
+  headY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  headZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  leftShoulderX: {[T0]: -20, [T1]: -120, [T2]: -130, [T3]: -40, [T4]: 0},
+  leftShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftShoulderZ: {[T0]: 0, [T1]: -20, [T2]: -30, [T3]: -20, [T4]: 0},
+
+  rightShoulderX: {[T0]: -20, [T1]: -120, [T2]: -130, [T3]: -40, [T4]: 0},
+  rightShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightShoulderZ: {[T0]: 0, [T1]: 20, [T2]: 30, [T3]: 20, [T4]: 0},
+
+  leftElbowX: {[T0]: 10, [T1]: 30, [T2]: 20, [T3]: 30, [T4]: 0},
+  leftElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftElbowZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  rightElbowX: {[T0]: 10, [T1]: 30, [T2]: 20, [T3]: 30, [T4]: 0},
+  rightElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightElbowZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  leftHipX: {[T0]: -70, [T1]: -20, [T2]: 10, [T3]: -40, [T4]: -30},
+  leftHipY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftHipZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  rightHipX: {[T0]: -70, [T1]: -20, [T2]: 10, [T3]: -40, [T4]: -30},
+  rightHipY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightHipZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  leftKneeX: {[T0]: 100, [T1]: 30, [T2]: 40, [T3]: 70, [T4]: 50},
+  leftKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftKneeZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  rightKneeX: {[T0]: 100, [T1]: 30, [T2]: 40, [T3]: 70, [T4]: 50},
+  rightKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightKneeZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+};
+
+const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  y: {[T0]: -0.6, [T1]: 0.5, [T2]: 1.5, [T3]: 0.5, [T4]: 0},
+  z: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+};
+
 export const JUMP_MOTION: MotionData = {
   name: "jump",
-  duration: 0.6, // 1サイクル0.6秒
-  loop: false, // ジャンプは1回きり
-  keyframes: [
-    // 開始姿勢: しゃがむ
-    {
-      time: 0.0,
-      joints: {
-        upperBody: { x: 20, y: 0, z: 0 }, // 前傾
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: -10, y: 0, z: 0 }, // 頭は水平を保つ
-        leftShoulder: { x: -20, y: 0, z: 0 }, // 腕を後ろに
-        rightShoulder: { x: -20, y: 0, z: 0 },
-        leftElbow: { x: 10, y: 0, z: 0 },
-        rightElbow: { x: 10, y: 0, z: 0 },
-        leftHip: { x: -70, y: 0, z: 0 }, // 深くしゃがむ
-        rightHip: { x: -70, y: 0, z: 0 },
-        leftKnee: { x: 100, y: 0, z: 0 }, // 膝を大きく曲げる
-        rightKnee: { x: 100, y: 0, z: 0 },
-      },
-      position: { x: 0, y: -0.6, z: 0 }, // しゃがんで沈み込む
-    },
-    // ジャンプ開始: 腕を振り上げる
-    {
-      time: 0.15,
-      joints: {
-        upperBody: { x: -10, y: 0, z: 0 }, // 後傾（反動）
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: 5, y: 0, z: 0 },
-        leftShoulder: { x: -120, y: 0, z: -20 }, // 腕を大きく振り上げる
-        rightShoulder: { x: -120, y: 0, z: 20 },
-        leftElbow: { x: 30, y: 0, z: 0 },
-        rightElbow: { x: 30, y: 0, z: 0 },
-        leftHip: { x: -20, y: 0, z: 0 }, // 脚を伸ばす
-        rightHip: { x: -20, y: 0, z: 0 },
-        leftKnee: { x: 30, y: 0, z: 0 },
-        rightKnee: { x: 30, y: 0, z: 0 },
-      },
-      position: { x: 0, y: 0.5, z: 0 }, // 少し浮き始める
-    },
-    // 空中姿勢（ピーク）
-    {
-      time: 0.3,
-      joints: {
-        upperBody: { x: 0, y: 0, z: 0 }, // まっすぐ
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: 0, y: 0, z: 0 },
-        leftShoulder: { x: -130, y: 0, z: -30 }, // 腕を上に
-        rightShoulder: { x: -130, y: 0, z: 30 },
-        leftElbow: { x: 20, y: 0, z: 0 },
-        rightElbow: { x: 20, y: 0, z: 0 },
-        leftHip: { x: 10, y: 0, z: 0 }, // 脚をやや曲げる
-        rightHip: { x: 10, y: 0, z: 0 },
-        leftKnee: { x: 40, y: 0, z: 0 },
-        rightKnee: { x: 40, y: 0, z: 0 },
-      },
-      position: { x: 0, y: 1.5, z: 0 }, // 最高地点（1.5メートル上）
-    },
-    // 着地準備
-    {
-      time: 0.45,
-      joints: {
-        upperBody: { x: 15, y: 0, z: 0 }, // 前傾
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: -10, y: 0, z: 0 },
-        leftShoulder: { x: -40, y: 0, z: -20 }, // 腕を下げる
-        rightShoulder: { x: -40, y: 0, z: 20 },
-        leftElbow: { x: 30, y: 0, z: 0 },
-        rightElbow: { x: 30, y: 0, z: 0 },
-        leftHip: { x: -40, y: 0, z: 0 }, // 着地に備えて膝を曲げる
-        rightHip: { x: -40, y: 0, z: 0 },
-        leftKnee: { x: 70, y: 0, z: 0 },
-        rightKnee: { x: 70, y: 0, z: 0 },
-      },
-      position: {
-        x: 0, y: 0.5, z: 0
-      }, // 下降中
-    },
-    // 着地完了
-    {
-      time: 0.6,
-      joints: {
-        upperBody: { x: 10, y: 0, z: 0 }, // やや前傾
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: -5, y: 0, z: 0 },
-        leftShoulder: { x: 0, y: 0, z: 0 }, // 腕を戻す
-        rightShoulder: { x: 0, y: 0, z: 0 },
-        leftElbow: { x: 0, y: 0, z: 0 },
-        rightElbow: { x: 0, y: 0, z: 0 },
-        leftHip: { x: -30, y: 0, z: 0 }, // 着地の衝撃吸収
-        rightHip: { x: -30, y: 0, z: 0 },
-        leftKnee: { x: 50, y: 0, z: 0 },
-        rightKnee: { x: 50, y: 0, z: 0 },
-      },
-      position: { x: 0, y: 0, z: 0 }, // 地面に戻る
-    },
-  ],
-  // 優先度設定（全身を使うので高優先度）
+  duration: T4,
+  loop: false,
+  keyframes: buildKeyframes(JOINT_ANIMATIONS, POSITION_ANIMATIONS),
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
@@ -124,13 +90,10 @@ export const JUMP_MOTION: MotionData = {
   ],
 };
 
-/**
- * ジャンプモーションの設定
- */
 export const JUMP_MOTION_CONFIG: MotionConfig = {
   motionData: JUMP_MOTION,
-  isDefault: false, // デフォルトモーションではない
-  blendDuration: 0.1, // 0.1秒でブレンド（素早く切り替え）
-  priority: 30, // 歩行・走行より高優先度
-  interruptible: false, // ジャンプ中は中断不可
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 30,
+  interruptible: false,
 };

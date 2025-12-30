@@ -1,75 +1,84 @@
 import { MotionData, MotionConfig } from "../types/MotionTypes";
+import { buildKeyframes } from "../utils/MotionUtils";
 
 /**
  * アイドル（直立）モーション
  *
  * キーフレーム構成：
- * - 0.0秒: 直立姿勢
- * - 1.0秒: 直立姿勢（わずかな呼吸の動き）
- * - 2.0秒: 直立姿勢（元に戻る）
+ * - T0: 直立姿勢
+ * - T1: わずかな呼吸の動き
+ * - T2: 直立姿勢（元に戻る）
+ * - T3: わずかな呼吸の動き（逆方向）
+ * - T4: 直立姿勢（元に戻る）
  */
+
+// 時間定義
+const T0 = 0.0;  // 開始
+const T1 = 0.5;  // 第1キーフレーム
+const T2 = 1.0;  // 第2キーフレーム
+const T3 = 1.5;  // 第3キーフレーム
+const T4 = 2.0;  // 終了
+
+// 各部位の軸ごとの時系列データ（時間: 角度）
+const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身
+  upperBodyX: {[T0]: 0, [T1]: 2, [T2]: 0, [T3]: 0, [T4]: 0},
+  upperBodyY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  upperBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  lowerBodyX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  lowerBodyY: {[T0]: 0, [T1]: 5, [T2]: 0, [T3]: -5, [T4]: 0},
+  lowerBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  headX: {[T0]: 0, [T1]: -1, [T2]: 0, [T3]: 0, [T4]: 0},
+  headY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  headZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+
+  // 腕
+  leftShoulderX: {[T0]: 0, [T1]: 5, [T2]: 0, [T3]: -5, [T4]: 0},
+  leftShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftShoulderZ: {[T0]: -6, [T1]: -6, [T2]: -6, [T3]: -6, [T4]: -6},
+
+  rightShoulderX: {[T0]: 0, [T1]: -5, [T2]: 0, [T3]: 5, [T4]: 0},
+  rightShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightShoulderZ: {[T0]: 6, [T1]: 6, [T2]: 6, [T3]: 6, [T4]: 6},
+
+  leftElbowX: {[T0]: -10, [T1]: -10, [T2]: -10, [T3]: -10, [T4]: -10},
+  leftElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftElbowZ: {[T0]: 6, [T1]: 6, [T2]: 6, [T3]: 6, [T4]: 6},
+
+  rightElbowX: {[T0]: -10, [T1]: -10, [T2]: -10, [T3]: -10, [T4]: -10},
+  rightElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightElbowZ: {[T0]: -6, [T1]: -6, [T2]: -6, [T3]: -6, [T4]: -6},
+
+  // 脚
+  leftHipX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftHipY: {[T0]: -15, [T1]: -15, [T2]: -15, [T3]: -15, [T4]: -15},
+  leftHipZ: {[T0]: -8, [T1]: -8, [T2]: -8, [T3]: -8, [T4]: -8},
+
+  rightHipX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightHipY: {[T0]: 15, [T1]: 15, [T2]: 15, [T3]: 15, [T4]: 15},
+  rightHipZ: {[T0]: 8, [T1]: 8, [T2]: 8, [T3]: 8, [T4]: 8},
+
+  leftKneeX: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
+  leftKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  leftKneeZ: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
+
+  rightKneeX: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
+  rightKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+  rightKneeZ: {[T0]: -5, [T1]: -5, [T2]: -5, [T3]: -5, [T4]: -5},
+};
+
 export const IDLE_MOTION: MotionData = {
   name: "idle",
-  duration: 2.0, // 1サイクル2秒
+  duration: T4, // 1サイクル: T4秒
   loop: true,
-  keyframes: [
-    // 開始姿勢（直立）
-    {
-      time: 0.0,
-      joints: {
-        upperBody: { x: 0, y: 0, z: 0 },
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: 0, y: 0, z: 0 },
-        leftShoulder: { x: 0, y: 0, z: 0 },
-        rightShoulder: { x: 0, y: 0, z: 0 },
-        leftElbow: { x: 0, y: 0, z: 0 },
-        rightElbow: { x: 0, y: 0, z: 0 },
-        leftHip: { x: 0, y: 0, z: 0 },
-        rightHip: { x: 0, y: 0, z: 0 },
-        leftKnee: { x: 5, y: 0, z: 5 },
-        rightKnee: { x: 5, y: 0, z: -5 },
-      },
-    },
-    // 中間: わずかに呼吸で上半身が動く
-    {
-      time: 1.0,
-      joints: {
-        upperBody: { x: 2, y: 0, z: 0 }, // わずかに前傾
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: -1, y: 0, z: 0 }, // 頭は水平を保つ
-        leftShoulder: { x: 0, y: 0, z: 0 },
-        rightShoulder: { x: 0, y: 0, z: 0 },
-        leftElbow: { x: 0, y: 0, z: 0 },
-        rightElbow: { x: 0, y: 0, z: 0 },
-        leftHip: { x: 0, y: 0, z: 0 },
-        rightHip: { x: 0, y: 0, z: 0 },
-        leftKnee: { x: 5, y: 0, z: 5 },
-        rightKnee: { x: 5, y: 0, z: -5 },
-      },
-    },
-    // 終了姿勢（直立に戻る）
-    {
-      time: 2.0,
-      joints: {
-        upperBody: { x: 0, y: 0, z: 0 },
-        lowerBody: { x: 0, y: 0, z: 0 },
-        head: { x: 0, y: 0, z: 0 },
-        leftShoulder: { x: 0, y: 0, z: 0 },
-        rightShoulder: { x: 0, y: 0, z: 0 },
-        leftElbow: { x: 0, y: 0, z: 0 },
-        rightElbow: { x: 0, y: 0, z: 0 },
-        leftHip: { x: 0, y: 0, z: 0 },
-        rightHip: { x: 0, y: 0, z: 0 },
-        leftKnee: { x: 5, y: 0, z: 5 },
-        rightKnee: { x: 5, y: 0, z: -5 },
-      },
-    },
-  ],
+  keyframes: buildKeyframes(JOINT_ANIMATIONS),
   // 優先度設定（全体的に低め）
   priorities: [
-    { jointName: "upperBody", priority: 5 },
-    { jointName: "head", priority: 4 },
-    { jointName: "lowerBody", priority: 3 },
+    {jointName: "upperBody", priority: 5},
+    {jointName: "head", priority: 4},
+    {jointName: "lowerBody", priority: 3},
   ],
 };
 
