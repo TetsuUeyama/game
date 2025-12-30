@@ -163,7 +163,7 @@ export class Character {
    */
   private createHead(): Mesh {
     const headSize = 0.25;
-    const upperBodyHeight = 0.4;
+    const upperBodyHeight = 0.35;
 
     const head = MeshBuilder.CreateSphere(
       "character-head",
@@ -188,7 +188,7 @@ export class Character {
    */
   private createEye(side: "left" | "right"): Mesh {
     const eyeRadius = 0.03;
-    const headSize = 0.25;
+    const headSize = 0.20;
 
     const eye = MeshBuilder.CreateSphere(
       `character-eye-${side}`,
@@ -246,7 +246,7 @@ export class Character {
    * 腰関節を作成（上半身と下半身の接続点）
    */
   private createWaistJoint(): Mesh {
-    const waistRadius = 0.12;
+    const waistRadius = 0.10;
 
     const waistJoint = MeshBuilder.CreateSphere(
       "character-waist-joint",
@@ -856,6 +856,13 @@ export class Character {
    */
   public setMotionTime(time: number): void {
     this.motionController.setCurrentTime(time);
+  }
+
+  /**
+   * モーションの基準位置を更新（ジャンプ中の慣性移動などで使用）
+   */
+  public updateMotionBasePosition(position: Vector3): void {
+    this.motionController.updateBasePosition({x: position.x, y: position.y, z: position.z});
   }
 
   /**

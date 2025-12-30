@@ -473,4 +473,11 @@ export class MotionController {
     }
     return this.state.currentMotion?.name || null;
   }
+
+  /**
+   * 基準位置を更新（ジャンプ中の慣性移動などで使用）
+   */
+  public updateBasePosition(position: {x: number, y: number, z: number}): void {
+    this.state.basePosition = {x: position.x, y: position.y, z: position.z};
+  }
 }
