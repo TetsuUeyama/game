@@ -99,7 +99,7 @@ export const CROUCH_MOTION: MotionData = {
 export const CROUCH_MOTION_CONFIG: MotionConfig = {
   motionData: CROUCH_MOTION,
   isDefault: false,
-  blendDuration: 0.05, // 素早く切り替え
-  priority: 10, // 高優先度（他のモーションより優先）
+  blendDuration: 0.0, // 即座に切り替え
+  priority: 25, // ダッシュより高優先度
   interruptible: true, // ボタンを離したらすぐジャンプできる
 };
