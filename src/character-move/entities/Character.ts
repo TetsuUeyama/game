@@ -880,6 +880,13 @@ export class Character {
   }
 
   /**
+   * モーションコントローラーを取得
+   */
+  public getMotionController(): MotionController {
+    return this.motionController;
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
