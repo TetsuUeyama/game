@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "^8.40.1",
+    "@babylonjs/gui": "^8.43.0",
     "@babylonjs/materials": "^8.40.1",
     "@chakra-ui/react": "^3.26.0",
     "@emotion/react": "^11.14.0",

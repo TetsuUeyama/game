@@ -10,7 +10,7 @@ import {
 import { Character } from "../entities/Character";
 import { Field } from "../entities/Field";
 import { InputController } from "../controllers/InputController";
-// import { JointController } from "../controllers/JointController"; // UIコントロールパネルを使用するため無効化
+import { JointController } from "../controllers/JointController";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -29,12 +29,15 @@ export class GameScene {
   private field: Field;
   private character: Character;
   private inputController: InputController;
-  // private jointController: JointController; // UIコントロールパネルを使用するため無効化
+  private jointController: JointController;
 
   private lastFrameTime: number = Date.now();
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
+
+  // モーション確認モード（入力とモーション再生を停止）
+  private isMotionConfirmationMode: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     // WebGLサポートチェック
@@ -75,8 +78,8 @@ export class GameScene {
     // 入力コントローラーの初期化
     this.inputController = new InputController(this.scene, this.character);
 
-    // 関節操作コントローラーの初期化（UIコントロールパネルを使用するため無効化）
-    // this.jointController = new JointController(this.scene, this.character);
+    // 関節操作コントローラーの初期化（モーション選択UI含む）
+    this.jointController = new JointController(this.scene, this.character);
 
     // 3Dモデルのロード（オプション）
     // this.loadCharacterModel(); // 一旦無効化
@@ -220,17 +223,20 @@ export class GameScene {
    * 更新処理（毎フレーム）
    */
   private update(deltaTime: number): void {
-    // 入力コントローラーを更新
-    this.inputController.update(deltaTime);
+    // モーション確認モードでは入力とモーション再生をスキップ
+    if (!this.isMotionConfirmationMode) {
+      // 入力コントローラーを更新
+      this.inputController.update(deltaTime);
 
-    // 関節操作コントローラーを更新（UIコントロールパネルを使用するため無効化）
-    // this.jointController.update(deltaTime);
+      // キャラクターを更新
+      this.character.update(deltaTime);
 
-    // キャラクターを更新
-    this.character.update(deltaTime);
+      // カメラをキャラクターに追従させる
+      this.updateCamera(deltaTime);
+    }
 
-    // カメラをキャラクターに追従させる
-    this.updateCamera(deltaTime);
+    // 関節操作コントローラーは常に更新（Ctrl+ドラッグ用）
+    this.jointController.update(deltaTime);
   }
 
   /**
@@ -273,11 +279,25 @@ export class GameScene {
   }
 
   /**
+   * モーション再生を停止（モーション確認用）
+   */
+  public stopMotionPlayback(): void {
+    // モーション確認モードを有効化（入力とモーション再生を停止）
+    this.isMotionConfirmationMode = true;
+
+    // キャラクターのモーションコントローラーを停止
+    const motionController = this.character.getMotionController();
+    motionController.stop();
+
+    console.log("[GameScene] モーション確認モードを有効化しました");
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
     this.inputController.dispose();
-    // this.jointController.dispose(); // UIコントロールパネルを使用するため無効化
+    this.jointController.dispose();
     this.character.dispose();
     this.field.dispose();
     this.scene.dispose();

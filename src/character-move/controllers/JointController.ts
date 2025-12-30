@@ -1,9 +1,9 @@
-import { Scene, Mesh, PointerEventTypes, PointerInfo, Vector3, StandardMaterial } from "@babylonjs/core";
+import { Scene, Mesh, PointerEventTypes, PointerInfo, StandardMaterial, KeyboardEventTypes } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 
 /**
  * 関節操作コントローラー
- * マウスで肩などの関節を回転させることができる
+ * Ctrlキーを押しながらマウスで関節を回転
  */
 export class JointController {
   private scene: Scene;
@@ -11,18 +11,57 @@ export class JointController {
 
   private selectedJoint: Mesh | null = null;
   private isDragging: boolean = false;
-  private previousPointerPosition: Vector3 | null = null;
+  private previousPointerX: number = 0;
+  private previousPointerY: number = 0;
+  private isCtrlPressed: boolean = false;
+
+  // 関節名の一覧
+  private readonly jointNames = [
+    "head", "upperBody", "lowerBody",
+    "leftShoulder", "rightShoulder",
+    "leftElbow", "rightElbow",
+    "leftHip", "rightHip",
+    "leftKnee", "rightKnee"
+  ];
 
   constructor(scene: Scene, character: Character) {
     this.scene = scene;
     this.character = character;
 
+    // キーボードイベントを監視
+    this.scene.onKeyboardObservable.add((kbInfo) => {
+      if (kbInfo.type === KeyboardEventTypes.KEYDOWN) {
+        // Rキーでリセット
+        if (kbInfo.event.key === "r" || kbInfo.event.key === "R") {
+          this.resetAllJoints();
+        }
+      }
+    });
+
     // ポインターイベントを監視
     this.scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
-      this.handlePointerEvent(pointerInfo);
+      const event = pointerInfo.event as PointerEvent;
+      const isCtrlPressed = event.ctrlKey;
+
+      if (isCtrlPressed || this.isDragging) {
+        if (isCtrlPressed && !this.isCtrlPressed) {
+          console.log("[JointController] 関節コントロールモード有効（Ctrl+クリック）");
+        }
+        this.isCtrlPressed = isCtrlPressed;
+        this.handlePointerEvent(pointerInfo);
+      } else if (this.isCtrlPressed) {
+        console.log("[JointController] 関節コントロールモード無効");
+        this.isCtrlPressed = false;
+        if (this.selectedJoint) {
+          this.highlightJoint(this.selectedJoint, false);
+          this.selectedJoint = null;
+        }
+        this.isDragging = false;
+      }
     });
 
     console.log("[JointController] 関節操作コントローラーを初期化しました");
+    console.log("[JointController] Ctrlキーを押しながら関節をクリック＆ドラッグで操作、Rキーでリセット");
   }
 
   /**
@@ -46,21 +85,32 @@ export class JointController {
    * ポインターダウン
    */
   private onPointerDown(pointerInfo: PointerInfo): void {
+    if (!this.isCtrlPressed) return;
+
     const pickResult = pointerInfo.pickInfo;
 
     if (pickResult && pickResult.hit && pickResult.pickedMesh) {
       const mesh = pickResult.pickedMesh as Mesh;
+      console.log(`[JointController] クリックされたメッシュ: ${mesh.name}`);
 
-      // 肩または他の関節がクリックされたか確認
       if (this.isJoint(mesh)) {
         this.selectedJoint = mesh;
         this.isDragging = true;
-        this.previousPointerPosition = pickResult.pickedPoint;
 
-        // 選択された関節を強調表示
+        const event = pointerInfo.event as PointerEvent;
+        this.previousPointerX = event.clientX;
+        this.previousPointerY = event.clientY;
+
         this.highlightJoint(mesh, true);
 
         console.log(`[JointController] 関節を選択: ${mesh.name}`);
+
+        if (this.scene.activeCamera) {
+          this.scene.activeCamera.detachControl();
+          console.log("[JointController] カメラコントロールを無効化");
+        }
+      } else {
+        console.log(`[JointController] ${mesh.name} は関節ではありません`);
       }
     }
   }
@@ -69,26 +119,26 @@ export class JointController {
    * ポインター移動
    */
   private onPointerMove(pointerInfo: PointerInfo): void {
-    if (!this.isDragging || !this.selectedJoint || !this.previousPointerPosition) {
+    if (!this.isDragging || !this.selectedJoint) {
       return;
     }
 
-    const pickResult = pointerInfo.pickInfo;
-    if (!pickResult || !pickResult.pickedPoint) {
+    const event = pointerInfo.event as PointerEvent;
+
+    const deltaX = event.clientX - this.previousPointerX;
+    const deltaY = event.clientY - this.previousPointerY;
+
+    if (Math.abs(deltaX) < 0.1 && Math.abs(deltaY) < 0.1) {
       return;
     }
 
-    // マウスの移動量を計算
-    const currentPosition = pickResult.pickedPoint;
-    const deltaX = currentPosition.x - this.previousPointerPosition.x;
-    const deltaY = currentPosition.y - this.previousPointerPosition.y;
+    const rotationSpeed = 0.01;
 
-    // 関節を回転（Y軸とZ軸）
-    const rotationSpeed = 2.0;
     this.selectedJoint.rotation.y += deltaX * rotationSpeed;
-    this.selectedJoint.rotation.z += deltaY * rotationSpeed;
+    this.selectedJoint.rotation.x -= deltaY * rotationSpeed;
 
-    this.previousPointerPosition = currentPosition;
+    this.previousPointerX = event.clientX;
+    this.previousPointerY = event.clientY;
   }
 
   /**
@@ -96,13 +146,22 @@ export class JointController {
    */
   private onPointerUp(): void {
     if (this.selectedJoint) {
-      // 選択を解除
       this.highlightJoint(this.selectedJoint, false);
       this.selectedJoint = null;
+      console.log("[JointController] 関節の選択を解除");
     }
 
-    this.isDragging = false;
-    this.previousPointerPosition = null;
+    if (this.isDragging) {
+      this.isDragging = false;
+
+      if (this.scene.activeCamera) {
+        const canvas = this.scene.getEngine().getRenderingCanvas();
+        if (canvas) {
+          this.scene.activeCamera.attachControl(canvas, true);
+          console.log("[JointController] カメラコントロールを再有効化");
+        }
+      }
+    }
   }
 
   /**
@@ -110,12 +169,22 @@ export class JointController {
    */
   private isJoint(mesh: Mesh): boolean {
     const name = mesh.name;
-    return (
+    const isJoint = (
       name.includes("shoulder") ||
       name.includes("elbow") ||
       name.includes("hip") ||
-      name.includes("knee")
+      name.includes("knee") ||
+      name.includes("head") ||
+      name.includes("upper-body") ||
+      name.includes("lower-body") ||
+      name.includes("waist-joint")
     );
+
+    if (isJoint) {
+      console.log(`[JointController] ${name} は関節として認識されました`);
+    }
+
+    return isJoint;
   }
 
   /**
@@ -123,16 +192,33 @@ export class JointController {
    */
   private highlightJoint(mesh: Mesh, highlight: boolean): void {
     if (mesh.material) {
-      // エミッシブカラーで強調表示
       const material = mesh.material as StandardMaterial;
       if (material.emissiveColor) {
         if (highlight) {
-          material.emissiveColor.set(0.3, 0.3, 0.0); // 黄色く光らせる
+          material.emissiveColor.set(0.5, 0.5, 0.0);
         } else {
-          material.emissiveColor.set(0, 0, 0); // 元に戻す
+          material.emissiveColor.set(0, 0, 0);
         }
       }
     }
+  }
+
+  /**
+   * すべての関節をリセット
+   */
+  private resetAllJoints(): void {
+    console.log("[JointController] すべての関節をリセットします");
+
+    this.jointNames.forEach(jointName => {
+      const joint = this.character.getJoint(jointName);
+      if (joint) {
+        joint.rotation.x = 0;
+        joint.rotation.y = 0;
+        joint.rotation.z = 0;
+      }
+    });
+
+    console.log("[JointController] リセット完了");
   }
 
   /**
@@ -146,6 +232,6 @@ export class JointController {
    * 破棄
    */
   public dispose(): void {
-    // 必要に応じてクリーンアップ
+    // 現在は特に破棄する必要なし
   }
 }
