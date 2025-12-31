@@ -887,6 +887,49 @@ export class Character {
   }
 
   /**
+   * キャラクターの色を変更
+   * @param r 赤 (0.0 - 1.0)
+   * @param g 緑 (0.0 - 1.0)
+   * @param b 青 (0.0 - 1.0)
+   */
+  public setColor(r: number, g: number, b: number): void {
+    const color = new Color3(r, g, b);
+
+    // 全ての身体パーツの色を変更
+    const bodyParts = [
+      this.headMesh,
+      this.upperBodyMesh,
+      this.lowerBodyMesh,
+      this.leftShoulderMesh,
+      this.rightShoulderMesh,
+      this.leftUpperArmMesh,
+      this.rightUpperArmMesh,
+      this.leftElbowMesh,
+      this.rightElbowMesh,
+      this.leftForearmMesh,
+      this.rightForearmMesh,
+      this.leftHandMesh,
+      this.rightHandMesh,
+      this.leftHipMesh,
+      this.rightHipMesh,
+      this.leftThighMesh,
+      this.rightThighMesh,
+      this.leftKneeMesh,
+      this.rightKneeMesh,
+      this.leftShinMesh,
+      this.rightShinMesh,
+      this.leftFootMesh,
+      this.rightFootMesh,
+    ];
+
+    bodyParts.forEach((mesh) => {
+      if (mesh.material && mesh.material instanceof StandardMaterial) {
+        mesh.material.diffuseColor = color;
+      }
+    });
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
