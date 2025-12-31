@@ -9,8 +9,10 @@ import {
 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Field } from "../entities/Field";
+import { Ball } from "../entities/Ball";
 import { InputController } from "../controllers/InputController";
 import { JointController } from "../controllers/JointController";
+import { CollisionHandler } from "../controllers/CollisionHandler";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -28,8 +30,10 @@ export class GameScene {
   private camera: ArcRotateCamera;
   private field: Field;
   private character: Character;
+  private ball: Ball;
   private inputController: InputController;
   private jointController: JointController;
+  private collisionHandler: CollisionHandler;
 
   // 追加キャラクター（オプション）
   private ally?: Character; // 味方
@@ -82,12 +86,24 @@ export class GameScene {
     // キャラクターの作成（プレイヤー）
     this.character = this.createCharacter();
 
+    // ボールの作成
+    this.ball = this.createBall();
+
     // 追加キャラクターの作成（オプション）
     if (showAdditionalCharacters) {
       this.ally = this.createAlly();
       this.enemy1 = this.createEnemy1();
       this.enemy2 = this.createEnemy2();
     }
+
+    // 衝突判定コントローラーの初期化
+    this.collisionHandler = new CollisionHandler(
+      this.ball,
+      this.character,
+      this.ally,
+      this.enemy1,
+      this.enemy2
+    );
 
     // 入力コントローラーの初期化
     this.inputController = new InputController(this.scene, this.character);
@@ -172,6 +188,20 @@ export class GameScene {
     console.log("[GameScene] プレイヤーキャラクター作成完了");
 
     return character;
+  }
+
+  /**
+   * ボールを作成
+   */
+  private createBall(): Ball {
+    // プレイヤーの前方に配置（半径0.25mなので、地面からの高さは0.25m）
+    const initialPosition = new Vector3(0, 0.25, 2);
+
+    const ball = new Ball(this.scene, initialPosition);
+
+    console.log("[GameScene] ボール作成完了");
+
+    return ball;
   }
 
   /**
@@ -300,6 +330,12 @@ export class GameScene {
       this.updateCamera(deltaTime);
     }
 
+    // ボールを更新（保持中はキャラクターに追従）
+    this.ball.update(deltaTime);
+
+    // 衝突判定を常に更新
+    this.collisionHandler.update(deltaTime);
+
     // 関節操作コントローラーは常に更新（Ctrl+ドラッグ用）
     this.jointController.update(deltaTime);
   }
@@ -363,7 +399,9 @@ export class GameScene {
   public dispose(): void {
     this.inputController.dispose();
     this.jointController.dispose();
+    this.collisionHandler.dispose();
     this.character.dispose();
+    this.ball.dispose();
 
     // 追加キャラクターが存在する場合のみdispose
     if (this.ally) {
