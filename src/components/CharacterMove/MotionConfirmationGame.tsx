@@ -17,8 +17,8 @@ export default function MotionConfirmationGame() {
     if (!canvasRef.current) return;
 
     try {
-      // ゲームシーンの初期化
-      gameSceneRef.current = new GameScene(canvasRef.current);
+      // ゲームシーンの初期化（追加キャラクターなし）
+      gameSceneRef.current = new GameScene(canvasRef.current, { showAdditionalCharacters: false });
 
       // モーション確認モードのため、モーション再生を停止
       gameSceneRef.current.stopMotionPlayback();

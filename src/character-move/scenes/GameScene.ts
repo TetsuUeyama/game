@@ -31,6 +31,11 @@ export class GameScene {
   private inputController: InputController;
   private jointController: JointController;
 
+  // 追加キャラクター（オプション）
+  private ally?: Character; // 味方
+  private enemy1?: Character; // 敵1
+  private enemy2?: Character; // 敵2
+
   private lastFrameTime: number = Date.now();
 
   // 3Dモデルロード状態
@@ -39,7 +44,9 @@ export class GameScene {
   // モーション確認モード（入力とモーション再生を停止）
   private isMotionConfirmationMode: boolean = false;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options?: { showAdditionalCharacters?: boolean }) {
+    const showAdditionalCharacters = options?.showAdditionalCharacters ?? true;
+
     // WebGLサポートチェック
     if (!canvas.getContext("webgl") && !canvas.getContext("webgl2")) {
       throw new Error(
@@ -72,8 +79,15 @@ export class GameScene {
     // フィールドの作成
     this.field = new Field(this.scene);
 
-    // キャラクターの作成
+    // キャラクターの作成（プレイヤー）
     this.character = this.createCharacter();
+
+    // 追加キャラクターの作成（オプション）
+    if (showAdditionalCharacters) {
+      this.ally = this.createAlly();
+      this.enemy1 = this.createEnemy1();
+      this.enemy2 = this.createEnemy2();
+    }
 
     // 入力コントローラーの初期化
     this.inputController = new InputController(this.scene, this.character);
@@ -147,7 +161,7 @@ export class GameScene {
   }
 
   /**
-   * キャラクターを作成
+   * キャラクターを作成（プレイヤー）
    */
   private createCharacter(): Character {
     // 初期位置（フィールドの中央）
@@ -155,9 +169,60 @@ export class GameScene {
 
     const character = new Character(this.scene, initialPosition);
 
-    console.log("[GameScene] キャラクター作成完了");
+    console.log("[GameScene] プレイヤーキャラクター作成完了");
 
     return character;
+  }
+
+  /**
+   * 味方キャラクターを作成
+   */
+  private createAlly(): Character {
+    // プレイヤーの右側に配置
+    const initialPosition = new Vector3(3, CHARACTER_CONFIG.height / 2, 2);
+
+    const ally = new Character(this.scene, initialPosition);
+
+    // 味方は緑色で表示
+    ally.setColor(0.3, 0.8, 0.3);
+
+    console.log("[GameScene] 味方キャラクター作成完了");
+
+    return ally;
+  }
+
+  /**
+   * 敵キャラクター1を作成
+   */
+  private createEnemy1(): Character {
+    // プレイヤーの前方左側に配置
+    const initialPosition = new Vector3(-4, CHARACTER_CONFIG.height / 2, 5);
+
+    const enemy = new Character(this.scene, initialPosition);
+
+    // 敵は赤色で表示
+    enemy.setColor(0.9, 0.2, 0.2);
+
+    console.log("[GameScene] 敵キャラクター1作成完了");
+
+    return enemy;
+  }
+
+  /**
+   * 敵キャラクター2を作成
+   */
+  private createEnemy2(): Character {
+    // プレイヤーの前方右側に配置
+    const initialPosition = new Vector3(4, CHARACTER_CONFIG.height / 2, 5);
+
+    const enemy = new Character(this.scene, initialPosition);
+
+    // 敵は赤色で表示
+    enemy.setColor(0.9, 0.2, 0.2);
+
+    console.log("[GameScene] 敵キャラクター2作成完了");
+
+    return enemy;
   }
 
   /**
@@ -299,6 +364,18 @@ export class GameScene {
     this.inputController.dispose();
     this.jointController.dispose();
     this.character.dispose();
+
+    // 追加キャラクターが存在する場合のみdispose
+    if (this.ally) {
+      this.ally.dispose();
+    }
+    if (this.enemy1) {
+      this.enemy1.dispose();
+    }
+    if (this.enemy2) {
+      this.enemy2.dispose();
+    }
+
     this.field.dispose();
     this.scene.dispose();
     this.engine.dispose();
