@@ -185,6 +185,9 @@ export class GameScene {
 
     const character = new Character(this.scene, initialPosition);
 
+    // プレイヤーは味方チーム
+    character.setTeam("ally");
+
     console.log("[GameScene] プレイヤーキャラクター作成完了");
 
     return character;
@@ -216,6 +219,9 @@ export class GameScene {
     // 味方は緑色で表示
     ally.setColor(0.3, 0.8, 0.3);
 
+    // チームを味方に設定
+    ally.setTeam("ally");
+
     console.log("[GameScene] 味方キャラクター作成完了");
 
     return ally;
@@ -233,6 +239,9 @@ export class GameScene {
     // 敵は赤色で表示
     enemy.setColor(0.9, 0.2, 0.2);
 
+    // チームを敵に設定
+    enemy.setTeam("enemy");
+
     console.log("[GameScene] 敵キャラクター1作成完了");
 
     return enemy;
@@ -249,6 +258,9 @@ export class GameScene {
 
     // 敵は赤色で表示
     enemy.setColor(0.9, 0.2, 0.2);
+
+    // チームを敵に設定
+    enemy.setTeam("enemy");
 
     console.log("[GameScene] 敵キャラクター2作成完了");
 

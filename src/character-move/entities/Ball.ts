@@ -13,10 +13,6 @@ import type { Character } from "./Character";
  */
 const BALL_RADIUS = 0.15;
 
-/**
- * ボールを保持した時の頭上からの高さ（m）
- */
-const HELD_HEIGHT_OFFSET = 2.0; // キャラクターの位置（足元）からの高さ
 
 /**
  * 3Dバスケットボールエンティティ
@@ -112,15 +108,11 @@ export class Ball {
    */
   update(_deltaTime: number): void {
     if (this.holder) {
-      // 保持者の位置を取得
-      const holderPosition = this.holder.getPosition();
+      // 保持者の右手のひらの先端位置を取得
+      const rightHandPosition = this.holder.getRightHandPosition();
 
-      // 頭上に配置
-      this.mesh.position = new Vector3(
-        holderPosition.x,
-        holderPosition.y + HELD_HEIGHT_OFFSET,
-        holderPosition.z
-      );
+      // 右手のひらの先に配置
+      this.mesh.position = rightHandPosition;
     }
   }
 

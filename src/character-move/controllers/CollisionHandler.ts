@@ -1,6 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
+import { CharacterState } from "../types/CharacterState";
 
 /**
  * 衝突判定の設定
@@ -58,6 +59,9 @@ export class CollisionHandler {
     this.resolveCharacterCharacterCollision(this.ally, this.enemy1);
     this.resolveCharacterCharacterCollision(this.ally, this.enemy2);
     this.resolveCharacterCharacterCollision(this.enemy1, this.enemy2);
+
+    // キャラクターの状態を更新
+    this.updateCharacterStates();
   }
 
   /**
@@ -131,6 +135,81 @@ export class CollisionHandler {
 
       character1.setPosition(newPos1);
       character2.setPosition(newPos2);
+    }
+  }
+
+  /**
+   * キャラクターの状態を更新
+   */
+  private updateCharacterStates(): void {
+    const holder = this.ball.getHolder();
+
+    // ボールが誰も保持していない場合、全員BALL_LOST
+    if (!holder) {
+      this.player.setState(CharacterState.BALL_LOST);
+      if (this.ally) {
+        this.ally.setState(CharacterState.BALL_LOST);
+      }
+      if (this.enemy1) {
+        this.enemy1.setState(CharacterState.BALL_LOST);
+      }
+      if (this.enemy2) {
+        this.enemy2.setState(CharacterState.BALL_LOST);
+      }
+      return;
+    }
+
+    // ボール保持者をON_BALL_PLAYERに設定
+    holder.setState(CharacterState.ON_BALL_PLAYER);
+
+    // ボール保持者のチームを判定
+    const holderTeam = holder.team;
+
+    // 全キャラクターをリスト化
+    const allCharacters: Character[] = [this.player];
+    if (this.ally) allCharacters.push(this.ally);
+    if (this.enemy1) allCharacters.push(this.enemy1);
+    if (this.enemy2) allCharacters.push(this.enemy2);
+
+    // 味方と敵を分類
+    const teammates: Character[] = [];
+    const opponents: Character[] = [];
+
+    allCharacters.forEach((char) => {
+      if (char === holder) {
+        return; // 保持者自身はスキップ
+      }
+
+      if (char.team === holderTeam) {
+        teammates.push(char);
+      } else {
+        opponents.push(char);
+      }
+    });
+
+    // 味方は全員OFF_BALL_PLAYER
+    teammates.forEach((teammate) => {
+      teammate.setState(CharacterState.OFF_BALL_PLAYER);
+    });
+
+    // 敵の状態を設定（一番近い敵がON_BALL_DEFENDER、遠い敵がOFF_BALL_DEFENDER）
+    if (opponents.length > 0) {
+      const holderPosition = holder.getPosition();
+
+      // 敵を距離順にソート
+      const sortedOpponents = opponents.sort((a, b) => {
+        const distA = Vector3.Distance(holderPosition, a.getPosition());
+        const distB = Vector3.Distance(holderPosition, b.getPosition());
+        return distA - distB;
+      });
+
+      // 一番近い敵をON_BALL_DEFENDER
+      sortedOpponents[0].setState(CharacterState.ON_BALL_DEFENDER);
+
+      // 残りの敵をOFF_BALL_DEFENDER
+      for (let i = 1; i < sortedOpponents.length; i++) {
+        sortedOpponents[i].setState(CharacterState.OFF_BALL_DEFENDER);
+      }
     }
   }
 
