@@ -2,6 +2,7 @@ import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMe
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
 import { MotionData } from "../types/MotionTypes";
+import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 
 /**
  * 3Dキャラクターエンティティ
@@ -43,11 +44,20 @@ export class Character {
   private rightEyeMesh: Mesh; // 右目
   private mouthMesh: Mesh; // 口
 
+  // 状態インジケーター（頭上の球体）
+  private stateIndicator: Mesh;
+
   public position: Vector3; // 位置
   public rotation: number = 0; // Y軸周りの回転（ラジアン）
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
   private groundY: number = CHARACTER_CONFIG.height / 2; // 地面のY座標
+
+  // キャラクターの状態
+  private state: CharacterState = CharacterState.BALL_LOST;
+
+  // チーム識別（味方か敵か）
+  public team: "ally" | "enemy" = "ally"; // デフォルトは味方チーム
 
   // モーションコントローラー
   private motionController: MotionController;
@@ -139,6 +149,9 @@ export class Character {
     this.rightKneeMesh.parent = this.rightHipMesh; // 股関節の子
     this.rightShinMesh.parent = this.rightKneeMesh; // 膝の子
     this.rightFootMesh.parent = this.rightShinMesh; // すねの子
+
+    // 状態インジケーター球体を作成
+    this.stateIndicator = this.createStateIndicator();
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
@@ -612,6 +625,34 @@ export class Character {
   }
 
   /**
+   * 状態インジケーター球体を作成（頭のすぐ上に配置）
+   */
+  private createStateIndicator(): Mesh {
+    const indicator = MeshBuilder.CreateSphere(
+      "state-indicator",
+      { diameter: 0.2, segments: 16 },
+      this.scene
+    );
+
+    // 頭のすぐ上に配置
+    const headHeight = 0.15; // 頭の半径
+    const indicatorOffset = 0.25; // 頭からのオフセット
+    indicator.position = new Vector3(0, headHeight + indicatorOffset, 0);
+
+    // 初期状態の色を設定
+    const material = new StandardMaterial("state-indicator-material", this.scene);
+    const color = CHARACTER_STATE_COLORS[this.state];
+    material.diffuseColor = new Color3(color.r, color.g, color.b);
+    material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3); // 少し発光させる
+    indicator.material = material;
+
+    // 頭の子として設定
+    indicator.parent = this.headMesh;
+
+    return indicator;
+  }
+
+  /**
    * 3Dモデルを設定
    * @param model ロードした3Dモデル
    */
@@ -930,6 +971,49 @@ export class Character {
   }
 
   /**
+   * 右手のひらの先端位置を取得（ワールド座標）
+   */
+  public getRightHandPosition(): Vector3 {
+    // 右手のひらのワールド座標を取得
+    const handWorldPosition = this.rightHandMesh.getAbsolutePosition();
+
+    // 手のひらの半径分下に移動（手のひらの先端）
+    const handRadius = 0.07;
+    const handTipOffset = new Vector3(0, -handRadius, 0);
+
+    // ワールド座標系での手のひらの先端位置を返す
+    return handWorldPosition.add(handTipOffset);
+  }
+
+  /**
+   * キャラクターの状態を取得
+   */
+  public getState(): CharacterState {
+    return this.state;
+  }
+
+  /**
+   * キャラクターの状態を設定
+   */
+  public setState(state: CharacterState): void {
+    this.state = state;
+
+    // 状態インジケーターの色を更新
+    const color = CHARACTER_STATE_COLORS[state];
+    if (this.stateIndicator.material && this.stateIndicator.material instanceof StandardMaterial) {
+      this.stateIndicator.material.diffuseColor = new Color3(color.r, color.g, color.b);
+      this.stateIndicator.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
+    }
+  }
+
+  /**
+   * チームを設定
+   */
+  public setTeam(team: "ally" | "enemy"): void {
+    this.team = team;
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
@@ -961,6 +1045,9 @@ export class Character {
     this.rightShinMesh.dispose();
     this.leftFootMesh.dispose();
     this.rightFootMesh.dispose();
+
+    // 状態インジケーターを破棄
+    this.stateIndicator.dispose();
 
     // 3Dモデルを破棄
     if (this.model) {
