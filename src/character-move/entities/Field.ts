@@ -8,10 +8,14 @@ import { FIELD_CONFIG } from "../config/gameConfig";
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
+  private goal1: Mesh; // ゴール1（奥側）
+  private goal2: Mesh; // ゴール2（手前側）
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.mesh = this.createField();
+    this.goal1 = this.createGoal(1);
+    this.goal2 = this.createGoal(2);
   }
 
   /**
@@ -56,9 +60,67 @@ export class Field {
   }
 
   /**
+   * ゴールを作成
+   * @param goalNumber ゴール番号（1または2）
+   */
+  private createGoal(goalNumber: number): Mesh {
+    const goalWidth = 5; // ゴールの幅（m）
+    const goalHeight = 2.5; // ゴールの高さ（m）
+    const goalDepth = 0.5; // ゴールの奥行き（m）
+
+    // ゴールのボックスを作成
+    const goal = MeshBuilder.CreateBox(
+      `goal-${goalNumber}`,
+      {
+        width: goalWidth,
+        height: goalHeight,
+        depth: goalDepth,
+      },
+      this.scene
+    );
+
+    // ゴールの位置を設定（フィールドの端）
+    const fieldHalfSize = FIELD_CONFIG.size / 2;
+    const zPosition = goalNumber === 1 ? fieldHalfSize : -fieldHalfSize;
+    goal.position = new Vector3(0, goalHeight / 2, zPosition);
+
+    // マテリアルを設定
+    const material = new StandardMaterial(`goal-${goalNumber}-material`, this.scene);
+    // ゴール1は青、ゴール2は赤
+    if (goalNumber === 1) {
+      material.diffuseColor = new Color3(0.2, 0.4, 1.0); // 青
+      material.emissiveColor = new Color3(0.1, 0.2, 0.5); // 青の発光
+    } else {
+      material.diffuseColor = new Color3(1.0, 0.3, 0.2); // 赤
+      material.emissiveColor = new Color3(0.5, 0.15, 0.1); // 赤の発光
+    }
+    material.specularColor = new Color3(0.3, 0.3, 0.3);
+    material.alpha = 0.7; // 半透明
+    goal.material = material;
+
+    return goal;
+  }
+
+  /**
+   * ゴール1のメッシュを取得
+   */
+  public getGoal1(): Mesh {
+    return this.goal1;
+  }
+
+  /**
+   * ゴール2のメッシュを取得
+   */
+  public getGoal2(): Mesh {
+    return this.goal2;
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
     this.mesh.dispose();
+    this.goal1.dispose();
+    this.goal2.dispose();
   }
 }

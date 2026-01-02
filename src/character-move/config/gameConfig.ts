@@ -9,6 +9,10 @@ export const CHARACTER_CONFIG = {
   speed: 5, // 移動速度（m/s）
   rotationSpeed: 3, // 回転速度（rad/s）
   mass: 70, // 質量（kg）
+
+  // 視野設定
+  visionAngle: 60, // 視野角（度）
+  visionRange: 5, // 視野範囲（m）
 };
 
 // フィールド設定

@@ -47,6 +47,11 @@ export class Character {
   // 状態インジケーター（頭上の球体）
   private stateIndicator: Mesh;
 
+  // 視野
+  private visionConeMesh: Mesh; // 視野コーン（可視化用）
+  public visionAngle: number; // 視野角（度）
+  public visionRange: number; // 視野範囲（m）
+
   public position: Vector3; // 位置
   public rotation: number = 0; // Y軸周りの回転（ラジアン）
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
@@ -65,6 +70,10 @@ export class Character {
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
     this.position = position.clone();
+
+    // 視野設定を初期化
+    this.visionAngle = CHARACTER_CONFIG.visionAngle;
+    this.visionRange = CHARACTER_CONFIG.visionRange;
 
     // ルートメッシュを作成（透明な親メッシュ）
     this.mesh = this.createRootMesh();
@@ -152,6 +161,9 @@ export class Character {
 
     // 状態インジケーター球体を作成
     this.stateIndicator = this.createStateIndicator();
+
+    // 視野コーンを作成
+    this.visionConeMesh = this.createVisionCone();
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
@@ -653,6 +665,59 @@ export class Character {
   }
 
   /**
+   * 視野コーン（円錐形）を作成
+   */
+  private createVisionCone(): Mesh {
+    // 視野角の半分をラジアンに変換
+    const halfAngleRad = (this.visionAngle / 2) * (Math.PI / 180);
+    // 視野範囲と視野角から底面の半径を三角関数で計算
+    const coneRadius = this.visionRange * Math.tan(halfAngleRad);
+
+    // 円錐メッシュを作成
+    const visionCone = MeshBuilder.CreateCylinder(
+      "vision-cone",
+      {
+        diameterTop: coneRadius * 2, // 底面（広がった部分）の直径
+        diameterBottom: 0, // 頂点（尖った部分）の直径
+        height: this.visionRange, // 円錐の高さ = 視野範囲
+        tessellation: 16, // 円錐の滑らかさ
+      },
+      this.scene
+    );
+
+    // デフォルトでは円錐はY軸方向（上向き）に作成される
+    // X軸周りに90度回転して、Z軸方向（前方）を向くようにする
+    visionCone.rotation = new Vector3(Math.PI / 2, 0, 0);
+
+    // 位置を設定（目の位置から開始）
+    // 目のY位置（頭の中心から少し上）
+    const eyeY = 0.03;
+    // 目のZ位置（頭の前面）
+    const headSize = 0.20;
+    const eyeZ = headSize / 2 - 0.01;
+
+    visionCone.position = new Vector3(
+      0, // X座標: 中央（両目の中間）
+      eyeY, // Y座標: 目の高さ
+      eyeZ + this.visionRange / 2 // Z座標: 頂点が目の位置に来るように中心を前方にずらす
+    );
+
+    // マテリアル（見た目）を設定
+    const material = new StandardMaterial("vision-cone-material", this.scene);
+    // 初期状態の色を設定
+    const initialColor = CHARACTER_STATE_COLORS[this.state];
+    material.diffuseColor = new Color3(initialColor.r, initialColor.g, initialColor.b);
+    material.alpha = 0.15; // 透明度
+    material.wireframe = false;
+    visionCone.material = material;
+
+    // 頭の子として設定（頭の向きに追従）
+    visionCone.parent = this.headMesh;
+
+    return visionCone;
+  }
+
+  /**
    * 3Dモデルを設定
    * @param model ロードした3Dモデル
    */
@@ -998,11 +1063,18 @@ export class Character {
   public setState(state: CharacterState): void {
     this.state = state;
 
-    // 状態インジケーターの色を更新
+    // 状態の色を取得
     const color = CHARACTER_STATE_COLORS[state];
+
+    // 状態インジケーターの色を更新
     if (this.stateIndicator.material && this.stateIndicator.material instanceof StandardMaterial) {
       this.stateIndicator.material.diffuseColor = new Color3(color.r, color.g, color.b);
       this.stateIndicator.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
+    }
+
+    // 視野コーンの色も更新
+    if (this.visionConeMesh.material && this.visionConeMesh.material instanceof StandardMaterial) {
+      this.visionConeMesh.material.diffuseColor = new Color3(color.r, color.g, color.b);
     }
   }
 
@@ -1011,6 +1083,75 @@ export class Character {
    */
   public setTeam(team: "ally" | "enemy"): void {
     this.team = team;
+  }
+
+  /**
+   * 視野コーンの表示/非表示を切り替え
+   */
+  public setVisionVisible(visible: boolean): void {
+    this.visionConeMesh.isVisible = visible;
+  }
+
+  /**
+   * 指定した位置が視野内にあるかを判定
+   * @param targetPosition 対象の位置
+   * @returns 視野内にある場合はtrue
+   */
+  public isInVision(targetPosition: Vector3): boolean {
+    const characterPosition = this.getPosition();
+
+    // 目の位置（視野の始点）
+    const headOffsetY = 0.6; // 上半身の中心から頭までのオフセット
+    const eyeY = 0.03; // 頭の中心から目までのオフセット
+    const visionStartPosition = new Vector3(
+      characterPosition.x,
+      characterPosition.y + headOffsetY + eyeY,
+      characterPosition.z
+    );
+
+    // 対象までの距離
+    const distance = Vector3.Distance(visionStartPosition, targetPosition);
+
+    // 視野範囲外ならfalse
+    if (distance > this.visionRange) {
+      return false;
+    }
+
+    // キャラクターの向き（正面方向）
+    const forwardDirection = new Vector3(
+      Math.sin(this.rotation),
+      0,
+      Math.cos(this.rotation)
+    );
+
+    // 対象への方向ベクトル
+    const toTarget = targetPosition.subtract(visionStartPosition);
+    toTarget.y = 0; // Y軸（高さ）は無視して水平面で判定
+    toTarget.normalize();
+
+    // 内積から角度を計算
+    const dotProduct = Vector3.Dot(forwardDirection, toTarget);
+    const angleToTarget = Math.acos(Math.max(-1, Math.min(1, dotProduct))); // clampして安全に
+
+    // 視野角の半分（ラジアン）
+    const halfVisionAngleRad = (this.visionAngle / 2) * (Math.PI / 180);
+
+    // 視野角内ならtrue
+    return angleToTarget <= halfVisionAngleRad;
+  }
+
+  /**
+   * 別のキャラクターが視野内にいるかを判定
+   */
+  public canSeeCharacter(otherCharacter: Character): boolean {
+    return this.isInVision(otherCharacter.getPosition());
+  }
+
+  /**
+   * ボールが視野内にあるかを判定
+   */
+  public canSeeBall(ballPosition: Vector3): boolean {
+    return this.isInVision(ballPosition);
   }
 
   /**
@@ -1048,6 +1189,9 @@ export class Character {
 
     // 状態インジケーターを破棄
     this.stateIndicator.dispose();
+
+    // 視野コーンを破棄
+    this.visionConeMesh.dispose();
 
     // 3Dモデルを破棄
     if (this.model) {
