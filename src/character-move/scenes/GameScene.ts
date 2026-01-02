@@ -13,6 +13,7 @@ import { Ball } from "../entities/Ball";
 import { InputController } from "../controllers/InputController";
 import { JointController } from "../controllers/JointController";
 import { CollisionHandler } from "../controllers/CollisionHandler";
+import { CharacterAI } from "../controllers/CharacterAI";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -39,6 +40,11 @@ export class GameScene {
   private ally?: Character; // 味方
   private enemy1?: Character; // 敵1
   private enemy2?: Character; // 敵2
+
+  // AIコントローラー
+  private allyAI?: CharacterAI;
+  private enemy1AI?: CharacterAI;
+  private enemy2AI?: CharacterAI;
 
   private lastFrameTime: number = Date.now();
 
@@ -104,6 +110,26 @@ export class GameScene {
       this.enemy1,
       this.enemy2
     );
+
+    // AIコントローラーの初期化（追加キャラクターのみ）
+    if (showAdditionalCharacters) {
+      // 全キャラクターのリストを作成
+      const allCharacters: Character[] = [this.character];
+      if (this.ally) allCharacters.push(this.ally);
+      if (this.enemy1) allCharacters.push(this.enemy1);
+      if (this.enemy2) allCharacters.push(this.enemy2);
+
+      // 各AIキャラクターにAIコントローラーを設定
+      if (this.ally) {
+        this.allyAI = new CharacterAI(this.ally, this.ball, allCharacters, this.field);
+      }
+      if (this.enemy1) {
+        this.enemy1AI = new CharacterAI(this.enemy1, this.ball, allCharacters, this.field);
+      }
+      if (this.enemy2) {
+        this.enemy2AI = new CharacterAI(this.enemy2, this.ball, allCharacters, this.field);
+      }
+    }
 
     // 入力コントローラーの初期化
     this.inputController = new InputController(this.scene, this.character);
@@ -338,6 +364,20 @@ export class GameScene {
       // キャラクターを更新
       this.character.update(deltaTime);
 
+      // AIコントローラーを更新
+      if (this.allyAI) {
+        this.allyAI.update(deltaTime);
+        this.ally!.update(deltaTime);
+      }
+      if (this.enemy1AI) {
+        this.enemy1AI.update(deltaTime);
+        this.enemy1!.update(deltaTime);
+      }
+      if (this.enemy2AI) {
+        this.enemy2AI.update(deltaTime);
+        this.enemy2!.update(deltaTime);
+      }
+
       // カメラをキャラクターに追従させる
       this.updateCamera(deltaTime);
     }
@@ -414,6 +454,17 @@ export class GameScene {
     this.collisionHandler.dispose();
     this.character.dispose();
     this.ball.dispose();
+
+    // AIコントローラーを破棄
+    if (this.allyAI) {
+      this.allyAI.dispose();
+    }
+    if (this.enemy1AI) {
+      this.enemy1AI.dispose();
+    }
+    if (this.enemy2AI) {
+      this.enemy2AI.dispose();
+    }
 
     // 追加キャラクターが存在する場合のみdispose
     if (this.ally) {
