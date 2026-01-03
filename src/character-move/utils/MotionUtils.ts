@@ -91,3 +91,77 @@ export function buildKeyframes(
     return position ? { time, joints, position } : { time, joints };
   });
 }
+
+/**
+ * ベースモーションに追加値を加算する
+ * @param baseMotion ベースとなるモーションデータ
+ * @param additions 追加する値のマップ (jointName => {time => additionalValue})
+ * @returns 加算された新しいモーションデータ
+ */
+export function addToMotion(
+  baseMotion: Record<string, Record<number, number>>,
+  additions: Record<string, Record<number, number>>
+): Record<string, Record<number, number>> {
+  const result: Record<string, Record<number, number>> = {};
+
+  // ベースモーションの全関節をコピー
+  for (const jointName in baseMotion) {
+    result[jointName] = { ...baseMotion[jointName] };
+  }
+
+  // 追加値を加算
+  for (const jointName in additions) {
+    if (!result[jointName]) {
+      result[jointName] = {};
+    }
+    for (const timeStr in additions[jointName]) {
+      const time = parseFloat(timeStr);
+      const baseValue = baseMotion[jointName]?.[time] ?? 0;
+      const addValue = additions[jointName][time];
+      result[jointName][time] = baseValue + addValue;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * ベースモーションから派生モーションを作成する
+ * 配列形式の追加値を使用して、ベースモーションの時間軸を新しい時間軸にマッピングしながら値を加算
+ * @param baseMotion ベースとなるモーションデータ
+ * @param baseTimes ベースモーションの時間配列
+ * @param newTimes 新しいモーションの時間配列
+ * @param additions 追加する値の配列マップ (jointName => [値1, 値2, ...])
+ * @returns 派生モーションデータ
+ */
+export function createDerivedMotion(
+  baseMotion: Record<string, Record<number, number>>,
+  baseTimes: number[],
+  newTimes: number[],
+  additions: Record<string, number[]>
+): Record<string, Record<number, number>> {
+  const result: Record<string, Record<number, number>> = {};
+
+  // まずベースモーションの全関節を新しい時間軸でコピー
+  for (const jointName in baseMotion) {
+    result[jointName] = {};
+    for (let i = 0; i < newTimes.length; i++) {
+      const baseValue = baseMotion[jointName]?.[baseTimes[i]] ?? 0;
+      result[jointName][newTimes[i]] = baseValue;
+    }
+  }
+
+  // 追加値を適用
+  for (const jointName in additions) {
+    if (!result[jointName]) {
+      result[jointName] = {};
+    }
+    for (let i = 0; i < newTimes.length; i++) {
+      const baseValue = baseMotion[jointName]?.[baseTimes[i]] ?? 0;
+      const addValue = additions[jointName][i] ?? 0;
+      result[jointName][newTimes[i]] = baseValue + addValue;
+    }
+  }
+
+  return result;
+}

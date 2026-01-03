@@ -13,13 +13,13 @@ import { buildKeyframes } from "../utils/MotionUtils";
  */
 
 // ===== WALK_FORWARD =====
-const WF_T0 = 0.0;
-const WF_T1 = 0.25;
-const WF_T2 = 0.5;
-const WF_T3 = 0.75;
-const WF_T4 = 1.0;
+export const WF_T0 = 0.0;
+export const WF_T1 = 0.25;
+export const WF_T2 = 0.5;
+export const WF_T3 = 0.75;
+export const WF_T4 = 1.0;
 
-const WF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+export const WF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   upperBodyX: {[WF_T0]: 2.5, [WF_T1]: 5, [WF_T2]: 0, [WF_T3]: 5, [WF_T4]: 0},
   upperBodyY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
   upperBodyZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
@@ -94,13 +94,13 @@ export const WALK_FORWARD_MOTION_CONFIG: MotionConfig = {
 };
 
 // ===== WALK_BACKWARD =====
-const WB_T0 = 0.0;
-const WB_T1 = 0.25;
-const WB_T2 = 0.5;
-const WB_T3 = 0.75;
-const WB_T4 = 1.0;
+export const WB_T0 = 0.0;
+export const WB_T1 = 0.25;
+export const WB_T2 = 0.5;
+export const WB_T3 = 0.75;
+export const WB_T4 = 1.0;
 
-const WB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+export const WB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   upperBodyX: {[WB_T0]: -5, [WB_T1]: -5, [WB_T2]: -5, [WB_T3]: -5, [WB_T4]: -5},
   upperBodyY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
   upperBodyZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
@@ -172,13 +172,13 @@ export const WALK_BACKWARD_MOTION_CONFIG: MotionConfig = {
 };
 
 // ===== WALK_LEFT =====
-const WL_T0 = 0.0;
-const WL_T1 = 0.25;
-const WL_T2 = 0.5;
-const WL_T3 = 0.75;
-const WL_T4 = 1.0;
+export const WL_T0 = 0.0;
+export const WL_T1 = 0.25;
+export const WL_T2 = 0.5;
+export const WL_T3 = 0.75;
+export const WL_T4 = 1.0;
 
-const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+export const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   upperBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
   upperBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
   upperBodyZ: {[WL_T0]: -3, [WL_T1]: -4, [WL_T2]: -3, [WL_T3]: -4, [WL_T4]: -3},
@@ -248,13 +248,13 @@ export const WALK_LEFT_MOTION_CONFIG: MotionConfig = {
 };
 
 // ===== WALK_RIGHT =====
-const WR_T0 = 0.0;
-const WR_T1 = 0.25;
-const WR_T2 = 0.5;
-const WR_T3 = 0.75;
-const WR_T4 = 1.0;
+export const WR_T0 = 0.0;
+export const WR_T1 = 0.25;
+export const WR_T2 = 0.5;
+export const WR_T3 = 0.75;
+export const WR_T4 = 1.0;
 
-const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+export const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   upperBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
   upperBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
   upperBodyZ: {[WR_T0]: 3, [WR_T1]: 4, [WR_T2]: 3, [WR_T3]: 4, [WR_T4]: 3},
