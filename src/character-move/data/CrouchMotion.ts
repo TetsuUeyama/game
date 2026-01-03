@@ -60,7 +60,7 @@ const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
-  y: {[T0]: 0, [T1]: -0.2, [T2]: -0.4, [T3]: -0.6},
+  y: {[T0]: 0, [T1]: -0.2, [T2]: -0.25, [T3]: -0.3},
   z: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
 };
 

@@ -57,6 +57,7 @@ export class Character {
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
   private groundY: number = CHARACTER_CONFIG.height / 2; // 地面のY座標
+  private motionOffsetY: number = 0; // モーションによるY軸オフセット
 
   // キャラクターの状態
   private state: CharacterState = CharacterState.BALL_LOST;
@@ -802,10 +803,10 @@ export class Character {
   }
 
   /**
-   * 位置を取得
+   * 位置を取得（モーションオフセットを除いた基準位置）
    */
   public getPosition(): Vector3 {
-    return this.mesh.position.clone();
+    return this.position.clone();
   }
 
   /**
@@ -819,8 +820,22 @@ export class Character {
       position.z
     );
 
-    this.mesh.position = clampedPosition;
+    // モーションオフセットを加算してメッシュ位置を設定
+    this.mesh.position = new Vector3(
+      clampedPosition.x,
+      clampedPosition.y + this.motionOffsetY,
+      clampedPosition.z
+    );
     this.position = clampedPosition;
+  }
+
+  /**
+   * モーションによるY軸オフセットを設定
+   */
+  public setMotionOffsetY(offset: number): void {
+    this.motionOffsetY = offset;
+    // 現在位置を再設定してオフセットを反映
+    this.setPosition(this.position);
   }
 
   /**
@@ -870,8 +885,8 @@ export class Character {
     const speed = CHARACTER_CONFIG.speed;
     this.velocity = direction.scale(speed);
 
-    // 新しい位置を計算
-    const newPosition = this.mesh.position.add(this.velocity.scale(deltaTime));
+    // 新しい位置を計算（モーションオフセットを除いた基準位置を使用）
+    const newPosition = this.position.add(this.velocity.scale(deltaTime));
 
     // 位置を更新
     this.setPosition(newPosition);
