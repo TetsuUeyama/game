@@ -1,72 +1,99 @@
 import { MotionData, MotionConfig } from "../types/MotionTypes";
-import { buildKeyframes } from "../utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "../utils/MotionUtils";
+import {
+  WF_JOINT_ANIMATIONS, WF_T0, WF_T1, WF_T2, WF_T3, WF_T4,
+  WB_JOINT_ANIMATIONS, WB_T0, WB_T1, WB_T2, WB_T3, WB_T4,
+  WL_JOINT_ANIMATIONS, WL_T0, WL_T1, WL_T2, WL_T3, WL_T4,
+  WR_JOINT_ANIMATIONS, WR_T0, WR_T1, WR_T2, WR_T3, WR_T4,
+} from "./WalkMotion";
 
 /**
  * 前進ダッシュモーション
+ * WALK_FORWARDをベースに、より大きな動きを追加
  */
 
 const DF_T0 = 0.0;
 const DF_T1 = 0.2;
 const DF_T2 = 0.4;
+const DF_T3 = 0.6;
+const DF_T4 = 0.8;
 
-const DF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[DF_T0]: 30, [DF_T1]: 35, [DF_T2]: 10},
-  upperBodyY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  upperBodyZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+// 歩行モーションに加算する値（配列のインデックスは T0, T1, T2, T3, T4 に対応）
+const DF_ADDITIONS = {
+  upperBodyX: [27.5, 30, 10, 30, 10],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: {[DF_T0]: -10, [DF_T1]: -15, [DF_T2]: -5},
-  lowerBodyY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  lowerBodyZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  lowerBodyX: [-10, -15, -5, -15, -5],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: {[DF_T0]: -10, [DF_T1]: -15, [DF_T2]: 0},
-  headY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  headZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  headX: [-11.5, -12, 0, -12, 0],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: {[DF_T0]: -40, [DF_T1]: 40, [DF_T2]: -20},
-  leftShoulderY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  leftShoulderZ: {[DF_T0]: -30, [DF_T1]: -20, [DF_T2]: -15},
+  leftShoulderX: [0, 45, 0, -45, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: {[DF_T0]: 40, [DF_T1]: -40, [DF_T2]: 20},
-  rightShoulderY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  rightShoulderZ: {[DF_T0]: 20, [DF_T1]: 30, [DF_T2]: 15},
+  rightShoulderX: [-22.5, -45, 0, 45, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: {[DF_T0]: 60, [DF_T1]: 60, [DF_T2]: 30},
-  leftElbowY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  leftElbowZ: {[DF_T0]: -20, [DF_T1]: -20, [DF_T2]: -10},
+  leftElbowX: [0, 0, 0, 0, 0],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: {[DF_T0]: 60, [DF_T1]: 60, [DF_T2]: 30},
-  rightElbowY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  rightElbowZ: {[DF_T0]: 20, [DF_T1]: 20, [DF_T2]: 10},
+  rightElbowX: [0, 0, 0, 0, 0],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: {[DF_T0]: -50, [DF_T1]: 10, [DF_T2]: -20},
-  leftHipY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  leftHipZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  leftHipX: [-27.5, -55, 0, 45, 0],
+  leftHipY: [0, 0, 0, 0, 0],
+  leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: {[DF_T0]: 10, [DF_T1]: -50, [DF_T2]: -5},
-  rightHipY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  rightHipZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  rightHipX: [0, 45, 0, -55, 0],
+  rightHipY: [0, 0, 0, 0, 0],
+  rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: {[DF_T0]: 70, [DF_T1]: 20, [DF_T2]: 30},
-  leftKneeY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  leftKneeZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  leftKneeX: [67.5, 20, 67.5, 20, 67.5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: {[DF_T0]: 20, [DF_T1]: 70, [DF_T2]: 10},
-  rightKneeY: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  rightKneeZ: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
+  rightKneeX: [20, 65, 20, 65, 20],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [0, 0, 0, 0, 0],
 };
 
-const DF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  x: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  y: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0},
-  z: {[DF_T0]: 0.5, [DF_T1]: 1.5, [DF_T2]: 3.0},
-};
+/**
+ * ダッシュゲージのパーセンテージに応じた前進ダッシュモーションを生成
+ * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
+ * @returns 前進ダッシュモーションデータ
+ */
+export function createDashForwardMotion(dashPercentage: number): MotionData {
+  // ダッシュゲージに応じて追加値をスケール
+  const scaledAdditions: Record<string, number[]> = {};
+  for (const jointName in DF_ADDITIONS) {
+    scaledAdditions[jointName] = (DF_ADDITIONS as Record<string, number[]>)[jointName].map(value => value * dashPercentage);
+  }
 
-export const DASH_FORWARD_MOTION: MotionData = {
-  name: "dash_forward",
-  duration: DF_T2,
-  loop: false,
-  keyframes: buildKeyframes(DF_JOINT_ANIMATIONS, DF_POSITION_ANIMATIONS),
-};
+  const jointAnimations = createDerivedMotion(
+    WF_JOINT_ANIMATIONS,
+    [WF_T0, WF_T1, WF_T2, WF_T3, WF_T4],
+    [DF_T0, DF_T1, DF_T2, DF_T3, DF_T4],
+    scaledAdditions
+  );
+
+  return {
+    name: "dash_forward",
+    duration: DF_T4,
+    loop: true,
+    keyframes: buildKeyframes(jointAnimations),
+  };
+}
+
+// 100%の時のデフォルトモーション（後方互換性のため）
+export const DASH_FORWARD_MOTION: MotionData = createDashForwardMotion(1.0);
 
 export const DASH_FORWARD_MOTION_CONFIG: MotionConfig = {
   motionData: DASH_FORWARD_MOTION,
@@ -78,70 +105,90 @@ export const DASH_FORWARD_MOTION_CONFIG: MotionConfig = {
 
 /**
  * 後退ダッシュモーション
+ * WALK_BACKWARDをベースに、より大きな動きを追加
  */
 
 const DB_T0 = 0.0;
 const DB_T1 = 0.2;
 const DB_T2 = 0.4;
+const DB_T3 = 0.6;
+const DB_T4 = 0.8;
 
-const DB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[DB_T0]: -10, [DB_T1]: -15, [DB_T2]: -5},
-  upperBodyY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  upperBodyZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+const DB_ADDITIONS = {
+  upperBodyX: [5, 10, 0, 10, 0],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: {[DB_T0]: 5, [DB_T1]: 10, [DB_T2]: 0},
-  lowerBodyY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  lowerBodyZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  lowerBodyX: [-5, -10, 0, -10, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: {[DB_T0]: 5, [DB_T1]: 10, [DB_T2]: 0},
-  headY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  headZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  headX: [2, 7, -3, 7, -3],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: {[DB_T0]: -30, [DB_T1]: -30, [DB_T2]: -15},
-  leftShoulderY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  leftShoulderZ: {[DB_T0]: -20, [DB_T1]: -20, [DB_T2]: -10},
+  leftShoulderX: [0, 0, 0, 0, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: {[DB_T0]: -30, [DB_T1]: -30, [DB_T2]: -15},
-  rightShoulderY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  rightShoulderZ: {[DB_T0]: 20, [DB_T1]: 20, [DB_T2]: 10},
+  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: {[DB_T0]: 40, [DB_T1]: 40, [DB_T2]: 20},
-  leftElbowY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  leftElbowZ: {[DB_T0]: -15, [DB_T1]: -15, [DB_T2]: -10},
+  leftElbowX: [0, 0, 0, 0, 0],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: {[DB_T0]: 40, [DB_T1]: 40, [DB_T2]: 20},
-  rightElbowY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  rightElbowZ: {[DB_T0]: 15, [DB_T1]: 15, [DB_T2]: 10},
+  rightElbowX: [0, 0, 0, 0, 0],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: {[DB_T0]: -30, [DB_T1]: -10, [DB_T2]: -5},
-  leftHipY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  leftHipZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  leftHipX: [-30, 5, -5, 5, -5],
+  leftHipY: [0, 0, 0, 0, 0],
+  leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: {[DB_T0]: -10, [DB_T1]: -30, [DB_T2]: -10},
-  rightHipY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  rightHipZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  rightHipX: [-10, -5, -10, -5, -10],
+  rightHipY: [0, 0, 0, 0, 0],
+  rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: {[DB_T0]: 40, [DB_T1]: 15, [DB_T2]: 10},
-  leftKneeY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  leftKneeZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  leftKneeX: [40, 10, 10, 10, 10],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: {[DB_T0]: 15, [DB_T1]: 40, [DB_T2]: 15},
-  rightKneeY: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  rightKneeZ: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
+  rightKneeX: [15, 35, 15, 35, 15],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [0, 0, 0, 0, 0],
 };
 
-const DB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  x: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  y: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0},
-  z: {[DB_T0]: -0.5, [DB_T1]: -1.5, [DB_T2]: -3.0},
-};
+/**
+ * ダッシュゲージのパーセンテージに応じた後退ダッシュモーションを生成
+ * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
+ * @returns 後退ダッシュモーションデータ
+ */
+export function createDashBackwardMotion(dashPercentage: number): MotionData {
+  // ダッシュゲージに応じて追加値をスケール
+  const scaledAdditions: Record<string, number[]> = {};
+  for (const jointName in DB_ADDITIONS) {
+    scaledAdditions[jointName] = (DB_ADDITIONS as Record<string, number[]>)[jointName].map(value => value * dashPercentage);
+  }
 
-export const DASH_BACKWARD_MOTION: MotionData = {
-  name: "dash_backward",
-  duration: DB_T2,
-  loop: false,
-  keyframes: buildKeyframes(DB_JOINT_ANIMATIONS, DB_POSITION_ANIMATIONS),
-};
+  const jointAnimations = createDerivedMotion(
+    WB_JOINT_ANIMATIONS,
+    [WB_T0, WB_T1, WB_T2, WB_T3, WB_T4],
+    [DB_T0, DB_T1, DB_T2, DB_T3, DB_T4],
+    scaledAdditions
+  );
+
+  return {
+    name: "dash_backward",
+    duration: DB_T4,
+    loop: true,
+    keyframes: buildKeyframes(jointAnimations),
+  };
+}
+
+// 100%の時のデフォルトモーション（後方互換性のため）
+export const DASH_BACKWARD_MOTION: MotionData = createDashBackwardMotion(1.0);
 
 export const DASH_BACKWARD_MOTION_CONFIG: MotionConfig = {
   motionData: DASH_BACKWARD_MOTION,
@@ -153,70 +200,90 @@ export const DASH_BACKWARD_MOTION_CONFIG: MotionConfig = {
 
 /**
  * 左ダッシュモーション
+ * WALK_LEFTをベースに、より大きな動きを追加
  */
 
 const DL_T0 = 0.0;
 const DL_T1 = 0.2;
 const DL_T2 = 0.4;
+const DL_T3 = 0.6;
+const DL_T4 = 0.8;
 
-const DL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[DL_T0]: 5, [DL_T1]: 5, [DL_T2]: 0},
-  upperBodyY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  upperBodyZ: {[DL_T0]: -20, [DL_T1]: -25, [DL_T2]: -10},
+const DL_ADDITIONS = {
+  upperBodyX: [5, 5, 0, 5, 0],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [-17, -21, -7, -21, -7],
 
-  lowerBodyX: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  lowerBodyY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  lowerBodyZ: {[DL_T0]: 10, [DL_T1]: 15, [DL_T2]: 5},
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [7, 13, 2, 13, 2],
 
-  headX: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  headY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  headZ: {[DL_T0]: 10, [DL_T1]: 15, [DL_T2]: 5},
+  headX: [0, 0, 0, 0, 0],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [7, 10, 2, 10, 2],
 
-  leftShoulderX: {[DL_T0]: -20, [DL_T1]: -10, [DL_T2]: 0},
-  leftShoulderY: {[DL_T0]: -20, [DL_T1]: -20, [DL_T2]: -10},
-  leftShoulderZ: {[DL_T0]: -25, [DL_T1]: -20, [DL_T2]: -15},
+  leftShoulderX: [-20, -10, 0, -10, 0],
+  leftShoulderY: [-20, -20, -10, -20, -10],
+  leftShoulderZ: [-19, -9, -9, -9, -9],
 
-  rightShoulderX: {[DL_T0]: -10, [DL_T1]: -20, [DL_T2]: 0},
-  rightShoulderY: {[DL_T0]: 20, [DL_T1]: 20, [DL_T2]: 10},
-  rightShoulderZ: {[DL_T0]: 20, [DL_T1]: 25, [DL_T2]: 15},
+  rightShoulderX: [-10, -20, 0, -20, 0],
+  rightShoulderY: [20, 20, 10, 20, 10],
+  rightShoulderZ: [9, 9, 4, 9, 4],
 
-  leftElbowX: {[DL_T0]: 50, [DL_T1]: 30, [DL_T2]: 10},
-  leftElbowY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  leftElbowZ: {[DL_T0]: -20, [DL_T1]: -15, [DL_T2]: -10},
+  leftElbowX: [58, 44, 18, 44, 18],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [-28, -40, -18, -40, -18],
 
-  rightElbowX: {[DL_T0]: 30, [DL_T1]: 50, [DL_T2]: 10},
-  rightElbowY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  rightElbowZ: {[DL_T0]: 15, [DL_T1]: 20, [DL_T2]: 10},
+  rightElbowX: [38, 64, 18, 64, 18],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [26, 35, 21, 35, 21],
 
-  leftHipX: {[DL_T0]: -40, [DL_T1]: -10, [DL_T2]: -10},
-  leftHipY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  leftHipZ: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
+  leftHipX: [-40, -10, -10, -10, -10],
+  leftHipY: [0, 15, 0, 15, 0],
+  leftHipZ: [17, 7, 17, 7, 17],
 
-  rightHipX: {[DL_T0]: -10, [DL_T1]: -40, [DL_T2]: -5},
-  rightHipY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  rightHipZ: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
+  rightHipX: [-10, -40, -5, -40, -5],
+  rightHipY: [0, -10, 0, -10, 0],
+  rightHipZ: [-13, 0, -13, 0, -13],
 
-  leftKneeX: {[DL_T0]: 50, [DL_T1]: 20, [DL_T2]: 20},
-  leftKneeY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  leftKneeZ: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
+  leftKneeX: [50, 15, 20, 15, 20],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-8, -8, -8, -8, -8],
 
-  rightKneeX: {[DL_T0]: 20, [DL_T1]: 50, [DL_T2]: 10},
-  rightKneeY: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  rightKneeZ: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
+  rightKneeX: [20, 50, 10, 50, 10],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [8, 8, 8, 8, 8],
 };
 
-const DL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  x: {[DL_T0]: -0.5, [DL_T1]: -1.5, [DL_T2]: -3.0},
-  y: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-  z: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0},
-};
+/**
+ * ダッシュゲージのパーセンテージに応じた左ダッシュモーションを生成
+ * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
+ * @returns 左ダッシュモーションデータ
+ */
+export function createDashLeftMotion(dashPercentage: number): MotionData {
+  // ダッシュゲージに応じて追加値をスケール
+  const scaledAdditions: Record<string, number[]> = {};
+  for (const jointName in DL_ADDITIONS) {
+    scaledAdditions[jointName] = (DL_ADDITIONS as Record<string, number[]>)[jointName].map(value => value * dashPercentage);
+  }
 
-export const DASH_LEFT_MOTION: MotionData = {
-  name: "dash_left",
-  duration: DL_T2,
-  loop: false,
-  keyframes: buildKeyframes(DL_JOINT_ANIMATIONS, DL_POSITION_ANIMATIONS),
-};
+  const jointAnimations = createDerivedMotion(
+    WL_JOINT_ANIMATIONS,
+    [WL_T0, WL_T1, WL_T2, WL_T3, WL_T4],
+    [DL_T0, DL_T1, DL_T2, DL_T3, DL_T4],
+    scaledAdditions
+  );
+
+  return {
+    name: "dash_left",
+    duration: DL_T4,
+    loop: true,
+    keyframes: buildKeyframes(jointAnimations),
+  };
+}
+
+// 100%の時のデフォルトモーション（後方互換性のため）
+export const DASH_LEFT_MOTION: MotionData = createDashLeftMotion(1.0);
 
 export const DASH_LEFT_MOTION_CONFIG: MotionConfig = {
   motionData: DASH_LEFT_MOTION,
@@ -228,70 +295,90 @@ export const DASH_LEFT_MOTION_CONFIG: MotionConfig = {
 
 /**
  * 右ダッシュモーション
+ * WALK_RIGHTをベースに、より大きな動きを追加
  */
 
 const DR_T0 = 0.0;
 const DR_T1 = 0.2;
 const DR_T2 = 0.4;
+const DR_T3 = 0.6;
+const DR_T4 = 0.8;
 
-const DR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[DR_T0]: 5, [DR_T1]: 5, [DR_T2]: 0},
-  upperBodyY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  upperBodyZ: {[DR_T0]: 20, [DR_T1]: 25, [DR_T2]: 10},
+const DR_ADDITIONS = {
+  upperBodyX: [5, 5, 0, 5, 0],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [17, 21, 7, 21, 7],
 
-  lowerBodyX: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  lowerBodyY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  lowerBodyZ: {[DR_T0]: -10, [DR_T1]: -15, [DR_T2]: -5},
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [-7, -13, -2, -13, -2],
 
-  headX: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  headY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  headZ: {[DR_T0]: -10, [DR_T1]: -15, [DR_T2]: -5},
+  headX: [0, 0, 0, 0, 0],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [-7, -10, -2, -10, -2],
 
-  leftShoulderX: {[DR_T0]: -10, [DR_T1]: -20, [DR_T2]: 0},
-  leftShoulderY: {[DR_T0]: -20, [DR_T1]: -20, [DR_T2]: -10},
-  leftShoulderZ: {[DR_T0]: -20, [DR_T1]: -25, [DR_T2]: -15},
+  leftShoulderX: [1, -4, 11, -4, 11],
+  leftShoulderY: [-20, -20, -10, -20, -10],
+  leftShoulderZ: [-9, -9, -4, -9, -4],
 
-  rightShoulderX: {[DR_T0]: -20, [DR_T1]: -10, [DR_T2]: 0},
-  rightShoulderY: {[DR_T0]: 20, [DR_T1]: 20, [DR_T2]: 10},
-  rightShoulderZ: {[DR_T0]: 25, [DR_T1]: 20, [DR_T2]: 15},
+  rightShoulderX: [-20, -10, 0, -10, 0],
+  rightShoulderY: [20, 20, 10, 20, 10],
+  rightShoulderZ: [19, 9, 9, 9, 9],
 
-  leftElbowX: {[DR_T0]: 30, [DR_T1]: 50, [DR_T2]: 10},
-  leftElbowY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  leftElbowZ: {[DR_T0]: -15, [DR_T1]: -20, [DR_T2]: -10},
+  leftElbowX: [38, 64, 18, 64, 18],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [-26, -35, -21, -35, -21],
 
-  rightElbowX: {[DR_T0]: 50, [DR_T1]: 30, [DR_T2]: 10},
-  rightElbowY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  rightElbowZ: {[DR_T0]: 20, [DR_T1]: 15, [DR_T2]: 10},
+  rightElbowX: [58, 44, 18, 44, 18],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [28, 40, 18, 40, 18],
 
-  leftHipX: {[DR_T0]: -10, [DR_T1]: -40, [DR_T2]: -5},
-  leftHipY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  leftHipZ: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
+  leftHipX: [-10, -40, -5, -40, -5],
+  leftHipY: [0, 10, 0, 10, 0],
+  leftHipZ: [13, 0, 13, 0, 13],
 
-  rightHipX: {[DR_T0]: -40, [DR_T1]: -10, [DR_T2]: -10},
-  rightHipY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  rightHipZ: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
+  rightHipX: [-40, -10, -10, -10, -10],
+  rightHipY: [0, -15, 0, -15, 0],
+  rightHipZ: [-17, -7, -17, -7, -17],
 
-  leftKneeX: {[DR_T0]: 20, [DR_T1]: 50, [DR_T2]: 10},
-  leftKneeY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  leftKneeZ: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
+  leftKneeX: [20, 50, 10, 50, 10],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-8, -8, -8, -8, -8],
 
-  rightKneeX: {[DR_T0]: 50, [DR_T1]: 20, [DR_T2]: 20},
-  rightKneeY: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  rightKneeZ: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
+  rightKneeX: [50, 15, 20, 15, 20],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [8, 8, 8, 8, 8],
 };
 
-const DR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  x: {[DR_T0]: 0.5, [DR_T1]: 1.5, [DR_T2]: 3.0},
-  y: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-  z: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0},
-};
+/**
+ * ダッシュゲージのパーセンテージに応じた右ダッシュモーションを生成
+ * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
+ * @returns 右ダッシュモーションデータ
+ */
+export function createDashRightMotion(dashPercentage: number): MotionData {
+  // ダッシュゲージに応じて追加値をスケール
+  const scaledAdditions: Record<string, number[]> = {};
+  for (const jointName in DR_ADDITIONS) {
+    scaledAdditions[jointName] = (DR_ADDITIONS as Record<string, number[]>)[jointName].map(value => value * dashPercentage);
+  }
 
-export const DASH_RIGHT_MOTION: MotionData = {
-  name: "dash_right",
-  duration: DR_T2,
-  loop: false,
-  keyframes: buildKeyframes(DR_JOINT_ANIMATIONS, DR_POSITION_ANIMATIONS),
-};
+  const jointAnimations = createDerivedMotion(
+    WR_JOINT_ANIMATIONS,
+    [WR_T0, WR_T1, WR_T2, WR_T3, WR_T4],
+    [DR_T0, DR_T1, DR_T2, DR_T3, DR_T4],
+    scaledAdditions
+  );
+
+  return {
+    name: "dash_right",
+    duration: DR_T4,
+    loop: true,
+    keyframes: buildKeyframes(jointAnimations),
+  };
+}
+
+// 100%の時のデフォルトモーション（後方互換性のため）
+export const DASH_RIGHT_MOTION: MotionData = createDashRightMotion(1.0);
 
 export const DASH_RIGHT_MOTION_CONFIG: MotionConfig = {
   motionData: DASH_RIGHT_MOTION,
