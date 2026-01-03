@@ -173,53 +173,55 @@ export const WALK_BACKWARD_MOTION_CONFIG: MotionConfig = {
 
 // ===== WALK_LEFT =====
 const WL_T0 = 0.0;
-const WL_T1 = 0.5;
-const WL_T2 = 1.0;
+const WL_T1 = 0.25;
+const WL_T2 = 0.5;
+const WL_T3 = 0.75;
+const WL_T4 = 1.0;
 
 const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  upperBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  upperBodyZ: {[WL_T0]: -5, [WL_T1]: -8, [WL_T2]: -5},
+  upperBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  upperBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  upperBodyZ: {[WL_T0]: -3, [WL_T1]: -4, [WL_T2]: -3, [WL_T3]: -4, [WL_T4]: -3},
 
-  lowerBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  lowerBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  lowerBodyZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  lowerBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  lowerBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  lowerBodyZ: {[WL_T0]: 3, [WL_T1]: 2, [WL_T2]: 3, [WL_T3]: 2, [WL_T4]: 2},
 
-  headX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  headY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  headZ: {[WL_T0]: 3, [WL_T1]: 5, [WL_T2]: 3},
+  headX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  headY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  headZ: {[WL_T0]: 3, [WL_T1]: 5, [WL_T2]: 3, [WL_T3]: 5, [WL_T4]: 3},
 
-  leftShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftShoulderZ: {[WL_T0]: 0, [WL_T1]: 10, [WL_T2]: 0},
+  leftShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftShoulderZ: {[WL_T0]: -6, [WL_T1]:-11, [WL_T2]: -6, [WL_T3]: -11, [WL_T4]: -6},
 
-  rightShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightShoulderZ: {[WL_T0]: 0, [WL_T1]: -10, [WL_T2]: 0},
+  rightShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightShoulderZ: {[WL_T0]: 11, [WL_T1]: 16, [WL_T2]: 11, [WL_T3]: 16, [WL_T4]: 11},
 
-  leftElbowX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftElbowZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  leftElbowX: {[WL_T0]: -8, [WL_T1]: -14, [WL_T2]: -8, [WL_T3]: -14, [WL_T4]: -8},
+  leftElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftElbowZ: {[WL_T0]: 8, [WL_T1]: 25, [WL_T2]: 8, [WL_T3]: 25, [WL_T4]: 8},
 
-  rightElbowX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightElbowZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  rightElbowX: {[WL_T0]: -8, [WL_T1]: -14, [WL_T2]: -8, [WL_T3]: -8, [WL_T4]: -14},
+  rightElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightElbowZ: {[WL_T0]: -11, [WL_T1]: -15, [WL_T2]: -11, [WL_T3]: -15, [WL_T4]: -11},
 
-  leftHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftHipY: {[WL_T0]: 0, [WL_T1]: -15, [WL_T2]: 0},
-  leftHipZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  leftHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftHipY: {[WL_T0]: 0, [WL_T1]: -15, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftHipZ: {[WL_T0]: -17, [WL_T1]: -7, [WL_T2]: -17, [WL_T3]: -7, [WL_T4]: -17},
 
-  rightHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightHipY: {[WL_T0]: 0, [WL_T1]: 10, [WL_T2]: 0},
-  rightHipZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  rightHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightHipY: {[WL_T0]: 0, [WL_T1]: 10, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightHipZ: {[WL_T0]: 13, [WL_T1]: 8, [WL_T2]: 13, [WL_T3]: 8, [WL_T4]: 13},
 
-  leftKneeX: {[WL_T0]: 0, [WL_T1]: 5, [WL_T2]: 0},
-  leftKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  leftKneeZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  leftKneeX: {[WL_T0]: 0, [WL_T1]: 5, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  leftKneeZ: {[WL_T0]: 8, [WL_T1]: 8, [WL_T2]: 8, [WL_T3]: 8, [WL_T4]: 8},
 
-  rightKneeX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
-  rightKneeZ: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0},
+  rightKneeX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
+  rightKneeZ: {[WL_T0]: -8, [WL_T1]: -8, [WL_T2]: -8, [WL_T3]: -8, [WL_T4]: -8},
 };
 
 export const WALK_LEFT_MOTION: MotionData = {
@@ -247,53 +249,55 @@ export const WALK_LEFT_MOTION_CONFIG: MotionConfig = {
 
 // ===== WALK_RIGHT =====
 const WR_T0 = 0.0;
-const WR_T1 = 0.5;
-const WR_T2 = 1.0;
+const WR_T1 = 0.25;
+const WR_T2 = 0.5;
+const WR_T3 = 0.75;
+const WR_T4 = 1.0;
 
 const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  upperBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  upperBodyZ: {[WR_T0]: 5, [WR_T1]: 8, [WR_T2]: 5},
+  upperBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  upperBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  upperBodyZ: {[WR_T0]: 3, [WR_T1]: 4, [WR_T2]: 3, [WR_T3]: 4, [WR_T4]: 3},
 
-  lowerBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  lowerBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  lowerBodyZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  lowerBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  lowerBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  lowerBodyZ: {[WR_T0]: -3, [WR_T1]: -2, [WR_T2]: -3, [WR_T3]: -2, [WR_T4]: -2},
 
-  headX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  headY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  headZ: {[WR_T0]: -3, [WR_T1]: -5, [WR_T2]: -3},
+  headX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  headY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  headZ: {[WR_T0]: -3, [WR_T1]: -5, [WR_T2]: -3, [WR_T3]: -5, [WR_T4]: -3},
 
-  leftShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftShoulderZ: {[WR_T0]: 0, [WR_T1]: 10, [WR_T2]: 0},
+  leftShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftShoulderZ: {[WR_T0]: -11, [WR_T1]: -16, [WR_T2]: -11, [WR_T3]: -16, [WR_T4]: -11},
 
-  rightShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightShoulderZ: {[WR_T0]: 0, [WR_T1]: -10, [WR_T2]: 0},
+  rightShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightShoulderZ: {[WR_T0]: 6, [WR_T1]: 11, [WR_T2]: 6, [WR_T3]: 11, [WR_T4]: 6},
 
-  leftElbowX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftElbowZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  leftElbowX: {[WR_T0]: -8, [WR_T1]: -14, [WR_T2]: -8, [WR_T3]: -8, [WR_T4]: -14},
+  leftElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftElbowZ: {[WR_T0]: 11, [WR_T1]: 15, [WR_T2]: 11, [WR_T3]: 15, [WR_T4]: 11},
 
-  rightElbowX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightElbowZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  rightElbowX: {[WR_T0]: -8, [WR_T1]: -14, [WR_T2]: -8, [WR_T3]: -14, [WR_T4]: -8},
+  rightElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightElbowZ: {[WR_T0]: -8, [WR_T1]: -25, [WR_T2]: -8, [WR_T3]: -25, [WR_T4]: -8},
 
-  leftHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftHipY: {[WR_T0]: 0, [WR_T1]: -10, [WR_T2]: 0},
-  leftHipZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  leftHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftHipY: {[WR_T0]: 0, [WR_T1]: -10, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftHipZ: {[WR_T0]: -13, [WR_T1]: -8, [WR_T2]: -13, [WR_T3]: -8, [WR_T4]: -13},
 
-  rightHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightHipY: {[WR_T0]: 0, [WR_T1]: 15, [WR_T2]: 0},
-  rightHipZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  rightHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightHipY: {[WR_T0]: 0, [WR_T1]: 15, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightHipZ: {[WR_T0]: 17, [WR_T1]: 7, [WR_T2]: 17, [WR_T3]: 7, [WR_T4]: 17},
 
-  leftKneeX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  leftKneeZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  leftKneeX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  leftKneeZ: {[WR_T0]: 8, [WR_T1]: 8, [WR_T2]: 8, [WR_T3]: 8, [WR_T4]: 8},
 
-  rightKneeX: {[WR_T0]: 0, [WR_T1]: 5, [WR_T2]: 0},
-  rightKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
-  rightKneeZ: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0},
+  rightKneeX: {[WR_T0]: 0, [WR_T1]: 5, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
+  rightKneeZ: {[WR_T0]: -8, [WR_T1]: -8, [WR_T2]: -8, [WR_T3]: -8, [WR_T4]: -8},
 };
 
 export const WALK_RIGHT_MOTION: MotionData = {
