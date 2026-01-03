@@ -13,14 +13,14 @@ import { buildKeyframes } from "../utils/MotionUtils";
  */
 
 // 時間定義
-const T0 = 0.0;  // 開始
-const T1 = 0.5;  // 第1キーフレーム
-const T2 = 1.0;  // 第2キーフレーム
-const T3 = 1.5;  // 第3キーフレーム
-const T4 = 2.0;  // 終了
+export const T0 = 0.0;  // 開始
+export const T1 = 0.5;  // 第1キーフレーム
+export const T2 = 1.0;  // 第2キーフレーム
+export const T3 = 1.5;  // 第3キーフレーム
+export const T4 = 2.0;  // 終了
 
 // 各部位の軸ごとの時系列データ（時間: 角度）
-const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+export const IDLE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   // 上半身
   upperBodyX: {[T0]: 0, [T1]: 2, [T2]: 0, [T3]: 0, [T4]: 0},
   upperBodyY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
@@ -69,11 +69,15 @@ const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightKneeZ: {[T0]: -5, [T1]: -5, [T2]: -5, [T3]: -5, [T4]: -5},
 };
 
+const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[T0]: 0, [T1]: -0.01, [T2]: 0, [T3]: -0.01, [T4]: 0},
+};
+
 export const IDLE_MOTION: MotionData = {
   name: "idle",
   duration: T4, // 1サイクル: T4秒
   loop: true,
-  keyframes: buildKeyframes(JOINT_ANIMATIONS),
+  keyframes: buildKeyframes(IDLE_JOINT_ANIMATIONS, POSITION_ANIMATIONS),
   // 優先度設定（全体的に低め）
   priorities: [
     {jointName: "upperBody", priority: 5},

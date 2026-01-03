@@ -1,6 +1,5 @@
 import {Character} from "../entities/Character";
 import {MotionData, MotionState, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset} from "../types/MotionTypes";
-import {Vector3} from "@babylonjs/core";
 
 /**
  * モーションコントローラー
@@ -43,11 +42,7 @@ export class MotionController {
       this.state.isBlending = true;
       this.state.blendTime = 0;
       this.state.blendDuration = blendDuration;
-      // 位置オフセットもリセット（次のモーションで再計算される）
-      this.state.lastAppliedPosition = null;
-      // 基準位置を現在位置に設定
-      const currentPos = this.character.getPosition();
-      this.state.basePosition = {x: currentPos.x, y: currentPos.y, z: currentPos.z};
+      // lastAppliedPositionは保持（新しいモーションのオフセットとの差分を取るため）
       // 位置スケールをリセット
       this.state.positionScale = 1.0;
     } else {
@@ -60,10 +55,8 @@ export class MotionController {
       this.state.previousJoints = null;
       this.state.previousPosition = null;
       this.state.nextMotion = null;
-      this.state.lastAppliedPosition = null; // 位置オフセットをリセット
-      // 基準位置を現在位置に設定
-      const currentPos = this.character.getPosition();
-      this.state.basePosition = {x: currentPos.x, y: currentPos.y, z: currentPos.z};
+      // 初回のみ位置オフセットをリセット
+      this.state.lastAppliedPosition = null;
       // 位置スケールをリセット
       this.state.positionScale = 1.0;
     }
@@ -83,11 +76,7 @@ export class MotionController {
       this.state.isBlending = true;
       this.state.blendTime = 0;
       this.state.blendDuration = blendDuration;
-      // 位置オフセットもリセット（次のモーションで再計算される）
-      this.state.lastAppliedPosition = null;
-      // 基準位置を現在位置に設定
-      const currentPos = this.character.getPosition();
-      this.state.basePosition = {x: currentPos.x, y: currentPos.y, z: currentPos.z};
+      // lastAppliedPositionは保持（新しいモーションのオフセットとの差分を取るため）
       // 位置スケールを設定
       this.state.positionScale = positionScale;
     } else {
@@ -100,10 +89,8 @@ export class MotionController {
       this.state.previousJoints = null;
       this.state.previousPosition = null;
       this.state.nextMotion = null;
-      this.state.lastAppliedPosition = null; // 位置オフセットをリセット
-      // 基準位置を現在位置に設定
-      const currentPos = this.character.getPosition();
-      this.state.basePosition = {x: currentPos.x, y: currentPos.y, z: currentPos.z};
+      // 初回のみ位置オフセットをリセット
+      this.state.lastAppliedPosition = null;
       // 位置スケールを設定
       this.state.positionScale = positionScale;
     }
@@ -177,7 +164,6 @@ export class MotionController {
         this.state.previousPosition = null;
         this.state.nextMotion = null;
         this.state.blendTime = 0;
-        this.state.lastAppliedPosition = null; // 位置オフセットをリセット
       } else {
         // ブレンド中: 前のモーションと次のモーションを補間
         const blendRatio = this.state.blendTime / this.state.blendDuration;
@@ -194,6 +180,15 @@ export class MotionController {
         // ブレンドした関節を適用
         const priorities = this.state.nextMotion.priorities || this.state.currentMotion?.priorities;
         this.applyJointsWithPriority(blendedJoints, priorities);
+
+        // ブレンド中も位置オフセットを適用
+        const currentPosition = this.interpolatePosition(this.state.nextMotion.keyframes, 0);
+        if (currentPosition) {
+          this.applyPositionOffset(currentPosition);
+        } else if (this.state.lastAppliedPosition) {
+          // 位置オフセットがないモーションの場合、元の位置に戻す
+          this.applyPositionOffset({x: 0, y: 0, z: 0});
+        }
         return;
       }
     }
@@ -353,12 +348,9 @@ export class MotionController {
 
   /**
    * 位置オフセットをキャラクターに適用
-   * 基準位置からの絶対オフセットとして適用
+   * Y軸オフセットはCharacterクラス内で管理し、setPosition()時に自動的に加算される
    */
   private applyPositionOffset(offset: PositionOffset): void {
-    // 基準位置がない場合は現在位置を基準にする
-    const basePos = this.state.basePosition || {x: 0, y: 0, z: 0};
-
     // 位置スケールを適用
     const scaledOffset = {
       x: offset.x * this.state.positionScale,
@@ -366,13 +358,8 @@ export class MotionController {
       z: offset.z * this.state.positionScale,
     };
 
-    // 基準位置 + スケール済みオフセットで絶対位置を計算
-    const newPosition = new Vector3(
-      basePos.x + scaledOffset.x,
-      basePos.y + scaledOffset.y,
-      basePos.z + scaledOffset.z
-    );
-    this.character.setPosition(newPosition);
+    // Y軸オフセットをキャラクターに設定（clampの影響を受けない）
+    this.character.setMotionOffsetY(scaledOffset.y);
 
     // 今回のオフセットを保存（スケール済み）
     this.state.lastAppliedPosition = {...scaledOffset};

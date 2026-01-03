@@ -65,6 +65,10 @@ const DF_ADDITIONS = {
   rightKneeZ: [0, 0, 0, 0, 0],
 };
 
+const DF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[DF_T0]: 0, [DF_T1]: -0.15, [DF_T2]: 0, [DF_T3]: -0.15, [DF_T4]: 0},
+};
+
 /**
  * ダッシュゲージのパーセンテージに応じた前進ダッシュモーションを生成
  * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
@@ -88,7 +92,7 @@ export function createDashForwardMotion(dashPercentage: number): MotionData {
     name: "dash_forward",
     duration: DF_T4,
     loop: true,
-    keyframes: buildKeyframes(jointAnimations),
+    keyframes: buildKeyframes(jointAnimations, DF_POSITION_ANIMATIONS),
   };
 }
 
@@ -160,6 +164,10 @@ const DB_ADDITIONS = {
   rightKneeZ: [0, 0, 0, 0, 0],
 };
 
+const DB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[DB_T0]: 0, [DB_T1]: -0.15, [DB_T2]: 0, [DB_T3]: -0.15, [DB_T4]: 0},
+};
+
 /**
  * ダッシュゲージのパーセンテージに応じた後退ダッシュモーションを生成
  * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
@@ -183,7 +191,7 @@ export function createDashBackwardMotion(dashPercentage: number): MotionData {
     name: "dash_backward",
     duration: DB_T4,
     loop: true,
-    keyframes: buildKeyframes(jointAnimations),
+    keyframes: buildKeyframes(jointAnimations, DB_POSITION_ANIMATIONS),
   };
 }
 
@@ -255,6 +263,10 @@ const DL_ADDITIONS = {
   rightKneeZ: [8, 8, 8, 8, 8],
 };
 
+const DL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[DL_T0]: 0, [DL_T1]: -0.15, [DL_T2]: 0, [DL_T3]: -0.15, [DL_T4]: 0},
+};
+
 /**
  * ダッシュゲージのパーセンテージに応じた左ダッシュモーションを生成
  * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
@@ -278,7 +290,7 @@ export function createDashLeftMotion(dashPercentage: number): MotionData {
     name: "dash_left",
     duration: DL_T4,
     loop: true,
-    keyframes: buildKeyframes(jointAnimations),
+    keyframes: buildKeyframes(jointAnimations, DL_POSITION_ANIMATIONS),
   };
 }
 
@@ -350,6 +362,10 @@ const DR_ADDITIONS = {
   rightKneeZ: [8, 8, 8, 8, 8],
 };
 
+const DR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[DR_T0]: 0, [DR_T1]: -0.15, [DR_T2]: 0, [DR_T3]: -0.15, [DR_T4]: 0},
+};
+
 /**
  * ダッシュゲージのパーセンテージに応じた右ダッシュモーションを生成
  * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
@@ -373,7 +389,7 @@ export function createDashRightMotion(dashPercentage: number): MotionData {
     name: "dash_right",
     duration: DR_T4,
     loop: true,
-    keyframes: buildKeyframes(jointAnimations),
+    keyframes: buildKeyframes(jointAnimations, DR_POSITION_ANIMATIONS),
   };
 }
 

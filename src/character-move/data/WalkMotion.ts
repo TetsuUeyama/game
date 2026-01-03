@@ -1,8 +1,10 @@
 import { MotionData, MotionConfig } from "../types/MotionTypes";
-import { buildKeyframes } from "../utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "../utils/MotionUtils";
+import { IDLE_JOINT_ANIMATIONS, T0 as IDLE_T0, T1 as IDLE_T1, T2 as IDLE_T2, T3 as IDLE_T3, T4 as IDLE_T4 } from "./IdleMotion";
 
 /**
  * 前進（歩行）モーション
+ * IDLE_MOTIONをベースに、歩行の動きを追加
  *
  * キーフレーム構成：
  * - T0: 開始姿勢（直立）
@@ -19,57 +21,70 @@ export const WF_T2 = 0.5;
 export const WF_T3 = 0.75;
 export const WF_T4 = 1.0;
 
-export const WF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WF_T0]: 2.5, [WF_T1]: 5, [WF_T2]: 0, [WF_T3]: 5, [WF_T4]: 0},
-  upperBodyY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  upperBodyZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+// アイドリングモーション（T0）からの追加値
+const WF_ADDITIONS = {
+  upperBodyX: [2.5, 5, 0, 5, 0],
+  upperBodyY: [0, -10, 0, 10, 0],
+  upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  lowerBodyY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  lowerBodyZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: {[WF_T0]: -1.5, [WF_T1]: -3, [WF_T2]: 0, [WF_T3]: -3, [WF_T4]: 0},
-  headY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  headZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  headX: [-1.5, -3, 0, -3, 0],
+  headY: [0, 10, 0, -10, 0],
+  headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: {[WF_T0]: 0, [WF_T1]: 35, [WF_T2]: 0, [WF_T3]: -35, [WF_T4]: 0},
-  leftShoulderY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  leftShoulderZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  leftShoulderX: [0, 35, 0, -35, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: {[WF_T0]: -17.5, [WF_T1]: -35, [WF_T2]: 0, [WF_T3]: 35, [WF_T4]: 0},
-  rightShoulderY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  rightShoulderZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  rightShoulderX: [-17.5, -35, 0, 35, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  leftElbowY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  leftElbowZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  leftElbowX: [0, -10, 0, -10, 0],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  rightElbowY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  rightElbowZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  rightElbowX: [0, -10, 0, -10, 0],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: {[WF_T0]: -17.5, [WF_T1]: -35, [WF_T2]: 0, [WF_T3]: 25, [WF_T4]: 0},
-  leftHipY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  leftHipZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  leftHipX: [-17.5, -35, 0, 25, 0],
+  leftHipY: [15, 15, 15, 15, 15],
+  leftHipZ: [8, 8, 8, 8, 8],
 
-  rightHipX: {[WF_T0]: 0, [WF_T1]: 25, [WF_T2]: 0, [WF_T3]: -35, [WF_T4]: 0},
-  rightHipY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  rightHipZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  rightHipX: [0, 25, 0, -35, 0],
+  rightHipY: [-15, -15, -15, -15, -15],
+  rightHipZ: [-8, -8, -8, -8, -8],
 
-  leftKneeX: {[WF_T0]: 2.5, [WF_T1]: 10, [WF_T2]: 0, [WF_T3]: 5, [WF_T4]: 0},
-  leftKneeY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  leftKneeZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  leftKneeX: [9, 18, -5, 18, 0],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-5, -5, -5, -5, -5],
 
-  rightKneeX: {[WF_T0]: 0, [WF_T1]: 5, [WF_T2]: 0, [WF_T3]: 10, [WF_T4]: 0},
-  rightKneeY: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
-  rightKneeZ: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
+  rightKneeX: [9, 18, -5, 18, 0],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [5, 5, 5, 5, 5],
+};
+
+// アイドリングモーションの各キーフレーム姿勢に追加値を加算したジョイントアニメーション
+export const WF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WF_T0, WF_T1, WF_T2, WF_T3, WF_T4],
+  WF_ADDITIONS
+);
+
+const WF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WF_T0]: 0, [WF_T1]: -0.05, [WF_T2]: 0, [WF_T3]: -0.05, [WF_T4]: 0},
 };
 
 export const WALK_FORWARD_MOTION: MotionData = {
   name: "walk_forward",
   duration: WF_T4,
   loop: true,
-  keyframes: buildKeyframes(WF_JOINT_ANIMATIONS),
+  keyframes: buildKeyframes(WF_JOINT_ANIMATIONS, WF_POSITION_ANIMATIONS),
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
@@ -100,57 +115,70 @@ export const WB_T2 = 0.5;
 export const WB_T3 = 0.75;
 export const WB_T4 = 1.0;
 
-export const WB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WB_T0]: -5, [WB_T1]: -5, [WB_T2]: -5, [WB_T3]: -5, [WB_T4]: -5},
-  upperBodyY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  upperBodyZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+// アイドリングモーション（T0）からの追加値
+const WB_ADDITIONS = {
+  upperBodyX: [5, 5, 5, 5, 5],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  lowerBodyY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  lowerBodyZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  lowerBodyX: [-5, -5, -5, -5, -5],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: {[WB_T0]: 3, [WB_T1]: 3, [WB_T2]: 3, [WB_T3]: 3, [WB_T4]: 3},
-  headY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  headZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  headX: [3, 3, 3, 3, 3],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: {[WB_T0]: 0, [WB_T1]: -25, [WB_T2]: 0, [WB_T3]: 25, [WB_T4]: 0},
-  leftShoulderY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  leftShoulderZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  leftShoulderX: [0, 25, 0, -25, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: {[WB_T0]: 0, [WB_T1]: 25, [WB_T2]: 0, [WB_T3]: -25, [WB_T4]: 0},
-  rightShoulderY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  rightShoulderZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  rightShoulderX: [0, -25, 0, 25, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  leftElbowY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  leftElbowZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  leftElbowX: [0, -10, 0, -10, 0],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  rightElbowY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  rightElbowZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  rightElbowX: [0, -10, 0, -10, 0],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: {[WB_T0]: 0, [WB_T1]: -15, [WB_T2]: 0, [WB_T3]: 25, [WB_T4]: 0},
-  leftHipY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  leftHipZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  leftHipX: [0, -15, 0, 25, 0],
+  leftHipY: [15, 15, 15, 15, 15],
+  leftHipZ: [8, 8, 8, 8, 8],
 
-  rightHipX: {[WB_T0]: 0, [WB_T1]: 25, [WB_T2]: 0, [WB_T3]: -15, [WB_T4]: 0},
-  rightHipY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  rightHipZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  rightHipX: [0, 25, 0, -15, 0],
+  rightHipY: [-15, -15, -15, -15, -15],
+  rightHipZ: [-8, -8, -8, -8, -8],
 
-  leftKneeX: {[WB_T0]: 0, [WB_T1]: 5, [WB_T2]: 0, [WB_T3]: 5, [WB_T4]: 0},
-  leftKneeY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  leftKneeZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  leftKneeX: [-5, 18 -5, 18, -5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-5, -5, -5, -5, -5],
 
-  rightKneeX: {[WB_T0]: 0, [WB_T1]: 5, [WB_T2]: 0, [WB_T3]: 5, [WB_T4]: 0},
-  rightKneeY: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
-  rightKneeZ: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
+  rightKneeX: [-5, 18, -5, 18, -5],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [5, 5, 5, 5, 5],
+};
+
+// アイドリングモーションの各キーフレーム姿勢に追加値を加算したジョイントアニメーション
+export const WB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WB_T0, WB_T1, WB_T2, WB_T3, WB_T4],
+  WB_ADDITIONS
+);
+
+const WB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WB_T0]: 0, [WB_T1]: -0.05, [WB_T2]: 0, [WB_T3]: -0.05, [WB_T4]: 0},
 };
 
 export const WALK_BACKWARD_MOTION: MotionData = {
   name: "walk_backward",
   duration: WB_T4,
   loop: true,
-  keyframes: buildKeyframes(WB_JOINT_ANIMATIONS),
+  keyframes: buildKeyframes(WB_JOINT_ANIMATIONS, WB_POSITION_ANIMATIONS),
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
@@ -178,57 +206,70 @@ export const WL_T2 = 0.5;
 export const WL_T3 = 0.75;
 export const WL_T4 = 1.0;
 
-export const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  upperBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  upperBodyZ: {[WL_T0]: -3, [WL_T1]: -4, [WL_T2]: -3, [WL_T3]: -4, [WL_T4]: -3},
+// アイドリングモーション（T0）からの追加値
+const WL_ADDITIONS = {
+  upperBodyX: [0, 0, 0, 0, 0],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [-3, -4, -3, -4, -3],
 
-  lowerBodyX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  lowerBodyY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  lowerBodyZ: {[WL_T0]: 3, [WL_T1]: 2, [WL_T2]: 3, [WL_T3]: 2, [WL_T4]: 2},
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [3, 2, 3, 2, 2],
 
-  headX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  headY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  headZ: {[WL_T0]: 3, [WL_T1]: 5, [WL_T2]: 3, [WL_T3]: 5, [WL_T4]: 3},
+  headX: [0, 0, 0, 0, 0],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [3, 5, 3, 5, 3],
 
-  leftShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftShoulderZ: {[WL_T0]: -6, [WL_T1]:-11, [WL_T2]: -6, [WL_T3]: -11, [WL_T4]: -6},
+  leftShoulderX: [0, 0, 0, 0, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, -5, 0, -5, 0],
 
-  rightShoulderX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightShoulderY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightShoulderZ: {[WL_T0]: 11, [WL_T1]: 16, [WL_T2]: 11, [WL_T3]: 16, [WL_T4]: 11},
+  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [5, 10, 5, 10, 5],
 
-  leftElbowX: {[WL_T0]: -8, [WL_T1]: -14, [WL_T2]: -8, [WL_T3]: -14, [WL_T4]: -8},
-  leftElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftElbowZ: {[WL_T0]: 8, [WL_T1]: 25, [WL_T2]: 8, [WL_T3]: 25, [WL_T4]: 8},
+  leftElbowX: [2, -4, 2, -4, 2],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [2, 19, 2, 19, 2],
 
-  rightElbowX: {[WL_T0]: -8, [WL_T1]: -14, [WL_T2]: -8, [WL_T3]: -8, [WL_T4]: -14},
-  rightElbowY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightElbowZ: {[WL_T0]: -11, [WL_T1]: -15, [WL_T2]: -11, [WL_T3]: -15, [WL_T4]: -11},
+  rightElbowX: [2, -4, 2, 2, -4],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-5, -9, -5, -9, -5],
 
-  leftHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftHipY: {[WL_T0]: 0, [WL_T1]: -15, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftHipZ: {[WL_T0]: -17, [WL_T1]: -7, [WL_T2]: -17, [WL_T3]: -7, [WL_T4]: -17},
+  leftHipX: [0, 0, 0, 0, 0],
+  leftHipY: [15, 0, 15, 15, 15],
+  leftHipZ: [-9, 1, -9, 1, -9],
 
-  rightHipX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightHipY: {[WL_T0]: 0, [WL_T1]: 10, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightHipZ: {[WL_T0]: 13, [WL_T1]: 8, [WL_T2]: 13, [WL_T3]: 8, [WL_T4]: 13},
+  rightHipX: [0, 0, 0, 0, 0],
+  rightHipY: [-15, -5, -15, -15, -15],
+  rightHipZ: [5, 0, 5, 0, 5],
 
-  leftKneeX: {[WL_T0]: 0, [WL_T1]: 5, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  leftKneeZ: {[WL_T0]: 8, [WL_T1]: 8, [WL_T2]: 8, [WL_T3]: 8, [WL_T4]: 8},
+  leftKneeX: [-5, 0, -5, -5, -5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [3, 3, 3, 3, 3],
 
-  rightKneeX: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightKneeY: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
-  rightKneeZ: {[WL_T0]: -8, [WL_T1]: -8, [WL_T2]: -8, [WL_T3]: -8, [WL_T4]: -8},
+  rightKneeX: [-5, -5, -5, -5, -5],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [-3, -3, -3, -3, -3],
+};
+
+// アイドリングモーションの各キーフレーム姿勢に追加値を加算したジョイントアニメーション
+export const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WL_T0, WL_T1, WL_T2, WL_T3, WL_T4],
+  WL_ADDITIONS
+);
+
+const WL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WL_T0]: 0, [WL_T1]: -0.05, [WL_T2]: 0, [WL_T3]: -0.05, [WL_T4]: 0},
 };
 
 export const WALK_LEFT_MOTION: MotionData = {
   name: "walk_left",
   duration: WL_T2,
   loop: true,
-  keyframes: buildKeyframes(WL_JOINT_ANIMATIONS),
+  keyframes: buildKeyframes(WL_JOINT_ANIMATIONS, WL_POSITION_ANIMATIONS),
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
@@ -254,57 +295,71 @@ export const WR_T2 = 0.5;
 export const WR_T3 = 0.75;
 export const WR_T4 = 1.0;
 
-export const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  upperBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  upperBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  upperBodyZ: {[WR_T0]: 3, [WR_T1]: 4, [WR_T2]: 3, [WR_T3]: 4, [WR_T4]: 3},
+// アイドリングモーション（T0）からの追加値
+const WR_ADDITIONS = {
+  upperBodyX: [0, 0, 0, 0, 0],
+  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyZ: [3, 4, 3, 4, 3],
 
-  lowerBodyX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  lowerBodyY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  lowerBodyZ: {[WR_T0]: -3, [WR_T1]: -2, [WR_T2]: -3, [WR_T3]: -2, [WR_T4]: -2},
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyZ: [-3, -2, -3, -2, -2],
 
-  headX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  headY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  headZ: {[WR_T0]: -3, [WR_T1]: -5, [WR_T2]: -3, [WR_T3]: -5, [WR_T4]: -3},
+  headX: [0, 0, 0, 0, 0],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [-3, -5, -3, -5, -3],
 
-  leftShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftShoulderZ: {[WR_T0]: -11, [WR_T1]: -16, [WR_T2]: -11, [WR_T3]: -16, [WR_T4]: -11},
+  leftShoulderX: [0, 0, 0, 0, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [-5, -10, -5, -10, -5],
 
-  rightShoulderX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightShoulderY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightShoulderZ: {[WR_T0]: 6, [WR_T1]: 11, [WR_T2]: 6, [WR_T3]: 11, [WR_T4]: 6},
 
-  leftElbowX: {[WR_T0]: -8, [WR_T1]: -14, [WR_T2]: -8, [WR_T3]: -8, [WR_T4]: -14},
-  leftElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftElbowZ: {[WR_T0]: 11, [WR_T1]: 15, [WR_T2]: 11, [WR_T3]: 15, [WR_T4]: 11},
+  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 5, 0, 5, 0],
 
-  rightElbowX: {[WR_T0]: -8, [WR_T1]: -14, [WR_T2]: -8, [WR_T3]: -14, [WR_T4]: -8},
-  rightElbowY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightElbowZ: {[WR_T0]: -8, [WR_T1]: -25, [WR_T2]: -8, [WR_T3]: -25, [WR_T4]: -8},
+  leftElbowX: [2, -4, 2, 2, -4],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [5, 9, 5, 9, 5],
 
-  leftHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftHipY: {[WR_T0]: 0, [WR_T1]: -10, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftHipZ: {[WR_T0]: -13, [WR_T1]: -8, [WR_T2]: -13, [WR_T3]: -8, [WR_T4]: -13},
+  rightElbowX: [2, -4, 2, -4, 2],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-2, -19, -2, -19, -2],
 
-  rightHipX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightHipY: {[WR_T0]: 0, [WR_T1]: 15, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightHipZ: {[WR_T0]: 17, [WR_T1]: 7, [WR_T2]: 17, [WR_T3]: 7, [WR_T4]: 17},
+  leftHipX: [0, 0, 0, 0, 0],
+  leftHipY: [15, 5, 15, 15, 15],
+  leftHipZ: [-5, 0, -5, 0, -5],
 
-  leftKneeX: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  leftKneeZ: {[WR_T0]: 8, [WR_T1]: 8, [WR_T2]: 8, [WR_T3]: 8, [WR_T4]: 8},
+  rightHipX: [0, 0, 0, 0, 0],
+  rightHipY: [-15, 0, -15, -15, -15],
+  rightHipZ: [9, -1, 9, -1, 9],
 
-  rightKneeX: {[WR_T0]: 0, [WR_T1]: 5, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightKneeY: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
-  rightKneeZ: {[WR_T0]: -8, [WR_T1]: -8, [WR_T2]: -8, [WR_T3]: -8, [WR_T4]: -8},
+  leftKneeX: [-5, -5, -5, -5, -5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [3, 3, 3, 3, 3],
+
+  rightKneeX: [-5, 0, -5, -5, -5],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [-3, -3, -3, -3, -3],
+};
+
+// アイドリングモーションの各キーフレーム姿勢に追加値を加算したジョイントアニメーション
+export const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WR_T0, WR_T1, WR_T2, WR_T3, WR_T4],
+  WR_ADDITIONS
+);
+
+const WR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WR_T0]: 0, [WR_T1]: -0.05, [WR_T2]: 0, [WR_T3]: -0.05, [WR_T4]: 0},
 };
 
 export const WALK_RIGHT_MOTION: MotionData = {
   name: "walk_right",
   duration: WR_T2,
   loop: true,
-  keyframes: buildKeyframes(WR_JOINT_ANIMATIONS),
+  keyframes: buildKeyframes(WR_JOINT_ANIMATIONS, WR_POSITION_ANIMATIONS),
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
