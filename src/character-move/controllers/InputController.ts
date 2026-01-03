@@ -13,6 +13,7 @@ import {
   LANDING_SMALL_MOTION_CONFIG,
   LANDING_MOTION_CONFIG,
   LANDING_LARGE_MOTION_CONFIG,
+  createExtendedLandingMotion,
 } from "../data/LandingMotion";
 import { CROUCH_MOTION_CONFIG } from "../data/CrouchMotion";
 import {
@@ -21,8 +22,10 @@ import {
   DASH_LEFT_MOTION_CONFIG,
   DASH_RIGHT_MOTION_CONFIG,
 } from "../data/DashMotion";
+import { createDashStopMotion, DASH_STOP_MOTION_CONFIG } from "../data/DashStopMotion";
 import { JumpChargeGauge } from "../ui/JumpChargeGauge";
 import { DashGauge } from "../ui/DashGauge";
+import { CooldownGauge } from "../ui/CooldownGauge";
 
 /**
  * 入力状態
@@ -55,6 +58,7 @@ export class InputController {
   private pendingLandingMotion: string | null = null; // ジャンプ後に再生する着地硬直モーション
   private jumpChargeGauge: JumpChargeGauge; // ジャンプチャージゲージ
   private dashGauge: DashGauge; // ダッシュゲージ
+  private cooldownGauge: CooldownGauge; // クールダウンゲージ（硬直時間表示）
   private dashAccelerationTime: number = 0; // ダッシュ加速時間
   private currentDashDirection: string | null = null; // 現在のダッシュ方向
   private dashMomentumDirection: Vector3 | null = null; // ジャンプ時のダッシュ慣性方向
@@ -71,6 +75,9 @@ export class InputController {
 
     // ダッシュゲージを初期化
     this.dashGauge = new DashGauge(scene);
+
+    // クールダウンゲージを初期化
+    this.cooldownGauge = new CooldownGauge(scene);
 
     // 入力状態を初期化
     this.inputState = {
@@ -106,6 +113,7 @@ export class InputController {
       DASH_BACKWARD_MOTION_CONFIG, // 後退ダッシュ
       DASH_LEFT_MOTION_CONFIG, // 左ダッシュ
       DASH_RIGHT_MOTION_CONFIG, // 右ダッシュ
+      DASH_STOP_MOTION_CONFIG, // ダッシュ停止硬直
     ]);
 
     // キーボードイベントを登録
@@ -322,6 +330,39 @@ export class InputController {
 
     // ジャンプが終了して着地硬直が待機中の場合
     if (this.pendingLandingMotion && currentMotion === "jump" && !isPlaying) {
+      // 基本の着地時間を取得
+      let landingDuration = 0.1; // デフォルト
+      if (this.pendingLandingMotion === "landing_small") {
+        landingDuration = 0.1;
+      } else if (this.pendingLandingMotion === "landing") {
+        landingDuration = 0.3;
+      } else if (this.pendingLandingMotion === "landing_large") {
+        landingDuration = 0.3;
+      }
+
+      // ダッシュジャンプの場合、着地モーションの長さを速度に応じて延長
+      if (this.dashMomentumSpeed > 0.5) {
+        // ダッシュ速度に基づいて着地硬直を延長
+        const extendedLandingMotion = createExtendedLandingMotion(this.pendingLandingMotion, this.dashMomentumSpeed);
+
+        // 延長された着地モーションを登録
+        this.motionManager.registerMotions([{
+          motionData: extendedLandingMotion,
+          isDefault: false,
+          blendDuration: 0.1,
+          priority: 5,
+          interruptible: false,
+        }]);
+
+        landingDuration = extendedLandingMotion.duration;
+        console.log(`[着地硬直延長] ダッシュ速度: ${this.dashMomentumSpeed.toFixed(2)}, 硬直時間: ${landingDuration.toFixed(2)}秒`);
+      } else {
+        console.log(`[垂直ジャンプ着地] ジャンプタイプ: ${this.pendingLandingMotion}, 硬直時間: ${landingDuration.toFixed(2)}秒`);
+      }
+
+      // クールダウンゲージを開始（垂直ジャンプでも表示）
+      this.cooldownGauge.start(landingDuration);
+
       // 着地硬直モーションを再生
       this.motionManager.play(this.pendingLandingMotion, true); // forceで強制再生
       this.pendingLandingMotion = null;
@@ -330,9 +371,10 @@ export class InputController {
       return;
     }
 
-    // ジャンプ中または着地中はダッシュ処理をスキップ
+    // ジャンプ中、着地中、ダッシュ停止中はダッシュ処理をスキップ
     const isJumping = currentMotion === "jump";
     const isLanding = currentMotion === "landing_small" || currentMotion === "landing" || currentMotion === "landing_large";
+    const isDashStopping = currentMotion === "dash_stop";
 
     // デバッグ: ジャンプ中かつ慣性がある場合
     if (isJumping && this.dashMomentumDirection !== null) {
@@ -365,9 +407,9 @@ export class InputController {
       // ダッシュ中の場合は、下のダッシュ処理に続く
     }
 
-    // ダッシュボタンが押されている場合（ただしジャンプ中・着地中は除く）
+    // ダッシュボタンが押されている場合（ただしジャンプ中・着地中・ダッシュ停止中は除く）
     // ジャンプチャージ中でダッシュ未開始の場合もダッシュを開始できない
-    if (isDashPressed && !(this.isJumpPressed && this.currentDashDirection === null) && !isJumping && !isLanding) {
+    if (isDashPressed && !(this.isJumpPressed && this.currentDashDirection === null) && !isJumping && !isLanding && !isDashStopping) {
       // ダッシュ方向を決定
       let dashMotionName: string | null = null;
 
@@ -434,8 +476,30 @@ export class InputController {
         return;
       }
     } else {
-      // ダッシュボタンが離された場合、リセット
+      // ダッシュボタンが離された場合
       if (this.currentDashDirection !== null) {
+        // 加速度に応じたダッシュ停止モーションを生成して再生
+        const accelerationRatio = this.dashAccelerationTime / 1.0;
+        const dashStopMotion = createDashStopMotion(accelerationRatio);
+
+        // モーションマネージャーに登録してから再生
+        this.motionManager.registerMotions([{
+          motionData: dashStopMotion,
+          isDefault: false,
+          blendDuration: 0.05,
+          priority: 20,
+          interruptible: false,
+        }]);
+
+        // ジャンプ中・ジャンプチャージ中でない場合のみ、ダッシュ停止モーションを再生
+        if (!isJumping && !this.isJumpPressed) {
+          this.motionManager.play("dash_stop", true); // forceで強制再生
+          console.log(`[ダッシュ停止] 加速度: ${accelerationRatio.toFixed(2)}, 硬直時間: ${dashStopMotion.duration.toFixed(2)}秒`);
+
+          // クールダウンゲージを開始
+          this.cooldownGauge.start(dashStopMotion.duration);
+        }
+
         this.dashAccelerationTime = 0;
         this.currentDashDirection = null;
         this.dashGauge.hide();
@@ -497,8 +561,8 @@ export class InputController {
     // ダッシュ中以外はモーションマネージャーの更新（モーション終了検知と位置更新）
     this.motionManager.update();
 
-    // 着地硬直中は移動不可
-    if (!isLanding) {
+    // 着地硬直中・ダッシュ停止中は移動不可
+    if (!isLanding && !isDashStopping) {
       // 移動方向を計算
       const moveDirection = this.calculateMoveDirection();
 
@@ -533,6 +597,12 @@ export class InputController {
 
     // 回転処理（Q/Eキーのみで回転）
     this.handleRotation(deltaTime);
+
+    // クールダウンゲージを更新
+    if (this.cooldownGauge.isShowing()) {
+      this.cooldownGauge.updatePosition(this.character.getPosition());
+      this.cooldownGauge.update(deltaTime);
+    }
   }
 
   /**
@@ -680,6 +750,8 @@ export class InputController {
     this.jumpChargeGauge.dispose();
     // ダッシュゲージを破棄
     this.dashGauge.dispose();
+    // クールダウンゲージを破棄
+    this.cooldownGauge.dispose();
     // イベントリスナーの削除は省略（必要に応じて実装）
   }
 }

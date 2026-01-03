@@ -2,6 +2,79 @@ import {MotionData, MotionConfig} from "../types/MotionTypes";
 import {buildKeyframes} from "../utils/MotionUtils";
 
 /**
+ * ダッシュ速度に応じて着地モーションを延長する
+ * @param baseMotion 基本となる着地モーション名
+ * @param dashSpeed ダッシュ速度（0.0～3.5程度）
+ * @returns 延長された着地モーションデータ
+ */
+export function createExtendedLandingMotion(baseMotion: string, dashSpeed: number): MotionData {
+  // ダッシュ速度に応じて延長時間を決定（速度が高いほど長い硬直）
+  let extensionMultiplier = 1.0;
+  if (dashSpeed > 2.5) {
+    extensionMultiplier = 1.8; // 高速: 1.8倍の硬直
+  } else if (dashSpeed > 1.5) {
+    extensionMultiplier = 1.4; // 中速: 1.4倍の硬直
+  } else if (dashSpeed > 0.5) {
+    extensionMultiplier = 1.2; // 低速: 1.2倍の硬直
+  }
+  // 速度が0.5以下の場合は延長なし（1.0倍）
+
+  // 基本モーションを選択
+  let baseJointAnimations: Record<string, Record<number, number>>;
+  let basePositionAnimations: Record<string, Record<number, number>>;
+  let baseDuration: number;
+  let motionName: string;
+
+  if (baseMotion === "landing_small") {
+    baseJointAnimations = LS_JOINT_ANIMATIONS;
+    basePositionAnimations = LS_POSITION_ANIMATIONS;
+    baseDuration = LS_T1;
+    motionName = "landing_small";
+  } else if (baseMotion === "landing_large") {
+    baseJointAnimations = LL_JOINT_ANIMATIONS;
+    basePositionAnimations = LL_POSITION_ANIMATIONS;
+    baseDuration = LL_T3;
+    motionName = "landing_large";
+  } else {
+    // landing (中ジャンプ)
+    baseJointAnimations = L_JOINT_ANIMATIONS;
+    basePositionAnimations = L_POSITION_ANIMATIONS;
+    baseDuration = L_T2;
+    motionName = "landing";
+  }
+
+  const extendedDuration = baseDuration * extensionMultiplier;
+
+  // 延長されたタイムラインを生成
+  const extendedJointAnimations: Record<string, Record<number, number>> = {};
+  for (const jointName in baseJointAnimations) {
+    extendedJointAnimations[jointName] = {};
+    for (const timeStr in baseJointAnimations[jointName]) {
+      const originalTime = parseFloat(timeStr);
+      const extendedTime = originalTime * extensionMultiplier;
+      extendedJointAnimations[jointName][extendedTime] = baseJointAnimations[jointName][originalTime];
+    }
+  }
+
+  const extendedPositionAnimations: Record<string, Record<number, number>> = {};
+  for (const axis in basePositionAnimations) {
+    extendedPositionAnimations[axis] = {};
+    for (const timeStr in basePositionAnimations[axis]) {
+      const originalTime = parseFloat(timeStr);
+      const extendedTime = originalTime * extensionMultiplier;
+      extendedPositionAnimations[axis][extendedTime] = basePositionAnimations[axis][originalTime];
+    }
+  }
+
+  return {
+    name: motionName,
+    duration: extendedDuration,
+    loop: false,
+    keyframes: buildKeyframes(extendedJointAnimations, extendedPositionAnimations),
+  };
+}
+
+/**
  * 着地硬直モーション（中ジャンプ用）
  */
 
