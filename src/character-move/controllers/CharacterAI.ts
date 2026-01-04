@@ -50,7 +50,25 @@ export class CharacterAI {
    * ボールロスト状態の処理
    */
   private handleBallLostState(_deltaTime: number): void {
-    // TODO: ボールに向かって移動する
+    // ボールの位置を取得
+    const ballPosition = this.ball.getPosition();
+    const myPosition = this.character.getPosition();
+
+    // ボールへの方向ベクトルを計算（XZ平面上）
+    const direction = new Vector3(
+      ballPosition.x - myPosition.x,
+      0,
+      ballPosition.z - myPosition.z
+    );
+
+    // 方向ベクトルが0でない場合のみ回転
+    if (direction.length() > 0.01) {
+      // Y軸周りの回転角度を計算
+      const angle = Math.atan2(direction.x, direction.z);
+
+      // キャラクターの回転を設定（ボールの方向を向く）
+      this.character.setRotation(angle);
+    }
   }
 
   /**

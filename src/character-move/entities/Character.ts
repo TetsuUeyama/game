@@ -3,6 +3,7 @@ import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
 import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
+import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 
 /**
  * 3Dキャラクターエンティティ
@@ -56,7 +57,7 @@ export class Character {
   public rotation: number = 0; // Y軸周りの回転（ラジアン）
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
-  private groundY: number = CHARACTER_CONFIG.height / 2; // 地面のY座標
+  private groundY: number; // 地面のY座標
   private motionOffsetY: number = 0; // モーションによるY軸オフセット
 
   // キャラクターの状態
@@ -65,16 +66,25 @@ export class Character {
   // チーム識別（味方か敵か）
   public team: "ally" | "enemy" = "ally"; // デフォルトは味方チーム
 
+  // キャラクター設定
+  public config: CharacterConfig;
+
   // モーションコントローラー
   private motionController: MotionController;
 
-  constructor(scene: Scene, position: Vector3) {
+  constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
     this.position = position.clone();
 
+    // 設定を初期化（指定がなければデフォルト）
+    this.config = config || DEFAULT_CHARACTER_CONFIG;
+
+    // 身長に応じて地面のY座標を設定
+    this.groundY = this.config.physical.height / 2;
+
     // 視野設定を初期化
-    this.visionAngle = CHARACTER_CONFIG.visionAngle;
-    this.visionRange = CHARACTER_CONFIG.visionRange;
+    this.visionAngle = this.config.vision.visionAngle;
+    this.visionRange = this.config.vision.visionRange;
 
     // ルートメッシュを作成（透明な親メッシュ）
     this.mesh = this.createRootMesh();
@@ -181,6 +191,12 @@ export class Character {
     );
     root.position = this.position;
     root.isVisible = false; // 透明にする
+
+    // 身長に応じてスケーリング（基準身長: 1.8m）
+    const baseHeight = 1.8;
+    const scale = this.config.physical.height / baseHeight;
+    root.scaling = new Vector3(scale, scale, scale);
+
     return root;
   }
 

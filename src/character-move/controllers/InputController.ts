@@ -438,6 +438,10 @@ export class InputController {
         // 加速割合を計算（0.0 ~ 1.0）
         const accelerationRatio = this.dashAccelerationTime / 1.0;
 
+        // キャラクター設定から速度倍率を取得
+        const dashSpeedMin = this.character.config.movement.dashSpeedMin;
+        const dashSpeedMax = this.character.config.movement.dashSpeedMax;
+
         // 方向別の速度倍率を取得
         let directionMultiplier = 1.0;
         if (dashMotionName === "dash_left" || dashMotionName === "dash_right") {
@@ -446,9 +450,9 @@ export class InputController {
           directionMultiplier = 0.4; // 後ろ方向は0.4倍
         }
 
-        // 速度倍率を計算（2.0倍 → 3.5倍に徐々に加速）
-        const minSpeed = 2.0 * directionMultiplier; // ダッシュ開始時の速度
-        const maxSpeed = 3.5 * directionMultiplier; // 最高速度
+        // 速度倍率を計算（キャラクター設定に基づいて加速）
+        const minSpeed = dashSpeedMin * directionMultiplier; // ダッシュ開始時の速度
+        const maxSpeed = dashSpeedMax * directionMultiplier; // 最高速度
         const currentSpeedMultiplier = minSpeed + (maxSpeed - minSpeed) * accelerationRatio;
 
         // ダッシュ方向を決定
@@ -575,6 +579,9 @@ export class InputController {
         // 入力方向に応じて適切なモーションを決定
         const motionName = this.determineMotionFromInput();
 
+        // キャラクター設定から歩行速度を取得
+        const walkSpeed = this.character.config.movement.walkSpeed;
+
         // モーション名に基づいて歩行速度倍率を決定
         let speedMultiplier = 1.0; // 前進は1.0倍（基準）
         if (motionName === "walk_backward") {
@@ -583,8 +590,9 @@ export class InputController {
           speedMultiplier = 0.8; // 左右は0.8倍
         }
 
-        // 速度倍率を適用して移動
-        const scaledDirection = moveDirection.scale(speedMultiplier);
+        // キャラクター設定の速度と方向倍率を適用して移動
+        const finalSpeed = walkSpeed * speedMultiplier;
+        const scaledDirection = moveDirection.scale(finalSpeed / 5.0); // 5.0で正規化（元の基準速度）
         this.character.move(scaledDirection, deltaTime);
 
         // モーションを再生
@@ -722,7 +730,8 @@ export class InputController {
    * 回転処理
    */
   private handleRotation(deltaTime: number): void {
-    const rotationSpeed = 2.0; // ラジアン/秒
+    // キャラクター設定から回転速度を取得
+    const rotationSpeed = this.character.config.movement.rotationSpeed;
 
     if (this.inputState.rotateLeft) {
       const newRotation = this.character.getRotation() - rotationSpeed * deltaTime;
