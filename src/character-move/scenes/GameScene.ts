@@ -15,6 +15,8 @@ import { JointController } from "../controllers/JointController";
 import { CollisionHandler } from "../controllers/CollisionHandler";
 import { CharacterAI } from "../controllers/CharacterAI";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
+import { GameTeamConfig } from "../utils/TeamConfigLoader";
+import { PlayerData } from "../types/PlayerData";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -30,21 +32,17 @@ export class GameScene {
   private scene: Scene;
   private camera: ArcRotateCamera;
   private field: Field;
-  private character: Character;
   private ball: Ball;
-  private inputController: InputController;
-  private jointController: JointController;
-  private collisionHandler: CollisionHandler;
+  private inputController?: InputController;
+  private jointController?: JointController;
+  private collisionHandler?: CollisionHandler;
 
-  // 追加キャラクター（オプション）
-  private ally?: Character; // 味方
-  private enemy1?: Character; // 敵1
-  private enemy2?: Character; // 敵2
+  // キャラクター（6対6）
+  private allyCharacters: Character[] = []; // 味方チーム6人
+  private enemyCharacters: Character[] = []; // 敵チーム6人
 
   // AIコントローラー
-  private allyAI?: CharacterAI;
-  private enemy1AI?: CharacterAI;
-  private enemy2AI?: CharacterAI;
+  private characterAIs: CharacterAI[] = [];
 
   private lastFrameTime: number = Date.now();
 
@@ -54,8 +52,14 @@ export class GameScene {
   // モーション確認モード（入力とモーション再生を停止）
   private isMotionConfirmationMode: boolean = false;
 
-  constructor(canvas: HTMLCanvasElement, options?: { showAdditionalCharacters?: boolean }) {
+  constructor(canvas: HTMLCanvasElement, options?: {
+    showAdditionalCharacters?: boolean;
+    teamConfig?: GameTeamConfig;
+    playerData?: Record<string, PlayerData>;
+  }) {
     const showAdditionalCharacters = options?.showAdditionalCharacters ?? true;
+    const teamConfig = options?.teamConfig;
+    const playerData = options?.playerData;
 
     // WebGLサポートチェック
     if (!canvas.getContext("webgl") && !canvas.getContext("webgl2")) {
@@ -89,53 +93,46 @@ export class GameScene {
     // フィールドの作成
     this.field = new Field(this.scene);
 
-    // キャラクターの作成（プレイヤー）
-    this.character = this.createCharacter();
-
     // ボールの作成
     this.ball = this.createBall();
 
-    // 追加キャラクターの作成（オプション）
-    if (showAdditionalCharacters) {
-      this.ally = this.createAlly();
-      this.enemy1 = this.createEnemy1();
-      this.enemy2 = this.createEnemy2();
+    // キャラクターの作成（6対6）
+    if (showAdditionalCharacters && teamConfig && playerData) {
+      this.createTeams(teamConfig, playerData);
+    } else if (!showAdditionalCharacters) {
+      // モーション確認モードの場合、デフォルトキャラクターを1体作成
+      const defaultCharacter = this.createCharacter();
+      this.allyCharacters.push(defaultCharacter);
     }
 
-    // 衝突判定コントローラーの初期化
-    this.collisionHandler = new CollisionHandler(
-      this.ball,
-      this.character,
-      this.ally,
-      this.enemy1,
-      this.enemy2
-    );
+    // 全キャラクターのリスト
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
 
-    // AIコントローラーの初期化（追加キャラクターのみ）
-    if (showAdditionalCharacters) {
-      // 全キャラクターのリストを作成
-      const allCharacters: Character[] = [this.character];
-      if (this.ally) allCharacters.push(this.ally);
-      if (this.enemy1) allCharacters.push(this.enemy1);
-      if (this.enemy2) allCharacters.push(this.enemy2);
-
-      // 各AIキャラクターにAIコントローラーを設定
-      if (this.ally) {
-        this.allyAI = new CharacterAI(this.ally, this.ball, allCharacters, this.field);
-      }
-      if (this.enemy1) {
-        this.enemy1AI = new CharacterAI(this.enemy1, this.ball, allCharacters, this.field);
-      }
-      if (this.enemy2) {
-        this.enemy2AI = new CharacterAI(this.enemy2, this.ball, allCharacters, this.field);
-      }
+    // 衝突判定コントローラーの初期化（キャラクターが存在する場合のみ）
+    if (allCharacters.length > 0) {
+      this.collisionHandler = new CollisionHandler(
+        this.ball,
+        allCharacters[0], // プレイヤーキャラクター（味方チームの1人目）
+        ...allCharacters.slice(1, 3) // 他の味方
+      );
     }
 
-    // 入力コントローラーの初期化
-    this.inputController = new InputController(this.scene, this.character);
+    // AIコントローラーの初期化
+    if (showAdditionalCharacters) {
+      // 全キャラクターにAIコントローラーを設定
+      for (const character of allCharacters) {
+        const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
+        this.characterAIs.push(ai);
+      }
+      console.log(`[GameScene] ${this.characterAIs.length}人のAIコントローラーを初期化しました`);
+    }
 
-    // 関節操作コントローラーの初期化（モーション選択UI含む）
-    this.jointController = new JointController(this.scene, this.character);
+    // 入力コントローラーの初期化（プレイヤーキャラクター）
+    if (allCharacters.length > 0) {
+      this.inputController = new InputController(this.scene, allCharacters[0]);
+      // 関節操作コントローラーの初期化（モーション選択UI含む）
+      this.jointController = new JointController(this.scene, allCharacters[0]);
+    }
 
     // 3Dモデルのロード（オプション）
     // this.loadCharacterModel(); // 一旦無効化
@@ -203,7 +200,56 @@ export class GameScene {
   }
 
   /**
-   * キャラクターを作成（プレイヤー）
+   * チーム設定に基づいてキャラクターを作成（6対6）
+   */
+  private createTeams(teamConfig: GameTeamConfig, playerData: Record<string, PlayerData>): void {
+    console.log('[GameScene] チームを作成中...');
+
+    // 味方チーム作成
+    for (const playerConfig of teamConfig.allyTeam.players) {
+      const player = playerData[playerConfig.playerId];
+      if (!player) {
+        console.warn(`[GameScene] 選手ID ${playerConfig.playerId} のデータが見つかりません`);
+        continue;
+      }
+
+      const config = DEFAULT_CHARACTER_CONFIG;
+      const position = new Vector3(playerConfig.x, config.physical.height / 2, playerConfig.z);
+
+      const character = new Character(this.scene, position, config);
+      character.team = "ally";
+      character.setPlayerData(player, playerConfig.position);
+
+      this.allyCharacters.push(character);
+
+      console.log(`[GameScene] 味方チーム: ${player.basic.NAME} (${playerConfig.position}) を作成`);
+    }
+
+    // 敵チーム作成
+    for (const playerConfig of teamConfig.enemyTeam.players) {
+      const player = playerData[playerConfig.playerId];
+      if (!player) {
+        console.warn(`[GameScene] 選手ID ${playerConfig.playerId} のデータが見つかりません`);
+        continue;
+      }
+
+      const config = DEFAULT_CHARACTER_CONFIG;
+      const position = new Vector3(playerConfig.x, config.physical.height / 2, playerConfig.z);
+
+      const character = new Character(this.scene, position, config);
+      character.team = "enemy";
+      character.setPlayerData(player, playerConfig.position);
+
+      this.enemyCharacters.push(character);
+
+      console.log(`[GameScene] 敵チーム: ${player.basic.NAME} (${playerConfig.position}) を作成`);
+    }
+
+    console.log(`[GameScene] チーム作成完了: 味方${this.allyCharacters.length}人, 敵${this.enemyCharacters.length}人`);
+  }
+
+  /**
+   * キャラクターを作成（プレイヤー）- 旧バージョン（使用しない）
    */
   private createCharacter(): Character {
     // デフォルト設定を使用
@@ -371,26 +417,22 @@ export class GameScene {
     // モーション確認モードでは入力とモーション再生をスキップ
     if (!this.isMotionConfirmationMode) {
       // 入力コントローラーを更新
-      this.inputController.update(deltaTime);
-
-      // キャラクターを更新
-      this.character.update(deltaTime);
-
-      // AIコントローラーを更新
-      if (this.allyAI) {
-        this.allyAI.update(deltaTime);
-        this.ally!.update(deltaTime);
-      }
-      if (this.enemy1AI) {
-        this.enemy1AI.update(deltaTime);
-        this.enemy1!.update(deltaTime);
-      }
-      if (this.enemy2AI) {
-        this.enemy2AI.update(deltaTime);
-        this.enemy2!.update(deltaTime);
+      if (this.inputController) {
+        this.inputController.update(deltaTime);
       }
 
-      // カメラをキャラクターに追従させる
+      // 全キャラクターを更新
+      const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+      for (const character of allCharacters) {
+        character.update(deltaTime);
+      }
+
+      // 全AIコントローラーを更新
+      for (const ai of this.characterAIs) {
+        ai.update(deltaTime);
+      }
+
+      // カメラをプレイヤーキャラクターに追従させる
       this.updateCamera(deltaTime);
     }
 
@@ -398,18 +440,25 @@ export class GameScene {
     this.ball.update(deltaTime);
 
     // 衝突判定を常に更新
-    this.collisionHandler.update(deltaTime);
+    if (this.collisionHandler) {
+      this.collisionHandler.update(deltaTime);
+    }
 
     // 関節操作コントローラーは常に更新（Ctrl+ドラッグ用）
-    this.jointController.update(deltaTime);
+    if (this.jointController) {
+      this.jointController.update(deltaTime);
+    }
   }
 
   /**
    * カメラの追従更新
    */
   private updateCamera(_deltaTime: number): void {
+    // プレイヤーキャラクター（味方チームの1人目）
+    if (this.allyCharacters.length === 0) return;
+
     // キャラクターの位置を取得
-    const characterPosition = this.character.getPosition();
+    const characterPosition = this.allyCharacters[0].getPosition();
 
     // カメラのターゲットをスムーズに移動
     const followSpeed = CAMERA_CONFIG.followSpeed;
@@ -437,10 +486,10 @@ export class GameScene {
   }
 
   /**
-   * キャラクターを取得（外部からアクセス用）
+   * プレイヤーキャラクターを取得（外部からアクセス用）
    */
-  public getCharacter(): Character {
-    return this.character;
+  public getCharacter(): Character | undefined {
+    return this.allyCharacters[0];
   }
 
   /**
@@ -450,9 +499,12 @@ export class GameScene {
     // モーション確認モードを有効化（入力とモーション再生を停止）
     this.isMotionConfirmationMode = true;
 
-    // キャラクターのモーションコントローラーを停止
-    const motionController = this.character.getMotionController();
-    motionController.stop();
+    // 全キャラクターのモーションコントローラーを停止
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const character of allCharacters) {
+      const motionController = character.getMotionController();
+      motionController.stop();
+    }
 
     console.log("[GameScene] モーション確認モードを有効化しました");
   }
@@ -461,32 +513,28 @@ export class GameScene {
    * 破棄
    */
   public dispose(): void {
-    this.inputController.dispose();
-    this.jointController.dispose();
-    this.collisionHandler.dispose();
-    this.character.dispose();
+    if (this.inputController) {
+      this.inputController.dispose();
+    }
+    if (this.jointController) {
+      this.jointController.dispose();
+    }
+    if (this.collisionHandler) {
+      this.collisionHandler.dispose();
+    }
     this.ball.dispose();
 
-    // AIコントローラーを破棄
-    if (this.allyAI) {
-      this.allyAI.dispose();
-    }
-    if (this.enemy1AI) {
-      this.enemy1AI.dispose();
-    }
-    if (this.enemy2AI) {
-      this.enemy2AI.dispose();
+    // 全AIコントローラーを破棄
+    for (const ai of this.characterAIs) {
+      ai.dispose();
     }
 
-    // 追加キャラクターが存在する場合のみdispose
-    if (this.ally) {
-      this.ally.dispose();
+    // 全キャラクターを破棄
+    for (const character of this.allyCharacters) {
+      character.dispose();
     }
-    if (this.enemy1) {
-      this.enemy1.dispose();
-    }
-    if (this.enemy2) {
-      this.enemy2.dispose();
+    for (const character of this.enemyCharacters) {
+      character.dispose();
     }
 
     this.field.dispose();

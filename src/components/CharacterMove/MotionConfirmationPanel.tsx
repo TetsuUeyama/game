@@ -123,15 +123,17 @@ export function MotionConfirmationPanel({ gameScene }: MotionConfirmationPanelPr
 
         // キャラクターに適用
         const character = gameScene.getCharacter();
-        const jointNames: (keyof KeyframeJoints)[] = ["upperBody", "lowerBody", "head", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftHip", "rightHip", "leftKnee", "rightKnee"];
+        if (character) {
+          const jointNames: (keyof KeyframeJoints)[] = ["upperBody", "lowerBody", "head", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftHip", "rightHip", "leftKnee", "rightKnee"];
 
-        for (const jointName of jointNames) {
-          const rotation = keyframe.joints[jointName];
-          const characterJoint = character.getJoint(jointName);
-          if (rotation && characterJoint) {
-            characterJoint.rotation.x = (rotation.x * Math.PI) / 180;
-            characterJoint.rotation.y = (rotation.y * Math.PI) / 180;
-            characterJoint.rotation.z = (rotation.z * Math.PI) / 180;
+          for (const jointName of jointNames) {
+            const rotation = keyframe.joints[jointName];
+            const characterJoint = character.getJoint(jointName);
+            if (rotation && characterJoint) {
+              characterJoint.rotation.x = (rotation.x * Math.PI) / 180;
+              characterJoint.rotation.y = (rotation.y * Math.PI) / 180;
+              characterJoint.rotation.z = (rotation.z * Math.PI) / 180;
+            }
           }
         }
       }
@@ -172,9 +174,11 @@ export function MotionConfirmationPanel({ gameScene }: MotionConfirmationPanelPr
     // キャラクターに適用
     if (gameScene) {
       const character = gameScene.getCharacter();
-      const joint = character.getJoint(jointName);
-      if (joint && updatedJoints[jointName]) {
-        joint.rotation[axis] = (updatedJoints[jointName]![axis] * Math.PI) / 180;
+      if (character) {
+        const joint = character.getJoint(jointName);
+        if (joint && updatedJoints[jointName]) {
+          joint.rotation[axis] = (updatedJoints[jointName]![axis] * Math.PI) / 180;
+        }
       }
     }
   };
@@ -192,9 +196,11 @@ export function MotionConfirmationPanel({ gameScene }: MotionConfirmationPanelPr
     // キャラクターに適用
     if (gameScene) {
       const character = gameScene.getCharacter();
-      const joint = character.getJoint(jointName);
-      if (joint && updatedJoints[jointName]) {
-        joint.rotation[axis] = (updatedJoints[jointName]![axis] * Math.PI) / 180;
+      if (character) {
+        const joint = character.getJoint(jointName);
+        if (joint && updatedJoints[jointName]) {
+          joint.rotation[axis] = (updatedJoints[jointName]![axis] * Math.PI) / 180;
+        }
       }
     }
   };

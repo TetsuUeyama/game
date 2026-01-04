@@ -1,0 +1,84 @@
+{
+  "allyTeam": {
+    "formation": "2-2-1",
+    "players": [
+      {
+        "playerId": "1",
+        "position": "GK",
+        "x": 0,
+        "z": -20
+      },
+      {
+        "playerId": "2",
+        "position": "DF",
+        "x": -5,
+        "z": -12
+      },
+      {
+        "playerId": "3",
+        "position": "DF",
+        "x": 5,
+        "z": -12
+      },
+      {
+        "playerId": "4",
+        "position": "MF",
+        "x": -5,
+        "z": -6
+      },
+      {
+        "playerId": "5",
+        "position": "MF",
+        "x": 5,
+        "z": -6
+      },
+      {
+        "playerId": "6",
+        "position": "FW",
+        "x": 0,
+        "z": -2
+      }
+    ]
+  },
+  "enemyTeam": {
+    "formation": "2-2-1",
+    "players": [
+      {
+        "playerId": "7",
+        "position": "GK",
+        "x": 0,
+        "z": 20
+      },
+      {
+        "playerId": "8",
+        "position": "DF",
+        "x": -5,
+        "z": 12
+      },
+      {
+        "playerId": "9",
+        "position": "DF",
+        "x": 5,
+        "z": 12
+      },
+      {
+        "playerId": "10",
+        "position": "MF",
+        "x": -5,
+        "z": 6
+      },
+      {
+        "playerId": "11",
+        "position": "MF",
+        "x": 5,
+        "z": 6
+      },
+      {
+        "playerId": "12",
+        "position": "FW",
+        "x": 0,
+        "z": 2
+      }
+    ]
+  }
+}

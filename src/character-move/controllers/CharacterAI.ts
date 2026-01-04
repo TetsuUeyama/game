@@ -25,6 +25,11 @@ export class CharacterAI {
    * AIの更新処理
    */
   public update(deltaTime: number): void {
+    // ゴールキーパーの場合、ゴール前半径5m以内に位置を制限
+    if (this.character.playerPosition === 'GK') {
+      this.constrainGoalkeeperPosition();
+    }
+
     const state = this.character.getState();
 
     switch (state) {
@@ -460,6 +465,37 @@ export class CharacterAI {
 
       // キャラクターの回転を設定（setRotationメソッドを使用してメッシュにも反映）
       this.character.setRotation(angle);
+    }
+  }
+
+  /**
+   * ゴールキーパーの位置をゴール前半径5m以内に制限
+   */
+  private constrainGoalkeeperPosition(): void {
+    const myPosition = this.character.getPosition();
+
+    // 自チームのゴール位置を取得
+    const goal = this.character.team === "ally" ? this.field.getGoal2() : this.field.getGoal1();
+    const goalPosition = goal.position;
+
+    // ゴールからの距離を計算（XZ平面上）
+    const dx = myPosition.x - goalPosition.x;
+    const dz = myPosition.z - goalPosition.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    // 半径5mを超えた場合、位置を制限
+    const maxRadius = 5.0;
+    if (distance > maxRadius) {
+      // ゴール方向への単位ベクトル
+      const dirX = dx / distance;
+      const dirZ = dz / distance;
+
+      // 半径5m以内の位置に修正
+      const newX = goalPosition.x + dirX * maxRadius;
+      const newZ = goalPosition.z + dirZ * maxRadius;
+
+      // キャラクターの位置を更新
+      this.character.setPosition(new Vector3(newX, myPosition.y, newZ));
     }
   }
 
