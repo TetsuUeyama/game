@@ -1,9 +1,11 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh } from "@babylonjs/core";
+import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
 import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
+import { PlayerData } from "../types/PlayerData";
 
 /**
  * 3Dキャラクターエンティティ
@@ -71,6 +73,14 @@ export class Character {
 
   // モーションコントローラー
   private motionController: MotionController;
+
+  // 選手データ
+  public playerData: PlayerData | null = null;
+  public playerPosition: 'GK' | 'DF' | 'MF' | 'FW' | null = null;
+
+  // 名前表示用
+  private nameLabel: Mesh | null = null;
+  private nameLabelTexture: AdvancedDynamicTexture | null = null;
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -1186,6 +1196,63 @@ export class Character {
   }
 
   /**
+   * 選手データを設定する
+   */
+  public setPlayerData(playerData: PlayerData, position: 'GK' | 'DF' | 'MF' | 'FW'): void {
+    this.playerData = playerData;
+    this.playerPosition = position;
+
+    // 名前ラベルを作成
+    this.createNameLabel();
+
+    console.log(`[Character] 選手データを設定: ${playerData.basic.NAME} (${position})`);
+  }
+
+  /**
+   * 名前ラベルを作成
+   */
+  private createNameLabel(): void {
+    if (!this.playerData) return;
+
+    // 既存のラベルがあれば削除
+    if (this.nameLabel) {
+      this.nameLabel.dispose();
+      this.nameLabel = null;
+    }
+
+    // ラベル用の平面メッシュを作成
+    this.nameLabel = MeshBuilder.CreatePlane(
+      `nameLabel_${this.playerData.basic.ID}`,
+      { width: 2, height: 0.5 },
+      this.scene
+    );
+
+    // ラベルを頭上に配置（キャラクターの子として設定）
+    this.nameLabel.parent = this.mesh;
+    this.nameLabel.position = new Vector3(0, this.config.physical.height + 0.5, 0);
+    this.nameLabel.billboardMode = Mesh.BILLBOARDMODE_ALL; // 常にカメラの方を向く
+
+    // GUI用のテクスチャを作成
+    this.nameLabelTexture = AdvancedDynamicTexture.CreateForMesh(this.nameLabel);
+
+    // テキストブロックを作成
+    const textBlock = new TextBlock();
+    textBlock.text = this.playerData.basic.NAME;
+    textBlock.color = "white";
+    textBlock.fontSize = 60;
+    textBlock.fontFamily = "Arial";
+    textBlock.fontWeight = "bold";
+    textBlock.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
+    textBlock.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
+
+    // テキストに影（アウトライン）を追加
+    textBlock.outlineWidth = 4;
+    textBlock.outlineColor = "black";
+
+    this.nameLabelTexture.addControl(textBlock);
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
@@ -1223,6 +1290,16 @@ export class Character {
 
     // 視野コーンを破棄
     this.visionConeMesh.dispose();
+
+    // 名前ラベルを破棄
+    if (this.nameLabel) {
+      this.nameLabel.dispose();
+      this.nameLabel = null;
+    }
+    if (this.nameLabelTexture) {
+      this.nameLabelTexture.dispose();
+      this.nameLabelTexture = null;
+    }
 
     // 3Dモデルを破棄
     if (this.model) {

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
+import { TeamConfigLoader } from '@/character-move/utils/TeamConfigLoader';
+import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
 
 /**
  * Character Moveゲームコンポーネント
@@ -10,22 +12,51 @@ export default function CharacterMoveGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameSceneRef = useRef<GameScene | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    try {
-      // ゲームシーンの初期化
-      gameSceneRef.current = new GameScene(canvasRef.current);
+    let mounted = true;
 
-      setError(null);
-    } catch (err) {
-      console.error('[CharacterMoveGame] Initialization failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to initialize 3D game');
-    }
+    const initializeGame = async () => {
+      try {
+        setLoading(true);
+        console.log('[CharacterMoveGame] ゲーム初期化開始...');
+
+        // チーム設定を読み込む
+        const teamConfig = await TeamConfigLoader.loadTeamConfig();
+
+        // 選手データを読み込む
+        const playerData = await PlayerDataLoader.loadPlayerData();
+
+        if (!mounted || !canvasRef.current) return;
+
+        console.log('[CharacterMoveGame] GameScene初期化中...');
+        // ゲームシーンの初期化
+        gameSceneRef.current = new GameScene(canvasRef.current, {
+          showAdditionalCharacters: true,
+          teamConfig,
+          playerData,
+        });
+
+        setError(null);
+        setLoading(false);
+        console.log('[CharacterMoveGame] ゲーム初期化完了');
+      } catch (err) {
+        console.error('[CharacterMoveGame] Initialization failed:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to initialize 3D game');
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeGame();
 
     // クリーンアップ
     return () => {
+      mounted = false;
       if (gameSceneRef.current) {
         gameSceneRef.current.dispose();
         gameSceneRef.current = null;
@@ -82,8 +113,20 @@ export default function CharacterMoveGame() {
           style={{ touchAction: 'none' }}
         />
 
+        {/* ローディング画面 */}
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 z-50">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
+              <p className="text-white text-xl font-bold">ゲームデータを読み込み中...</p>
+              <p className="text-white/70 text-sm mt-2">選手データとチーム設定を読み込んでいます...</p>
+            </div>
+          </div>
+        )}
+
         {/* 操作説明パネル */}
-        <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white p-4 rounded-lg max-w-xs">
+        {!loading && (
+          <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white p-4 rounded-lg max-w-xs">
           <h3 className="text-lg font-bold mb-2">操作方法</h3>
           <ul className="text-sm space-y-1">
             <li><strong>W/S</strong>: 前進/後退</li>
@@ -94,7 +137,8 @@ export default function CharacterMoveGame() {
             <li><strong>Ctrl+ドラッグ</strong>: 関節操作</li>
             <li><strong>R</strong>: 関節リセット</li>
           </ul>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* フッター */}
