@@ -209,11 +209,11 @@ export const WL_T4 = 1.0;
 // アイドリングモーション（T0）からの追加値
 const WL_ADDITIONS = {
   upperBodyX: [0, 0, 0, 0, 0],
-  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyY: [17, 17, 17, 17, 17],
   upperBodyZ: [-3, -4, -3, -4, -3],
 
   lowerBodyX: [0, 0, 0, 0, 0],
-  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyY: [37, 37, 37, 37, 37],
   lowerBodyZ: [3, 2, 3, 2, 2],
 
   headX: [0, 0, 0, 0, 0],
@@ -236,21 +236,21 @@ const WL_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [-5, -9, -5, -9, -5],
 
-  leftHipX: [0, 0, 0, 0, 0],
-  leftHipY: [15, 0, 15, 15, 15],
-  leftHipZ: [-9, 1, -9, 1, -9],
+  leftHipX: [0, -15, 0, 25, 0],
+  leftHipY: [15, 15, 15, 15, 15],
+  leftHipZ: [8, 8, 8, 8, 8],
 
-  rightHipX: [0, 0, 0, 0, 0],
-  rightHipY: [-15, -5, -15, -15, -15],
-  rightHipZ: [5, 0, 5, 0, 5],
+  rightHipX: [0, 25, 0, -15, 0],
+  rightHipY: [-15, -15, -15, -15, -15],
+  rightHipZ: [-8, -8, -8, -8, -8],
 
-  leftKneeX: [-5, 0, -5, -5, -5],
+  leftKneeX: [-5, 37 - 5, 37, -5],
   leftKneeY: [0, 0, 0, 0, 0],
-  leftKneeZ: [3, 3, 3, 3, 3],
+  leftKneeZ: [-5, -5, -5, -5, -5],
 
-  rightKneeX: [-5, -5, -5, -5, -5],
+  rightKneeX: [-5, 18, -5, 18, -5],
   rightKneeY: [0, 0, 0, 0, 0],
-  rightKneeZ: [-3, -3, -3, -3, -3],
+  rightKneeZ: [5, 5, 5, 5, 5],
 };
 
 // アイドリングモーションの各キーフレーム姿勢に追加値を加算したジョイントアニメーション
@@ -298,11 +298,11 @@ export const WR_T4 = 1.0;
 // アイドリングモーション（T0）からの追加値
 const WR_ADDITIONS = {
   upperBodyX: [0, 0, 0, 0, 0],
-  upperBodyY: [0, 0, 0, 0, 0],
+  upperBodyY: [-17, -17, -17, -17, -17],
   upperBodyZ: [3, 4, 3, 4, 3],
 
   lowerBodyX: [0, 0, 0, 0, 0],
-  lowerBodyY: [0, 0, 0, 0, 0],
+  lowerBodyY: [-37, -37, -37, -37, -37],
   lowerBodyZ: [-3, -2, -3, -2, -2],
 
   headX: [0, 0, 0, 0, 0],
@@ -312,7 +312,6 @@ const WR_ADDITIONS = {
   leftShoulderX: [0, 0, 0, 0, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [-5, -10, -5, -10, -5],
-
 
   rightShoulderX: [0, 0, 0, 0, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
@@ -326,19 +325,19 @@ const WR_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [-2, -19, -2, -19, -2],
 
-  leftHipX: [0, 0, 0, 0, 0],
+  leftHipX: [0, -15, 0, 25, 0],
   leftHipY: [15, 5, 15, 15, 15],
   leftHipZ: [-5, 0, -5, 0, -5],
 
-  rightHipX: [0, 0, 0, 0, 0],
+  rightHipX: [0, 25, 0, -15, 0],
   rightHipY: [-15, 0, -15, -15, -15],
   rightHipZ: [9, -1, 9, -1, 9],
 
-  leftKneeX: [-5, -5, -5, -5, -5],
+  leftKneeX: [5, -5, 5, -5, 5],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [3, 3, 3, 3, 3],
 
-  rightKneeX: [-5, 0, -5, -5, -5],
+  rightKneeX: [11.5, 0, 23, -5, 23],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [-3, -3, -3, -3, -3],
 };

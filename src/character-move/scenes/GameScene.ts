@@ -14,11 +14,11 @@ import { InputController } from "../controllers/InputController";
 import { JointController } from "../controllers/JointController";
 import { CollisionHandler } from "../controllers/CollisionHandler";
 import { CharacterAI } from "../controllers/CharacterAI";
+import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
   LIGHT_CONFIG,
-  CHARACTER_CONFIG,
   // MODEL_CONFIG, // 一旦無効化
 } from "../config/gameConfig";
 
@@ -206,15 +206,18 @@ export class GameScene {
    * キャラクターを作成（プレイヤー）
    */
   private createCharacter(): Character {
-    // 初期位置（フィールドの中央）
-    const initialPosition = new Vector3(0, CHARACTER_CONFIG.height / 2, 0);
+    // デフォルト設定を使用
+    const config = DEFAULT_CHARACTER_CONFIG;
 
-    const character = new Character(this.scene, initialPosition);
+    // 初期位置（フィールドの中央）
+    const initialPosition = new Vector3(0, config.physical.height / 2, 0);
+
+    const character = new Character(this.scene, initialPosition, config);
 
     // プレイヤーは味方チーム
     character.setTeam("ally");
 
-    console.log("[GameScene] プレイヤーキャラクター作成完了");
+    console.log(`[GameScene] プレイヤーキャラクター作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
 
     return character;
   }
@@ -237,10 +240,13 @@ export class GameScene {
    * 味方キャラクターを作成
    */
   private createAlly(): Character {
-    // プレイヤーの右側に配置
-    const initialPosition = new Vector3(3, CHARACTER_CONFIG.height / 2, 2);
+    // デフォルト設定を使用
+    const config = DEFAULT_CHARACTER_CONFIG;
 
-    const ally = new Character(this.scene, initialPosition);
+    // プレイヤーの右側に配置
+    const initialPosition = new Vector3(3, config.physical.height / 2, 2);
+
+    const ally = new Character(this.scene, initialPosition, config);
 
     // 味方は緑色で表示
     ally.setColor(0.3, 0.8, 0.3);
@@ -248,7 +254,7 @@ export class GameScene {
     // チームを味方に設定
     ally.setTeam("ally");
 
-    console.log("[GameScene] 味方キャラクター作成完了");
+    console.log(`[GameScene] 味方キャラクター作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
 
     return ally;
   }
@@ -257,10 +263,13 @@ export class GameScene {
    * 敵キャラクター1を作成
    */
   private createEnemy1(): Character {
-    // プレイヤーの前方左側に配置
-    const initialPosition = new Vector3(-4, CHARACTER_CONFIG.height / 2, 5);
+    // デフォルト設定を使用
+    const config = DEFAULT_CHARACTER_CONFIG;
 
-    const enemy = new Character(this.scene, initialPosition);
+    // プレイヤーの前方左側に配置
+    const initialPosition = new Vector3(-4, config.physical.height / 2, 5);
+
+    const enemy = new Character(this.scene, initialPosition, config);
 
     // 敵は赤色で表示
     enemy.setColor(0.9, 0.2, 0.2);
@@ -268,7 +277,7 @@ export class GameScene {
     // チームを敵に設定
     enemy.setTeam("enemy");
 
-    console.log("[GameScene] 敵キャラクター1作成完了");
+    console.log(`[GameScene] 敵キャラクター1作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
 
     return enemy;
   }
@@ -277,10 +286,13 @@ export class GameScene {
    * 敵キャラクター2を作成
    */
   private createEnemy2(): Character {
-    // プレイヤーの前方右側に配置
-    const initialPosition = new Vector3(4, CHARACTER_CONFIG.height / 2, 5);
+    // デフォルト設定を使用
+    const config = DEFAULT_CHARACTER_CONFIG;
 
-    const enemy = new Character(this.scene, initialPosition);
+    // プレイヤーの前方右側に配置
+    const initialPosition = new Vector3(4, config.physical.height / 2, 5);
+
+    const enemy = new Character(this.scene, initialPosition, config);
 
     // 敵は赤色で表示
     enemy.setColor(0.9, 0.2, 0.2);
@@ -288,7 +300,7 @@ export class GameScene {
     // チームを敵に設定
     enemy.setTeam("enemy");
 
-    console.log("[GameScene] 敵キャラクター2作成完了");
+    console.log(`[GameScene] 敵キャラクター2作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
 
     return enemy;
   }

@@ -69,7 +69,7 @@ const DF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   y: {[DF_T0]: 0, [DF_T1]: -0.15, [DF_T2]: 0, [DF_T3]: -0.15, [DF_T4]: 0},
 };
 
-/**
+/**1111
  * ダッシュゲージのパーセンテージに応じた前進ダッシュモーションを生成
  * @param dashPercentage ダッシュゲージの溜まり具合 (0.0～1.0)
  * @returns 前進ダッシュモーションデータ
@@ -147,25 +147,25 @@ const DB_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [-30, 5, -5, 5, -5],
+  leftHipX: [0, 0, 0, 0, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [-10, -5, -10, -5, -10],
+  rightHipX: [0, 0, 0, 0, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [40, 10, 10, 10, 10],
+  leftKneeX: [0, 0, 0, 0, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [15, 35, 15, 35, 15],
+  rightKneeX: [0, 0, 0, 0, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 };
 
 const DB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DB_T0]: 0, [DB_T1]: -0.15, [DB_T2]: 0, [DB_T3]: -0.15, [DB_T4]: 0},
+  y: {[DB_T0]: 0, [DB_T1]: -0.05, [DB_T2]: 0, [DB_T3]: -0.05, [DB_T4]: 0},
 };
 
 /**
@@ -238,13 +238,13 @@ const DL_ADDITIONS = {
   rightShoulderY: [20, 20, 10, 20, 10],
   rightShoulderZ: [9, 9, 4, 9, 4],
 
-  leftElbowX: [58, 44, 18, 44, 18],
+  leftElbowX: [0, 0, 0, 0, 0],
   leftElbowY: [0, 0, 0, 0, 0],
-  leftElbowZ: [-28, -40, -18, -40, -18],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [38, 64, 18, 64, 18],
+  rightElbowX: [0, 0, 0, 0, 0],
   rightElbowY: [0, 0, 0, 0, 0],
-  rightElbowZ: [26, 35, 21, 35, 21],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
   leftHipX: [-40, -10, -10, -10, -10],
   leftHipY: [0, 15, 0, 15, 0],
@@ -264,7 +264,7 @@ const DL_ADDITIONS = {
 };
 
 const DL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DL_T0]: 0, [DL_T1]: -0.15, [DL_T2]: 0, [DL_T3]: -0.15, [DL_T4]: 0},
+  y: {[DL_T0]: 0, [DL_T1]: -0.05, [DL_T2]: 0, [DL_T3]: -0.05, [DL_T4]: 0},
 };
 
 /**
@@ -329,41 +329,41 @@ const DR_ADDITIONS = {
   headY: [0, 0, 0, 0, 0],
   headZ: [-7, -10, -2, -10, -2],
 
-  leftShoulderX: [1, -4, 11, -4, 11],
-  leftShoulderY: [-20, -20, -10, -20, -10],
-  leftShoulderZ: [-9, -9, -4, -9, -4],
+  leftShoulderX: [0, 0, 0, 0, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [-20, -10, 0, -10, 0],
-  rightShoulderY: [20, 20, 10, 20, 10],
-  rightShoulderZ: [19, 9, 9, 9, 9],
+  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [38, 64, 18, 64, 18],
+  leftElbowX: [0, 0, 0, 0, 0],
   leftElbowY: [0, 0, 0, 0, 0],
-  leftElbowZ: [-26, -35, -21, -35, -21],
+  leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [58, 44, 18, 44, 18],
+  rightElbowX: [0, 0, 0, 0, 0],
   rightElbowY: [0, 0, 0, 0, 0],
-  rightElbowZ: [28, 40, 18, 40, 18],
+  rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [-10, -40, -5, -40, -5],
-  leftHipY: [0, 10, 0, 10, 0],
-  leftHipZ: [13, 0, 13, 0, 13],
+  leftHipX: [0, 0, 0, 0, 0],
+  leftHipY: [0, 0, 0, 0, 0],
+  leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [-40, -10, -10, -10, -10],
-  rightHipY: [0, -15, 0, -15, 0],
-  rightHipZ: [-17, -7, -17, -7, -17],
+  rightHipX: [0, 0, 0, 0, 0],
+  rightHipY: [0, 0, 0, 0, 0],
+  rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [20, 50, 10, 50, 10],
+  leftKneeX: [0, 0, 0, 0, 0],
   leftKneeY: [0, 0, 0, 0, 0],
-  leftKneeZ: [-8, -8, -8, -8, -8],
+  leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [50, 15, 20, 15, 20],
+  rightKneeX: [0, 0, 0, 0, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [8, 8, 8, 8, 8],
 };
 
 const DR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DR_T0]: 0, [DR_T1]: -0.15, [DR_T2]: 0, [DR_T3]: -0.15, [DR_T4]: 0},
+  y: {[DR_T0]: 0, [DR_T1]: -0.05, [DR_T2]: 0, [DR_T3]: -0.05, [DR_T4]: 0},
 };
 
 /**
