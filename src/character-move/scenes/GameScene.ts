@@ -44,6 +44,10 @@ export class GameScene {
   // AIコントローラー
   private characterAIs: CharacterAI[] = [];
 
+  // カメラターゲット切り替え用
+  private currentTargetTeam: 'ally' | 'enemy' = 'ally';
+  private currentTargetIndex: number = 0;
+
   private lastFrameTime: number = Date.now();
 
   // 3Dモデルロード状態
@@ -220,9 +224,16 @@ export class GameScene {
       character.team = "ally";
       character.setPlayerData(player, playerConfig.position);
 
+      // 選手の身長を反映（cm → m）
+      const heightInMeters = player.basic.height / 100;
+      character.setHeight(heightInMeters);
+
+      // 味方チームの胴体を青くする
+      character.setBodyColor(0.0, 0.4, 1.0);
+
       this.allyCharacters.push(character);
 
-      console.log(`[GameScene] 味方チーム: ${player.basic.NAME} (${playerConfig.position}) を作成`);
+      console.log(`[GameScene] 味方チーム: ${player.basic.NAME} (${playerConfig.position}、身長: ${player.basic.height}cm) を作成`);
     }
 
     // 敵チーム作成
@@ -240,9 +251,16 @@ export class GameScene {
       character.team = "enemy";
       character.setPlayerData(player, playerConfig.position);
 
+      // 選手の身長を反映（cm → m）
+      const heightInMeters = player.basic.height / 100;
+      character.setHeight(heightInMeters);
+
+      // 敵チームの胴体を赤くする
+      character.setBodyColor(1.0, 0.0, 0.0);
+
       this.enemyCharacters.push(character);
 
-      console.log(`[GameScene] 敵チーム: ${player.basic.NAME} (${playerConfig.position}) を作成`);
+      console.log(`[GameScene] 敵チーム: ${player.basic.NAME} (${playerConfig.position}、身長: ${player.basic.height}cm) を作成`);
     }
 
     console.log(`[GameScene] チーム作成完了: 味方${this.allyCharacters.length}人, 敵${this.enemyCharacters.length}人`);
@@ -454,11 +472,12 @@ export class GameScene {
    * カメラの追従更新
    */
   private updateCamera(_deltaTime: number): void {
-    // プレイヤーキャラクター（味方チームの1人目）
-    if (this.allyCharacters.length === 0) return;
+    // 現在のターゲットキャラクターを取得
+    const targetCharacter = this.getCurrentTargetCharacter();
+    if (!targetCharacter) return;
 
     // キャラクターの位置を取得
-    const characterPosition = this.allyCharacters[0].getPosition();
+    const characterPosition = targetCharacter.getPosition();
 
     // カメラのターゲットをスムーズに移動
     const followSpeed = CAMERA_CONFIG.followSpeed;
@@ -469,6 +488,63 @@ export class GameScene {
       (characterPosition.y - this.camera.target.y) * followSpeed;
     this.camera.target.z +=
       (characterPosition.z - this.camera.target.z) * followSpeed;
+  }
+
+  /**
+   * 現在のターゲットキャラクターを取得
+   */
+  private getCurrentTargetCharacter(): Character | null {
+    const characters = this.currentTargetTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+    if (characters.length === 0) return null;
+    if (this.currentTargetIndex >= characters.length) {
+      this.currentTargetIndex = 0;
+    }
+    return characters[this.currentTargetIndex];
+  }
+
+  /**
+   * カメラターゲットを次のキャラクターに切り替え
+   */
+  public switchToNextCharacter(): void {
+    const characters = this.currentTargetTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+    if (characters.length === 0) return;
+
+    this.currentTargetIndex = (this.currentTargetIndex + 1) % characters.length;
+    const character = characters[this.currentTargetIndex];
+    console.log(`[GameScene] カメラターゲット: ${this.currentTargetTeam} ${this.currentTargetIndex + 1}人目 (${character.playerData?.basic.NAME || 'Unknown'})`);
+  }
+
+  /**
+   * カメラターゲットを前のキャラクターに切り替え
+   */
+  public switchToPreviousCharacter(): void {
+    const characters = this.currentTargetTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+    if (characters.length === 0) return;
+
+    this.currentTargetIndex = (this.currentTargetIndex - 1 + characters.length) % characters.length;
+    const character = characters[this.currentTargetIndex];
+    console.log(`[GameScene] カメラターゲット: ${this.currentTargetTeam} ${this.currentTargetIndex + 1}人目 (${character.playerData?.basic.NAME || 'Unknown'})`);
+  }
+
+  /**
+   * カメラターゲットのチームを切り替え
+   */
+  public switchTeam(): void {
+    this.currentTargetTeam = this.currentTargetTeam === 'ally' ? 'enemy' : 'ally';
+    this.currentTargetIndex = 0;
+    const character = this.getCurrentTargetCharacter();
+    console.log(`[GameScene] チーム切り替え: ${this.currentTargetTeam} 1人目 (${character?.playerData?.basic.NAME || 'Unknown'})`);
+  }
+
+  /**
+   * 現在のターゲット情報を取得
+   */
+  public getCurrentTargetInfo(): { team: 'ally' | 'enemy'; index: number; character: Character | null } {
+    return {
+      team: this.currentTargetTeam,
+      index: this.currentTargetIndex,
+      character: this.getCurrentTargetCharacter(),
+    };
   }
 
   /**

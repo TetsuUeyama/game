@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
 import { TeamConfigLoader } from '@/character-move/utils/TeamConfigLoader';
 import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
+import { CameraSwitchPanel } from './CameraSwitchPanel';
 
 /**
  * Character Moveゲームコンポーネント
@@ -62,6 +63,32 @@ export default function CharacterMoveGame() {
         gameSceneRef.current = null;
       }
     };
+  }, []);
+
+  // キーボードショートカット（カメラ切り替え）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!gameSceneRef.current) return;
+
+      switch (e.key.toLowerCase()) {
+        case 'z':
+          // 前のキャラクター
+          gameSceneRef.current.switchToPreviousCharacter();
+          break;
+        case 'c':
+          // 次のキャラクター
+          gameSceneRef.current.switchToNextCharacter();
+          break;
+        case 'tab':
+          // チーム切り替え
+          e.preventDefault();
+          gameSceneRef.current.switchTeam();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // エラー表示
@@ -131,7 +158,9 @@ export default function CharacterMoveGame() {
           <ul className="text-sm space-y-1">
             <li><strong>W/S</strong>: 前進/後退</li>
             <li><strong>A/D</strong>: 左移動/右移動</li>
-            <li><strong>Q/E</strong>: 左回転/右回転</li>
+            <li><strong>Q/E</strong>: 左右回転</li>
+            <li><strong>Z/C</strong>: カメラターゲット切り替え</li>
+            <li><strong>Tab</strong>: チーム切り替え</li>
             <li><strong>マウスドラッグ</strong>: カメラ回転</li>
             <li><strong>ホイール</strong>: ズーム</li>
             <li><strong>Ctrl+ドラッグ</strong>: 関節操作</li>
@@ -139,6 +168,9 @@ export default function CharacterMoveGame() {
           </ul>
           </div>
         )}
+
+        {/* カメラ切り替えパネル */}
+        {!loading && <CameraSwitchPanel gameScene={gameSceneRef.current} />}
       </div>
 
       {/* フッター */}
