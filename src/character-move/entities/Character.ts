@@ -1077,6 +1077,30 @@ export class Character {
   }
 
   /**
+   * 胴体の色を変更（肩を含む）
+   * @param r 赤 (0.0 - 1.0)
+   * @param g 緑 (0.0 - 1.0)
+   * @param b 青 (0.0 - 1.0)
+   */
+  public setBodyColor(r: number, g: number, b: number): void {
+    const color = new Color3(r, g, b);
+
+    // 胴体と肩パーツの色を変更
+    const bodyParts = [
+      this.upperBodyMesh,
+      this.lowerBodyMesh,
+      this.leftShoulderMesh,
+      this.rightShoulderMesh,
+    ];
+
+    bodyParts.forEach((mesh) => {
+      if (mesh.material && mesh.material instanceof StandardMaterial) {
+        mesh.material.diffuseColor = color;
+      }
+    });
+  }
+
+  /**
    * 右手のひらの先端位置を取得（ワールド座標）
    */
   public getRightHandPosition(): Vector3 {
@@ -1124,6 +1148,33 @@ export class Character {
    */
   public setTeam(team: "ally" | "enemy"): void {
     this.team = team;
+  }
+
+  /**
+   * 身長を設定（メートル単位）
+   * @param heightInMeters 身長（メートル）
+   */
+  public setHeight(heightInMeters: number): void {
+    // 身長を更新
+    this.config.physical.height = heightInMeters;
+    this.groundY = heightInMeters / 2;
+
+    // 基準身長（1.8m）に対するスケール比率を計算
+    const baseHeight = 1.8;
+    const scale = heightInMeters / baseHeight;
+
+    // ルートメッシュのスケーリングを更新（メッシュが存在する場合のみ）
+    if (this.mesh) {
+      this.mesh.scaling = new Vector3(scale, scale, scale);
+
+      // キャラクターの位置を更新（新しいgroundYに合わせる）
+      // 現在のXZ座標を保持し、Y座標だけを新しいgroundYに更新
+      this.setPosition(new Vector3(this.position.x, this.groundY, this.position.z));
+
+      console.log(`[Character] 身長を${heightInMeters}mに変更しました（スケール: ${scale}、新しいY座標: ${this.groundY}）`);
+    } else {
+      console.warn(`[Character] ルートメッシュが存在しないため、身長の変更をスキップしました`);
+    }
   }
 
   /**
@@ -1220,33 +1271,34 @@ export class Character {
       this.nameLabel = null;
     }
 
-    // ラベル用の平面メッシュを作成
+    // ラベル用の平面メッシュを作成（幅を広くして長い名前に対応）
     this.nameLabel = MeshBuilder.CreatePlane(
       `nameLabel_${this.playerData.basic.ID}`,
-      { width: 2, height: 0.5 },
+      { width: 5, height: 2.5 },
       this.scene
     );
 
     // ラベルを頭上に配置（キャラクターの子として設定）
+    // 位置を低く調整（身長の65%の高さ）
     this.nameLabel.parent = this.mesh;
-    this.nameLabel.position = new Vector3(0, this.config.physical.height + 0.5, 0);
+    this.nameLabel.position = new Vector3(0, this.config.physical.height * 0.65, 0);
     this.nameLabel.billboardMode = Mesh.BILLBOARDMODE_ALL; // 常にカメラの方を向く
 
     // GUI用のテクスチャを作成
     this.nameLabelTexture = AdvancedDynamicTexture.CreateForMesh(this.nameLabel);
 
-    // テキストブロックを作成
+    // テキストブロックを作成（名前のみ表示）
     const textBlock = new TextBlock();
     textBlock.text = this.playerData.basic.NAME;
     textBlock.color = "white";
-    textBlock.fontSize = 60;
+    textBlock.fontSize = 50;
     textBlock.fontFamily = "Arial";
     textBlock.fontWeight = "bold";
     textBlock.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_CENTER;
     textBlock.textVerticalAlignment = TextBlock.VERTICAL_ALIGNMENT_CENTER;
 
     // テキストに影（アウトライン）を追加
-    textBlock.outlineWidth = 4;
+    textBlock.outlineWidth = 5;
     textBlock.outlineColor = "black";
 
     this.nameLabelTexture.addControl(textBlock);

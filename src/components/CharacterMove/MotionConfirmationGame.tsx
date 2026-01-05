@@ -83,6 +83,19 @@ export default function MotionConfirmationGame() {
     };
   }, []);
 
+  // 選手選択時のハンドラー
+  const handlePlayerSelect = (playerId: string, player: PlayerData | null) => {
+    if (player && gameSceneRef.current) {
+      const character = gameSceneRef.current.getCharacter();
+      if (character) {
+        // 選手の身長をセンチメートルからメートルに変換してキャラクターに反映
+        const heightInMeters = player.basic.height / 100;
+        character.setHeight(heightInMeters);
+        console.log(`[MotionConfirmationGame] 選手「${player.basic.NAME}」の身長 ${player.basic.height}cm (${heightInMeters}m) を反映しました`);
+      }
+    }
+  };
+
   return (
     <div className="w-full h-screen flex flex-col bg-gradient-to-br from-purple-600 to-indigo-700">
       {/* ヘッダー */}
@@ -144,8 +157,8 @@ export default function MotionConfirmationGame() {
           {/* モーション確認パネル */}
           {gameSceneReady && <MotionConfirmationPanel gameScene={gameSceneRef.current} />}
 
-          {/* 選手データパネル */}
-          {playerData && <PlayerDataPanel playerData={playerData} />}
+          {/* 選手データパネル（ゲームシーン準備完了後のみ表示） */}
+          {gameSceneReady && playerData && <PlayerDataPanel playerData={playerData} onPlayerSelect={handlePlayerSelect} />}
       </div>
 
       {/* フッター */}

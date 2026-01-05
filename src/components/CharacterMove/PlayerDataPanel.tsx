@@ -5,17 +5,27 @@ import { PlayerData } from '@/character-move/types/PlayerData';
 
 interface PlayerDataPanelProps {
   playerData: Record<string, PlayerData>;
+  onPlayerSelect?: (playerId: string, player: PlayerData | null) => void;
 }
 
 /**
  * 選手データ表示パネル（プルダウン形式）
  */
-export function PlayerDataPanel({ playerData }: PlayerDataPanelProps) {
+export function PlayerDataPanel({ playerData, onPlayerSelect }: PlayerDataPanelProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
   const playerIds = Object.keys(playerData).sort((a, b) => parseInt(a) - parseInt(b));
   const selectedPlayer = selectedPlayerId ? playerData[selectedPlayerId] : null;
+
+  // 選手選択時のハンドラー
+  const handlePlayerSelect = (playerId: string) => {
+    setSelectedPlayerId(playerId);
+    const player = playerId ? playerData[playerId] : null;
+    if (onPlayerSelect) {
+      onPlayerSelect(playerId, player);
+    }
+  };
 
   return (
     <div className="absolute top-4 left-4 w-[500px] bg-black/80 backdrop-blur-sm text-white rounded-lg shadow-lg overflow-hidden max-h-[calc(100vh-100px)]">
@@ -40,7 +50,7 @@ export function PlayerDataPanel({ playerData }: PlayerDataPanelProps) {
             <label className="block text-sm text-gray-300 mb-2">選手を選択してください</label>
             <select
               value={selectedPlayerId}
-              onChange={(e) => setSelectedPlayerId(e.target.value)}
+              onChange={(e) => handlePlayerSelect(e.target.value)}
               className="w-full p-2 bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
             >
               <option value="">-- 選手を選択 --</option>
