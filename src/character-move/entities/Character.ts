@@ -62,6 +62,9 @@ export class Character {
   private groundY: number; // 地面のY座標
   private motionOffsetY: number = 0; // モーションによるY軸オフセット
 
+  // 衝突判定
+  public collisionRadius: number = 0.3; // 衝突半径（m）
+
   // キャラクターの状態
   private state: CharacterState = CharacterState.BALL_LOST;
 
