@@ -114,11 +114,7 @@ export class GameScene {
 
     // 衝突判定コントローラーの初期化（キャラクターが存在する場合のみ）
     if (allCharacters.length > 0) {
-      this.collisionHandler = new CollisionHandler(
-        this.ball,
-        allCharacters[0], // プレイヤーキャラクター（味方チームの1人目）
-        ...allCharacters.slice(1, 3) // 他の味方
-      );
+      this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
     }
 
     // AIコントローラーの初期化

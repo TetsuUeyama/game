@@ -3,6 +3,9 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { Field } from "../entities/Field";
+import { IDLE_MOTION } from "../data/IdleMotion";
+import { WALK_FORWARD_MOTION } from "../data/WalkMotion";
+import { DASH_FORWARD_MOTION } from "../data/DashMotion";
 
 /**
  * キャラクターAIコントローラー
@@ -34,19 +37,23 @@ export class CharacterAI {
 
     switch (state) {
       case CharacterState.BALL_LOST:
+        // ボールが誰にも保持されていない場合は、全員がボールを取りに行く
         this.handleBallLostState(deltaTime);
         break;
       case CharacterState.ON_BALL_PLAYER:
+        // ボール保持者は動く
         this.handleOnBallPlayerState(deltaTime);
         break;
-      case CharacterState.OFF_BALL_PLAYER:
-        this.handleOffBallPlayerState(deltaTime);
-        break;
       case CharacterState.ON_BALL_DEFENDER:
+        // ボール保持者に最も近いディフェンダーは動く
         this.handleOnBallDefenderState(deltaTime);
         break;
+      case CharacterState.OFF_BALL_PLAYER:
       case CharacterState.OFF_BALL_DEFENDER:
-        this.handleOffBallDefenderState(deltaTime);
+        // その他のキャラクターは停止（待機モーション）
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
         break;
     }
   }
@@ -54,7 +61,7 @@ export class CharacterAI {
   /**
    * ボールロスト状態の処理
    */
-  private handleBallLostState(_deltaTime: number): void {
+  private handleBallLostState(deltaTime: number): void {
     // ボールの位置を取得
     const ballPosition = this.ball.getPosition();
     const myPosition = this.character.getPosition();
@@ -66,21 +73,94 @@ export class CharacterAI {
       ballPosition.z - myPosition.z
     );
 
-    // 方向ベクトルが0でない場合のみ回転
-    if (direction.length() > 0.01) {
+    const distance = direction.length();
+
+    // 方向ベクトルが0でない場合
+    if (distance > 0.01) {
+      direction.normalize();
+
       // Y軸周りの回転角度を計算
       const angle = Math.atan2(direction.x, direction.z);
 
       // キャラクターの回転を設定（ボールの方向を向く）
       this.character.setRotation(angle);
+
+      // ボールに近づく（距離が2m以上の場合）
+      if (distance > 2.0) {
+        // 衝突を考慮して移動方向を調整
+        const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
+
+        if (adjustedDirection) {
+          // ボールに向かって移動
+          this.character.move(adjustedDirection, deltaTime);
+
+          // 走りモーションを再生
+          if (this.character.getCurrentMotionName() !== 'dash_forward') {
+            this.character.playMotion(DASH_FORWARD_MOTION);
+          }
+        } else {
+          // 移動できない場合は待機
+          if (this.character.getCurrentMotionName() !== 'idle') {
+            this.character.playMotion(IDLE_MOTION);
+          }
+        }
+      } else {
+        // 近くにいる場合は歩く
+        const slowDirection = direction.scale(0.5);
+        const adjustedDirection = this.adjustDirectionForCollision(slowDirection, deltaTime);
+
+        if (adjustedDirection) {
+          this.character.move(adjustedDirection, deltaTime);
+
+          // 歩きモーションを再生
+          if (this.character.getCurrentMotionName() !== 'walk_forward') {
+            this.character.playMotion(WALK_FORWARD_MOTION);
+          }
+        } else {
+          // 移動できない場合は待機
+          if (this.character.getCurrentMotionName() !== 'idle') {
+            this.character.playMotion(IDLE_MOTION);
+          }
+        }
+      }
+    } else {
+      // ボールの真上にいる場合は待機
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
     }
   }
 
   /**
    * オンボールプレイヤー状態の処理
    */
-  private handleOnBallPlayerState(_deltaTime: number): void {
-    // TODO: ゴールに向かって移動、シュート、パスなど
+  private handleOnBallPlayerState(deltaTime: number): void {
+    // 目の前にディフェンダーがいるかチェック
+    const onBallDefender = this.findOnBallDefender();
+
+    if (onBallDefender) {
+      const myPosition = this.character.getPosition();
+      const defenderPosition = onBallDefender.getPosition();
+
+      // ディフェンダーとの距離をチェック
+      const distance = Vector3.Distance(myPosition, defenderPosition);
+
+      // ディフェンダーが2m以内にいる場合は停止
+      if (distance < 2.0) {
+        // 停止時は待機モーションを再生
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
+        return;
+      }
+    }
+
+    // 攻めるべきゴールを決定（敵チームのゴールに向かう）
+    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1() : this.field.getGoal2();
+    const goalPosition = attackingGoal.position;
+
+    // ゴールに向かって移動
+    this.moveTowards(goalPosition, deltaTime, 2.0); // ゴール2m手前で停止
   }
 
   /**
@@ -112,11 +192,16 @@ export class CharacterAI {
       if (awayDirection.length() > 0.01) {
         awayDirection.normalize();
 
-        // オンボールプレイヤーの方を向く
-        this.faceTowards(onBallPlayer);
+        // 衝突を考慮して移動方向を調整
+        const adjustedDirection = this.adjustDirectionForCollision(awayDirection, deltaTime);
 
-        // 離れる方向に移動（向きは変えない）
-        this.character.move(awayDirection, deltaTime);
+        if (adjustedDirection) {
+          // オンボールプレイヤーの方を向く
+          this.faceTowards(onBallPlayer);
+
+          // 離れる方向に移動（向きは変えない）
+          this.character.move(adjustedDirection, deltaTime);
+        }
         return; // 距離が確保されるまでは他の処理をスキップ
       }
     }
@@ -204,15 +289,43 @@ export class CharacterAI {
       // 距離が十分近い場合は移動せず、オンボールプレイヤーの方を向く
       if (distance < 0.3) {
         this.faceTowards(onBallPlayer);
+
+        // 待機モーションを再生
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
       } else {
         // 移動方向を正規化
         direction.normalize();
 
-        // オンボールプレイヤーの方を向く
-        this.faceTowards(onBallPlayer);
+        // 衝突を考慮して移動方向を調整
+        const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
 
-        // 移動（向きは変えずに移動）
-        this.character.move(direction, deltaTime);
+        if (adjustedDirection) {
+          // オンボールプレイヤーの方を向く
+          this.faceTowards(onBallPlayer);
+
+          // 移動（向きは変えずに移動）
+          this.character.move(adjustedDirection, deltaTime);
+
+          // 距離に応じたモーション再生
+          if (distance > 5.0) {
+            // 遠い場合は走る
+            if (this.character.getCurrentMotionName() !== 'dash_forward') {
+              this.character.playMotion(DASH_FORWARD_MOTION);
+            }
+          } else {
+            // 近い場合は歩く
+            if (this.character.getCurrentMotionName() !== 'walk_forward') {
+              this.character.playMotion(WALK_FORWARD_MOTION);
+            }
+          }
+        } else {
+          // 移動できない場合は待機
+          if (this.character.getCurrentMotionName() !== 'idle') {
+            this.character.playMotion(IDLE_MOTION);
+          }
+        }
       }
     }
   }
@@ -227,10 +340,12 @@ export class CharacterAI {
       return;
     }
 
-    // 守るべきゴールを決定（敵チームなので、味方チームのゴールを守る）
+    const myPosition = this.character.getPosition();
+    const onBallPosition = onBallPlayer.getPosition();
+
+    // 守るべきゴールを決定（自チームのゴールを守る）
     const defendingGoal = this.character.team === "ally" ? this.field.getGoal2() : this.field.getGoal1();
     const goalPosition = defendingGoal.position;
-    const onBallPosition = onBallPlayer.getPosition();
 
     // オンボールプレイヤーからゴールへの方向ベクトルを計算
     const toGoal = new Vector3(
@@ -242,18 +357,36 @@ export class CharacterAI {
     // 方向を正規化
     const direction = toGoal.normalize();
 
-    // オンボールプレイヤーから1m離れた位置（ゴール方向）
-    const targetDistance = 1.0; // 1m
+    // 維持したい距離（1.5m）
+    const targetDistance = 1.5;
+
+    // オンボールプレイヤーから1.5m離れた位置（ゴール方向）
     const targetPosition = new Vector3(
       onBallPosition.x + direction.x * targetDistance,
       onBallPosition.y,
       onBallPosition.z + direction.z * targetDistance
     );
 
-    // 目標位置に向かって移動
-    this.moveTowards(targetPosition, deltaTime);
+    // 現在の距離をチェック
+    const currentDistance = Vector3.Distance(myPosition, onBallPosition);
 
-    // オンボールプレイヤーの方を向く
+    // 距離が近すぎる場合（1m以内）は離れる
+    if (currentDistance < 1.0) {
+      // ゴール方向に離れる
+      this.moveTowards(targetPosition, deltaTime, 0.2);
+    }
+    // 距離が遠すぎる場合（2m以上）は近づく
+    else if (currentDistance > 2.0) {
+      this.moveTowards(targetPosition, deltaTime, 0.2);
+    }
+    // 適切な距離（1m～2m）にいる場合は停止
+    else {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+    }
+
+    // 常にオンボールプレイヤーの方を向く
     this.faceTowards(onBallPlayer);
   }
 
@@ -316,6 +449,18 @@ export class CharacterAI {
   }
 
   /**
+   * オンボールディフェンダーを見つける
+   */
+  private findOnBallDefender(): Character | null {
+    for (const char of this.allCharacters) {
+      if (char.getState() === CharacterState.ON_BALL_DEFENDER) {
+        return char;
+      }
+    }
+    return null;
+  }
+
+  /**
    * オフボールディフェンダーを見つける
    */
   private findOffBallDefender(): Character | null {
@@ -355,18 +500,47 @@ export class CharacterAI {
     // 距離が十分近い場合は移動しない
     const distance = direction.length();
     if (distance < stopDistance) {
+      // 停止時は待機モーションを再生
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
       return;
     }
 
     // 方向ベクトルを正規化
     direction.normalize();
 
+    // 衝突を考慮して移動方向を調整
+    const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
+
+    // 移動できない場合は停止
+    if (!adjustedDirection) {
+      // 停止時は待機モーションを再生
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
     // 移動方向を向く
-    const angle = Math.atan2(direction.x, direction.z);
+    const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
     this.character.setRotation(angle);
 
     // 移動
-    this.character.move(direction, deltaTime);
+    this.character.move(adjustedDirection, deltaTime);
+
+    // 距離に応じたモーション再生
+    if (distance > 5.0) {
+      // 遠い場合は走る
+      if (this.character.getCurrentMotionName() !== 'dash_forward') {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+    } else {
+      // 近い場合は歩く
+      if (this.character.getCurrentMotionName() !== 'walk_forward') {
+        this.character.playMotion(WALK_FORWARD_MOTION);
+      }
+    }
   }
 
   /**
@@ -497,6 +671,89 @@ export class CharacterAI {
       // キャラクターの位置を更新
       this.character.setPosition(new Vector3(newX, myPosition.y, newZ));
     }
+  }
+
+  /**
+   * 衝突チェック - 他のキャラクターと衝突するかチェック
+   * @param newPosition 移動先の位置
+   * @returns 衝突する場合true
+   */
+  private checkCollision(newPosition: Vector3): boolean {
+    const myRadius = this.character.collisionRadius;
+
+    for (const other of this.allCharacters) {
+      // 自分自身はスキップ
+      if (other === this.character) continue;
+
+      const otherPosition = other.getPosition();
+      const otherRadius = other.collisionRadius;
+
+      // XZ平面上での距離を計算
+      const dx = newPosition.x - otherPosition.x;
+      const dz = newPosition.z - otherPosition.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+
+      // 衝突半径の合計より近い場合は衝突
+      const minDistance = myRadius + otherRadius;
+      if (distance < minDistance) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 衝突を考慮した移動方向の調整
+   * @param direction 元の移動方向
+   * @param deltaTime デルタタイム
+   * @returns 調整後の移動方向（移動不可の場合はnull）
+   */
+  private adjustDirectionForCollision(direction: Vector3, deltaTime: number): Vector3 | null {
+    const currentPosition = this.character.getPosition();
+    const speed = this.character.config.physical.speed;
+    const moveDistance = speed * deltaTime;
+
+    // 元の方向での移動先をチェック
+    const newPosition = new Vector3(
+      currentPosition.x + direction.x * moveDistance,
+      currentPosition.y,
+      currentPosition.z + direction.z * moveDistance
+    );
+
+    if (!this.checkCollision(newPosition)) {
+      // 衝突しない場合はそのまま移動
+      return direction;
+    }
+
+    // 衝突する場合、左右に回避を試みる
+    const avoidanceAngles = [30, -30, 60, -60, 90, -90]; // 度数
+    for (const angleDeg of avoidanceAngles) {
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
+
+      // 回転後の方向ベクトル
+      const rotatedDirection = new Vector3(
+        direction.x * cos - direction.z * sin,
+        0,
+        direction.x * sin + direction.z * cos
+      );
+
+      const avoidPosition = new Vector3(
+        currentPosition.x + rotatedDirection.x * moveDistance,
+        currentPosition.y,
+        currentPosition.z + rotatedDirection.z * moveDistance
+      );
+
+      if (!this.checkCollision(avoidPosition)) {
+        // 衝突しない方向が見つかった
+        return rotatedDirection;
+      }
+    }
+
+    // どの方向にも移動できない場合はnull
+    return null;
   }
 
   /**

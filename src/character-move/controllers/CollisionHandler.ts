@@ -17,23 +17,11 @@ const CHARACTER_CHARACTER_DISTANCE = CHARACTER_RADIUS * 2; // キャラクター
  */
 export class CollisionHandler {
   private ball: Ball;
-  private player: Character;
-  private ally?: Character;
-  private enemy1?: Character;
-  private enemy2?: Character;
+  private allCharacters: Character[];
 
-  constructor(
-    ball: Ball,
-    player: Character,
-    ally?: Character,
-    enemy1?: Character,
-    enemy2?: Character
-  ) {
+  constructor(ball: Ball, characters: Character[]) {
     this.ball = ball;
-    this.player = player;
-    this.ally = ally;
-    this.enemy1 = enemy1;
-    this.enemy2 = enemy2;
+    this.allCharacters = characters;
   }
 
   /**
@@ -41,24 +29,16 @@ export class CollisionHandler {
    */
   public update(_deltaTime: number): void {
     // ボールとキャラクターの衝突判定
-    this.resolveBallCharacterCollision(this.player);
-    if (this.ally) {
-      this.resolveBallCharacterCollision(this.ally);
-    }
-    if (this.enemy1) {
-      this.resolveBallCharacterCollision(this.enemy1);
-    }
-    if (this.enemy2) {
-      this.resolveBallCharacterCollision(this.enemy2);
+    for (const character of this.allCharacters) {
+      this.resolveBallCharacterCollision(character);
     }
 
-    // キャラクター同士の衝突判定
-    this.resolveCharacterCharacterCollision(this.player, this.ally);
-    this.resolveCharacterCharacterCollision(this.player, this.enemy1);
-    this.resolveCharacterCharacterCollision(this.player, this.enemy2);
-    this.resolveCharacterCharacterCollision(this.ally, this.enemy1);
-    this.resolveCharacterCharacterCollision(this.ally, this.enemy2);
-    this.resolveCharacterCharacterCollision(this.enemy1, this.enemy2);
+    // キャラクター同士の衝突判定（全ペアをチェック）
+    for (let i = 0; i < this.allCharacters.length; i++) {
+      for (let j = i + 1; j < this.allCharacters.length; j++) {
+        this.resolveCharacterCharacterCollision(this.allCharacters[i], this.allCharacters[j]);
+      }
+    }
 
     // キャラクターの状態を更新
     this.updateCharacterStates();
@@ -92,15 +72,7 @@ export class CollisionHandler {
   /**
    * キャラクター同士の衝突を解決
    */
-  private resolveCharacterCharacterCollision(
-    character1: Character | undefined,
-    character2: Character | undefined
-  ): void {
-    // どちらかが存在しない場合はスキップ
-    if (!character1 || !character2) {
-      return;
-    }
-
+  private resolveCharacterCharacterCollision(character1: Character, character2: Character): void {
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
@@ -146,15 +118,8 @@ export class CollisionHandler {
 
     // ボールが誰も保持していない場合、全員BALL_LOST
     if (!holder) {
-      this.player.setState(CharacterState.BALL_LOST);
-      if (this.ally) {
-        this.ally.setState(CharacterState.BALL_LOST);
-      }
-      if (this.enemy1) {
-        this.enemy1.setState(CharacterState.BALL_LOST);
-      }
-      if (this.enemy2) {
-        this.enemy2.setState(CharacterState.BALL_LOST);
+      for (const character of this.allCharacters) {
+        character.setState(CharacterState.BALL_LOST);
       }
       return;
     }
@@ -165,17 +130,11 @@ export class CollisionHandler {
     // ボール保持者のチームを判定
     const holderTeam = holder.team;
 
-    // 全キャラクターをリスト化
-    const allCharacters: Character[] = [this.player];
-    if (this.ally) allCharacters.push(this.ally);
-    if (this.enemy1) allCharacters.push(this.enemy1);
-    if (this.enemy2) allCharacters.push(this.enemy2);
-
     // 味方と敵を分類
     const teammates: Character[] = [];
     const opponents: Character[] = [];
 
-    allCharacters.forEach((char) => {
+    this.allCharacters.forEach((char) => {
       if (char === holder) {
         return; // 保持者自身はスキップ
       }
