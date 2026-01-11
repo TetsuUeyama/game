@@ -23,12 +23,13 @@ export interface GameTeamConfig {
 export class TeamConfigLoader {
   /**
    * チーム設定を読み込む
+   * @param configPath 設定ファイルのパス（デフォルト: /data/teamConfig.json）
    */
-  public static async loadTeamConfig(): Promise<GameTeamConfig> {
-    console.log('[TeamConfigLoader] チーム設定を読み込み中...');
+  public static async loadTeamConfig(configPath: string = '/data/teamConfig.json'): Promise<GameTeamConfig> {
+    console.log('[TeamConfigLoader] チーム設定を読み込み中...', configPath);
 
     try {
-      const response = await fetch('/data/teamConfig.json');
+      const response = await fetch(configPath);
 
       if (!response.ok) {
         throw new Error(`チーム設定の読み込みに失敗しました: ${response.statusText}`);
