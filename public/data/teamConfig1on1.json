@@ -1,0 +1,24 @@
+{
+  "allyTeam": {
+    "formation": "1on1",
+    "players": [
+      {
+        "playerId": "1",
+        "position": "FW",
+        "x": 0,
+        "z": -5
+      }
+    ]
+  },
+  "enemyTeam": {
+    "formation": "1on1",
+    "players": [
+      {
+        "playerId": "7",
+        "position": "DF",
+        "x": 0,
+        "z": 5
+      }
+    ]
+  }
+}

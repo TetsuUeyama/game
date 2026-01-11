@@ -139,6 +139,11 @@ export class CollisionHandler {
         return; // 保持者自身はスキップ
       }
 
+      // 無力化されたキャラクターはスキップ（状態を変更しない）
+      if (char.isDefeated()) {
+        return;
+      }
+
       if (char.team === holderTeam) {
         teammates.push(char);
       } else {

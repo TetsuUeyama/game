@@ -17,6 +17,7 @@ import { CharacterAI } from "../controllers/CharacterAI";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
+import { CharacterState } from "../types/CharacterState";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -49,6 +50,17 @@ export class GameScene {
   private currentTargetIndex: number = 0;
 
   private lastFrameTime: number = Date.now();
+
+  // 1on1勝負の状態管理
+  private was1on1: boolean = false;
+  private in1on1Battle: boolean = false; // 1on1バトル中かどうか
+  private lastDiceRollTime: number = 0; // 最後にサイコロを振った時刻
+  private diceRollInterval: number = 1000; // サイコロを振る間隔（ミリ秒）
+  private oneononeResult: { winner: 'offense' | 'defense'; offenseDice: number; defenseDice: number } | null = null;
+  private defeatedDefender: Character | null = null;
+  private currentDefenderRadius: number = 1.0; // 現在のディフェンダーのサークル半径
+  private readonly maxDefenderRadius: number = 1.0; // ディフェンダーのサークル最大半径
+  private readonly radiusChangePerRound: number = 0.2; // 1回の勝負でサークルが変化する量
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -462,6 +474,137 @@ export class GameScene {
     if (this.jointController) {
       this.jointController.update(deltaTime);
     }
+
+    // 1on1状態の変化をチェック
+    this.check1on1Battle();
+  }
+
+  /**
+   * 1on1の勝負をチェック
+   */
+  private check1on1Battle(): void {
+    const is1on1Now = this.is1on1State();
+
+    // 1on1状態に突入した瞬間（false → true）
+    if (!this.was1on1 && is1on1Now) {
+      console.log('[GameScene] 1on1バトル開始！');
+      this.in1on1Battle = true;
+      this.currentDefenderRadius = this.maxDefenderRadius; // サークル半径を初期化
+      this.lastDiceRollTime = Date.now(); // 即座に最初のサイコロを振る
+
+      // ディフェンダーのサークル半径を設定
+      const defender = this.findOnBallDefender();
+      if (defender) {
+        defender.setFootCircleRadius(this.currentDefenderRadius);
+      }
+    }
+
+    // 1on1状態から抜けた瞬間（true → false）
+    if (this.was1on1 && !is1on1Now) {
+      console.log('[GameScene] 1on1バトル終了');
+      this.in1on1Battle = false;
+
+      // ディフェンダーのサークル半径を元に戻す
+      const defender = this.findOnBallDefender();
+      if (defender && !defender.isDefeated()) {
+        defender.setFootCircleRadius(this.maxDefenderRadius);
+      }
+    }
+
+    // 1on1バトル中は一定間隔でサイコロを振る
+    if (this.in1on1Battle) {
+      const currentTime = Date.now();
+      if (currentTime - this.lastDiceRollTime >= this.diceRollInterval) {
+        this.perform1on1Battle();
+        this.lastDiceRollTime = currentTime;
+      }
+    }
+
+    this.was1on1 = is1on1Now;
+  }
+
+  /**
+   * 1on1の勝負を実行（サイコロを振る）
+   */
+  private perform1on1Battle(): void {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+
+    // オンボールプレイヤーとディフェンダーを探す
+    let onBallPlayer: Character | null = null;
+    let onBallDefender: Character | null = null;
+
+    for (const char of allCharacters) {
+      const state = char.getState();
+      if (state === "ON_BALL_PLAYER") {
+        onBallPlayer = char;
+      } else if (state === "ON_BALL_DEFENDER") {
+        onBallDefender = char;
+      }
+    }
+
+    if (!onBallPlayer || !onBallDefender) {
+      return;
+    }
+
+    // サイコロを振る（1〜6）
+    const offenseDice = Math.floor(Math.random() * 6) + 1;
+    const defenseDice = Math.floor(Math.random() * 6) + 1;
+
+    console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}, 現在のサークル半径=${this.currentDefenderRadius.toFixed(2)}m`);
+
+    if (offenseDice > defenseDice) {
+      // オフェンス勝利：サークルを小さくする
+      console.log('[GameScene] オフェンス勝利！');
+      this.oneononeResult = { winner: 'offense', offenseDice, defenseDice };
+
+      // サークル半径を減少
+      this.currentDefenderRadius = Math.max(0, this.currentDefenderRadius - this.radiusChangePerRound);
+      onBallDefender.setFootCircleRadius(this.currentDefenderRadius);
+
+      console.log(`[GameScene] ディフェンダーのサークル半径: ${this.currentDefenderRadius.toFixed(2)}m`);
+
+      // サークルサイズが0になったら無力化
+      if (this.currentDefenderRadius <= 0) {
+        console.log('[GameScene] サークルサイズが0になりました。ディフェンダーを無力化');
+        this.defeatedDefender = onBallDefender;
+
+        // ディフェンダーを無力化（BALL_LOSTにして動きを止める）
+        onBallDefender.setState(CharacterState.BALL_LOST);
+        onBallDefender.setDefeated(true); // 無力化フラグを設定
+
+        // 足元の円を非表示にする
+        onBallDefender.setFootCircleVisible(false);
+
+        // 1on1バトル終了
+        this.in1on1Battle = false;
+      }
+    } else if (defenseDice > offenseDice) {
+      // ディフェンス勝利：サークルを大きくする
+      console.log('[GameScene] ディフェンス勝利！');
+      this.oneononeResult = { winner: 'defense', offenseDice, defenseDice };
+
+      // サークル半径を増加（最大値を超えないように）
+      const previousRadius = this.currentDefenderRadius;
+      this.currentDefenderRadius = Math.min(this.maxDefenderRadius, this.currentDefenderRadius + this.radiusChangePerRound);
+      onBallDefender.setFootCircleRadius(this.currentDefenderRadius);
+
+      console.log(`[GameScene] ディフェンダーのサークル半径: ${this.currentDefenderRadius.toFixed(2)}m`);
+
+      // サークルが最大サイズの時にディフェンスが勝ったらボールを奪う
+      if (previousRadius >= this.maxDefenderRadius && this.currentDefenderRadius >= this.maxDefenderRadius) {
+        console.log('[GameScene] サークル最大サイズでディフェンスが勝利！ボールを奪います');
+
+        // ボールの保持者を変更
+        this.ball.setHolder(onBallDefender);
+
+        // 1on1バトル終了
+        this.in1on1Battle = false;
+      }
+    } else {
+      // 引き分け：何もしない（次の間隔で再度サイコロを振る）
+      console.log('[GameScene] 引き分け！');
+      this.oneononeResult = null; // 引き分けの場合は結果をクリア
+    }
   }
 
   /**
@@ -544,6 +687,101 @@ export class GameScene {
   }
 
   /**
+   * 1on1勝負の結果を取得
+   */
+  public get1on1Result(): { winner: 'offense' | 'defense'; offenseDice: number; defenseDice: number } | null {
+    return this.oneononeResult;
+  }
+
+  /**
+   * 1on1勝負の結果をクリア
+   */
+  public clear1on1Result(): void {
+    this.oneononeResult = null;
+  }
+
+  /**
+   * 現在のディフェンダーのサークル半径を取得
+   */
+  public getDefenderCircleRadius(): number {
+    return this.currentDefenderRadius;
+  }
+
+  /**
+   * 1on1バトル中かどうかを取得
+   */
+  public isIn1on1Battle(): boolean {
+    return this.in1on1Battle;
+  }
+
+  /**
+   * 無力化されたディフェンダーかチェック
+   */
+  public isDefeatedDefender(character: Character): boolean {
+    return this.defeatedDefender === character;
+  }
+
+  /**
+   * オンボールディフェンダーを探す
+   */
+  private findOnBallDefender(): Character | null {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const char of allCharacters) {
+      const state = char.getState();
+      if (state === "ON_BALL_DEFENDER") {
+        return char;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 1on1状態かどうかを判定
+   * @returns 1on1状態の場合true、それ以外false
+   */
+  public is1on1State(): boolean {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+
+    // オンボールプレイヤーを探す
+    let onBallPlayer: Character | null = null;
+    let onBallDefender: Character | null = null;
+
+    for (const char of allCharacters) {
+      const state = char.getState();
+      if (state === "ON_BALL_PLAYER") {
+        onBallPlayer = char;
+      } else if (state === "ON_BALL_DEFENDER") {
+        onBallDefender = char;
+      }
+    }
+
+    // 両方存在する場合のみチェック
+    if (onBallPlayer && onBallDefender) {
+      const distance = Vector3.Distance(
+        onBallPlayer.getPosition(),
+        onBallDefender.getPosition()
+      );
+
+      // サークルが重なる距離を動的に計算
+      // オフェンスのサークル半径（1m）+ ディフェンダーのサークル半径（動的）
+      const offenseRadius = 1.0;
+      const defenderRadius = onBallDefender.getFootCircleRadius();
+      const minDistance = offenseRadius + defenderRadius;
+
+      const is1on1 = distance <= minDistance;
+
+      // デバッグ用（最初の1秒だけログ出力）
+      if (Date.now() % 1000 < 100) {
+        console.log(`[GameScene] 1on1チェック: 距離=${distance.toFixed(2)}m, 最小距離=${minDistance.toFixed(2)}m, 1on1=${is1on1}`);
+      }
+
+      return is1on1;
+    }
+
+    return false;
+  }
+
+  /**
    * シーンを取得（外部からアクセス用）
    */
   public getScene(): Scene {
@@ -579,6 +817,26 @@ export class GameScene {
     }
 
     console.log("[GameScene] モーション確認モードを有効化しました");
+  }
+
+  /**
+   * 8角形の頂点番号を表示（デバッグ用）
+   */
+  public showOctagonVertexNumbers(): void {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const character of allCharacters) {
+      character.showOctagonVertexNumbers();
+    }
+  }
+
+  /**
+   * 8角形の頂点番号を非表示（デバッグ用）
+   */
+  public hideOctagonVertexNumbers(): void {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const character of allCharacters) {
+      character.hideOctagonVertexNumbers();
+    }
   }
 
   /**

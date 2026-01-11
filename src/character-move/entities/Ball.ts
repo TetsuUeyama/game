@@ -108,11 +108,11 @@ export class Ball {
    */
   update(_deltaTime: number): void {
     if (this.holder) {
-      // 保持者の右手のひらの先端位置を取得
-      const rightHandPosition = this.holder.getRightHandPosition();
+      // 保持者の設定されたボール保持位置を取得
+      const ballHoldingPosition = this.holder.getBallHoldingPosition();
 
-      // 右手のひらの先に配置
-      this.mesh.position = rightHandPosition;
+      // ボール保持位置に配置
+      this.mesh.position = ballHoldingPosition;
     }
   }
 
