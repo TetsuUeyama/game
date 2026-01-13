@@ -103,6 +103,8 @@ export class Character {
   // AI移動制御（1on1バトル中のランダム移動など）
   private aiMovementDirection: Vector3 | null = null; // AI移動方向
   private aiMovementSpeed: number = 0; // AI移動速度
+  private aiMovementStartTime: number = 0; // AI移動開始時刻（ミリ秒）
+  private aiMovementDelay: number = 0; // AI移動開始までの遅延時間（ミリ秒）
 
   // 無力化フラグ（1on1勝負で負けた場合など）
   private defeated: boolean = false;
@@ -1177,11 +1179,40 @@ export class Character {
         vertexData.applyToMesh(this.footCircleFaceSegments[i]);
       }
     }
+  }
 
-    // AI移動処理（1on1バトル中のランダム移動など）
-    if (this.aiMovementDirection !== null && this.aiMovementSpeed > 0) {
-      const scaledDirection = this.aiMovementDirection.scale(this.aiMovementSpeed);
+  /**
+   * AI移動を適用（衝突判定付き）
+   * @param deltaTime フレーム時間（秒）
+   * @param otherCharacters 他のキャラクターのリスト
+   * @returns 衝突が発生した場合はtrue
+   */
+  public applyAIMovementWithCollision(deltaTime: number, otherCharacters: Character[]): boolean {
+    if (this.aiMovementDirection === null || this.aiMovementSpeed <= 0) {
+      return false;
+    }
+
+    // 遅延時間が経過していない場合は移動しない
+    const currentTime = Date.now();
+    const elapsedTime = currentTime - this.aiMovementStartTime;
+    if (elapsedTime < this.aiMovementDelay) {
+      return false; // まだ遅延時間中
+    }
+
+    // 移動先の位置を計算
+    const speed = CHARACTER_CONFIG.speed;
+    const scaledDirection = this.aiMovementDirection.scale(this.aiMovementSpeed);
+    const velocity = scaledDirection.scale(speed);
+    const targetPosition = this.position.add(velocity.scale(deltaTime));
+
+    // 衝突判定
+    if (!this.checkCollisionWithCharacters(targetPosition, otherCharacters)) {
+      // 衝突しない場合のみ移動
       this.move(scaledDirection, deltaTime);
+      return false; // 衝突なし
+    } else {
+      // 衝突あり
+      return true;
     }
   }
 
@@ -1925,10 +1956,13 @@ export class Character {
    * AI移動を設定（1on1バトル中のランダム移動など）
    * @param direction 移動方向（正規化済みのベクトル）
    * @param speed 移動速度
+   * @param delayMs 移動開始までの遅延時間（ミリ秒）、デフォルトは0（即座に開始）
    */
-  public setAIMovement(direction: Vector3, speed: number): void {
+  public setAIMovement(direction: Vector3, speed: number, delayMs: number = 0): void {
     this.aiMovementDirection = direction.clone().normalize();
     this.aiMovementSpeed = speed;
+    this.aiMovementStartTime = Date.now();
+    this.aiMovementDelay = delayMs;
   }
 
   /**
@@ -1937,6 +1971,33 @@ export class Character {
   public clearAIMovement(): void {
     this.aiMovementDirection = null;
     this.aiMovementSpeed = 0;
+    this.aiMovementStartTime = 0;
+    this.aiMovementDelay = 0;
+  }
+
+  /**
+   * 他のキャラクターとの衝突判定（footCircle基準）
+   * @param targetPosition 移動先の位置
+   * @param otherCharacters 他のキャラクターのリスト
+   * @returns 衝突する場合はtrue
+   */
+  public checkCollisionWithCharacters(targetPosition: Vector3, otherCharacters: Character[]): boolean {
+    for (const other of otherCharacters) {
+      if (other === this) continue; // 自分自身は除外
+
+      const otherPos = other.getPosition();
+      const distance = Vector3.Distance(
+        new Vector3(targetPosition.x, 0, targetPosition.z),
+        new Vector3(otherPos.x, 0, otherPos.z)
+      );
+
+      // footCircleの半径を使った衝突判定
+      const minDistance = this.footCircleRadius + other.getFootCircleRadius();
+      if (distance < minDistance) {
+        return true; // 衝突あり
+      }
+    }
+    return false; // 衝突なし
   }
 
   /**
