@@ -56,6 +56,8 @@ export class GameScene {
   private lastDiceRollTime: number = 0; // 最後にサイコロを振った時刻
   private diceRollInterval: number = 1000; // サイコロを振る間隔（ミリ秒）
   private oneononeResult: { winner: 'offense' | 'defense'; offenseDice: number; defenseDice: number } | null = null;
+  private lastCollisionRedirectTime: number = 0; // 最後に衝突で方向転換した時刻
+  private collisionRedirectInterval: number = 300; // 方向転換の最小間隔（ミリ秒）
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -448,6 +450,85 @@ export class GameScene {
         character.update(deltaTime);
       }
 
+      // AI移動を衝突判定付きで適用（1on1バトル中）
+      if (this.in1on1Battle) {
+        // オフェンス側の衝突を検知して動き直す処理
+        let onBallPlayer: Character | null = null;
+        let onBallDefender: Character | null = null;
+
+        // オンボールプレイヤーとディフェンダーを探す
+        for (const char of allCharacters) {
+          const state = char.getState();
+          if (state === "ON_BALL_PLAYER") {
+            onBallPlayer = char;
+          } else if (state === "ON_BALL_DEFENDER") {
+            onBallDefender = char;
+          }
+        }
+
+        // オフェンス側の移動を試行
+        let offenseCollided = false;
+        if (onBallPlayer) {
+          offenseCollided = onBallPlayer.applyAIMovementWithCollision(deltaTime, allCharacters);
+        }
+
+        // ディフェンス側の移動を試行（衝突判定なしで移動、目標位置に向かう）
+        if (onBallDefender) {
+          onBallDefender.applyAIMovementWithCollision(deltaTime, allCharacters);
+        }
+
+        // サークルが接触しているかチェック
+        let circlesInContact = false;
+        if (onBallPlayer && onBallDefender) {
+          const distance = Vector3.Distance(
+            new Vector3(onBallPlayer.getPosition().x, 0, onBallPlayer.getPosition().z),
+            new Vector3(onBallDefender.getPosition().x, 0, onBallDefender.getPosition().z)
+          );
+          const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+          circlesInContact = distance <= contactDistance + 0.1; // 少し余裕を持たせる
+        }
+
+        // オフェンスが衝突した場合、またはサークルが接触している場合、動き直す
+        if ((offenseCollided || circlesInContact) && onBallPlayer && onBallDefender) {
+          const currentTime = Date.now();
+          if (currentTime - this.lastCollisionRedirectTime >= this.collisionRedirectInterval) {
+            console.log(`[GameScene] 動き直し発生！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
+
+            // 新しいランダム方向を設定
+            const newDirection = this.getRandomDirection8();
+            const moveSpeed = 3.0;
+
+            // オフェンス側の動き直し遅延時間を計算（(100 - quickness) * 10 ミリ秒）
+            // 例：quickness=83 → (100-83)*10 = 170ms、quickness=90 → (100-90)*10 = 100ms
+            const offensePlayerData = onBallPlayer.playerData;
+            let offenseDelayMs = 1000; // デフォルト1秒
+
+            if (offensePlayerData && offensePlayerData.stats.quickness !== undefined) {
+              const quickness = offensePlayerData.stats.quickness;
+              offenseDelayMs = Math.max(0, (100 - quickness) * 10); // (100 - quickness) * 10ms（最小0ms）
+              console.log(`[GameScene] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${quickness})`);
+            } else {
+              console.log(`[GameScene] オフェンスのquicknessデータなし、デフォルト遅延: ${offenseDelayMs}ms`);
+            }
+
+            onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
+
+            // ディフェンスもオフェンスとゴールの間に位置取る（動き直しなのでquicknessを使用）
+            this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
+
+            // 最後に方向転換した時刻を更新
+            this.lastCollisionRedirectTime = currentTime;
+          }
+        }
+
+        // その他のキャラクターも移動
+        for (const character of allCharacters) {
+          if (character !== onBallPlayer && character !== onBallDefender) {
+            character.applyAIMovementWithCollision(deltaTime, allCharacters);
+          }
+        }
+      }
+
       // 全AIコントローラーを更新
       for (const ai of this.characterAIs) {
         ai.update(deltaTime);
@@ -484,7 +565,10 @@ export class GameScene {
     if (!this.was1on1 && is1on1Now) {
       console.log('[GameScene] 1on1バトル開始！');
       this.in1on1Battle = true;
-      this.lastDiceRollTime = Date.now(); // 即座に最初のサイコロを振る
+
+      // 開始直後に即座にサイコロを振って移動開始
+      this.perform1on1Battle();
+      this.lastDiceRollTime = Date.now();
     }
 
     // 1on1状態から抜けた瞬間（true → false）
@@ -544,7 +628,12 @@ export class GameScene {
     // オフェンス側：8方向のランダムな移動を設定
     const randomDirection = this.getRandomDirection8();
     const moveSpeed = 3.0; // 歩行速度（適宜調整）
-    onBallPlayer.setAIMovement(randomDirection, moveSpeed);
+
+    // 初回は遅延なしで開始（動き直し時のみquicknessに基づく遅延を適用）
+    onBallPlayer.setAIMovement(randomDirection, moveSpeed, 0);
+
+    // ディフェンス側：オフェンスの動きに対応
+    this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
 
     console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}`);
 
@@ -558,6 +647,106 @@ export class GameScene {
       console.log('[GameScene] 引き分け！');
       this.oneononeResult = null; // 引き分けの場合は結果をクリア
     }
+  }
+
+  /**
+   * ディフェンダーの対応動作を設定
+   * オフェンスとゴールを結ぶ直線上に位置取り、0番の辺をオフェンスに向ける
+   * @param offense オフェンス側キャラクター
+   * @param defender ディフェンダー側キャラクター
+   * @param _offenseDirection オフェンスの移動方向（未使用、互換性のため残す）
+   * @param speed 移動速度
+   * @param isRedirect 動き直しかどうか（trueの場合はquicknessを使用、falseの場合はreflexesを使用）
+   */
+  private setDefenderReaction(
+    offense: Character,
+    defender: Character,
+    _offenseDirection: Vector3,
+    speed: number,
+    isRedirect: boolean = false
+  ): void {
+    const offensePos = offense.getPosition();
+    const defenderPos = defender.getPosition();
+
+    // 1. 守るゴールの位置を決定（ディフェンダーのチームに応じて）
+    // 味方チーム(ally)はゴール2（手前側、Z=-25）を守る
+    // 敵チーム(enemy)はゴール1（奥側、Z=+25）を守る
+    const goalZ = defender.team === "ally" ? -25 : 25;
+    const goalPosition = new Vector3(0, 0, goalZ);
+
+    // 2. オフェンス→ゴールの方向ベクトルを計算
+    const offenseToGoal = goalPosition.subtract(offensePos);
+    offenseToGoal.y = 0; // XZ平面上で計算
+    const distanceToGoal = offenseToGoal.length();
+
+    if (distanceToGoal < 0.1) {
+      // オフェンスがゴール上にいる場合は何もしない
+      return;
+    }
+
+    const directionToGoal = offenseToGoal.normalize();
+
+    // 3. 目標位置を計算：オフェンスからゴール方向に、サークルが接触する距離
+    // オフェンスのサークル半径 + ディフェンダーのサークル半径
+    const offenseRadius = offense.getFootCircleRadius();
+    const defenderRadius = defender.getFootCircleRadius();
+    const contactDistance = offenseRadius + defenderRadius;
+
+    // 目標位置：オフェンスからゴール方向にcontactDistance進んだ位置
+    const targetPosition = offensePos.add(directionToGoal.scale(contactDistance));
+
+    // 4. ディフェンダーの向きを設定（0番の辺がオフェンス方向を向くように）
+    // オフェンスへの方向
+    const directionToOffense = offensePos.subtract(targetPosition);
+    directionToOffense.y = 0;
+
+    if (directionToOffense.length() > 0.01) {
+      const targetRotation = Math.atan2(directionToOffense.x, directionToOffense.z);
+      defender.setRotation(targetRotation);
+    }
+
+    // 5. 現在位置から目標位置への移動方向を計算
+    const moveDirection = targetPosition.subtract(defenderPos);
+    moveDirection.y = 0;
+
+    const distanceToTarget = moveDirection.length();
+
+    if (distanceToTarget < 0.05) {
+      // 既に目標位置にいる場合は移動しない
+      defender.clearAIMovement();
+      return;
+    }
+
+    const normalizedDirection = moveDirection.normalize();
+
+    // 6. ディフェンダーの遅延時間を計算
+    const defenderPlayerData = defender.playerData;
+    let reactionDelayMs = 1000; // デフォルト1秒
+
+    if (isRedirect) {
+      // 動き直しの場合：quicknessを使用（(100 - quickness) * 10 ミリ秒）
+      if (defenderPlayerData && defenderPlayerData.stats.quickness !== undefined) {
+        const quickness = defenderPlayerData.stats.quickness;
+        reactionDelayMs = Math.max(0, (100 - quickness) * 10); // 最小0ms
+        console.log(`[GameScene] ディフェンダー動き直し遅延: ${reactionDelayMs}ms (quickness=${quickness})`);
+      } else {
+        console.log(`[GameScene] ディフェンダーのquicknessデータなし、デフォルト遅延: ${reactionDelayMs}ms`);
+      }
+    } else {
+      // 通常の反応：reflexesを使用（1000ms - reflexes値）
+      if (defenderPlayerData && defenderPlayerData.stats.reflexes !== undefined) {
+        const reflexes = defenderPlayerData.stats.reflexes;
+        reactionDelayMs = Math.max(0, 1000 - reflexes); // 最小0ms
+        console.log(`[GameScene] ディフェンダー反応遅延: ${reactionDelayMs}ms (reflexes=${reflexes})`);
+      } else {
+        console.log(`[GameScene] ディフェンダーのreflexesデータなし、デフォルト遅延: ${reactionDelayMs}ms`);
+      }
+    }
+
+    // 7. ディフェンダーの移動を設定（遅延時間付き）
+    defender.setAIMovement(normalizedDirection, speed, reactionDelayMs);
+
+    console.log(`[GameScene] ディフェンダー目標位置: (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)}), 距離=${distanceToTarget.toFixed(2)}m`);
   }
 
   /**
