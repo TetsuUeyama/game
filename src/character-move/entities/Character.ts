@@ -1,4 +1,4 @@
-import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, VertexData } from "@babylonjs/core";
+import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, VertexData, LinesMesh } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
@@ -6,6 +6,8 @@ import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { PlayerData } from "../types/PlayerData";
+import { BallAction, FACE_ACTIONS } from "../types/BallAction";
+import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrategy";
 
 /**
  * 3Dキャラクターエンティティ
@@ -86,7 +88,7 @@ export class Character {
   private nameLabelTexture: AdvancedDynamicTexture | null = null;
 
   // 足元の円
-  private footCircle: Mesh | null = null;
+  private footCircle: LinesMesh | null = null;
   private footCircleRadius: number = 1.0; // 足元の円の半径（初期値1m）
   private footCircleVertexLabels: Mesh[] = []; // 8角形の頂点番号表示用
   private footCircleFaceSegments: Mesh[] = []; // 8角形の面セグメント（色分け用）
@@ -94,6 +96,9 @@ export class Character {
   // ボール保持位置設定
   private ballHoldingFaces: number[] = [0, 1, 2, 6, 7]; // 使用する8角形の面番号（前方5箇所）
   private currentBallHoldingIndex: number = 0; // 現在のボール保持位置インデックス（0-4）
+
+  // オフェンス戦術
+  private offenseStrategy: OffenseStrategy = OffenseStrategy.HIGH_RISK; // デフォルトはハイリスク
 
   // 無力化フラグ（1on1勝負で負けた場合など）
   private defeated: boolean = false;
@@ -204,6 +209,9 @@ export class Character {
 
     // 足元の円を作成
     this.footCircle = this.createFootCircle();
+
+    // 足元の円の色分けセグメントを作成
+    this.createFootCircleFaceSegments();
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
@@ -766,42 +774,42 @@ export class Character {
   /**
    * 足元の円を作成（8角形）
    */
-  private createFootCircle(): Mesh {
-    // 8つの頂点位置を計算（getOctagonVertexPosition()と同じロジック）
-    const positions: number[] = [];
-    const indices: number[] = [];
+  private createFootCircle(): LinesMesh {
+    // 8つの線分を定義（各辺を個別の線として作成）
+    const lines: Vector3[][] = [];
 
     for (let i = 0; i < 8; i++) {
       const angleStep = (Math.PI * 2) / 8;
       const angleOffset = Math.PI / 8; // 22.5度のオフセット（辺を正面に配置）
-      const angle = -i * angleStep + angleOffset; // 時計回り
-      const totalAngle = angle + this.rotation;
 
-      // 頂点位置（相対座標、キャラクター中心が原点）
-      const x = Math.sin(totalAngle) * this.footCircleRadius;
-      const z = Math.cos(totalAngle) * this.footCircleRadius;
+      // 現在の頂点
+      const angle1 = -i * angleStep + angleOffset;
+      const totalAngle1 = angle1 + this.rotation;
+      const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
+      const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
 
-      positions.push(x, 0.01, z); // Y=0.01で地面より少し上
+      // 次の頂点
+      const angle2 = -(i + 1) * angleStep + angleOffset;
+      const totalAngle2 = angle2 + this.rotation;
+      const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
+      const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
+
+      // 線分を追加
+      lines.push([
+        new Vector3(x1, 0.01, z1),
+        new Vector3(x2, 0.01, z2)
+      ]);
     }
 
-    // インデックス（8本の線分を作成）
-    for (let i = 0; i < 8; i++) {
-      indices.push(i, (i + 1) % 8);
-    }
+    // CreateLineSystemでLinesMeshを作成
+    const octagon = MeshBuilder.CreateLineSystem(
+      "foot-circle",
+      { lines: lines, updatable: true },
+      this.scene
+    );
 
-    // カスタムメッシュを作成
-    const octagon = new Mesh("foot-circle", this.scene);
-    const vertexData = new VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.applyToMesh(octagon);
-
-    // マテリアルを設定
-    const material = new StandardMaterial("foot-circle-material", this.scene);
-    material.diffuseColor = new Color3(1.0, 1.0, 1.0);
-    material.emissiveColor = new Color3(0.5, 0.5, 0.5);
-    material.alpha = 0.8;
-    octagon.material = material;
+    // 色を設定（LinesMeshはcolorプロパティを持つ）
+    octagon.color = new Color3(1.0, 1.0, 1.0);
 
     // 親を設定しない（シーンの直接の子として独立させる）
     octagon.parent = null;
@@ -817,6 +825,72 @@ export class Character {
     octagon.isVisible = true;
 
     return octagon;
+  }
+
+  /**
+   * 足元の円の色分けセグメント（8つの三角形）を作成
+   */
+  private createFootCircleFaceSegments(): void {
+    // 既存のセグメントを削除
+    for (const segment of this.footCircleFaceSegments) {
+      segment.dispose();
+    }
+    this.footCircleFaceSegments = [];
+
+    // 8色のカラーパレット
+    const colors = [
+      new Color3(1, 0, 0),     // 0: 赤
+      new Color3(1, 0.5, 0),   // 1: オレンジ
+      new Color3(1, 1, 0),     // 2: 黄色
+      new Color3(0, 1, 0),     // 3: 緑
+      new Color3(0, 1, 1),     // 4: シアン
+      new Color3(0, 0, 1),     // 5: 青
+      new Color3(0.5, 0, 1),   // 6: 紫
+      new Color3(1, 0, 1),     // 7: マゼンタ
+    ];
+
+    // 8角形の各面を三角形として作成
+    for (let i = 0; i < 8; i++) {
+      // 三角形の3つの頂点
+      const center = this.position.clone();
+      center.y = 0.02; // 地面より少し上
+      const vertex1 = this.getOctagonVertexPosition(i);
+      vertex1.y = 0.02;
+      const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
+      vertex2.y = 0.02;
+
+      // カスタムメッシュで三角形を作成
+      const positions = [
+        center.x, center.y, center.z,
+        vertex1.x, vertex1.y, vertex1.z,
+        vertex2.x, vertex2.y, vertex2.z,
+      ];
+
+      const indices = [0, 1, 2];
+      const normals: number[] = [];
+
+      // 法線を計算（上向き）
+      normals.push(0, 1, 0);
+      normals.push(0, 1, 0);
+      normals.push(0, 1, 0);
+
+      const triangle = new Mesh(`face-segment-${i}`, this.scene);
+      const vertexData = new VertexData();
+      vertexData.positions = positions;
+      vertexData.indices = indices;
+      vertexData.normals = normals;
+      vertexData.applyToMesh(triangle);
+
+      // マテリアルを設定
+      const material = new StandardMaterial(`face-material-${i}`, this.scene);
+      material.diffuseColor = colors[i];
+      material.emissiveColor = colors[i].scale(0.3); // 少し発光させる
+      material.alpha = 0.6; // 半透明
+      material.backFaceCulling = false; // 両面表示
+      triangle.material = material;
+
+      this.footCircleFaceSegments.push(triangle);
+    }
   }
 
   /**
@@ -1038,26 +1112,40 @@ export class Character {
 
     // 足元の円（8角形）の頂点位置を更新（キャラクターに追従・回転に対応）
     if (this.footCircle) {
-      const positions: number[] = [];
+      // LinesMesh用の線分配列を作成
+      const lines: Vector3[][] = [];
 
       for (let i = 0; i < 8; i++) {
         const angleStep = (Math.PI * 2) / 8;
         const angleOffset = Math.PI / 8; // 22.5度のオフセット（辺を正面に配置）
-        const angle = -i * angleStep + angleOffset; // 時計回り
-        const totalAngle = angle + this.rotation;
 
-        // 頂点位置（相対座標）
-        const x = Math.sin(totalAngle) * this.footCircleRadius;
-        const z = Math.cos(totalAngle) * this.footCircleRadius;
+        // 現在の頂点
+        const angle1 = -i * angleStep + angleOffset;
+        const totalAngle1 = angle1 + this.rotation;
+        const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
+        const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
 
-        positions.push(x, 0.01, z);
+        // 次の頂点
+        const angle2 = -(i + 1) * angleStep + angleOffset;
+        const totalAngle2 = angle2 + this.rotation;
+        const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
+        const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
+
+        // 線分を追加
+        lines.push([
+          new Vector3(x1, 0.01, z1),
+          new Vector3(x2, 0.01, z2)
+        ]);
       }
 
-      const vertexData = new VertexData();
-      vertexData.positions = positions;
-      vertexData.indices = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 0];
-      vertexData.applyToMesh(this.footCircle);
+      // LinesMeshを更新（CreateLineSystemで再作成）
+      const _updatedOctagon = MeshBuilder.CreateLineSystem(
+        "foot-circle",
+        { lines: lines, instance: this.footCircle },
+        this.scene
+      );
 
+      // 位置を更新
       this.footCircle.position.x = this.position.x;
       this.footCircle.position.z = this.position.z;
     }
@@ -1528,8 +1616,8 @@ export class Character {
     const ballX = edgeMidX + unitX * insetDistance;
     const ballZ = edgeMidZ + unitZ * insetDistance;
 
-    // ボールは手の高さ（腰あたり）に配置
-    const ballY = this.position.y + 0.8; // 地面から0.8m程度の高さ
+    // ボールは腰関節の高さに配置（上半身と下半身の境界）
+    const ballY = this.waistJointMesh.getAbsolutePosition().y;
 
     return new Vector3(ballX, ballY, ballZ);
   }
@@ -1745,6 +1833,85 @@ export class Character {
   }
 
   /**
+   * 現在のボール保持面で取れる行動を取得
+   * @returns 利用可能な行動の配列
+   */
+  public getAvailableActions(): BallAction[] {
+    if (this.ballHoldingFaces.length === 0) return [];
+
+    const currentFace = this.ballHoldingFaces[this.currentBallHoldingIndex];
+    const actions = FACE_ACTIONS[currentFace] || [];
+
+    return actions;
+  }
+
+  /**
+   * 現在のボール保持面の番号を取得
+   * @returns 現在の面番号（0-7）
+   */
+  public getCurrentBallFace(): number {
+    if (this.ballHoldingFaces.length === 0) return 0;
+    return this.ballHoldingFaces[this.currentBallHoldingIndex];
+  }
+
+  /**
+   * 指定した面にボールを移動する（ボールハンドリング用）
+   * @param targetFace 目標の面番号（0-7）
+   * @returns 移動成功したかどうか
+   */
+  public handleBallToFace(targetFace: number): boolean {
+    // 面番号の妥当性チェック
+    if (targetFace < 0 || targetFace > 7) {
+      console.warn(`[Character] 無効な面番号: ${targetFace}`);
+      return false;
+    }
+
+    // 目標の面が使用可能な面リストに含まれているかチェック
+    const targetIndex = this.ballHoldingFaces.indexOf(targetFace);
+    if (targetIndex === -1) {
+      console.warn(`[Character] 面${targetFace}は使用可能な面リストに含まれていません`);
+      return false;
+    }
+
+    // ボール保持位置を変更
+    this.setBallHoldingPositionIndex(targetIndex);
+    console.log(`[Character] ボールを面${targetFace}に移動しました`);
+    return true;
+  }
+
+  /**
+   * オフェンス戦術を設定
+   * @param strategy オフェンス戦術
+   */
+  public setOffenseStrategy(strategy: OffenseStrategy): void {
+    this.offenseStrategy = strategy;
+
+    // 戦術に応じて使用する面を設定
+    const faces = OFFENSE_STRATEGY_FACES[strategy];
+    this.setBallHoldingFaces(faces);
+
+    console.log(`[Character] オフェンス戦術を${strategy}に設定（使用面: ${faces.join(', ')}）`);
+  }
+
+  /**
+   * 現在のオフェンス戦術を取得
+   * @returns オフェンス戦術
+   */
+  public getOffenseStrategy(): OffenseStrategy {
+    return this.offenseStrategy;
+  }
+
+  /**
+   * ボール保持位置をランダムに変更（1on1バトル時）
+   */
+  public randomizeBallPosition(): void {
+    if (this.ballHoldingFaces.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * this.ballHoldingFaces.length);
+    this.setBallHoldingPositionIndex(randomIndex);
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
@@ -1788,6 +1955,18 @@ export class Character {
       this.footCircle.dispose();
       this.footCircle = null;
     }
+
+    // 足元の円の色分けセグメントを破棄
+    for (const segment of this.footCircleFaceSegments) {
+      segment.dispose();
+    }
+    this.footCircleFaceSegments = [];
+
+    // 頂点ラベルを破棄
+    for (const label of this.footCircleVertexLabels) {
+      label.dispose();
+    }
+    this.footCircleVertexLabels = [];
 
     // 名前ラベルを破棄
     if (this.nameLabel) {
