@@ -6,6 +6,10 @@ import {
   WALK_BACKWARD_MOTION_CONFIG,
   WALK_LEFT_MOTION_CONFIG,
   WALK_RIGHT_MOTION_CONFIG,
+  WALK_FORWARD_LEFT_MOTION_CONFIG,
+  WALK_FORWARD_RIGHT_MOTION_CONFIG,
+  WALK_BACKWARD_LEFT_MOTION_CONFIG,
+  WALK_BACKWARD_RIGHT_MOTION_CONFIG,
 } from "../data/WalkMotion";
 import { IDLE_MOTION_CONFIG } from "../data/IdleMotion";
 import { JUMP_MOTION_CONFIG } from "../data/JumpMotion";
@@ -104,6 +108,10 @@ export class InputController {
       WALK_BACKWARD_MOTION_CONFIG, // 後退モーション
       WALK_LEFT_MOTION_CONFIG, // 左移動モーション
       WALK_RIGHT_MOTION_CONFIG, // 右移動モーション
+      WALK_FORWARD_LEFT_MOTION_CONFIG, // 左前進モーション
+      WALK_FORWARD_RIGHT_MOTION_CONFIG, // 右前進モーション
+      WALK_BACKWARD_LEFT_MOTION_CONFIG, // 左後退モーション
+      WALK_BACKWARD_RIGHT_MOTION_CONFIG, // 右後退モーション
       CROUCH_MOTION_CONFIG, // しゃがみ込みモーション
       JUMP_MOTION_CONFIG, // ジャンプモーション
       LANDING_SMALL_MOTION_CONFIG, // 小ジャンプ着地硬直
@@ -588,6 +596,10 @@ export class InputController {
           speedMultiplier = 0.5; // 後退は0.5倍
         } else if (motionName === "walk_left" || motionName === "walk_right") {
           speedMultiplier = 0.8; // 左右は0.8倍
+        } else if (motionName === "walk_forward_left" || motionName === "walk_forward_right") {
+          speedMultiplier = 0.9; // 斜め前進は0.9倍
+        } else if (motionName === "walk_backward_left" || motionName === "walk_backward_right") {
+          speedMultiplier = 0.65; // 斜め後退は0.65倍（後退とサイドの中間）
         }
 
         // キャラクター設定の速度と方向倍率を適用して移動
@@ -617,6 +629,23 @@ export class InputController {
    * 入力状態から適切なモーション名を決定
    */
   private determineMotionFromInput(): string {
+    // 斜め移動（複合入力）を優先的に検出
+    if (this.inputState.forward && this.inputState.left && !this.inputState.backward && !this.inputState.right) {
+      return "walk_forward_left";
+    }
+
+    if (this.inputState.forward && this.inputState.right && !this.inputState.backward && !this.inputState.left) {
+      return "walk_forward_right";
+    }
+
+    if (this.inputState.backward && this.inputState.left && !this.inputState.forward && !this.inputState.right) {
+      return "walk_backward_left";
+    }
+
+    if (this.inputState.backward && this.inputState.right && !this.inputState.forward && !this.inputState.left) {
+      return "walk_backward_right";
+    }
+
     // 純粋な方向（単一キー）の場合
     if (
       this.inputState.forward &&
@@ -654,7 +683,7 @@ export class InputController {
       return "walk_right";
     }
 
-    // 斜め移動や複合入力の場合は前後を優先
+    // 複雑な複合入力（3キー以上）の場合は前後を優先
     if (this.inputState.forward) {
       return "walk_forward";
     }

@@ -376,3 +376,359 @@ export const WALK_RIGHT_MOTION_CONFIG: MotionConfig = {
   priority: 10,
   interruptible: true,
 };
+
+// ===== WALK_FORWARD_LEFT =====
+export const WFL_T0 = 0.0;
+export const WFL_T1 = 0.25;
+export const WFL_T2 = 0.5;
+export const WFL_T3 = 0.75;
+export const WFL_T4 = 1.0;
+
+// 前進と左移動を組み合わせたモーション
+const WFL_ADDITIONS = {
+  upperBodyX: [1.25, 2.5, 0, 2.5, 0],
+  upperBodyY: [8.5, 8.5, 8.5, 8.5, 8.5],
+  upperBodyZ: [-1.5, -2, -1.5, -2, -1.5],
+
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [18.5, 18.5, 18.5, 18.5, 18.5],
+  lowerBodyZ: [1.5, 1, 1.5, 1, 1],
+
+  headX: [-0.75, -1.5, 0, -1.5, 0],
+  headY: [0, 5, 0, -5, 0],
+  headZ: [1.5, 2.5, 1.5, 2.5, 1.5],
+
+  leftShoulderX: [0, 17.5, 0, -17.5, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, -2.5, 0, -2.5, 0],
+
+  rightShoulderX: [-8.75, -17.5, 0, 17.5, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [2.5, 5, 2.5, 5, 2.5],
+
+  leftElbowX: [1, -7, 1, -7, 1],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [1, 9.5, 1, 9.5, 1],
+
+  rightElbowX: [1, -7, 1, 1, -7],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-2.5, -4.5, -2.5, -4.5, -2.5],
+
+  leftHipX: [-8.75, -25, 0, 25, 0],
+  leftHipY: [15, 15, 15, 15, 15],
+  leftHipZ: [8, 8, 8, 8, 8],
+
+  rightHipX: [0, 25, 0, -25, 0],
+  rightHipY: [-15, -15, -15, -15, -15],
+  rightHipZ: [-8, -8, -8, -8, -8],
+
+  leftKneeX: [2, 27.5, -5, 27.5, -2.5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-5, -5, -5, -5, -5],
+
+  rightKneeX: [2, 18, -5, 18, -2.5],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [5, 5, 5, 5, 5],
+};
+
+export const WFL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WFL_T0, WFL_T1, WFL_T2, WFL_T3, WFL_T4],
+  WFL_ADDITIONS
+);
+
+const WFL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WFL_T0]: 0, [WFL_T1]: -0.05, [WFL_T2]: 0, [WFL_T3]: -0.05, [WFL_T4]: 0},
+};
+
+export const WALK_FORWARD_LEFT_MOTION: MotionData = {
+  name: "walk_forward_left",
+  duration: WFL_T4,
+  loop: true,
+  keyframes: buildKeyframes(WFL_JOINT_ANIMATIONS, WFL_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "leftHip", priority: 10 },
+    { jointName: "rightHip", priority: 10 },
+    { jointName: "leftKnee", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "leftShoulder", priority: 8 },
+    { jointName: "rightShoulder", priority: 8 },
+    { jointName: "upperBody", priority: 6 },
+    { jointName: "head", priority: 4 },
+  ],
+};
+
+export const WALK_FORWARD_LEFT_MOTION_CONFIG: MotionConfig = {
+  motionData: WALK_FORWARD_LEFT_MOTION,
+  isDefault: false,
+  blendDuration: 0.2,
+  priority: 10,
+  interruptible: true,
+};
+
+// ===== WALK_FORWARD_RIGHT =====
+export const WFR_T0 = 0.0;
+export const WFR_T1 = 0.25;
+export const WFR_T2 = 0.5;
+export const WFR_T3 = 0.75;
+export const WFR_T4 = 1.0;
+
+// 前進と右移動を組み合わせたモーション
+const WFR_ADDITIONS = {
+  upperBodyX: [1.25, 2.5, 0, 2.5, 0],
+  upperBodyY: [-8.5, -8.5, -8.5, -8.5, -8.5],
+  upperBodyZ: [1.5, 2, 1.5, 2, 1.5],
+
+  lowerBodyX: [0, 0, 0, 0, 0],
+  lowerBodyY: [-18.5, -18.5, -18.5, -18.5, -18.5],
+  lowerBodyZ: [-1.5, -1, -1.5, -1, -1],
+
+  headX: [-0.75, -1.5, 0, -1.5, 0],
+  headY: [0, 5, 0, -5, 0],
+  headZ: [-1.5, -2.5, -1.5, -2.5, -1.5],
+
+  leftShoulderX: [0, 17.5, 0, -17.5, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [-2.5, -5, -2.5, -5, -2.5],
+
+  rightShoulderX: [-8.75, -17.5, 0, 17.5, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 2.5, 0, 2.5, 0],
+
+  leftElbowX: [1, -7, 1, 1, -7],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [2.5, 4.5, 2.5, 4.5, 2.5],
+
+  rightElbowX: [1, -7, 1, -7, 1],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-1, -9.5, -1, -9.5, -1],
+
+  leftHipX: [-8.75, -25, 0, 25, 0],
+  leftHipY: [15, 2.5, 15, 15, 15],
+  leftHipZ: [-2.5, 0, -2.5, 0, -2.5],
+
+  rightHipX: [0, 25, 0, -25, 0],
+  rightHipY: [-15, 0, -15, -15, -15],
+  rightHipZ: [4.5, -0.5, 4.5, -0.5, 4.5],
+
+  leftKneeX: [7.5, -2.5, 14, -2.5, 14],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [1.5, 1.5, 1.5, 1.5, 1.5],
+
+  rightKneeX: [10.25, 9, 14, 6.5, 14],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [-1.5, -1.5, -1.5, -1.5, -1.5],
+};
+
+export const WFR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WFR_T0, WFR_T1, WFR_T2, WFR_T3, WFR_T4],
+  WFR_ADDITIONS
+);
+
+const WFR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WFR_T0]: 0, [WFR_T1]: -0.05, [WFR_T2]: 0, [WFR_T3]: -0.05, [WFR_T4]: 0},
+};
+
+export const WALK_FORWARD_RIGHT_MOTION: MotionData = {
+  name: "walk_forward_right",
+  duration: WFR_T4,
+  loop: true,
+  keyframes: buildKeyframes(WFR_JOINT_ANIMATIONS, WFR_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "leftHip", priority: 10 },
+    { jointName: "rightHip", priority: 10 },
+    { jointName: "leftKnee", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "leftShoulder", priority: 8 },
+    { jointName: "rightShoulder", priority: 8 },
+    { jointName: "upperBody", priority: 6 },
+    { jointName: "head", priority: 4 },
+  ],
+};
+
+export const WALK_FORWARD_RIGHT_MOTION_CONFIG: MotionConfig = {
+  motionData: WALK_FORWARD_RIGHT_MOTION,
+  isDefault: false,
+  blendDuration: 0.2,
+  priority: 10,
+  interruptible: true,
+};
+
+// ===== WALK_BACKWARD_LEFT =====
+export const WBL_T0 = 0.0;
+export const WBL_T1 = 0.25;
+export const WBL_T2 = 0.5;
+export const WBL_T3 = 0.75;
+export const WBL_T4 = 1.0;
+
+// 後退と左移動を組み合わせたモーション
+const WBL_ADDITIONS = {
+  upperBodyX: [2.5, 2.5, 2.5, 2.5, 2.5],
+  upperBodyY: [8.5, 8.5, 8.5, 8.5, 8.5],
+  upperBodyZ: [-1.5, -2, -1.5, -2, -1.5],
+
+  lowerBodyX: [-2.5, -2.5, -2.5, -2.5, -2.5],
+  lowerBodyY: [18.5, 18.5, 18.5, 18.5, 18.5],
+  lowerBodyZ: [1.5, 1, 1.5, 1, 1],
+
+  headX: [1.5, 1.5, 1.5, 1.5, 1.5],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [1.5, 2.5, 1.5, 2.5, 1.5],
+
+  leftShoulderX: [0, 12.5, 0, -12.5, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [0, -2.5, 0, -2.5, 0],
+
+  rightShoulderX: [0, -12.5, 0, 12.5, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [2.5, 5, 2.5, 5, 2.5],
+
+  leftElbowX: [1, -7, 1, -7, 1],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [1, 9.5, 1, 9.5, 1],
+
+  rightElbowX: [1, -7, 1, 1, -7],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-2.5, -4.5, -2.5, -4.5, -2.5],
+
+  leftHipX: [0, -15, 0, 25, 0],
+  leftHipY: [15, 15, 15, 15, 15],
+  leftHipZ: [8, 8, 8, 8, 8],
+
+  rightHipX: [0, 25, 0, -15, 0],
+  rightHipY: [-15, -15, -15, -15, -15],
+  rightHipZ: [-8, -8, -8, -8, -8],
+
+  leftKneeX: [-5, 27.5, -5, 27.5, -5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [-5, -5, -5, -5, -5],
+
+  rightKneeX: [-5, 18, -5, 18, -5],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [5, 5, 5, 5, 5],
+};
+
+export const WBL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WBL_T0, WBL_T1, WBL_T2, WBL_T3, WBL_T4],
+  WBL_ADDITIONS
+);
+
+const WBL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WBL_T0]: 0, [WBL_T1]: -0.05, [WBL_T2]: 0, [WBL_T3]: -0.05, [WBL_T4]: 0},
+};
+
+export const WALK_BACKWARD_LEFT_MOTION: MotionData = {
+  name: "walk_backward_left",
+  duration: WBL_T4,
+  loop: true,
+  keyframes: buildKeyframes(WBL_JOINT_ANIMATIONS, WBL_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "leftHip", priority: 10 },
+    { jointName: "rightHip", priority: 10 },
+    { jointName: "leftKnee", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "upperBody", priority: 6 },
+    { jointName: "head", priority: 4 },
+  ],
+};
+
+export const WALK_BACKWARD_LEFT_MOTION_CONFIG: MotionConfig = {
+  motionData: WALK_BACKWARD_LEFT_MOTION,
+  isDefault: false,
+  blendDuration: 0.2,
+  priority: 10,
+  interruptible: true,
+};
+
+// ===== WALK_BACKWARD_RIGHT =====
+export const WBR_T0 = 0.0;
+export const WBR_T1 = 0.25;
+export const WBR_T2 = 0.5;
+export const WBR_T3 = 0.75;
+export const WBR_T4 = 1.0;
+
+// 後退と右移動を組み合わせたモーション
+const WBR_ADDITIONS = {
+  upperBodyX: [2.5, 2.5, 2.5, 2.5, 2.5],
+  upperBodyY: [-8.5, -8.5, -8.5, -8.5, -8.5],
+  upperBodyZ: [1.5, 2, 1.5, 2, 1.5],
+
+  lowerBodyX: [-2.5, -2.5, -2.5, -2.5, -2.5],
+  lowerBodyY: [-18.5, -18.5, -18.5, -18.5, -18.5],
+  lowerBodyZ: [-1.5, -1, -1.5, -1, -1],
+
+  headX: [1.5, 1.5, 1.5, 1.5, 1.5],
+  headY: [0, 0, 0, 0, 0],
+  headZ: [-1.5, -2.5, -1.5, -2.5, -1.5],
+
+  leftShoulderX: [0, 12.5, 0, -12.5, 0],
+  leftShoulderY: [0, 0, 0, 0, 0],
+  leftShoulderZ: [-2.5, -5, -2.5, -5, -2.5],
+
+  rightShoulderX: [0, -12.5, 0, 12.5, 0],
+  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderZ: [0, 2.5, 0, 2.5, 0],
+
+  leftElbowX: [1, -7, 1, 1, -7],
+  leftElbowY: [0, 0, 0, 0, 0],
+  leftElbowZ: [2.5, 4.5, 2.5, 4.5, 2.5],
+
+  rightElbowX: [1, -7, 1, -7, 1],
+  rightElbowY: [0, 0, 0, 0, 0],
+  rightElbowZ: [-1, -9.5, -1, -9.5, -1],
+
+  leftHipX: [0, -15, 0, 25, 0],
+  leftHipY: [15, 2.5, 15, 15, 15],
+  leftHipZ: [-2.5, 0, -2.5, 0, -2.5],
+
+  rightHipX: [0, 25, 0, -15, 0],
+  rightHipY: [-15, 0, -15, -15, -15],
+  rightHipZ: [4.5, -0.5, 4.5, -0.5, 4.5],
+
+  leftKneeX: [-2.5, 9, -2.5, 9, -2.5],
+  leftKneeY: [0, 0, 0, 0, 0],
+  leftKneeZ: [1.5, 1.5, 1.5, 1.5, 1.5],
+
+  rightKneeX: [3.25, 9, 9, -2.5, 9],
+  rightKneeY: [0, 0, 0, 0, 0],
+  rightKneeZ: [-1.5, -1.5, -1.5, -1.5, -1.5],
+};
+
+export const WBR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  IDLE_JOINT_ANIMATIONS,
+  [IDLE_T0, IDLE_T1, IDLE_T2, IDLE_T3, IDLE_T4],
+  [WBR_T0, WBR_T1, WBR_T2, WBR_T3, WBR_T4],
+  WBR_ADDITIONS
+);
+
+const WBR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  y: {[WBR_T0]: 0, [WBR_T1]: -0.05, [WBR_T2]: 0, [WBR_T3]: -0.05, [WBR_T4]: 0},
+};
+
+export const WALK_BACKWARD_RIGHT_MOTION: MotionData = {
+  name: "walk_backward_right",
+  duration: WBR_T4,
+  loop: true,
+  keyframes: buildKeyframes(WBR_JOINT_ANIMATIONS, WBR_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "leftHip", priority: 10 },
+    { jointName: "rightHip", priority: 10 },
+    { jointName: "leftKnee", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "upperBody", priority: 6 },
+    { jointName: "head", priority: 4 },
+  ],
+};
+
+export const WALK_BACKWARD_RIGHT_MOTION_CONFIG: MotionConfig = {
+  motionData: WALK_BACKWARD_RIGHT_MOTION,
+  isDefault: false,
+  blendDuration: 0.2,
+  priority: 10,
+  interruptible: true,
+};

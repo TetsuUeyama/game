@@ -491,6 +491,12 @@ export class GameScene {
     if (this.was1on1 && !is1on1Now) {
       console.log('[GameScene] 1on1バトル終了');
       this.in1on1Battle = false;
+
+      // AI移動をクリア
+      const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+      for (const char of allCharacters) {
+        char.clearAIMovement();
+      }
     }
 
     // 1on1バトル中は一定間隔でサイコロを振る
@@ -535,6 +541,11 @@ export class GameScene {
     // オフェンス側：ボール保持位置をランダムに変更
     onBallPlayer.randomizeBallPosition();
 
+    // オフェンス側：8方向のランダムな移動を設定
+    const randomDirection = this.getRandomDirection8();
+    const moveSpeed = 3.0; // 歩行速度（適宜調整）
+    onBallPlayer.setAIMovement(randomDirection, moveSpeed);
+
     console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}`);
 
     if (offenseDice > defenseDice) {
@@ -547,6 +558,24 @@ export class GameScene {
       console.log('[GameScene] 引き分け！');
       this.oneononeResult = null; // 引き分けの場合は結果をクリア
     }
+  }
+
+  /**
+   * 8方向のランダムな方向ベクトルを取得
+   * @returns 正規化された方向ベクトル
+   */
+  private getRandomDirection8(): Vector3 {
+    // 0-7のランダムな方向番号を選択
+    const directionIndex = Math.floor(Math.random() * 8);
+
+    // 各方向の角度（0=正面、反時計回り）
+    const angle = (directionIndex * Math.PI) / 4; // 45度ずつ
+
+    // キャラクターの現在の向きを考慮せず、ワールド座標系での方向を返す
+    const x = Math.sin(angle);
+    const z = Math.cos(angle);
+
+    return new Vector3(x, 0, z).normalize();
   }
 
   /**
