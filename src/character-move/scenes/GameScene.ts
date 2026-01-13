@@ -17,7 +17,6 @@ import { CharacterAI } from "../controllers/CharacterAI";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
-import { CharacterState } from "../types/CharacterState";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -57,10 +56,6 @@ export class GameScene {
   private lastDiceRollTime: number = 0; // 最後にサイコロを振った時刻
   private diceRollInterval: number = 1000; // サイコロを振る間隔（ミリ秒）
   private oneononeResult: { winner: 'offense' | 'defense'; offenseDice: number; defenseDice: number } | null = null;
-  private defeatedDefender: Character | null = null;
-  private currentDefenderRadius: number = 1.0; // 現在のディフェンダーのサークル半径
-  private readonly maxDefenderRadius: number = 1.0; // ディフェンダーのサークル最大半径
-  private readonly radiusChangePerRound: number = 0.2; // 1回の勝負でサークルが変化する量
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -489,26 +484,13 @@ export class GameScene {
     if (!this.was1on1 && is1on1Now) {
       console.log('[GameScene] 1on1バトル開始！');
       this.in1on1Battle = true;
-      this.currentDefenderRadius = this.maxDefenderRadius; // サークル半径を初期化
       this.lastDiceRollTime = Date.now(); // 即座に最初のサイコロを振る
-
-      // ディフェンダーのサークル半径を設定
-      const defender = this.findOnBallDefender();
-      if (defender) {
-        defender.setFootCircleRadius(this.currentDefenderRadius);
-      }
     }
 
     // 1on1状態から抜けた瞬間（true → false）
     if (this.was1on1 && !is1on1Now) {
       console.log('[GameScene] 1on1バトル終了');
       this.in1on1Battle = false;
-
-      // ディフェンダーのサークル半径を元に戻す
-      const defender = this.findOnBallDefender();
-      if (defender && !defender.isDefeated()) {
-        defender.setFootCircleRadius(this.maxDefenderRadius);
-      }
     }
 
     // 1on1バトル中は一定間隔でサイコロを振る
@@ -550,58 +532,18 @@ export class GameScene {
     const offenseDice = Math.floor(Math.random() * 6) + 1;
     const defenseDice = Math.floor(Math.random() * 6) + 1;
 
-    console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}, 現在のサークル半径=${this.currentDefenderRadius.toFixed(2)}m`);
+    // オフェンス側：ボール保持位置をランダムに変更
+    onBallPlayer.randomizeBallPosition();
+
+    console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}`);
 
     if (offenseDice > defenseDice) {
-      // オフェンス勝利：サークルを小さくする
       console.log('[GameScene] オフェンス勝利！');
       this.oneononeResult = { winner: 'offense', offenseDice, defenseDice };
-
-      // サークル半径を減少
-      this.currentDefenderRadius = Math.max(0, this.currentDefenderRadius - this.radiusChangePerRound);
-      onBallDefender.setFootCircleRadius(this.currentDefenderRadius);
-
-      console.log(`[GameScene] ディフェンダーのサークル半径: ${this.currentDefenderRadius.toFixed(2)}m`);
-
-      // サークルサイズが0になったら無力化
-      if (this.currentDefenderRadius <= 0) {
-        console.log('[GameScene] サークルサイズが0になりました。ディフェンダーを無力化');
-        this.defeatedDefender = onBallDefender;
-
-        // ディフェンダーを無力化（BALL_LOSTにして動きを止める）
-        onBallDefender.setState(CharacterState.BALL_LOST);
-        onBallDefender.setDefeated(true); // 無力化フラグを設定
-
-        // 足元の円を非表示にする
-        onBallDefender.setFootCircleVisible(false);
-
-        // 1on1バトル終了
-        this.in1on1Battle = false;
-      }
     } else if (defenseDice > offenseDice) {
-      // ディフェンス勝利：サークルを大きくする
       console.log('[GameScene] ディフェンス勝利！');
       this.oneononeResult = { winner: 'defense', offenseDice, defenseDice };
-
-      // サークル半径を増加（最大値を超えないように）
-      const previousRadius = this.currentDefenderRadius;
-      this.currentDefenderRadius = Math.min(this.maxDefenderRadius, this.currentDefenderRadius + this.radiusChangePerRound);
-      onBallDefender.setFootCircleRadius(this.currentDefenderRadius);
-
-      console.log(`[GameScene] ディフェンダーのサークル半径: ${this.currentDefenderRadius.toFixed(2)}m`);
-
-      // サークルが最大サイズの時にディフェンスが勝ったらボールを奪う
-      if (previousRadius >= this.maxDefenderRadius && this.currentDefenderRadius >= this.maxDefenderRadius) {
-        console.log('[GameScene] サークル最大サイズでディフェンスが勝利！ボールを奪います');
-
-        // ボールの保持者を変更
-        this.ball.setHolder(onBallDefender);
-
-        // 1on1バトル終了
-        this.in1on1Battle = false;
-      }
     } else {
-      // 引き分け：何もしない（次の間隔で再度サイコロを振る）
       console.log('[GameScene] 引き分け！');
       this.oneononeResult = null; // 引き分けの場合は結果をクリア
     }
@@ -702,9 +644,15 @@ export class GameScene {
 
   /**
    * 現在のディフェンダーのサークル半径を取得
+   * 注：エンドレスのサイコロ勝負では半径は変わらないため、常に1.0を返す
    */
   public getDefenderCircleRadius(): number {
-    return this.currentDefenderRadius;
+    // 実際のオンボールディフェンダーのサークル半径を取得
+    const onBallDefender = this.findOnBallDefender();
+    if (onBallDefender) {
+      return onBallDefender.getFootCircleRadius();
+    }
+    return 1.0; // デフォルト値
   }
 
   /**
@@ -716,9 +664,10 @@ export class GameScene {
 
   /**
    * 無力化されたディフェンダーかチェック
+   * 注：エンドレスのサイコロ勝負では無力化されないため、常にfalseを返す
    */
-  public isDefeatedDefender(character: Character): boolean {
-    return this.defeatedDefender === character;
+  public isDefeatedDefender(_character: Character): boolean {
+    return false;
   }
 
   /**
