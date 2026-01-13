@@ -100,6 +100,10 @@ export class Character {
   // オフェンス戦術
   private offenseStrategy: OffenseStrategy = OffenseStrategy.HIGH_RISK; // デフォルトはハイリスク
 
+  // AI移動制御（1on1バトル中のランダム移動など）
+  private aiMovementDirection: Vector3 | null = null; // AI移動方向
+  private aiMovementSpeed: number = 0; // AI移動速度
+
   // 無力化フラグ（1on1勝負で負けた場合など）
   private defeated: boolean = false;
 
@@ -1173,6 +1177,12 @@ export class Character {
         vertexData.applyToMesh(this.footCircleFaceSegments[i]);
       }
     }
+
+    // AI移動処理（1on1バトル中のランダム移動など）
+    if (this.aiMovementDirection !== null && this.aiMovementSpeed > 0) {
+      const scaledDirection = this.aiMovementDirection.scale(this.aiMovementSpeed);
+      this.move(scaledDirection, deltaTime);
+    }
   }
 
   /**
@@ -1909,6 +1919,24 @@ export class Character {
 
     const randomIndex = Math.floor(Math.random() * this.ballHoldingFaces.length);
     this.setBallHoldingPositionIndex(randomIndex);
+  }
+
+  /**
+   * AI移動を設定（1on1バトル中のランダム移動など）
+   * @param direction 移動方向（正規化済みのベクトル）
+   * @param speed 移動速度
+   */
+  public setAIMovement(direction: Vector3, speed: number): void {
+    this.aiMovementDirection = direction.clone().normalize();
+    this.aiMovementSpeed = speed;
+  }
+
+  /**
+   * AI移動をクリア
+   */
+  public clearAIMovement(): void {
+    this.aiMovementDirection = null;
+    this.aiMovementSpeed = 0;
   }
 
   /**
