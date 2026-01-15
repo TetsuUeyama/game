@@ -1,4 +1,4 @@
-import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, VertexData, LinesMesh } from "@babylonjs/core";
+import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, LinesMesh } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
@@ -8,6 +8,8 @@ import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterSta
 import { PlayerData } from "../types/PlayerData";
 import { BallAction, FACE_ACTIONS } from "../types/BallAction";
 import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrategy";
+import { CharacterBodyParts } from "./CharacterBodyParts";
+import { DirectionCircle } from "./DirectionCircle";
 
 /**
  * 3Dキャラクターエンティティ
@@ -87,11 +89,13 @@ export class Character {
   private nameLabel: Mesh | null = null;
   private nameLabelTexture: AdvancedDynamicTexture | null = null;
 
-  // 足元の円
+  // 足元の円（方向サークル）
+  private directionCircle: DirectionCircle;
   private footCircle: LinesMesh | null = null;
   private footCircleRadius: number = 1.0; // 足元の円の半径（初期値1m）
-  private footCircleVertexLabels: Mesh[] = []; // 8角形の頂点番号表示用
-  private footCircleFaceSegments: Mesh[] = []; // 8角形の面セグメント（色分け用）
+
+  // 身体パーツファクトリー
+  private bodyPartsFactory: CharacterBodyParts;
 
   // ボール保持位置設定
   private ballHoldingFaces: number[] = [0, 1, 2, 6, 7]; // 使用する8角形の面番号（前方5箇所）
@@ -130,40 +134,43 @@ export class Character {
     this.visionAngle = this.config.vision.visionAngle;
     this.visionRange = this.config.vision.visionRange;
 
+    // 身体パーツファクトリーを初期化
+    this.bodyPartsFactory = new CharacterBodyParts(scene, this.config, this.state);
+
     // ルートメッシュを作成（透明な親メッシュ）
-    this.mesh = this.createRootMesh();
+    this.mesh = this.bodyPartsFactory.createRootMesh(this.position);
 
-    // 身体パーツを作成
-    this.headMesh = this.createHead();
-    this.waistJointMesh = this.createWaistJoint();
-    this.upperBodyMesh = this.createUpperBody();
-    this.lowerBodyConnectionMesh = this.createLowerBodyConnection();
-    this.lowerBodyMesh = this.createLowerBody();
-    this.leftShoulderMesh = this.createShoulder("left");
-    this.rightShoulderMesh = this.createShoulder("right");
-    this.leftUpperArmMesh = this.createUpperArm("left");
-    this.rightUpperArmMesh = this.createUpperArm("right");
-    this.leftElbowMesh = this.createElbow("left");
-    this.rightElbowMesh = this.createElbow("right");
-    this.leftForearmMesh = this.createForearm("left");
-    this.rightForearmMesh = this.createForearm("right");
-    this.leftHandMesh = this.createHand("left");
-    this.rightHandMesh = this.createHand("right");
-    this.leftHipMesh = this.createHip("left");
-    this.rightHipMesh = this.createHip("right");
-    this.leftThighMesh = this.createThigh("left");
-    this.rightThighMesh = this.createThigh("right");
-    this.leftKneeMesh = this.createKnee("left");
-    this.rightKneeMesh = this.createKnee("right");
-    this.leftShinMesh = this.createShin("left");
-    this.rightShinMesh = this.createShin("right");
-    this.leftFootMesh = this.createFoot("left");
-    this.rightFootMesh = this.createFoot("right");
+    // 身体パーツを作成（ファクトリーを使用）
+    this.headMesh = this.bodyPartsFactory.createHead();
+    this.waistJointMesh = this.bodyPartsFactory.createWaistJoint();
+    this.upperBodyMesh = this.bodyPartsFactory.createUpperBody();
+    this.lowerBodyConnectionMesh = this.bodyPartsFactory.createLowerBodyConnection();
+    this.lowerBodyMesh = this.bodyPartsFactory.createLowerBody();
+    this.leftShoulderMesh = this.bodyPartsFactory.createShoulder("left");
+    this.rightShoulderMesh = this.bodyPartsFactory.createShoulder("right");
+    this.leftUpperArmMesh = this.bodyPartsFactory.createUpperArm("left");
+    this.rightUpperArmMesh = this.bodyPartsFactory.createUpperArm("right");
+    this.leftElbowMesh = this.bodyPartsFactory.createElbow("left");
+    this.rightElbowMesh = this.bodyPartsFactory.createElbow("right");
+    this.leftForearmMesh = this.bodyPartsFactory.createForearm("left");
+    this.rightForearmMesh = this.bodyPartsFactory.createForearm("right");
+    this.leftHandMesh = this.bodyPartsFactory.createHand("left");
+    this.rightHandMesh = this.bodyPartsFactory.createHand("right");
+    this.leftHipMesh = this.bodyPartsFactory.createHip("left");
+    this.rightHipMesh = this.bodyPartsFactory.createHip("right");
+    this.leftThighMesh = this.bodyPartsFactory.createThigh("left");
+    this.rightThighMesh = this.bodyPartsFactory.createThigh("right");
+    this.leftKneeMesh = this.bodyPartsFactory.createKnee("left");
+    this.rightKneeMesh = this.bodyPartsFactory.createKnee("right");
+    this.leftShinMesh = this.bodyPartsFactory.createShin("left");
+    this.rightShinMesh = this.bodyPartsFactory.createShin("right");
+    this.leftFootMesh = this.bodyPartsFactory.createFoot("left");
+    this.rightFootMesh = this.bodyPartsFactory.createFoot("right");
 
-    // 顔のパーツを作成
-    this.leftEyeMesh = this.createEye("left");
-    this.rightEyeMesh = this.createEye("right");
-    this.mouthMesh = this.createMouth();
+    // 顔のパーツを作成（ファクトリーを使用）
+    this.leftEyeMesh = this.bodyPartsFactory.createEye("left");
+    this.rightEyeMesh = this.bodyPartsFactory.createEye("right");
+    this.mouthMesh = this.bodyPartsFactory.createMouth();
 
     // パーツの親子関係を設定
     // 腰関節はルートの子（接続位置、固定）
@@ -214,696 +221,30 @@ export class Character {
     this.rightShinMesh.parent = this.rightKneeMesh; // 膝の子
     this.rightFootMesh.parent = this.rightShinMesh; // すねの子
 
-    // 状態インジケーター球体を作成
-    this.stateIndicator = this.createStateIndicator();
+    // 状態インジケーター球体を作成（ファクトリーを使用）
+    this.stateIndicator = this.bodyPartsFactory.createStateIndicator();
+    this.stateIndicator.parent = this.headMesh;
 
-    // 視野コーンを作成
-    this.visionConeMesh = this.createVisionCone();
+    // 視野コーンを作成（ファクトリーを使用）
+    this.visionConeMesh = this.bodyPartsFactory.createVisionCone();
+    this.visionConeMesh.parent = this.headMesh;
 
-    // 足元の円を作成
-    this.footCircle = this.createFootCircle();
+    // 方向サークルを初期化
+    this.directionCircle = new DirectionCircle(
+      scene,
+      () => this.getPosition(),
+      () => this.getRotation(),
+      this.footCircleRadius
+    );
+
+    // 足元の円を作成（DirectionCircleを使用）
+    this.footCircle = this.directionCircle.createFootCircle();
 
     // 足元の円の色分けセグメントを作成
-    this.createFootCircleFaceSegments();
+    this.directionCircle.createFootCircleFaceSegments();
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
-  }
-
-  /**
-   * ルートメッシュを作成（透明な親メッシュ）
-   */
-  private createRootMesh(): Mesh {
-    const root = MeshBuilder.CreateBox(
-      "character-root",
-      { size: 0.1 },
-      this.scene
-    );
-    root.position = this.position;
-    root.isVisible = false; // 透明にする
-
-    // 身長に応じてスケーリング（基準身長: 1.8m）
-    const baseHeight = 1.8;
-    const scale = this.config.physical.height / baseHeight;
-    root.scaling = new Vector3(scale, scale, scale);
-
-    return root;
-  }
-
-  /**
-   * 頭を作成
-   */
-  private createHead(): Mesh {
-    const headSize = 0.25;
-    const upperBodyHeight = 0.35;
-
-    const head = MeshBuilder.CreateSphere(
-      "character-head",
-      { diameter: headSize, segments: 16 },
-      this.scene
-    );
-
-    // 位置: 上半身からの相対位置（親が上半身）
-    head.position = new Vector3(0, upperBodyHeight / 2 + headSize / 2, 0);
-
-    // マテリアル（肌色）
-    const material = new StandardMaterial("head-material", this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    head.material = material;
-
-    return head;
-  }
-
-  /**
-   * 目を作成
-   */
-  private createEye(side: "left" | "right"): Mesh {
-    const eyeRadius = 0.03;
-    const headSize = 0.20;
-
-    const eye = MeshBuilder.CreateSphere(
-      `character-eye-${side}`,
-      { diameter: eyeRadius * 2, segments: 8 },
-      this.scene
-    );
-
-    // 位置: 頭の前面（Z方向に突き出す）
-    const eyeX = side === "left" ? -0.04 : 0.04;
-    const eyeY = 0.03; // 少し上
-    const eyeZ = headSize / 2 - 0.01; // 頭の半径から少し前
-
-    eye.position = new Vector3(eyeX, eyeY, eyeZ);
-
-    // マテリアル（黒い目）
-    const material = new StandardMaterial(`eye-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.1, 0.1, 0.1); // 濃い灰色
-    material.specularColor = new Color3(0.5, 0.5, 0.5);
-    eye.material = material;
-
-    return eye;
-  }
-
-  /**
-   * 口を作成
-   */
-  private createMouth(): Mesh {
-    const mouthWidth = 0.06;
-    const mouthHeight = 0.02;
-    const mouthDepth = 0.02;
-    const headSize = 0.25;
-
-    const mouth = MeshBuilder.CreateBox(
-      "character-mouth",
-      { width: mouthWidth, height: mouthHeight, depth: mouthDepth },
-      this.scene
-    );
-
-    // 位置: 頭の前面下部
-    const mouthY = -0.04; // 少し下
-    const mouthZ = headSize / 2 - 0.01; // 頭の半径から少し前
-
-    mouth.position = new Vector3(0, mouthY, mouthZ);
-
-    // マテリアル（赤い口）
-    const material = new StandardMaterial("mouth-material", this.scene);
-    material.diffuseColor = new Color3(0.8, 0.2, 0.2); // 赤色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    mouth.material = material;
-
-    return mouth;
-  }
-
-  /**
-   * 腰関節を作成（上半身と下半身の接続点）
-   */
-  private createWaistJoint(): Mesh {
-    const waistRadius = 0.10;
-
-    const waistJoint = MeshBuilder.CreateSphere(
-      "character-waist-joint",
-      { diameter: waistRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 下半身の上部（上半身と下半身の間）
-    const headSize = 0.25;
-    const upperBodyHeight = 0.6;
-    const waistY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight;
-
-    waistJoint.position = new Vector3(0, waistY, 0);
-
-    // マテリアル（茶色いベルト）
-    const material = new StandardMaterial("waist-joint-material", this.scene);
-    material.diffuseColor = new Color3(0.4, 0.3, 0.2); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    waistJoint.material = material;
-
-    return waistJoint;
-  }
-
-  /**
-   * 下半身の接続点を作成（回転可能な接続点）
-   */
-  private createLowerBodyConnection(): Mesh {
-    const connectionRadius = 0.08;
-
-    const connection = MeshBuilder.CreateSphere(
-      "character-lower-body-connection",
-      { diameter: connectionRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 腰関節と同じ位置（親がルートなので絶対位置）
-    const headSize = 0.25;
-    const upperBodyHeight = 0.6;
-    const waistY = CHARACTER_CONFIG.height / 2 - headSize - upperBodyHeight;
-    connection.position = new Vector3(0, waistY, 0);
-
-    // マテリアル（暗い茶色）
-    const material = new StandardMaterial("lower-body-connection-material", this.scene);
-    material.diffuseColor = new Color3(0.35, 0.25, 0.15); // 暗い茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    connection.material = material;
-
-    return connection;
-  }
-
-  /**
-   * 胴体上半身を作成
-   */
-  private createUpperBody(): Mesh {
-    const width = 0.38;
-    const height = 0.4;
-    const depth = 0.20;
-
-    const upperBody = MeshBuilder.CreateBox(
-      "character-upper-body",
-      { width, height, depth },
-      this.scene
-    );
-
-    // 位置: 腰関節からの相対位置（親が腰関節）
-    upperBody.position = new Vector3(0, height / 2, 0);
-
-    // マテリアル（青いシャツ）
-    const material = new StandardMaterial("upper-body-material", this.scene);
-    material.diffuseColor = new Color3(0.2, 0.4, 0.8); // 青色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    upperBody.material = material;
-
-    return upperBody;
-  }
-
-  /**
-   * 胴体下半身を作成
-   */
-  private createLowerBody(): Mesh {
-    const width = 0.35;
-    const height = 0.2; // 半分の長さに変更
-    const depth = 0.20;
-
-    const lowerBody = MeshBuilder.CreateBox(
-      "character-lower-body",
-      { width, height, depth },
-      this.scene
-    );
-
-    // 位置: 接続点からの相対位置（親が接続点）
-    // 下半身の上端が接続点に来るように、Y = -height / 2
-    // X = 0 がデフォルト（オフセットはUIで調整）
-    lowerBody.position = new Vector3(0, -height / 2, 0);
-
-    // マテリアル（茶色いズボン）
-    const material = new StandardMaterial("lower-body-material", this.scene);
-    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    lowerBody.material = material;
-
-    return lowerBody;
-  }
-
-  /**
-   * 肩を作成
-   */
-  private createShoulder(side: "left" | "right"): Mesh {
-    const shoulderRadius = 0.08;
-    const upperBodyHeight = 0.4;
-
-    const shoulder = MeshBuilder.CreateSphere(
-      `character-shoulder-${side}`,
-      { diameter: shoulderRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 上半身からの相対位置（親が上半身）
-    const shoulderY = upperBodyHeight / 2 - upperBodyHeight / 6;
-    const shoulderX = side === "left" ? -0.25 : 0.25;
-
-    shoulder.position = new Vector3(shoulderX, shoulderY, 0);
-
-    // マテリアル（青いシャツと同じ色）
-    const material = new StandardMaterial(`shoulder-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.2, 0.4, 0.8); // 青色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    shoulder.material = material;
-
-    return shoulder;
-  }
-
-  /**
-   * 上腕を作成
-   */
-  private createUpperArm(side: "left" | "right"): Mesh {
-    const radius = 0.06;
-    const height = 0.3; // 腕を半分に
-
-    const upperArm = MeshBuilder.CreateCapsule(
-      `character-upper-arm-${side}`,
-      { radius, height, tessellation: 8 },
-      this.scene
-    );
-
-    // 位置: 肩からの相対位置（親が肩）
-    upperArm.position = new Vector3(0, -height / 2, 0);
-
-    // マテリアル（肌色）
-    const material = new StandardMaterial(`upper-arm-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    upperArm.material = material;
-
-    return upperArm;
-  }
-
-  /**
-   * 肘を作成
-   */
-  private createElbow(side: "left" | "right"): Mesh {
-    const elbowRadius = 0.06;
-    const upperArmHeight = 0.3;
-
-    const elbow = MeshBuilder.CreateSphere(
-      `character-elbow-${side}`,
-      { diameter: elbowRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 肩からの相対位置（親が肩）
-    elbow.position = new Vector3(0, -upperArmHeight, 0);
-
-    // マテリアル（肌色）
-    const material = new StandardMaterial(`elbow-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    elbow.material = material;
-
-    return elbow;
-  }
-
-  /**
-   * 前腕を作成
-   */
-  private createForearm(side: "left" | "right"): Mesh {
-    const radius = 0.05;
-    const height = 0.3; // 腕を半分に
-
-    const forearm = MeshBuilder.CreateCapsule(
-      `character-forearm-${side}`,
-      { radius, height, tessellation: 8 },
-      this.scene
-    );
-
-    // 位置: 肘からの相対位置（親が肘）
-    forearm.position = new Vector3(0, -height / 2, 0);
-
-    // マテリアル（肌色）
-    const material = new StandardMaterial(`forearm-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    forearm.material = material;
-
-    return forearm;
-  }
-
-  /**
-   * 手のひらを作成
-   */
-  private createHand(side: "left" | "right"): Mesh {
-    const handRadius = 0.07;
-    const forearmHeight = 0.3;
-
-    const hand = MeshBuilder.CreateSphere(
-      `character-hand-${side}`,
-      { diameter: handRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 前腕からの相対位置（親が前腕）
-    hand.position = new Vector3(0, -forearmHeight / 2, 0);
-
-    // マテリアル（肌色）
-    const material = new StandardMaterial(`hand-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7); // 肌色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    hand.material = material;
-
-    return hand;
-  }
-
-  /**
-   * 股関節を作成
-   */
-  private createHip(side: "left" | "right"): Mesh {
-    const hipRadius = 0.09;
-    const lowerBodyHeight = 0.2;
-
-    const hip = MeshBuilder.CreateSphere(
-      `character-hip-${side}`,
-      { diameter: hipRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 下半身からの相対位置（親が下半身）
-    const hipY = -lowerBodyHeight / 2;
-    const hipX = side === "left" ? -0.1 : 0.1;
-
-    hip.position = new Vector3(hipX, hipY, 0);
-
-    // マテリアル（茶色いズボン）
-    const material = new StandardMaterial(`hip-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    hip.material = material;
-
-    return hip;
-  }
-
-  /**
-   * 太ももを作成
-   */
-  private createThigh(side: "left" | "right"): Mesh {
-    const radius = 0.08;
-    const height = 0.4; // 足を半分に
-
-    const thigh = MeshBuilder.CreateCapsule(
-      `character-thigh-${side}`,
-      { radius, height, tessellation: 8 },
-      this.scene
-    );
-
-    // 位置: 股関節からの相対位置（親が股関節）
-    thigh.position = new Vector3(0, -height / 2, 0);
-
-    // マテリアル（茶色いズボン）
-    const material = new StandardMaterial(`thigh-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    thigh.material = material;
-
-    return thigh;
-  }
-
-  /**
-   * 膝を作成
-   */
-  private createKnee(side: "left" | "right"): Mesh {
-    const kneeRadius = 0.08;
-    const thighHeight = 0.4;
-
-    const knee = MeshBuilder.CreateSphere(
-      `character-knee-${side}`,
-      { diameter: kneeRadius * 2, segments: 12 },
-      this.scene
-    );
-
-    // 位置: 股関節からの相対位置（親が股関節）
-    knee.position = new Vector3(0, -thighHeight, 0);
-
-    // マテリアル（茶色いズボン）
-    const material = new StandardMaterial(`knee-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    knee.material = material;
-
-    return knee;
-  }
-
-  /**
-   * すねを作成
-   */
-  private createShin(side: "left" | "right"): Mesh {
-    const radius = 0.07;
-    const height = 0.4; // 足を半分に
-
-    const shin = MeshBuilder.CreateCapsule(
-      `character-shin-${side}`,
-      { radius, height, tessellation: 8 },
-      this.scene
-    );
-
-    // 位置: 膝からの相対位置（親が膝）
-    shin.position = new Vector3(0, -height / 2, 0);
-
-    // マテリアル（茶色いズボン）
-    const material = new StandardMaterial(`shin-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.3, 0.2, 0.1); // 茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    shin.material = material;
-
-    return shin;
-  }
-
-  /**
-   * 足を作成
-   */
-  private createFoot(side: "left" | "right"): Mesh {
-    const radius = 0.06;
-    const height = 0.2; // 前後に長い
-    const shinHeight = 0.4;
-
-    const foot = MeshBuilder.CreateCapsule(
-      `character-foot-${side}`,
-      { radius, height, tessellation: 8 },
-      this.scene
-    );
-
-    // カプセルを横向きに回転（Z軸方向に伸びるように）
-    foot.rotation.x = Math.PI / 2;
-
-    // 位置: すねからの相対位置（親がすね）
-    foot.position = new Vector3(0, -shinHeight / 2 + radius, height / 4); // 少し前に出す
-
-    // マテリアル（茶色い靴）
-    const material = new StandardMaterial(`foot-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.2, 0.15, 0.1); // 濃い茶色
-    material.specularColor = new Color3(0.2, 0.2, 0.2);
-    foot.material = material;
-
-    return foot;
-  }
-
-  /**
-   * 状態インジケーター球体を作成（頭のすぐ上に配置）
-   */
-  private createStateIndicator(): Mesh {
-    const indicator = MeshBuilder.CreateSphere(
-      "state-indicator",
-      { diameter: 0.2, segments: 16 },
-      this.scene
-    );
-
-    // 頭のすぐ上に配置
-    const headHeight = 0.15; // 頭の半径
-    const indicatorOffset = 0.25; // 頭からのオフセット
-    indicator.position = new Vector3(0, headHeight + indicatorOffset, 0);
-
-    // 初期状態の色を設定
-    const material = new StandardMaterial("state-indicator-material", this.scene);
-    const color = CHARACTER_STATE_COLORS[this.state];
-    material.diffuseColor = new Color3(color.r, color.g, color.b);
-    material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3); // 少し発光させる
-    indicator.material = material;
-
-    // 頭の子として設定
-    indicator.parent = this.headMesh;
-
-    return indicator;
-  }
-
-  /**
-   * 視野コーン（円錐形）を作成
-   */
-  private createVisionCone(): Mesh {
-    // 視野角の半分をラジアンに変換
-    const halfAngleRad = (this.visionAngle / 2) * (Math.PI / 180);
-    // 視野範囲と視野角から底面の半径を三角関数で計算
-    const coneRadius = this.visionRange * Math.tan(halfAngleRad);
-
-    // 円錐メッシュを作成
-    const visionCone = MeshBuilder.CreateCylinder(
-      "vision-cone",
-      {
-        diameterTop: coneRadius * 2, // 底面（広がった部分）の直径
-        diameterBottom: 0, // 頂点（尖った部分）の直径
-        height: this.visionRange, // 円錐の高さ = 視野範囲
-        tessellation: 16, // 円錐の滑らかさ
-      },
-      this.scene
-    );
-
-    // デフォルトでは円錐はY軸方向（上向き）に作成される
-    // X軸周りに90度回転して、Z軸方向（前方）を向くようにする
-    visionCone.rotation = new Vector3(Math.PI / 2, 0, 0);
-
-    // 位置を設定（目の位置から開始）
-    // 目のY位置（頭の中心から少し上）
-    const eyeY = 0.03;
-    // 目のZ位置（頭の前面）
-    const headSize = 0.20;
-    const eyeZ = headSize / 2 - 0.01;
-
-    visionCone.position = new Vector3(
-      0, // X座標: 中央（両目の中間）
-      eyeY, // Y座標: 目の高さ
-      eyeZ + this.visionRange / 2 // Z座標: 頂点が目の位置に来るように中心を前方にずらす
-    );
-
-    // マテリアル（見た目）を設定
-    const material = new StandardMaterial("vision-cone-material", this.scene);
-    // 初期状態の色を設定
-    const initialColor = CHARACTER_STATE_COLORS[this.state];
-    material.diffuseColor = new Color3(initialColor.r, initialColor.g, initialColor.b);
-    material.alpha = 0.15; // 透明度
-    material.wireframe = false;
-    visionCone.material = material;
-
-    // 頭の子として設定（頭の向きに追従）
-    visionCone.parent = this.headMesh;
-
-    return visionCone;
-  }
-
-  /**
-   * 足元の円を作成（8角形）
-   */
-  private createFootCircle(): LinesMesh {
-    // 8つの線分を定義（各辺を個別の線として作成）
-    const lines: Vector3[][] = [];
-
-    for (let i = 0; i < 8; i++) {
-      const angleStep = (Math.PI * 2) / 8;
-      const angleOffset = Math.PI / 8; // 22.5度のオフセット（辺を正面に配置）
-
-      // 現在の頂点
-      const angle1 = -i * angleStep + angleOffset;
-      const totalAngle1 = angle1 + this.rotation;
-      const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
-      const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
-
-      // 次の頂点
-      const angle2 = -(i + 1) * angleStep + angleOffset;
-      const totalAngle2 = angle2 + this.rotation;
-      const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
-      const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
-
-      // 線分を追加
-      lines.push([
-        new Vector3(x1, 0.01, z1),
-        new Vector3(x2, 0.01, z2)
-      ]);
-    }
-
-    // CreateLineSystemでLinesMeshを作成
-    const octagon = MeshBuilder.CreateLineSystem(
-      "foot-circle",
-      { lines: lines, updatable: true },
-      this.scene
-    );
-
-    // 色を設定（LinesMeshはcolorプロパティを持つ）
-    octagon.color = new Color3(1.0, 1.0, 1.0);
-
-    // 親を設定しない（シーンの直接の子として独立させる）
-    octagon.parent = null;
-
-    // ワールド座標で位置を設定
-    octagon.position = new Vector3(
-      this.position.x,
-      0, // 頂点のY座標に0.01を入れたので、positionは0
-      this.position.z
-    );
-
-    // 明示的に表示を有効化
-    octagon.isVisible = true;
-
-    return octagon;
-  }
-
-  /**
-   * 足元の円の色分けセグメント（8つの三角形）を作成
-   */
-  private createFootCircleFaceSegments(): void {
-    // 既存のセグメントを削除
-    for (const segment of this.footCircleFaceSegments) {
-      segment.dispose();
-    }
-    this.footCircleFaceSegments = [];
-
-    // 8色のカラーパレット
-    const colors = [
-      new Color3(1, 0, 0),     // 0: 赤
-      new Color3(1, 0.5, 0),   // 1: オレンジ
-      new Color3(1, 1, 0),     // 2: 黄色
-      new Color3(0, 1, 0),     // 3: 緑
-      new Color3(0, 1, 1),     // 4: シアン
-      new Color3(0, 0, 1),     // 5: 青
-      new Color3(0.5, 0, 1),   // 6: 紫
-      new Color3(1, 0, 1),     // 7: マゼンタ
-    ];
-
-    // 8角形の各面を三角形として作成
-    for (let i = 0; i < 8; i++) {
-      // 三角形の3つの頂点
-      const center = this.position.clone();
-      center.y = 0.02; // 地面より少し上
-      const vertex1 = this.getOctagonVertexPosition(i);
-      vertex1.y = 0.02;
-      const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-      vertex2.y = 0.02;
-
-      // カスタムメッシュで三角形を作成
-      const positions = [
-        center.x, center.y, center.z,
-        vertex1.x, vertex1.y, vertex1.z,
-        vertex2.x, vertex2.y, vertex2.z,
-      ];
-
-      const indices = [0, 1, 2];
-      const normals: number[] = [];
-
-      // 法線を計算（上向き）
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-
-      const triangle = new Mesh(`face-segment-${i}`, this.scene);
-      const vertexData = new VertexData();
-      vertexData.positions = positions;
-      vertexData.indices = indices;
-      vertexData.normals = normals;
-      vertexData.applyToMesh(triangle);
-
-      // マテリアルを設定
-      const material = new StandardMaterial(`face-material-${i}`, this.scene);
-      material.diffuseColor = colors[i];
-      material.emissiveColor = colors[i].scale(0.3); // 少し発光させる
-      material.alpha = 0.6; // 半透明
-      material.backFaceCulling = false; // 両面表示
-      triangle.material = material;
-
-      this.footCircleFaceSegments.push(triangle);
-    }
   }
 
   /**
@@ -1123,69 +464,8 @@ export class Character {
     // モーションコントローラーを更新
     this.motionController.update(deltaTime);
 
-    // 足元の円（8角形）の頂点位置を更新（キャラクターに追従・回転に対応）
-    if (this.footCircle) {
-      // LinesMesh用の線分配列を作成
-      const lines: Vector3[][] = [];
-
-      for (let i = 0; i < 8; i++) {
-        const angleStep = (Math.PI * 2) / 8;
-        const angleOffset = Math.PI / 8; // 22.5度のオフセット（辺を正面に配置）
-
-        // 現在の頂点
-        const angle1 = -i * angleStep + angleOffset;
-        const totalAngle1 = angle1 + this.rotation;
-        const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
-        const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
-
-        // 次の頂点
-        const angle2 = -(i + 1) * angleStep + angleOffset;
-        const totalAngle2 = angle2 + this.rotation;
-        const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
-        const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
-
-        // 線分を追加
-        lines.push([
-          new Vector3(x1, 0.01, z1),
-          new Vector3(x2, 0.01, z2)
-        ]);
-      }
-
-      // LinesMeshを更新（CreateLineSystemで再作成）
-      const _updatedOctagon = MeshBuilder.CreateLineSystem(
-        "foot-circle",
-        { lines: lines, instance: this.footCircle },
-        this.scene
-      );
-
-      // 位置を更新
-      this.footCircle.position.x = this.position.x;
-      this.footCircle.position.z = this.position.z;
-    }
-
-    // 三角形セグメントの頂点を更新
-    if (this.footCircleFaceSegments.length === 8) {
-      for (let i = 0; i < 8; i++) {
-        const center = this.position.clone();
-        center.y = 0.02;
-        const vertex1 = this.getOctagonVertexPosition(i);
-        vertex1.y = 0.02;
-        const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-        vertex2.y = 0.02;
-
-        const positions = [
-          center.x, center.y, center.z,
-          vertex1.x, vertex1.y, vertex1.z,
-          vertex2.x, vertex2.y, vertex2.z,
-        ];
-
-        const vertexData = new VertexData();
-        vertexData.positions = positions;
-        vertexData.indices = [0, 1, 2];
-        vertexData.normals = [0, 1, 0, 0, 1, 0, 0, 1, 0];
-        vertexData.applyToMesh(this.footCircleFaceSegments[i]);
-      }
-    }
+    // 方向サークルを更新
+    this.directionCircle.update();
   }
 
   /**
@@ -1411,42 +691,14 @@ export class Character {
    * 足元の円の色を状態に応じて更新
    */
   private updateFootCircleColor(): void {
-    if (!this.footCircle || !this.footCircle.material) {
-      return;
-    }
-
-    const material = this.footCircle.material as StandardMaterial;
-
-    // 状態に応じて色を設定
-    switch (this.state) {
-      case CharacterState.ON_BALL_PLAYER:
-      case CharacterState.OFF_BALL_PLAYER:
-        // 攻撃円（赤）
-        material.diffuseColor = new Color3(1.0, 0.0, 0.0);
-        material.emissiveColor = new Color3(0.3, 0.0, 0.0);
-        break;
-      case CharacterState.ON_BALL_DEFENDER:
-      case CharacterState.OFF_BALL_DEFENDER:
-        // 守備円（青）
-        material.diffuseColor = new Color3(0.0, 0.5, 1.0);
-        material.emissiveColor = new Color3(0.0, 0.15, 0.3);
-        break;
-      case CharacterState.BALL_LOST:
-      default:
-        // ボールロスト（白色で見やすく）
-        material.diffuseColor = new Color3(1.0, 1.0, 1.0);
-        material.emissiveColor = new Color3(0.3, 0.3, 0.3);
-        break;
-    }
+    this.directionCircle.updateFootCircleColor(this.state);
   }
 
   /**
    * 足元の円の表示/非表示を設定
    */
   public setFootCircleVisible(visible: boolean): void {
-    if (this.footCircle) {
-      this.footCircle.isVisible = visible;
-    }
+    this.directionCircle.setFootCircleVisible(visible);
   }
 
   /**
@@ -1454,15 +706,9 @@ export class Character {
    * @param radius 半径（メートル）
    */
   public setFootCircleRadius(radius: number): void {
-    this.footCircleRadius = Math.max(0, radius); // 負の値にならないようにする
-
-    // 既存の円を破棄して再作成
-    if (this.footCircle) {
-      const wasVisible = this.footCircle.isVisible;
-      this.footCircle.dispose();
-      this.footCircle = this.createFootCircle();
-      this.footCircle.isVisible = wasVisible;
-    }
+    this.footCircleRadius = Math.max(0, radius);
+    this.directionCircle.setFootCircleRadius(radius);
+    this.footCircle = this.directionCircle.getFootCircle();
   }
 
   /**
@@ -1470,7 +716,7 @@ export class Character {
    * @returns 半径（メートル）
    */
   public getFootCircleRadius(): number {
-    return this.footCircleRadius;
+    return this.directionCircle.getFootCircleRadius();
   }
 
   /**
@@ -1489,97 +735,21 @@ export class Character {
    *    4   3
    */
   public getOctagonVertexPosition(vertexIndex: number): Vector3 {
-    // 8角形の各頂点の角度を計算
-    const angleStep = (Math.PI * 2) / 8; // 45度 = π/4
-    const angleOffset = Math.PI / 8; // 22.5度のオフセット（辺を正面に配置するため）
-    const angle = -vertexIndex * angleStep + angleOffset; // 時計回りなので負の値
-
-    // キャラクターの向きを考慮
-    const totalAngle = angle + this.rotation;
-
-    // 頂点の位置を計算（XZ平面上）
-    const x = this.position.x + Math.sin(totalAngle) * this.footCircleRadius;
-    const z = this.position.z + Math.cos(totalAngle) * this.footCircleRadius;
-
-    return new Vector3(x, this.position.y, z);
+    return this.directionCircle.getOctagonVertexPosition(vertexIndex);
   }
 
   /**
    * 8角形の面（三角形）を色分けして表示（デバッグ用）
    */
   public showOctagonVertexNumbers(): void {
-    // 既存のセグメントを削除
-    this.hideOctagonVertexNumbers();
-
-    // 8色のカラーパレット
-    const colors = [
-      new Color3(1, 0, 0),     // 0: 赤
-      new Color3(1, 0.5, 0),   // 1: オレンジ
-      new Color3(1, 1, 0),     // 2: 黄色
-      new Color3(0, 1, 0),     // 3: 緑
-      new Color3(0, 1, 1),     // 4: シアン
-      new Color3(0, 0, 1),     // 5: 青
-      new Color3(0.5, 0, 1),   // 6: 紫
-      new Color3(1, 0, 1),     // 7: マゼンタ
-    ];
-
-    // 8角形の各面を三角形として作成
-    for (let i = 0; i < 8; i++) {
-      // 三角形の3つの頂点
-      const center = this.position.clone();
-      center.y = 0.02; // 地面より少し上
-      const vertex1 = this.getOctagonVertexPosition(i);
-      vertex1.y = 0.02;
-      const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-      vertex2.y = 0.02;
-
-      // カスタムメッシュで三角形を作成
-      const positions = [
-        center.x, center.y, center.z,
-        vertex1.x, vertex1.y, vertex1.z,
-        vertex2.x, vertex2.y, vertex2.z,
-      ];
-
-      const indices = [0, 1, 2];
-      const normals: number[] = [];
-
-      // 法線を計算（上向き）
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-
-      const triangle = new Mesh(`face-segment-${i}`, this.scene);
-      const vertexData = new VertexData();
-      vertexData.positions = positions;
-      vertexData.indices = indices;
-      vertexData.normals = normals;
-      vertexData.applyToMesh(triangle);
-
-      // マテリアルを設定
-      const material = new StandardMaterial(`face-material-${i}`, this.scene);
-      material.diffuseColor = colors[i];
-      material.emissiveColor = colors[i].scale(0.3); // 少し発光させる
-      material.alpha = 0.6; // 半透明
-      material.backFaceCulling = false; // 両面表示
-      triangle.material = material;
-
-      this.footCircleFaceSegments.push(triangle);
-    }
+    this.directionCircle.showOctagonVertexNumbers();
   }
 
   /**
    * 8角形の頂点番号を非表示（デバッグ用）
    */
   public hideOctagonVertexNumbers(): void {
-    for (const label of this.footCircleVertexLabels) {
-      label.dispose();
-    }
-    this.footCircleVertexLabels = [];
-
-    for (const segment of this.footCircleFaceSegments) {
-      segment.dispose();
-    }
-    this.footCircleFaceSegments = [];
+    this.directionCircle.hideOctagonVertexNumbers();
   }
 
   /**
@@ -1672,37 +842,13 @@ export class Character {
 
   /**
    * 足元の8角形を相手の方向に向けて、辺が一致するように回転させる
+   * 注意: サークルの回転はupdate()で頂点を再計算する際にキャラクターの回転に追従するため、
+   *       このメソッドは互換性のために残しています
    * @param targetPosition 相手の位置
    */
   public alignFootCircleToTarget(targetPosition: Vector3): void {
-    if (!this.footCircle) return;
-
-    const myPosition = this.getPosition();
-
-    // 相手への方向ベクトルを計算（XZ平面上）
-    const direction = new Vector3(
-      targetPosition.x - myPosition.x,
-      0,
-      targetPosition.z - myPosition.z
-    );
-
-    if (direction.length() < 0.01) return;
-
-    // 相手への角度を計算（ラジアン）
-    const angleToTarget = Math.atan2(direction.x, direction.z);
-
-    // 8角形の辺の法線方向は n * 45度（n = 0, 1, 2, ..., 7）
-    // ※辺が既に正面に配置されているため、オフセット不要
-    // 最も近い辺の角度を見つける
-    const segmentAngle = Math.PI / 4; // 45度（ラジアン）
-
-    // 最も近い辺の角度を計算
-    const nearestSegmentIndex = Math.round(angleToTarget / segmentAngle);
-    const alignedAngle = nearestSegmentIndex * segmentAngle;
-
-    // 8角形を回転（Y軸周りの回転を設定）
-    // rotation.xは地面に平行にするための回転なので、rotation.zで調整
-    this.footCircle.rotation.z = -alignedAngle;
+    // キャラクター自体を相手方向に向ける（サークルは自動的に追従する）
+    this.lookAt(targetPosition);
   }
 
   /**
@@ -2112,23 +1258,36 @@ export class Character {
 
     // power差を計算（-100〜+100の範囲）
     const powerDiff = myPower - otherPower;
-
-    // 押し返し量を計算（power差が大きいほど一方的に押される）
-    // powerDiff > 0: 自分の方がパワーがある → 相手が押される
-    // powerDiff < 0: 相手の方がパワーがある → 自分が押される
-    // 基準押し返し距離: 0.5m、power差100で完全に片方だけ押される
-    const basePushDistance = 0.5;
     const pushRatio = powerDiff / 100; // -1〜+1
 
-    // 押し返し方向を計算（自分から相手へのベクトル）
-    const pushDirection = other.getPosition().subtract(this.getPosition());
-    pushDirection.y = 0;
-    pushDirection.normalize();
+    // 現在の距離と最小距離（サークルが重ならない距離）を計算
+    const myPos = this.getPosition();
+    const otherPos = other.getPosition();
+    const currentDistance = Vector3.Distance(
+      new Vector3(myPos.x, 0, myPos.z),
+      new Vector3(otherPos.x, 0, otherPos.z)
+    );
+    const minDistance = this.footCircleRadius + other.getFootCircleRadius();
 
-    // 押し返し量を計算
-    // pushRatio > 0: 相手を押す（otherPushが大きくなる）
-    // pushRatio < 0: 自分が押される（selfPushが大きくなる）
-    const totalPush = basePushDistance;
+    // 押し返し方向を計算（自分から相手へのベクトル）
+    const pushDirection = otherPos.subtract(myPos);
+    pushDirection.y = 0;
+    if (pushDirection.length() > 0.01) {
+      pushDirection.normalize();
+    } else {
+      // 同じ位置にいる場合はランダムな方向に押し返す
+      const randomAngle = Math.random() * Math.PI * 2;
+      pushDirection.x = Math.sin(randomAngle);
+      pushDirection.z = Math.cos(randomAngle);
+    }
+
+    // 押し返し量を計算（サークルが重ならない距離まで離す + 少し余裕）
+    const overlap = Math.max(0, minDistance - currentDistance);
+    const totalPush = overlap + 0.1; // 0.1mの余裕を追加
+
+    // power差に応じて押し返し量を分配
+    // pushRatio > 0: 自分の方がパワーがある → 相手が多く押される
+    // pushRatio < 0: 相手の方がパワーがある → 自分が多く押される
     const selfPushAmount = totalPush * (0.5 - pushRatio * 0.5); // pushRatio=1なら0、pushRatio=-1なら1
     const otherPushAmount = totalPush * (0.5 + pushRatio * 0.5); // pushRatio=1なら1、pushRatio=-1なら0
 
@@ -2136,6 +1295,7 @@ export class Character {
     const otherPush = pushDirection.scale(otherPushAmount); // 相手は押し返される
 
     console.log(`[Character] 押し返し計算: myPower=${myPower}, otherPower=${otherPower}, diff=${powerDiff}`);
+    console.log(`[Character] 現在距離=${currentDistance.toFixed(2)}m, 最小距離=${minDistance.toFixed(2)}m, 重なり=${overlap.toFixed(2)}m`);
     console.log(`[Character] 押し返し結果: self=${selfPushAmount.toFixed(2)}m, other=${otherPushAmount.toFixed(2)}m`);
 
     return { selfPush, otherPush };
@@ -2180,23 +1340,8 @@ export class Character {
     // 視野コーンを破棄
     this.visionConeMesh.dispose();
 
-    // 足元の円を破棄
-    if (this.footCircle) {
-      this.footCircle.dispose();
-      this.footCircle = null;
-    }
-
-    // 足元の円の色分けセグメントを破棄
-    for (const segment of this.footCircleFaceSegments) {
-      segment.dispose();
-    }
-    this.footCircleFaceSegments = [];
-
-    // 頂点ラベルを破棄
-    for (const label of this.footCircleVertexLabels) {
-      label.dispose();
-    }
-    this.footCircleVertexLabels = [];
+    // 方向サークルを破棄
+    this.directionCircle.dispose();
 
     // 名前ラベルを破棄
     if (this.nameLabel) {
