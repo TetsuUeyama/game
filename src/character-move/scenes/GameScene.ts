@@ -450,6 +450,9 @@ export class GameScene {
         character.update(deltaTime);
       }
 
+      // ドリブル突破中の処理
+      this.updateDribbleBreakthrough(deltaTime, allCharacters);
+
       // AI移動を衝突判定付きで適用（1on1バトル中）
       if (this.in1on1Battle) {
         // オフェンス側の衝突を検知して動き直す処理
@@ -472,7 +475,7 @@ export class GameScene {
           offenseCollided = onBallPlayer.applyAIMovementWithCollision(deltaTime, allCharacters);
         }
 
-        // ディフェンス側の移動を試行（衝突判定なしで移動、目標位置に向かう）
+        // ディフェンス側の移動を試行
         if (onBallDefender) {
           onBallDefender.applyAIMovementWithCollision(deltaTime, allCharacters);
         }
@@ -492,29 +495,48 @@ export class GameScene {
         if ((offenseCollided || circlesInContact) && onBallPlayer && onBallDefender) {
           const currentTime = Date.now();
           if (currentTime - this.lastCollisionRedirectTime >= this.collisionRedirectInterval) {
-            console.log(`[GameScene] 動き直し発生！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
-
             // 新しいランダム方向を設定
             const newDirection = this.getRandomDirection8();
-            const moveSpeed = 3.0;
 
-            // オフェンス側の動き直し遅延時間を計算（(100 - quickness) * 10 ミリ秒）
-            // 例：quickness=83 → (100-83)*10 = 170ms、quickness=90 → (100-90)*10 = 100ms
-            const offensePlayerData = onBallPlayer.playerData;
-            let offenseDelayMs = 1000; // デフォルト1秒
-
-            if (offensePlayerData && offensePlayerData.stats.quickness !== undefined) {
-              const quickness = offensePlayerData.stats.quickness;
-              offenseDelayMs = Math.max(0, (100 - quickness) * 10); // (100 - quickness) * 10ms（最小0ms）
-              console.log(`[GameScene] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${quickness})`);
-            } else {
-              console.log(`[GameScene] オフェンスのquicknessデータなし、デフォルト遅延: ${offenseDelayMs}ms`);
+            // オフェンス側の速度をdribblingspeedで調整
+            const baseMoveSpeed = 3.0;
+            let moveSpeed = baseMoveSpeed;
+            const offenseData = onBallPlayer.playerData;
+            if (offenseData && offenseData.stats.dribblingspeed !== undefined) {
+              moveSpeed = baseMoveSpeed * (offenseData.stats.dribblingspeed / 100);
             }
 
-            onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
+            // フェイント判定
+            const isFeint = this.checkFeint(onBallPlayer);
 
-            // ディフェンスもオフェンスとゴールの間に位置取る（動き直しなのでquicknessを使用）
-            this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
+            if (isFeint) {
+              // フェイント発動：オフェンスは動かないが、ディフェンスはフェイント方向に釣られる
+              console.log(`[GameScene] 動き直しでフェイント発動！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
+              onBallPlayer.clearAIMovement(); // オフェンスは動かない
+
+              // ディフェンスはフェイント方向に釣られて動く（動き直しなのでquicknessを使用）
+              this.setDefenderFeintReaction(onBallDefender, newDirection, moveSpeed, true);
+            } else {
+              console.log(`[GameScene] 動き直し発生！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
+
+              // オフェンス側の動き直し遅延時間を計算（(100 - quickness) * 10 ミリ秒）
+              // 例：quickness=83 → (100-83)*10 = 170ms、quickness=90 → (100-90)*10 = 100ms
+              const offensePlayerData = onBallPlayer.playerData;
+              let offenseDelayMs = 1000; // デフォルト1秒
+
+              if (offensePlayerData && offensePlayerData.stats.quickness !== undefined) {
+                const quickness = offensePlayerData.stats.quickness;
+                offenseDelayMs = Math.max(0, (100 - quickness) * 10); // (100 - quickness) * 10ms（最小0ms）
+                console.log(`[GameScene] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${quickness})`);
+              } else {
+                console.log(`[GameScene] オフェンスのquicknessデータなし、デフォルト遅延: ${offenseDelayMs}ms`);
+              }
+
+              onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
+
+              // ディフェンスもオフェンスとゴールの間に位置取る（動き直しなのでquicknessを使用）
+              this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
+            }
 
             // 最後に方向転換した時刻を更新
             this.lastCollisionRedirectTime = currentTime;
@@ -618,6 +640,27 @@ export class GameScene {
       return;
     }
 
+    // ドリブル突破中は何もしない
+    if (onBallPlayer.isInDribbleBreakthrough()) {
+      return;
+    }
+
+    // ボールが0番面の時、ランダムでドリブル突破を実行
+    const currentFace = onBallPlayer.getCurrentBallFace();
+    if (currentFace === 0) {
+      const breakthroughChance = 0.3; // 30%の確率でドリブル突破
+      if (Math.random() < breakthroughChance) {
+        // 左右ランダムで突破方向を決定
+        const direction = Math.random() < 0.5 ? 'left' : 'right';
+        const success = onBallPlayer.startDribbleBreakthrough(direction);
+        if (success) {
+          onBallPlayer.clearAIMovement();
+          console.log(`[GameScene] AIがドリブル突破を選択: ${direction}方向`);
+          return; // 突破を開始したので通常処理をスキップ
+        }
+      }
+    }
+
     // サイコロを振る（1〜6）
     const offenseDice = Math.floor(Math.random() * 6) + 1;
     const defenseDice = Math.floor(Math.random() * 6) + 1;
@@ -627,16 +670,39 @@ export class GameScene {
 
     // オフェンス側：8方向のランダムな移動を設定
     const randomDirection = this.getRandomDirection8();
-    const moveSpeed = 3.0; // 歩行速度（適宜調整）
+    const baseMoveSpeed = 3.0; // 基準歩行速度
 
-    // 初回は遅延なしで開始（動き直し時のみquicknessに基づく遅延を適用）
-    onBallPlayer.setAIMovement(randomDirection, moveSpeed, 0);
+    // オフェンス側の速度をdribblingspeedで調整（dribblingspeed / 100 を倍率として適用）
+    const offensePlayerData = onBallPlayer.playerData;
+    let offenseMoveSpeed = baseMoveSpeed;
+    if (offensePlayerData && offensePlayerData.stats.dribblingspeed !== undefined) {
+      const dribblingSpeedMultiplier = offensePlayerData.stats.dribblingspeed / 100;
+      offenseMoveSpeed = baseMoveSpeed * dribblingSpeedMultiplier;
+      console.log(`[GameScene] オフェンス速度: ${offenseMoveSpeed.toFixed(2)} (dribblingspeed=${offensePlayerData.stats.dribblingspeed})`);
+    }
+    const moveSpeed = offenseMoveSpeed;
 
-    // ディフェンス側：オフェンスの動きに対応
-    this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
+    // フェイント判定：technique値に基づいて確率を決定
+    const isFeint = this.checkFeint(onBallPlayer);
 
-    console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}`);
+    if (isFeint) {
+      // フェイント発動：オフェンスは動かないが、ディフェンスはフェイント方向に釣られる
+      console.log('[GameScene] フェイント発動！オフェンスは動かずにディフェンスを釣る');
+      onBallPlayer.clearAIMovement(); // オフェンスは動かない
 
+      // ディフェンスはフェイント方向に釣られて動く
+      this.setDefenderFeintReaction(onBallDefender, randomDirection, moveSpeed);
+    } else {
+      // 通常移動：オフェンスも動く
+      onBallPlayer.setAIMovement(randomDirection, moveSpeed, 0);
+
+      // ディフェンス側：オフェンスの動きに対応
+      this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
+    }
+
+    console.log(`[GameScene] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}, フェイント=${isFeint}`);
+
+    
     if (offenseDice > defenseDice) {
       console.log('[GameScene] オフェンス勝利！');
       this.oneononeResult = { winner: 'offense', offenseDice, defenseDice };
@@ -750,6 +816,50 @@ export class GameScene {
   }
 
   /**
+   * フェイント時のディフェンダー反応
+   * ディフェンダーがフェイントの方向に釣られて動く
+   * @param defender ディフェンダー
+   * @param feintDirection フェイントの方向（オフェンスが動くふりをした方向）
+   * @param speed 移動速度
+   * @param isRedirect 動き直しかどうか
+   */
+  private setDefenderFeintReaction(
+    defender: Character,
+    feintDirection: Vector3,
+    speed: number,
+    isRedirect: boolean = false
+  ): void {
+    // ディフェンダーの遅延時間を計算
+    const defenderPlayerData = defender.playerData;
+    let reactionDelayMs = 1000; // デフォルト1秒
+
+    if (isRedirect) {
+      // 動き直しの場合：quicknessを使用
+      if (defenderPlayerData && defenderPlayerData.stats.quickness !== undefined) {
+        const quickness = defenderPlayerData.stats.quickness;
+        reactionDelayMs = Math.max(0, (100 - quickness) * 10);
+        console.log(`[GameScene] フェイント釣られ遅延: ${reactionDelayMs}ms (quickness=${quickness})`);
+      }
+    } else {
+      // 通常の反応：reflexesを使用
+      if (defenderPlayerData && defenderPlayerData.stats.reflexes !== undefined) {
+        const reflexes = defenderPlayerData.stats.reflexes;
+        reactionDelayMs = Math.max(0, 1000 - reflexes);
+        console.log(`[GameScene] フェイント釣られ遅延: ${reactionDelayMs}ms (reflexes=${reflexes})`);
+      }
+    }
+
+    // フェイント方向にディフェンダーを動かす
+    // フェイント方向と同じ方向に動く（オフェンスを追いかけるように）
+    const moveDirection = feintDirection.clone().normalize();
+
+    // 移動を設定（釣られる動き）
+    defender.setAIMovement(moveDirection, speed * 1.2, reactionDelayMs); // 少し速めに動く（焦って追いかける感じ）
+
+    console.log(`[GameScene] ディフェンダーがフェイントに釣られる！方向=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}), 速度=${speed * 1.2}`);
+  }
+
+  /**
    * 8方向のランダムな方向ベクトルを取得
    * @returns 正規化された方向ベクトル
    */
@@ -765,6 +875,30 @@ export class GameScene {
     const z = Math.cos(angle);
 
     return new Vector3(x, 0, z).normalize();
+  }
+
+  /**
+   * フェイント判定
+   * オフェンスプレイヤーのtechnique値に基づいてフェイントを発動するか判定
+   * @param offensePlayer オフェンスプレイヤー
+   * @returns フェイントを発動する場合はtrue
+   */
+  private checkFeint(offensePlayer: Character): boolean {
+    const playerData = offensePlayer.playerData;
+
+    // フェイント発動確率を計算（technique / 200 = 最大50%の確率）
+    // 例：technique=80 → 40%、technique=95 → 47.5%
+    let feintChance = 0.2; // デフォルト20%
+
+    if (playerData && playerData.stats.technique !== undefined) {
+      const technique = playerData.stats.technique;
+      feintChance = technique / 200; // technique / 200（最大50%）
+      console.log(`[GameScene] フェイント確率: ${(feintChance * 100).toFixed(1)}% (technique=${technique})`);
+    }
+
+    // 乱数でフェイント発動を判定
+    const roll = Math.random();
+    return roll < feintChance;
   }
 
   /**
@@ -1004,6 +1138,139 @@ export class GameScene {
     for (const character of allCharacters) {
       character.hideOctagonVertexNumbers();
     }
+  }
+
+  /**
+   * ドリブル突破を実行
+   * @param direction 突破方向（'left' = 左前、'right' = 右前）
+   * @returns 突破を開始できた場合はtrue
+   */
+  public performDribbleBreakthrough(direction: 'left' | 'right'): boolean {
+    // オンボールプレイヤーを探す
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    let onBallPlayer: Character | null = null;
+
+    for (const char of allCharacters) {
+      if (char.getState() === "ON_BALL_PLAYER") {
+        onBallPlayer = char;
+        break;
+      }
+    }
+
+    if (!onBallPlayer) {
+      console.log('[GameScene] ドリブル突破不可：オンボールプレイヤーがいません');
+      return false;
+    }
+
+    // キャラクターのドリブル突破を開始
+    const success = onBallPlayer.startDribbleBreakthrough(direction);
+
+    if (success) {
+      // 1on1バトル中の通常移動を一時停止
+      onBallPlayer.clearAIMovement();
+      console.log(`[GameScene] ドリブル突破開始: ${direction}方向`);
+    }
+
+    return success;
+  }
+
+  /**
+   * ドリブル突破中の更新処理
+   * @param deltaTime フレーム時間（秒）
+   * @param allCharacters 全キャラクターのリスト
+   */
+  private updateDribbleBreakthrough(deltaTime: number, allCharacters: Character[]): void {
+    // オンボールプレイヤーを探す
+    let onBallPlayer: Character | null = null;
+    let onBallDefender: Character | null = null;
+
+    for (const char of allCharacters) {
+      const state = char.getState();
+      if (state === "ON_BALL_PLAYER") {
+        onBallPlayer = char;
+      } else if (state === "ON_BALL_DEFENDER") {
+        onBallDefender = char;
+      }
+    }
+
+    // オンボールプレイヤーがドリブル突破中の場合
+    if (onBallPlayer && onBallPlayer.isInDribbleBreakthrough()) {
+      // 突破移動を適用（衝突判定無視）
+      const breakthroughEnded = onBallPlayer.applyBreakthroughMovement(deltaTime);
+
+      if (breakthroughEnded) {
+        // 突破終了
+        onBallPlayer.endDribbleBreakthrough();
+
+        // 衝突判定を行い、衝突している場合はpowerによる押し返しを計算
+        if (onBallDefender) {
+          const offensePos = onBallPlayer.getPosition();
+          const defenderPos = onBallDefender.getPosition();
+          const distance = Vector3.Distance(
+            new Vector3(offensePos.x, 0, offensePos.z),
+            new Vector3(defenderPos.x, 0, defenderPos.z)
+          );
+
+          const minDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+
+          if (distance < minDistance) {
+            // 衝突している場合、power差による押し返しを計算
+            console.log('[GameScene] ドリブル突破後の衝突発生！押し返し計算を実行');
+
+            const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);
+
+            // 押し返しを適用
+            const newOffensePos = offensePos.add(selfPush);
+            const newDefenderPos = defenderPos.add(otherPush);
+
+            onBallPlayer.setPosition(newOffensePos);
+            onBallDefender.setPosition(newDefenderPos);
+
+            console.log(`[GameScene] 押し返し適用: オフェンス移動(${selfPush.x.toFixed(2)}, ${selfPush.z.toFixed(2)}), ディフェンス移動(${otherPush.x.toFixed(2)}, ${otherPush.z.toFixed(2)})`);
+          } else {
+            console.log('[GameScene] ドリブル突破成功！衝突なし');
+          }
+        }
+
+        // 通常の1on1バトルを再開（新しい方向で動き直す）
+        if (this.in1on1Battle && onBallPlayer && onBallDefender) {
+          const newDirection = this.getRandomDirection8();
+
+          // オフェンス側の速度をdribblingspeedで調整
+          const baseMoveSpeed = 3.0;
+          let moveSpeed = baseMoveSpeed;
+          const offenseData = onBallPlayer.playerData;
+          if (offenseData && offenseData.stats.dribblingspeed !== undefined) {
+            moveSpeed = baseMoveSpeed * (offenseData.stats.dribblingspeed / 100);
+          }
+
+          // オフェンス側の動き直し遅延時間を計算
+          let offenseDelayMs = 1000;
+          if (offenseData && offenseData.stats.quickness !== undefined) {
+            offenseDelayMs = Math.max(0, (100 - offenseData.stats.quickness) * 10);
+          }
+
+          onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
+          this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
+        }
+      }
+    }
+  }
+
+  /**
+   * ドリブル突破可能かどうかをチェック
+   * @returns 突破可能な場合はtrue
+   */
+  public canPerformDribbleBreakthrough(): boolean {
+    // オンボールプレイヤーを探す
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const char of allCharacters) {
+      if (char.getState() === "ON_BALL_PLAYER") {
+        // ボール位置が0番面（正面）で、まだ突破中でないかチェック
+        return char.getCurrentBallFace() === 0 && !char.isInDribbleBreakthrough();
+      }
+    }
+    return false;
   }
 
   /**
