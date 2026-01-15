@@ -1,6 +1,7 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh } from "@babylonjs/core";
 import { GridMaterial } from "@babylonjs/materials";
-import { FIELD_CONFIG } from "../config/gameConfig";
+import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
+import { Net } from "./Net";
 
 /**
  * フィールド（地面）エンティティ
@@ -8,26 +9,40 @@ import { FIELD_CONFIG } from "../config/gameConfig";
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
-  private goal1: Mesh; // ゴール1（奥側）
-  private goal2: Mesh; // ゴール2（手前側）
+  private goal1Backboard: Mesh; // ゴール1のバックボード
+  private goal1Rim: Mesh; // ゴール1のリム
+  private goal1Net: Net; // ゴール1のネット
+  private goal2Backboard: Mesh; // ゴール2のバックボード
+  private goal2Rim: Mesh; // ゴール2のリム
+  private goal2Net: Net; // ゴール2のネット
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.mesh = this.createField();
-    this.goal1 = this.createGoal(1);
-    this.goal2 = this.createGoal(2);
+
+    // ゴール1（奥側、+Z）を作成
+    const goal1 = this.createBasketballGoal(1);
+    this.goal1Backboard = goal1.backboard;
+    this.goal1Rim = goal1.rim;
+    this.goal1Net = goal1.net;
+
+    // ゴール2（手前側、-Z）を作成
+    const goal2 = this.createBasketballGoal(2);
+    this.goal2Backboard = goal2.backboard;
+    this.goal2Rim = goal2.rim;
+    this.goal2Net = goal2.net;
   }
 
   /**
    * フィールドメッシュを作成
    */
   private createField(): Mesh {
-    // 地面の平面を作成
+    // 地面の平面を作成（width=X軸方向、height=Z軸方向）
     const ground = MeshBuilder.CreateGround(
       "field-ground",
       {
-        width: FIELD_CONFIG.size,
-        height: FIELD_CONFIG.size,
+        width: FIELD_CONFIG.width,
+        height: FIELD_CONFIG.length,
         subdivisions: FIELD_CONFIG.gridSize,
       },
       this.scene
@@ -60,59 +75,121 @@ export class Field {
   }
 
   /**
-   * ゴールを作成
+   * バスケットゴールを作成
    * @param goalNumber ゴール番号（1または2）
    */
-  private createGoal(goalNumber: number): Mesh {
-    const goalWidth = 5; // ゴールの幅（m）
-    const goalHeight = 2.5; // ゴールの高さ（m）
-    const goalDepth = 0.5; // ゴールの奥行き（m）
+  private createBasketballGoal(goalNumber: number): { backboard: Mesh; rim: Mesh; net: Net } {
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
 
-    // ゴールのボックスを作成
-    const goal = MeshBuilder.CreateBox(
-      `goal-${goalNumber}`,
+    // ゴール1は+Z側（奥）、ゴール2は-Z側（手前）
+    const zSign = goalNumber === 1 ? 1 : -1;
+    const zPosition = zSign * (fieldHalfLength - GOAL_CONFIG.backboardDistance);
+
+    // バックボード
+    const backboard = MeshBuilder.CreateBox(
+      `backboard-${goalNumber}`,
       {
-        width: goalWidth,
-        height: goalHeight,
-        depth: goalDepth,
+        width: GOAL_CONFIG.backboardWidth,
+        height: GOAL_CONFIG.backboardHeight,
+        depth: GOAL_CONFIG.backboardDepth,
       },
       this.scene
     );
 
-    // ゴールの位置を設定（フィールドの端）
-    const fieldHalfSize = FIELD_CONFIG.size / 2;
-    const zPosition = goalNumber === 1 ? fieldHalfSize : -fieldHalfSize;
-    goal.position = new Vector3(0, goalHeight / 2, zPosition);
+    backboard.position = new Vector3(
+      0,
+      GOAL_CONFIG.rimHeight + GOAL_CONFIG.backboardHeight / 2,
+      zPosition
+    );
 
-    // マテリアルを設定
-    const material = new StandardMaterial(`goal-${goalNumber}-material`, this.scene);
-    // ゴール1は青、ゴール2は赤
-    if (goalNumber === 1) {
-      material.diffuseColor = new Color3(0.2, 0.4, 1.0); // 青
-      material.emissiveColor = new Color3(0.1, 0.2, 0.5); // 青の発光
-    } else {
-      material.diffuseColor = new Color3(1.0, 0.3, 0.2); // 赤
-      material.emissiveColor = new Color3(0.5, 0.15, 0.1); // 赤の発光
-    }
-    material.specularColor = new Color3(0.3, 0.3, 0.3);
-    material.alpha = 0.7; // 半透明
-    goal.material = material;
+    const backboardMaterial = new StandardMaterial(
+      `backboard-material-${goalNumber}`,
+      this.scene
+    );
+    backboardMaterial.diffuseColor = new Color3(1, 1, 1);
+    backboardMaterial.alpha = 0.5;
+    backboard.material = backboardMaterial;
 
-    return goal;
+    // リム（輪）
+    const rim = MeshBuilder.CreateTorus(
+      `rim-${goalNumber}`,
+      {
+        diameter: GOAL_CONFIG.rimDiameter,
+        thickness: GOAL_CONFIG.rimThickness,
+        tessellation: 32,
+      },
+      this.scene
+    );
+
+    // リムの位置：バックボードからrimOffset分だけコート内側に配置
+    rim.position = new Vector3(
+      0,
+      GOAL_CONFIG.rimHeight,
+      zPosition - zSign * GOAL_CONFIG.rimOffset
+    );
+
+    const rimMaterial = new StandardMaterial(`rim-material-${goalNumber}`, this.scene);
+    rimMaterial.diffuseColor = Color3.FromHexString(GOAL_CONFIG.rimColor);
+    rimMaterial.emissiveColor = Color3.FromHexString(GOAL_CONFIG.rimColor).scale(0.3);
+    rim.material = rimMaterial;
+
+    // ネット
+    const rimCenter = rim.position.clone();
+    const net = new Net(this.scene, rimCenter, goalNumber === 1 ? "goal1" : "goal2");
+
+    console.log(`[Field] ゴール${goalNumber}を作成: バックボード Z=${zPosition}, リム Z=${rim.position.z}`);
+
+    return { backboard, rim, net };
   }
 
   /**
-   * ゴール1のメッシュを取得
+   * ゴール1のバックボードを取得
    */
-  public getGoal1(): Mesh {
-    return this.goal1;
+  public getGoal1Backboard(): Mesh {
+    return this.goal1Backboard;
   }
 
   /**
-   * ゴール2のメッシュを取得
+   * ゴール2のバックボードを取得
    */
-  public getGoal2(): Mesh {
-    return this.goal2;
+  public getGoal2Backboard(): Mesh {
+    return this.goal2Backboard;
+  }
+
+  /**
+   * ゴール1のリムを取得
+   */
+  public getGoal1Rim(): Mesh {
+    return this.goal1Rim;
+  }
+
+  /**
+   * ゴール2のリムを取得
+   */
+  public getGoal2Rim(): Mesh {
+    return this.goal2Rim;
+  }
+
+  /**
+   * ゴール1のネットを取得
+   */
+  public getGoal1Net(): Net {
+    return this.goal1Net;
+  }
+
+  /**
+   * ゴール2のネットを取得
+   */
+  public getGoal2Net(): Net {
+    return this.goal2Net;
+  }
+
+  /**
+   * 更新（ネットの物理シミュレーション）
+   */
+  public update(deltaTime: number): void {
+    this.goal1Net.update(deltaTime);
+    this.goal2Net.update(deltaTime);
   }
 
   /**
@@ -120,7 +197,11 @@ export class Field {
    */
   public dispose(): void {
     this.mesh.dispose();
-    this.goal1.dispose();
-    this.goal2.dispose();
+    this.goal1Backboard.dispose();
+    this.goal1Rim.dispose();
+    this.goal1Net.dispose();
+    this.goal2Backboard.dispose();
+    this.goal2Rim.dispose();
+    this.goal2Net.dispose();
   }
 }

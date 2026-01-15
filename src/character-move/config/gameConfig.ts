@@ -15,12 +15,37 @@ export const CHARACTER_CONFIG = {
   visionRange: 5, // 視野範囲（m）
 };
 
-// フィールド設定
+// フィールド設定（バスケットコートサイズ）
 export const FIELD_CONFIG = {
-  size: 50, // フィールドのサイズ（m × m）
-  floorColor: '#4CAF50', // 床の色（緑）
+  length: 28, // コートの長さ（m）- Z軸方向
+  width: 15, // コートの幅（m）- X軸方向
+  floorColor: '#8B4513', // 床の色（茶色 - バスケットコート）
   gridSize: 10, // グリッドのサイズ
-  gridColor: '#2E7D32', // グリッドの色（濃い緑）
+  gridColor: '#6B3510', // グリッドの色（濃い茶色）
+};
+
+// ゴール設定（バスケットゴール）
+export const GOAL_CONFIG = {
+  // リム（リング）設定
+  rimHeight: 3.05, // リムの高さ（m）
+  rimDiameter: 0.61, // リムの内径（m）
+  rimThickness: 0.02, // リムの太さ（m）
+  rimColor: '#FF6600', // リムの色（オレンジ）
+
+  // バックボード設定
+  backboardHeight: 1.05, // バックボードの高さ（m）
+  backboardWidth: 1.8, // バックボードの幅（m）
+  backboardDepth: 0.05, // バックボードの厚さ（m）
+  backboardDistance: 1.2, // エンドラインからバックボードまでの距離（m）
+  rimOffset: 0.4, // バックボードからリム中心までの距離（m）
+
+  // ネット設定
+  netSegmentsVertical: 10, // ネットの縦方向セグメント数
+  netSegmentsCircular: 16, // ネットの円周方向セグメント数
+  netLength: 0.45, // ネットの長さ（m）
+  netStiffness: 0.8, // ネットの硬さ（0-1）
+  netDamping: 0.85, // ネットの減衰（0-1）
+  netColor: '#FFFFFF', // ネットの色（白）
 };
 
 // 物理演算設定

@@ -563,6 +563,9 @@ export class GameScene {
     // ボールを更新（保持中はキャラクターに追従）
     this.ball.update(deltaTime);
 
+    // フィールドを更新（ネットの物理シミュレーション）
+    this.field.update(deltaTime);
+
     // 衝突判定を常に更新
     if (this.collisionHandler) {
       this.collisionHandler.update(deltaTime);
