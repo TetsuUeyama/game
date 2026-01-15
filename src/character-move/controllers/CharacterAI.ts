@@ -183,7 +183,7 @@ export class CharacterAI {
           awayDirection.normalize();
 
           // 攻めるべきゴールを決定
-          const attackingGoal = this.character.team === "ally" ? this.field.getGoal1() : this.field.getGoal2();
+          const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
           const goalPosition = attackingGoal.position;
 
           // ゴール方向とディフェンダーから離れる方向を組み合わせる
@@ -218,7 +218,7 @@ export class CharacterAI {
     }
 
     // ディフェンダーがいないか遠い場合は、ゴールに向かって移動
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1() : this.field.getGoal2();
+    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
     const goalPosition = attackingGoal.position;
 
     // ゴールに向かって移動
@@ -269,7 +269,7 @@ export class CharacterAI {
     }
 
     // 攻めるべきゴールを決定（敵チームのゴールに向かう）
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1() : this.field.getGoal2();
+    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
     const goalPosition = attackingGoal.position;
 
     // 敵キャラクターをリストアップ
@@ -431,7 +431,7 @@ export class CharacterAI {
 
     // サークルが重なっていない場合は、オンボールプレイヤーに近づく
     // 守るべきゴールを決定（自チームのゴールを守る）
-    const defendingGoal = this.character.team === "ally" ? this.field.getGoal2() : this.field.getGoal1();
+    const defendingGoal = this.character.team === "ally" ? this.field.getGoal2Backboard() : this.field.getGoal1Backboard();
     const goalPosition = defendingGoal.position;
 
     // オンボールプレイヤーからゴールへの方向ベクトルを計算
@@ -717,7 +717,7 @@ export class CharacterAI {
     const myPosition = this.character.getPosition();
 
     // 自チームのゴール位置を取得
-    const goal = this.character.team === "ally" ? this.field.getGoal2() : this.field.getGoal1();
+    const goal = this.character.team === "ally" ? this.field.getGoal2Backboard() : this.field.getGoal1Backboard();
     const goalPosition = goal.position;
 
     // ゴールからの距離を計算（XZ平面上）
