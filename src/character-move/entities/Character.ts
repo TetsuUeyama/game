@@ -109,6 +109,13 @@ export class Character {
   // 無力化フラグ（1on1勝負で負けた場合など）
   private defeated: boolean = false;
 
+  // ドリブル突破制御
+  private isDribbleBreakthrough: boolean = false; // ドリブル突破中かどうか
+  private breakthroughDirection: Vector3 | null = null; // 突破方向
+  private breakthroughStartTime: number = 0; // 突破開始時刻
+  private breakthroughDuration: number = 150; // 突破継続時間（ミリ秒）
+  private breakthroughSpeed: number = 2.5; // 突破時の速度
+
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
     this.position = position.clone();
@@ -1998,6 +2005,140 @@ export class Character {
       }
     }
     return false; // 衝突なし
+  }
+
+  /**
+   * ドリブル突破を開始
+   * @param direction 突破方向（'left' = 左斜め前、'right' = 右斜め前）
+   * @returns 突破を開始できた場合はtrue
+   */
+  public startDribbleBreakthrough(direction: 'left' | 'right'): boolean {
+    // 現在のボール保持面が0（正面）でない場合は突破不可
+    const currentFace = this.getCurrentBallFace();
+    if (currentFace !== 0) {
+      console.log(`[Character] ドリブル突破不可：ボール位置が0番面ではありません（現在: ${currentFace}）`);
+      return false;
+    }
+
+    // 既に突破中の場合は開始しない
+    if (this.isDribbleBreakthrough) {
+      console.log('[Character] ドリブル突破不可：既に突破中です');
+      return false;
+    }
+
+    // 突破方向を計算（キャラクターの向きを考慮）
+    // 左斜め前は約45度左、右斜め前は約45度右
+    const angleOffset = direction === 'left' ? -Math.PI / 4 : Math.PI / 4;
+    const breakthroughAngle = this.rotation + angleOffset;
+
+    this.breakthroughDirection = new Vector3(
+      Math.sin(breakthroughAngle),
+      0,
+      Math.cos(breakthroughAngle)
+    ).normalize();
+
+    this.isDribbleBreakthrough = true;
+    this.breakthroughStartTime = Date.now();
+
+    console.log(`[Character] ドリブル突破開始！方向: ${direction}, 角度: ${(breakthroughAngle * 180 / Math.PI).toFixed(1)}度`);
+    return true;
+  }
+
+  /**
+   * ドリブル突破中かどうかを取得
+   */
+  public isInDribbleBreakthrough(): boolean {
+    return this.isDribbleBreakthrough;
+  }
+
+  /**
+   * ドリブル突破の残り時間を取得（ミリ秒）
+   */
+  public getBreakthroughRemainingTime(): number {
+    if (!this.isDribbleBreakthrough) return 0;
+    const elapsed = Date.now() - this.breakthroughStartTime;
+    return Math.max(0, this.breakthroughDuration - elapsed);
+  }
+
+  /**
+   * ドリブル突破を終了
+   */
+  public endDribbleBreakthrough(): void {
+    this.isDribbleBreakthrough = false;
+    this.breakthroughDirection = null;
+    console.log('[Character] ドリブル突破終了');
+  }
+
+  /**
+   * ドリブル突破の移動を適用（衝突判定無視）
+   * @param deltaTime フレーム時間（秒）
+   * @returns 突破が終了した場合はtrue
+   */
+  public applyBreakthroughMovement(deltaTime: number): boolean {
+    if (!this.isDribbleBreakthrough || !this.breakthroughDirection) {
+      return false;
+    }
+
+    // 突破時間が経過したかチェック
+    const elapsed = Date.now() - this.breakthroughStartTime;
+    if (elapsed >= this.breakthroughDuration) {
+      return true; // 突破終了
+    }
+
+    // dribblingspeedを倍率として適用（dribblingspeed / 100）
+    let dribblingSpeedMultiplier = 1.0;
+    if (this.playerData && this.playerData.stats.dribblingspeed !== undefined) {
+      dribblingSpeedMultiplier = this.playerData.stats.dribblingspeed / 100;
+    }
+
+    // 突破方向に移動（衝突判定なし）
+    const speed = CHARACTER_CONFIG.speed * this.breakthroughSpeed * dribblingSpeedMultiplier;
+    const velocity = this.breakthroughDirection.scale(speed);
+    const newPosition = this.position.add(velocity.scale(deltaTime));
+    this.setPosition(newPosition);
+
+    return false; // まだ突破中
+  }
+
+  /**
+   * 押し返し（ボディバランス計算）を適用
+   * @param other 衝突した相手キャラクター
+   * @returns 押し返しベクトル（自分が押される方向と距離）
+   */
+  public calculatePushback(other: Character): { selfPush: Vector3; otherPush: Vector3 } {
+    // power値を取得（デフォルトは50）
+    const myPower = this.playerData?.stats.power ?? 50;
+    const otherPower = other.playerData?.stats.power ?? 50;
+
+    // power差を計算（-100〜+100の範囲）
+    const powerDiff = myPower - otherPower;
+
+    // 押し返し量を計算（power差が大きいほど一方的に押される）
+    // powerDiff > 0: 自分の方がパワーがある → 相手が押される
+    // powerDiff < 0: 相手の方がパワーがある → 自分が押される
+    // 基準押し返し距離: 0.5m、power差100で完全に片方だけ押される
+    const basePushDistance = 0.5;
+    const pushRatio = powerDiff / 100; // -1〜+1
+
+    // 押し返し方向を計算（自分から相手へのベクトル）
+    const pushDirection = other.getPosition().subtract(this.getPosition());
+    pushDirection.y = 0;
+    pushDirection.normalize();
+
+    // 押し返し量を計算
+    // pushRatio > 0: 相手を押す（otherPushが大きくなる）
+    // pushRatio < 0: 自分が押される（selfPushが大きくなる）
+    const totalPush = basePushDistance;
+    const selfPushAmount = totalPush * (0.5 - pushRatio * 0.5); // pushRatio=1なら0、pushRatio=-1なら1
+    const otherPushAmount = totalPush * (0.5 + pushRatio * 0.5); // pushRatio=1なら1、pushRatio=-1なら0
+
+    const selfPush = pushDirection.scale(-selfPushAmount); // 自分は相手の反対方向に押される
+    const otherPush = pushDirection.scale(otherPushAmount); // 相手は押し返される
+
+    console.log(`[Character] 押し返し計算: myPower=${myPower}, otherPower=${otherPower}, diff=${powerDiff}`);
+    console.log(`[Character] 押し返し結果: self=${selfPushAmount.toFixed(2)}m, other=${otherPushAmount.toFixed(2)}m`);
+
+    return { selfPush, otherPush };
   }
 
   /**

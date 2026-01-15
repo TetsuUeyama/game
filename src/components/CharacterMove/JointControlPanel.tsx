@@ -134,6 +134,7 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
     // ゲームシーンの関節を更新
     if (gameScene) {
       const character = gameScene.getCharacter();
+      if (!character) return;
       const joint = character.getJoint(selectedJoint);
       if (joint) {
         joint.rotation[axis] = (clampedValue * Math.PI) / 180; // 度数をラジアンに変換
@@ -154,6 +155,7 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
     // ゲームシーンの関節を更新（下半身のみ）
     if (gameScene && selectedJoint === "lowerBody") {
       const character = gameScene.getCharacter();
+      if (!character) return;
       // 下半身のオフセットは下半身ボックスメッシュのローカル座標で調整
       const lowerBodyMesh = character.getLowerBodyMesh();
       if (lowerBodyMesh) {
@@ -168,6 +170,7 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
     // 現在の関節の回転値と位置を取得
     if (gameScene) {
       const character = gameScene.getCharacter();
+      if (!character) return;
       const joint = character.getJoint(jointName);
       if (joint) {
         setRotation({
@@ -200,6 +203,7 @@ export function JointControlPanel({ gameScene }: JointControlPanelProps) {
     setPosition({ x: 0, y: 0, z: 0 });
     if (gameScene) {
       const character = gameScene.getCharacter();
+      if (!character) return;
       const joint = character.getJoint(selectedJoint);
       if (joint) {
         joint.rotation.x = 0;
