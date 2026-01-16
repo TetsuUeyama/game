@@ -15,6 +15,7 @@ import { JointController } from "../controllers/JointController";
 import { CollisionHandler } from "../controllers/CollisionHandler";
 import { CharacterAI } from "../controllers/CharacterAI";
 import { OneOnOneBattleController } from "../controllers/OneOnOneBattleController";
+import { ShootingController } from "../controllers/ShootingController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -53,6 +54,9 @@ export class GameScene {
 
   // 1on1バトルコントローラー
   private oneOnOneBattleController?: OneOnOneBattleController;
+
+  // シュートコントローラー
+  private shootingController?: ShootingController;
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -138,6 +142,23 @@ export class GameScene {
         () => [...this.allyCharacters, ...this.enemyCharacters]
       );
       console.log('[GameScene] 1on1バトルコントローラーを初期化しました');
+    }
+
+    // シュートコントローラーの初期化
+    if (allCharacters.length > 0) {
+      this.shootingController = new ShootingController(
+        this.scene,
+        this.ball,
+        this.field,
+        () => [...this.allyCharacters, ...this.enemyCharacters]
+      );
+      console.log('[GameScene] シュートコントローラーを初期化しました');
+
+      // 全AIコントローラーにShootingControllerを設定
+      for (const ai of this.characterAIs) {
+        ai.setShootingController(this.shootingController);
+      }
+      console.log('[GameScene] 全AIにShootingControllerを設定しました');
     }
 
     // 入力コントローラーの初期化（プレイヤーキャラクター）
@@ -489,6 +510,11 @@ export class GameScene {
     if (this.oneOnOneBattleController) {
       this.oneOnOneBattleController.check1on1Battle();
     }
+
+    // シュートコントローラーの更新（ゴール判定）
+    if (this.shootingController) {
+      this.shootingController.update(deltaTime);
+    }
   }
 
   /**
@@ -688,6 +714,64 @@ export class GameScene {
   }
 
   /**
+   * シュートを実行
+   * @param shooter シュートを打つキャラクター（省略時はオンボールプレイヤー）
+   * @returns シュート結果
+   */
+  public performShoot(shooter?: Character): { success: boolean; shootType: string; distance: number; message: string } | null {
+    if (!this.shootingController) {
+      return null;
+    }
+
+    // シューターが指定されていない場合、オンボールプレイヤーを取得
+    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
+    if (!targetShooter) {
+      return {
+        success: false,
+        shootType: 'none',
+        distance: 0,
+        message: 'シューターが見つかりません',
+      };
+    }
+
+    return this.shootingController.performShoot(targetShooter);
+  }
+
+  /**
+   * シュート可能かどうかをチェック
+   * @param shooter チェック対象のキャラクター（省略時はオンボールプレイヤー）
+   */
+  public canShoot(shooter?: Character): boolean {
+    if (!this.shootingController) {
+      return false;
+    }
+
+    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
+    if (!targetShooter) {
+      return false;
+    }
+
+    return this.shootingController.canShoot(targetShooter);
+  }
+
+  /**
+   * 現在のシュートレンジ情報を取得
+   * @param shooter 対象キャラクター（省略時はオンボールプレイヤー）
+   */
+  public getShootRangeInfo(shooter?: Character): { shootType: string; distance: number; inRange: boolean; facingGoal: boolean } | null {
+    if (!this.shootingController) {
+      return null;
+    }
+
+    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
+    if (!targetShooter) {
+      return null;
+    }
+
+    return this.shootingController.getShootRangeInfo(targetShooter);
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
@@ -702,6 +786,9 @@ export class GameScene {
     }
     if (this.oneOnOneBattleController) {
       this.oneOnOneBattleController.dispose();
+    }
+    if (this.shootingController) {
+      this.shootingController.dispose();
     }
     this.ball.dispose();
 

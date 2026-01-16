@@ -9,9 +9,24 @@ import {
 import type { Character } from "./Character";
 
 /**
- * バスケットボール半径（m）= 直径50cm
+ * バスケットボール半径（m）= 直径30cm
  */
 const BALL_RADIUS = 0.15;
+
+/**
+ * 重力加速度（m/s²）
+ */
+const GRAVITY = 9.81;
+
+/**
+ * バウンド時の反発係数（エネルギー保存率）
+ */
+const BOUNCE_COEFFICIENT = 0.7;
+
+/**
+ * バウンドを停止する最小速度
+ */
+const MIN_BOUNCE_VELOCITY = 0.5;
 
 
 /**
@@ -21,6 +36,17 @@ export class Ball {
   private scene: Scene;
   public mesh: Mesh;
   private holder: Character | null = null; // ボールを保持しているキャラクター
+
+  // 飛行中の状態管理
+  private inFlight: boolean = false;
+  private velocity: Vector3 = Vector3.Zero();
+  private flightTime: number = 0;
+  private targetPosition: Vector3 = Vector3.Zero(); // ゴールリング位置
+
+  // シューターのクールダウン（シュート直後にシューター自身がキャッチしないようにする）
+  private lastShooter: Character | null = null;
+  private shooterCooldown: number = 0;
+  private static readonly SHOOTER_COOLDOWN_TIME = 0.5; // 0.5秒間はシューターがキャッチ不可
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -94,6 +120,13 @@ export class Ball {
    */
   setHolder(character: Character | null): void {
     this.holder = character;
+
+    // 保持者が設定された場合、飛行状態を終了
+    if (character !== null && this.inFlight) {
+      console.log(`[Ball] キャッチされたため飛行状態を終了`);
+      this.inFlight = false;
+      this.velocity = Vector3.Zero();
+    }
   }
 
   /**
@@ -104,16 +137,220 @@ export class Ball {
   }
 
   /**
-   * 更新処理（保持中はキャラクターに追従）
+   * 更新処理（保持中はキャラクターに追従、飛行中は軌道計算）
    */
-  update(_deltaTime: number): void {
+  update(deltaTime: number): void {
+    // シューターのクールダウンを減少
+    if (this.shooterCooldown > 0) {
+      this.shooterCooldown -= deltaTime;
+      if (this.shooterCooldown <= 0) {
+        this.lastShooter = null;
+      }
+    }
+
     if (this.holder) {
       // 保持者の設定されたボール保持位置を取得
       const ballHoldingPosition = this.holder.getBallHoldingPosition();
 
       // ボール保持位置に配置
       this.mesh.position = ballHoldingPosition;
+    } else if (this.inFlight) {
+      // 飛行中の軌道更新
+      this.updateTrajectory(deltaTime);
     }
+  }
+
+  /**
+   * シュートを開始
+   * @param targetPosition ゴールリングの中心位置
+   * @param launchAngle 発射角度（ラジアン、水平からの角度）デフォルト55度
+   * @param overrideStartPosition 発射位置を指定（省略時は現在のボール位置）
+   * @returns シュート開始できた場合true
+   */
+  public shoot(targetPosition: Vector3, launchAngle: number = Math.PI * 55 / 180, overrideStartPosition?: Vector3): boolean {
+    if (this.inFlight) {
+      console.log('[Ball] 既に飛行中のためシュートできません');
+      return false;
+    }
+
+    // 保持者をクリア
+    const previousHolder = this.holder;
+    this.holder = null;
+
+    // 初期位置（指定された位置、または現在のボール位置）
+    const startPosition = overrideStartPosition ? overrideStartPosition.clone() : this.mesh.position.clone();
+
+    // ボールを発射位置に移動
+    this.mesh.position = startPosition.clone();
+
+    // ターゲット位置を保存
+    this.targetPosition = targetPosition.clone();
+
+    // 初速度を計算
+    this.velocity = this.calculateInitialVelocity(startPosition, targetPosition, launchAngle);
+
+    // 飛行開始
+    this.inFlight = true;
+    this.flightTime = 0;
+
+    // シューターのクールダウンを設定（シュート直後にシューター自身がキャッチしないようにする）
+    this.lastShooter = previousHolder;
+    this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
+
+    console.log(`[Ball] シュート開始:
+      開始位置=(${startPosition.x.toFixed(2)}, ${startPosition.y.toFixed(2)}, ${startPosition.z.toFixed(2)})
+      目標位置=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})
+      初速度=(${this.velocity.x.toFixed(2)}, ${this.velocity.y.toFixed(2)}, ${this.velocity.z.toFixed(2)})
+      発射角度=${(launchAngle * 180 / Math.PI).toFixed(1)}度
+      前保持者=${previousHolder ? 'あり' : 'なし'}`);
+
+    return true;
+  }
+
+  /**
+   * 軌道の更新処理
+   */
+  private updateTrajectory(deltaTime: number): void {
+    if (!this.inFlight) return;
+
+    this.flightTime += deltaTime;
+
+    // 現在の位置
+    const currentPos = this.mesh.position;
+
+    // 速度を更新（重力適用）
+    this.velocity.y -= GRAVITY * deltaTime;
+
+    // 位置を更新
+    const newPosition = new Vector3(
+      currentPos.x + this.velocity.x * deltaTime,
+      currentPos.y + this.velocity.y * deltaTime,
+      currentPos.z + this.velocity.z * deltaTime
+    );
+
+    // 地面との衝突チェック（バウンド処理）
+    if (newPosition.y <= BALL_RADIUS) {
+      newPosition.y = BALL_RADIUS;
+
+      // バウンド：Y速度を反転して減衰
+      const bounceVelocityY = -this.velocity.y * BOUNCE_COEFFICIENT;
+
+      // 速度が小さければバウンド終了
+      if (Math.abs(bounceVelocityY) < MIN_BOUNCE_VELOCITY) {
+        this.inFlight = false;
+        this.velocity = Vector3.Zero();
+        console.log(`[Ball] 地面に停止: 飛行時間=${this.flightTime.toFixed(2)}秒`);
+      } else {
+        // バウンド継続：Y速度を反転、XZ速度も少し減衰
+        this.velocity.y = bounceVelocityY;
+        this.velocity.x *= 0.9;
+        this.velocity.z *= 0.9;
+        console.log(`[Ball] バウンド: 速度Y=${bounceVelocityY.toFixed(2)}`);
+      }
+    }
+
+    this.mesh.position = newPosition;
+
+    // ゴール判定（リング通過）は別途ShootingControllerで行う
+  }
+
+  /**
+   * 目標位置に到達するための初速度を計算
+   * @param start 開始位置
+   * @param target 目標位置
+   * @param angle 発射角度（ラジアン）
+   * @returns 初速度ベクトル
+   */
+  private calculateInitialVelocity(start: Vector3, target: Vector3, angle: number): Vector3 {
+    // 水平距離（XZ平面）
+    const dx = target.x - start.x;
+    const dz = target.z - start.z;
+    const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+
+    // 垂直距離
+    const dy = target.y - start.y;
+
+    // 発射角度のtan値
+    const tanAngle = Math.tan(angle);
+    const cosAngle = Math.cos(angle);
+
+    // 初速度の大きさを計算
+    // y = x * tan(θ) - (g * x²) / (2 * v₀² * cos²(θ))
+    // 目標に到達するためのv₀を計算:
+    // v₀² = (g * x²) / (2 * cos²(θ) * (x * tan(θ) - y))
+    const numerator = GRAVITY * horizontalDistance * horizontalDistance;
+    const denominator = 2 * cosAngle * cosAngle * (horizontalDistance * tanAngle - dy);
+
+    // 分母が0以下の場合（物理的に到達不可能）、フォールバック値を使用
+    let v0: number;
+    if (denominator <= 0) {
+      // フォールバック：単純な速度計算
+      v0 = Math.sqrt(horizontalDistance * horizontalDistance + dy * dy) * 2;
+      console.log(`[Ball] 通常の軌道計算不可、フォールバック速度使用: v0=${v0.toFixed(2)}`);
+    } else {
+      v0 = Math.sqrt(numerator / denominator);
+    }
+
+    // 方向ベクトル（XZ平面）
+    const directionXZ = new Vector3(dx, 0, dz).normalize();
+
+    // 初速度の各成分
+    const vHorizontal = v0 * cosAngle;
+    const vVertical = v0 * Math.sin(angle);
+
+    return new Vector3(
+      directionXZ.x * vHorizontal,
+      vVertical,
+      directionXZ.z * vHorizontal
+    );
+  }
+
+  /**
+   * 飛行中かどうかを取得
+   */
+  public isInFlight(): boolean {
+    return this.inFlight;
+  }
+
+  /**
+   * 飛行を終了（外部から呼び出し用）
+   */
+  public endFlight(): void {
+    this.inFlight = false;
+    this.velocity = Vector3.Zero();
+  }
+
+  /**
+   * 現在の速度を取得
+   */
+  public getVelocity(): Vector3 {
+    return this.velocity.clone();
+  }
+
+  /**
+   * 速度を設定
+   */
+  public setVelocity(velocity: Vector3): void {
+    this.velocity = velocity.clone();
+  }
+
+  /**
+   * ボールの半径を取得
+   */
+  public getRadius(): number {
+    return BALL_RADIUS;
+  }
+
+  /**
+   * 指定したキャラクターがボールをキャッチできるかどうか
+   * シュート直後はシューター自身がキャッチできない
+   */
+  public canBeCaughtBy(character: Character): boolean {
+    // シューターのクールダウン中は、シューター自身はキャッチできない
+    if (this.lastShooter === character && this.shooterCooldown > 0) {
+      return false;
+    }
+    return true;
   }
 
   /**

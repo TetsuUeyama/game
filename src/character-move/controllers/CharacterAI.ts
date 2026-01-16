@@ -6,6 +6,7 @@ import { Field } from "../entities/Field";
 import { IDLE_MOTION } from "../data/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../data/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../data/DashMotion";
+import { ShootingController } from "./ShootingController";
 
 /**
  * キャラクターAIコントローラー
@@ -16,6 +17,11 @@ export class CharacterAI {
   private ball: Ball;
   private allCharacters: Character[];
   private field: Field;
+  private shootingController: ShootingController | null = null;
+
+  // シュートクールダウン（連続シュート防止）
+  private shootCooldown: number = 0;
+  private static readonly SHOOT_COOLDOWN_TIME = 2.0; // 2秒のクールダウン
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     this.character = character;
@@ -30,9 +36,20 @@ export class CharacterAI {
   }
 
   /**
+   * ShootingControllerを設定
+   */
+  public setShootingController(controller: ShootingController): void {
+    this.shootingController = controller;
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
+    // シュートクールダウンを減少
+    if (this.shootCooldown > 0) {
+      this.shootCooldown -= deltaTime;
+    }
     // ゴールキーパーの場合、ゴール前半径5m以内に位置を制限
     if (this.character.playerPosition === 'GK') {
       this.constrainGoalkeeperPosition();
@@ -137,9 +154,102 @@ export class CharacterAI {
   }
 
   /**
+   * シュートを試みる
+   * @returns シュートを打った場合true
+   */
+  private tryShoot(): boolean {
+    // ShootingControllerがない場合はスキップ
+    if (!this.shootingController) {
+      return false;
+    }
+
+    // クールダウン中はスキップ
+    if (this.shootCooldown > 0) {
+      return false;
+    }
+
+    // ゴールまでの距離を計算（向きに関係なく）
+    const goalZ = this.character.team === 'ally' ? 11.4 : -11.4;
+    const myPos = this.character.getPosition();
+    const dx = 0 - myPos.x;
+    const dz = goalZ - myPos.z;
+    const distanceToGoal = Math.sqrt(dx * dx + dz * dz);
+
+    // 距離だけで判定（3P: 6.75-10m, ミドル: 2-6.75m, レイアップ: 0.5-2m）
+    const isIn3PRange = distanceToGoal >= 6.75 && distanceToGoal <= 10.0;
+    const isInMidRange = distanceToGoal >= 2.0 && distanceToGoal < 6.75;
+    const isInLayupRange = distanceToGoal >= 0.5 && distanceToGoal < 2.0;
+
+    if (!isIn3PRange && !isInMidRange && !isInLayupRange) {
+      // デバッグ: 定期的にレンジ情報をログ出力
+      if (Math.random() < 0.005) {
+        console.log(`[CharacterAI DEBUG] ${this.character.playerData?.basic?.NAME || 'Unknown'}: 距離=${distanceToGoal.toFixed(2)}m - レンジ外`);
+      }
+      return false;
+    }
+
+    // シュートレンジ内に入ったらゴール方向を向く
+    const angle = Math.atan2(dx, dz);
+    this.character.setRotation(angle);
+
+    // 向きを変えた後、正式にチェック
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+
+    // デバッグ: レンジ内の場合はログ出力
+    console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'}: シュートレンジ内 距離=${distanceToGoal.toFixed(2)}m, タイプ=${rangeInfo.shootType}, inRange=${rangeInfo.inRange}, facingGoal=${rangeInfo.facingGoal}`);
+
+    if (!rangeInfo.inRange || !rangeInfo.facingGoal) {
+      return false;
+    }
+
+    // シュートタイプに応じた処理
+    const shootType = rangeInfo.shootType;
+    let shouldShoot = false;
+
+    switch (shootType) {
+      case '3pt':
+        // 3Pシュート：レンジ内で向いていればシュート
+        shouldShoot = true;
+        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} が3Pシュートレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
+        break;
+      case 'midrange':
+        // ミドルレンジシュート：レンジ内で向いていればシュート
+        shouldShoot = true;
+        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} がミドルレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
+        break;
+      case 'layup':
+        // レイアップ：レンジ内で向いていればシュート
+        shouldShoot = true;
+        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} がレイアップレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
+        break;
+    }
+
+    if (shouldShoot) {
+      // シュート実行
+      const result = this.shootingController.performShoot(this.character);
+      if (result.success) {
+        console.log(`[CharacterAI] ${result.message}`);
+        // クールダウンを設定
+        this.shootCooldown = CharacterAI.SHOOT_COOLDOWN_TIME;
+        return true;
+      } else {
+        // 失敗原因をログ出力
+        console.log(`[CharacterAI] シュート失敗: ${result.message}`);
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * オンボールプレイヤー状態の処理
    */
   private handleOnBallPlayerState(deltaTime: number): void {
+    // シュート可能かチェック（最優先）
+    if (this.tryShoot()) {
+      return; // シュートを打った場合は他の処理をスキップ
+    }
+
     // 目の前にディフェンダーがいるかチェック
     const onBallDefender = this.findOnBallDefender();
 
@@ -163,8 +273,18 @@ export class CharacterAI {
           this.character.playMotion(IDLE_MOTION);
         }
 
-        // 8角形の辺を相手に向けて一致させる
-        this.character.alignFootCircleToTarget(defenderPosition);
+        // オフェンス側は常にゴール方向を向く（最優先）
+        const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
+        const goalPosition = attackingGoal.position;
+        const toGoal = new Vector3(
+          goalPosition.x - myPosition.x,
+          0,
+          goalPosition.z - myPosition.z
+        );
+        if (toGoal.length() > 0.01) {
+          const angle = Math.atan2(toGoal.x, toGoal.z);
+          this.character.setRotation(angle);
+        }
 
         return;
       }
@@ -421,11 +541,12 @@ export class CharacterAI {
         this.character.playMotion(IDLE_MOTION);
       }
 
-      // 8角形の辺を相手に向けて一致させる
-      this.character.alignFootCircleToTarget(onBallPosition);
+      // ディフェンス側はオフェンス側の0ポジションに自分の0ポジションを合わせる
+      // オフェンス側の向きと反対方向（対面する向き）を向く
+      const offenseRotation = onBallPlayer.getRotation();
+      const defenseRotation = offenseRotation + Math.PI; // 180度反対方向
+      this.character.setRotation(defenseRotation);
 
-      // 常にオンボールプレイヤーの方を向く
-      this.faceTowards(onBallPlayer);
       return;
     }
 
