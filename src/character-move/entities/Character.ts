@@ -10,6 +10,7 @@ import { BallAction, FACE_ACTIONS } from "../types/BallAction";
 import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrategy";
 import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
+import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -117,8 +118,6 @@ export class Character {
   private isDribbleBreakthrough: boolean = false; // ドリブル突破中かどうか
   private breakthroughDirection: Vector3 | null = null; // 突破方向
   private breakthroughStartTime: number = 0; // 突破開始時刻
-  private breakthroughDuration: number = 150; // 突破継続時間（ミリ秒）
-  private breakthroughSpeed: number = 2.5; // 突破時の速度
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -1159,23 +1158,20 @@ export class Character {
    * @returns 突破を開始できた場合はtrue
    */
   public startDribbleBreakthrough(direction: 'left' | 'right'): boolean {
-    // 現在のボール保持面が0（正面）でない場合は突破不可
     const currentFace = this.getCurrentBallFace();
-    if (currentFace !== 0) {
-      console.log(`[Character] ドリブル突破不可：ボール位置が0番面ではありません（現在: ${currentFace}）`);
+
+    // DribbleUtilsを使用して突破可能かチェック
+    if (!DribbleUtils.canStartBreakthrough(currentFace, this.isDribbleBreakthrough)) {
+      if (currentFace !== 0) {
+        console.log(`[Character] ドリブル突破不可：ボール位置が0番面ではありません（現在: ${currentFace}）`);
+      } else {
+        console.log('[Character] ドリブル突破不可：既に突破中です');
+      }
       return false;
     }
 
-    // 既に突破中の場合は開始しない
-    if (this.isDribbleBreakthrough) {
-      console.log('[Character] ドリブル突破不可：既に突破中です');
-      return false;
-    }
-
-    // 突破方向を計算（キャラクターの向きを考慮）
-    // 左斜め前は約45度左、右斜め前は約45度右
-    const angleOffset = direction === 'left' ? -Math.PI / 4 : Math.PI / 4;
-    const breakthroughAngle = this.rotation + angleOffset;
+    // DribbleUtilsを使用して突破角度を計算
+    const breakthroughAngle = DribbleUtils.calculateBreakthroughAngle(this.rotation, direction);
 
     this.breakthroughDirection = new Vector3(
       Math.sin(breakthroughAngle),
@@ -1203,7 +1199,7 @@ export class Character {
   public getBreakthroughRemainingTime(): number {
     if (!this.isDribbleBreakthrough) return 0;
     const elapsed = Date.now() - this.breakthroughStartTime;
-    return Math.max(0, this.breakthroughDuration - elapsed);
+    return Math.max(0, DRIBBLE_CONFIG.BREAKTHROUGH_DURATION - elapsed);
   }
 
   /**
@@ -1227,18 +1223,15 @@ export class Character {
 
     // 突破時間が経過したかチェック
     const elapsed = Date.now() - this.breakthroughStartTime;
-    if (elapsed >= this.breakthroughDuration) {
+    if (elapsed >= DRIBBLE_CONFIG.BREAKTHROUGH_DURATION) {
       return true; // 突破終了
     }
 
-    // dribblingspeedを倍率として適用（dribblingspeed / 100）
-    let dribblingSpeedMultiplier = 1.0;
-    if (this.playerData && this.playerData.stats.dribblingspeed !== undefined) {
-      dribblingSpeedMultiplier = this.playerData.stats.dribblingspeed / 100;
-    }
-
-    // 突破方向に移動（衝突判定なし）
-    const speed = CHARACTER_CONFIG.speed * this.breakthroughSpeed * dribblingSpeedMultiplier;
+    // DribbleUtilsを使用して突破速度を計算
+    const speed = DribbleUtils.calculateBreakthroughSpeed(
+      CHARACTER_CONFIG.speed,
+      this.playerData?.stats.dribblingspeed
+    );
     const velocity = this.breakthroughDirection.scale(speed);
     const newPosition = this.position.add(velocity.scale(deltaTime));
     this.setPosition(newPosition);

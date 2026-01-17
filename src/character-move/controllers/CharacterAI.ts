@@ -7,6 +7,8 @@ import { IDLE_MOTION } from "../data/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../data/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../data/DashMotion";
 import { ShootingController } from "./ShootingController";
+import { SHOOT_COOLDOWN, ShootingUtils } from "../config/ShootingConfig";
+import { DEFENSE_DISTANCE, DEFENSE_MOVEMENT, DefenseUtils } from "../config/DefenseConfig";
 
 /**
  * キャラクターAIコントローラー
@@ -21,7 +23,7 @@ export class CharacterAI {
 
   // シュートクールダウン（連続シュート防止）
   private shootCooldown: number = 0;
-  private static readonly SHOOT_COOLDOWN_TIME = 2.0; // 2秒のクールダウン
+  // SHOOT_COOLDOWN.AFTER_SHOTを使用（ShootingConfigから）
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     this.character = character;
@@ -179,12 +181,8 @@ export class CharacterAI {
     const dz = goalPosition.z - myPos.z;
     const distanceToGoal = Math.sqrt(dx * dx + dz * dz);
 
-    // 距離だけで判定（3P: 6.75-10m, ミドル: 2-6.75m, レイアップ: 0.5-2m）
-    const isIn3PRange = distanceToGoal >= 6.75 && distanceToGoal <= 10.0;
-    const isInMidRange = distanceToGoal >= 2.0 && distanceToGoal < 6.75;
-    const isInLayupRange = distanceToGoal >= 0.5 && distanceToGoal < 2.0;
-
-    if (!isIn3PRange && !isInMidRange && !isInLayupRange) {
+    // ShootingUtilsを使用してレンジ判定
+    if (!ShootingUtils.isInShootRange(distanceToGoal)) {
       // デバッグ: 定期的にレンジ情報をログ出力
       if (Math.random() < 0.005) {
         console.log(`[CharacterAI DEBUG] ${this.character.playerData?.basic?.NAME || 'Unknown'}: 距離=${distanceToGoal.toFixed(2)}m - レンジ外`);
@@ -206,11 +204,10 @@ export class CharacterAI {
       return false;
     }
 
-    // シュートタイプに応じた処理
-    const shootType = rangeInfo.shootType;
+    // シュートタイプに応じた処理（rangeInfo.shootTypeを使用）
     let shouldShoot = false;
 
-    switch (shootType) {
+    switch (rangeInfo.shootType) {
       case '3pt':
         // 3Pシュート：レンジ内で向いていればシュート
         shouldShoot = true;
@@ -233,8 +230,8 @@ export class CharacterAI {
       const result = this.shootingController.performShoot(this.character);
       if (result.success) {
         console.log(`[CharacterAI] ${result.message}`);
-        // クールダウンを設定
-        this.shootCooldown = CharacterAI.SHOOT_COOLDOWN_TIME;
+        // SHOOT_COOLDOWN.AFTER_SHOTを使用してクールダウンを設定
+        this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
         return true;
       } else {
         // 失敗原因をログ出力
@@ -264,11 +261,10 @@ export class CharacterAI {
       // ディフェンダーとの距離をチェック
       const distance = Vector3.Distance(myPosition, defenderPosition);
 
-      // サークルが重なる距離を動的に計算
-      // オフェンスのサークル半径（1m）+ ディフェンダーのサークル半径（動的）
-      const offenseRadius = 1.0;
+      // DefenseUtilsを使用してサークルが重なる距離を計算
+      const offenseRadius = DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS;
       const defenderRadius = onBallDefender.getFootCircleRadius();
-      const minDistance = offenseRadius + defenderRadius;
+      const minDistance = DefenseUtils.calculateContactDistance(offenseRadius, defenderRadius);
 
       // サークルが重なったら1on1状態で停止
       if (distance <= minDistance) {
@@ -294,8 +290,8 @@ export class CharacterAI {
       }
 
       // ディフェンダーのサークルに入らないように、ディフェンダーから離れる方向に移動
-      // 近づきすぎないための余裕距離（+1m）
-      if (distance < minDistance + 1.0) {
+      // DefenseUtilsを使用して近づきすぎをチェック
+      if (DefenseUtils.isTooCloseToOffense(distance, offenseRadius, defenderRadius)) {
         // ディフェンダーから離れる方向を計算
         const awayDirection = new Vector3(
           myPosition.x - defenderPosition.x,
@@ -360,7 +356,8 @@ export class CharacterAI {
     }
 
     const onBallPosition = onBallPlayer.getPosition();
-    const minDistance = 5.0; // オンボールプレイヤーからの最低距離（5m維持）
+    // DEFENSE_MOVEMENT.OFF_BALL_MIN_DISTANCEを使用
+    const minDistance = DEFENSE_MOVEMENT.OFF_BALL_MIN_DISTANCE;
     const currentPosition = this.character.getPosition();
 
     // 現在のオンボールプレイヤーからの距離をチェック
@@ -412,13 +409,11 @@ export class CharacterAI {
     // ゴール方向の角度を計算
     const goalAngle = Math.atan2(toGoalDirection.x, toGoalDirection.z);
 
-    // 複数の候補位置を生成（ゴール方向を中心に前方180度の範囲、8方向）
-    // これによりゴールに近づく方向のみから候補位置を生成
+    // DEFENSE_FORMATIONを使用して複数の候補位置を生成（ゴール方向を中心に前方180度の範囲）
     const candidatePositions: Vector3[] = [];
-    const angleOffsets = [-90, -67.5, -45, -22.5, 0, 22.5, 45, 67.5, 90]; // ゴール方向から±90度
+    const angleOffsetsRad = DefenseUtils.getFormationAngleOffsetsInRadians();
 
-    for (const offsetDeg of angleOffsets) {
-      const offsetRad = (offsetDeg * Math.PI) / 180;
+    for (const offsetRad of angleOffsetsRad) {
       const finalAngle = goalAngle + offsetRad;
       // オンボールプレイヤーから5m離れた位置を計算
       const x = onBallPosition.x + Math.sin(finalAngle) * minDistance;
@@ -532,11 +527,10 @@ export class CharacterAI {
     // 現在の距離をチェック
     const currentDistance = Vector3.Distance(myPosition, onBallPosition);
 
-    // サークルが重なる距離を動的に計算
-    // ディフェンダーのサークル半径（動的）+ オフェンスのサークル半径（1m）
+    // DefenseUtilsを使用してサークルが重なる距離を計算
     const defenderRadius = this.character.getFootCircleRadius();
-    const offenseRadius = 1.0;
-    const targetDistance = defenderRadius + offenseRadius;
+    const offenseRadius = DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS;
+    const targetDistance = DefenseUtils.calculateContactDistance(defenderRadius, offenseRadius);
 
     // サークルが重なったら1on1状態で停止
     if (currentDistance <= targetDistance) {
@@ -613,8 +607,8 @@ export class CharacterAI {
     if (direction.length() > 0.01) {
       direction.normalize();
 
-      // オフボールプレイヤーから1m離れた位置（オンボールプレイヤー方向）
-      const targetDistance = 1.0; // 1m
+      // DEFENSE_DISTANCE.OFF_BALL_DEFENDER_DISTANCEを使用
+      const targetDistance = DEFENSE_DISTANCE.OFF_BALL_DEFENDER_DISTANCE;
       const targetPosition = new Vector3(
         offBallPosition.x + direction.x * targetDistance,
         offBallPosition.y,
@@ -740,7 +734,8 @@ export class CharacterAI {
    * 射線上に敵がいるかチェック
    */
   private hasEnemyInLine(start: Vector3, end: Vector3, enemies: Character[]): boolean {
-    const lineThreshold = 1.0; // 射線からの距離の閾値（1m）
+    // DEFENSE_DISTANCE.LINE_THRESHOLDを使用
+    const lineThreshold = DEFENSE_DISTANCE.LINE_THRESHOLD;
 
     for (const enemy of enemies) {
       const enemyPos = enemy.getPosition();
@@ -850,8 +845,8 @@ export class CharacterAI {
     const dz = myPosition.z - goalPosition.z;
     const distance = Math.sqrt(dx * dx + dz * dz);
 
-    // 半径5mを超えた場合、位置を制限
-    const maxRadius = 5.0;
+    // DEFENSE_DISTANCE.GOALKEEPER_MAX_RADIUSを超えた場合、位置を制限
+    const maxRadius = DEFENSE_DISTANCE.GOALKEEPER_MAX_RADIUS;
     if (distance > maxRadius) {
       // ゴール方向への単位ベクトル
       const dirX = dx / distance;
