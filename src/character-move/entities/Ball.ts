@@ -48,6 +48,9 @@ export class Ball {
   private shooterCooldown: number = 0;
   private static readonly SHOOTER_COOLDOWN_TIME = 0.5; // 0.5秒間はシューターがキャッチ不可
 
+  // 最後にボールに触れた選手（アウトオブバウンズ判定用）
+  private lastToucher: Character | null = null;
+
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
     this.mesh = this.createBall(position);
@@ -121,6 +124,11 @@ export class Ball {
   setHolder(character: Character | null): void {
     this.holder = character;
 
+    // 保持者が設定された場合、最後に触れた選手として記録
+    if (character !== null) {
+      this.lastToucher = character;
+    }
+
     // 保持者が設定された場合、飛行状態を終了
     if (character !== null && this.inFlight) {
       console.log(`[Ball] キャッチされたため飛行状態を終了`);
@@ -176,6 +184,11 @@ export class Ball {
     // 保持者をクリア
     const previousHolder = this.holder;
     this.holder = null;
+
+    // シュートした選手を最後に触れた選手として記録
+    if (previousHolder) {
+      this.lastToucher = previousHolder;
+    }
 
     // 初期位置（指定された位置、または現在のボール位置）
     const startPosition = overrideStartPosition ? overrideStartPosition.clone() : this.mesh.position.clone();
@@ -351,6 +364,20 @@ export class Ball {
       return false;
     }
     return true;
+  }
+
+  /**
+   * 最後にボールに触れた選手を取得
+   */
+  public getLastToucher(): Character | null {
+    return this.lastToucher;
+  }
+
+  /**
+   * 最後にボールに触れた選手をリセット
+   */
+  public clearLastToucher(): void {
+    this.lastToucher = null;
   }
 
   /**

@@ -47,8 +47,10 @@ export class GameScene {
   private keyE: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
-    // WebGLサポートチェック
-    if (!canvas.getContext("webgl") && !canvas.getContext("webgl2")) {
+    // WebGLサポートチェック（テスト用キャンバスを使用して、実際のキャンバスのコンテキストを消費しない）
+    const testCanvas = document.createElement("canvas");
+    const webglSupported = !!(testCanvas.getContext("webgl2") || testCanvas.getContext("webgl"));
+    if (!webglSupported) {
       throw new Error("WebGL is not supported in this browser. Please use a modern browser that supports WebGL.");
     }
 

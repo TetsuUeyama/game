@@ -2,12 +2,13 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
+import { CHARACTER_CONFIG } from "../config/gameConfig";
 
 /**
  * 衝突判定の設定
  */
 const BALL_RADIUS = 0.15; // ボールの半径（m）
-const CHARACTER_RADIUS = 0.3; // キャラクターの半径（m）
+const CHARACTER_RADIUS = CHARACTER_CONFIG.radius; // キャラクターの半径（m）- gameConfigから取得
 const BALL_CHARACTER_DISTANCE = BALL_RADIUS + CHARACTER_RADIUS; // ボールとキャラクターの衝突判定距離
 const CHARACTER_CHARACTER_DISTANCE = CHARACTER_RADIUS * 2; // キャラクター同士の衝突判定距離
 

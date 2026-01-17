@@ -22,13 +22,18 @@ export const FIELD_CONFIG = {
   floorColor: '#8B4513', // 床の色（茶色 - バスケットコート）
   gridSize: 10, // グリッドのサイズ
   gridColor: '#6B3510', // グリッドの色（濃い茶色）
+
+  // センターサークル設定
+  centerCircleRadius: 1.8, // センターサークル半径（m）- FIBA基準
+  centerCircleLineWidth: 0.05, // ラインの太さ（m）
+  centerCircleColor: '#FFFFFF', // ラインの色（白）
 };
 
 // ゴール設定（バスケットゴール）
 export const GOAL_CONFIG = {
   // リム（リング）設定
   rimHeight: 3.05, // リムの高さ（m）
-  rimDiameter: 0.61, // リムの内径（m）
+  rimDiameter: 0.45, // リムの内径（m）- 実際のサイズに近づける
   rimThickness: 0.02, // リムの太さ（m）
   rimColor: '#FF6600', // リムの色（オレンジ）
 

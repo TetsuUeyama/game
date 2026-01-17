@@ -74,6 +74,12 @@ export class ShootingController {
   private layupRangeMesh: Mesh | null = null;
   private shootRangeVisible: boolean = true;
 
+  // ゴール時のコールバック（シューターのチームを引数に渡す）
+  private onGoalCallback: ((scoringTeam: 'ally' | 'enemy') => void) | null = null;
+
+  // 現在のシューターのチーム（ゴール判定用）
+  private currentShooterTeam: 'ally' | 'enemy' | null = null;
+
   constructor(scene: Scene, ball: Ball, field: Field, getAllCharacters: () => Character[]) {
     this.scene = scene;
     this.ball = ball;
@@ -350,8 +356,34 @@ export class ShootingController {
     }
 
     // シュート実行
-    const targetPosition = targetGoal.position;
+    const baseTargetPosition = targetGoal.position;
     const launchAngle = this.calculateLaunchAngle(distance, shootType);
+
+    // シュート精度によるランダムなズレを追加
+    const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
+    const accuracy = this.getShootAccuracy(shootType, shooter);
+    const offsetX = (Math.random() - 0.5) * 2 * accuracy; // -accuracy ~ +accuracy
+    const offsetZ = (Math.random() - 0.5) * 2 * accuracy; // -accuracy ~ +accuracy
+    const targetPosition = new Vector3(
+      baseTargetPosition.x + offsetX,
+      baseTargetPosition.y,
+      baseTargetPosition.z + offsetZ
+    );
+
+    // リング半径との比較でゴール可能性を計算
+    const rimRadius = GOAL_CONFIG.rimDiameter / 2; // 0.225m
+    const totalOffset = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ);
+    const willScore = totalOffset <= rimRadius;
+
+    console.log(`[ShootingController] シュート精度デバッグ:
+      選手: ${shooter.playerData?.basic?.NAME || 'Unknown'}
+      3paccuracy: ${accuracy3pValue}
+      計算式: 0.05 + 0.75 * (100 - ${accuracy3pValue}) / 100 = ${accuracy.toFixed(3)}m
+      オフセット: X=${offsetX.toFixed(3)}m, Z=${offsetZ.toFixed(3)}m
+      合計ズレ: ${totalOffset.toFixed(3)}m
+      リング半径: ${rimRadius.toFixed(3)}m
+      予測: ${willScore ? 'ゴール可能' : 'ゴール外'}`
+    );
 
     // シューターの頭上からボールを発射（相手に取られないように）
     const shooterPos = shooter.getPosition();
@@ -377,9 +409,10 @@ export class ShootingController {
     this.checkingGoal = true;
     this.lastBallY = this.ball.getPosition().y;
 
-    // シュートするゴールを記録（ネット揺らし用）
+    // シュートするゴールとシューターのチームを記録
     const isAlly = shooter.team === 'ally';
     this.currentShootGoal = isAlly ? 'goal1' : 'goal2';
+    this.currentShooterTeam = shooter.team;
 
     console.log(`[ShootingController] ${shootType}シュート実行: 距離=${distance.toFixed(2)}m, 目標=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), ゴール=${this.currentShootGoal}`);
 
@@ -414,7 +447,6 @@ export class ShootingController {
     }
 
     const ballPosition = this.ball.getPosition();
-    const ballRadius = this.ball.getRadius();
     const ballY = ballPosition.y;
 
     // リングの高さ付近を通過中かチェック
@@ -585,6 +617,30 @@ export class ShootingController {
         return Math.PI * 55 / 180; // 55度（近距離なので低めでOK）
       default:
         return Math.PI * 60 / 180; // デフォルト60度
+    }
+  }
+
+  /**
+   * シュートタイプに応じた精度（ズレの最大値、メートル）を取得
+   * 値が大きいほど精度が低い（ズレが大きい）
+   * @param shootType シュートタイプ
+   * @param shooter シューター（選手データから精度を取得）
+   */
+  private getShootAccuracy(shootType: ShootType, shooter: Character): number {
+    switch (shootType) {
+      case '3pt': {
+        // 選手の3paccuracyを取得（デフォルト50）
+        const accuracy3p = shooter.playerData?.stats['3paccuracy'] ?? 50;
+        // ±(0.05 + 0.75 × (100 - 3paccuracy) / 100) m
+        const maxError = 0.05 + 0.75 * (100 - accuracy3p) / 100;
+        return maxError;
+      }
+      case 'midrange':
+        return 0.3; // ±0.3m
+      case 'layup':
+        return 0.1; // ±0.1m（近距離なので精度が高い）
+      default:
+        return 0.3;
     }
   }
 
@@ -782,8 +838,22 @@ export class ShootingController {
    */
   private onGoalScored(goalName: string): void {
     console.log(`[ShootingController] ${goalName}にスコア！`);
-    // シュートゴールをリセット
+
+    // ゴール時のコールバックを呼び出し
+    if (this.onGoalCallback && this.currentShooterTeam) {
+      this.onGoalCallback(this.currentShooterTeam);
+    }
+
+    // シュートゴールとシューターチームをリセット
     this.currentShootGoal = null;
+    this.currentShooterTeam = null;
+  }
+
+  /**
+   * ゴール時のコールバックを設定
+   */
+  public setOnGoalCallback(callback: (scoringTeam: 'ally' | 'enemy') => void): void {
+    this.onGoalCallback = callback;
   }
 
   /**
