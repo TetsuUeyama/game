@@ -169,10 +169,14 @@ export class CharacterAI {
     }
 
     // ゴールまでの距離を計算（向きに関係なく）
-    const goalZ = this.character.team === 'ally' ? 11.4 : -11.4;
+    // 攻めるべきゴールを取得（allyは+Z側のgoal1、enemyは-Z側のgoal2）
+    const attackingGoal = this.character.team === 'ally'
+      ? this.field.getGoal1Rim()
+      : this.field.getGoal2Rim();
+    const goalPosition = attackingGoal.position;
     const myPos = this.character.getPosition();
-    const dx = 0 - myPos.x;
-    const dz = goalZ - myPos.z;
+    const dx = goalPosition.x - myPos.x;
+    const dz = goalPosition.z - myPos.z;
     const distanceToGoal = Math.sqrt(dx * dx + dz * dz);
 
     // 距離だけで判定（3P: 6.75-10m, ミドル: 2-6.75m, レイアップ: 0.5-2m）

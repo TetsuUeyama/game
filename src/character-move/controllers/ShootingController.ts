@@ -3,6 +3,12 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { Field } from "../entities/Field";
 import { GOAL_CONFIG } from "../config/gameConfig";
+import {
+  getDistance2D,
+  getDirection2D,
+  isDirectionWithinAngle,
+  isPointInBox,
+} from "../utils/CollisionUtils";
 
 /**
  * シュートの種類
@@ -535,9 +541,7 @@ export class ShootingController {
     const shooterPos = shooter.getPosition();
 
     // シューターからゴールまでの水平距離
-    const dx = targetGoal.position.x - shooterPos.x;
-    const dz = targetGoal.position.z - shooterPos.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
+    const distance = getDistance2D(shooterPos, targetGoal.position);
 
     // シュートタイプを判定（各レンジに最小・最大距離を設定）
     let shootType: ShootType;
@@ -558,9 +562,8 @@ export class ShootingController {
       inRange = false;
     }
 
-    // 0番面の方向からゴール方向への角度差をチェック
-    const toGoal = new Vector3(dx, 0, dz).normalize();
-    const dotProduct = Vector3.Dot(shootDirection, toGoal);
+    // ゴールへの方向を取得
+    const toGoal = getDirection2D(shooterPos, targetGoal.position);
 
     // シュートタイプに応じた角度範囲でチェック（可視化メッシュと一致させる）
     let requiredAngle: number;
@@ -578,9 +581,8 @@ export class ShootingController {
         requiredAngle = Math.PI / 6; // 30度（デフォルト）
     }
 
-    // 内積がcos(角度)未満なら角度がずれている
-    const requiredDotProduct = Math.cos(requiredAngle);
-    if (dotProduct < requiredDotProduct) {
+    // 0番面の方向がゴール方向と合っているかチェック
+    if (!isDirectionWithinAngle(shootDirection, toGoal, requiredAngle)) {
       // レンジ外として扱う（0番面から伸びる範囲外）
       inRange = false;
     }
@@ -593,14 +595,11 @@ export class ShootingController {
    */
   private isFacingGoal(shooter: Character, targetGoal: GoalInfo, shootDirection: Vector3): boolean {
     const shooterPos = shooter.getPosition();
-    const dx = targetGoal.position.x - shooterPos.x;
-    const dz = targetGoal.position.z - shooterPos.z;
-    const toGoal = new Vector3(dx, 0, dz).normalize();
+    const toGoal = getDirection2D(shooterPos, targetGoal.position);
 
-    const dotProduct = Vector3.Dot(shootDirection, toGoal);
-
-    // cos(45°) ≈ 0.707 より、内積が0.7以上なら45度以内
-    return dotProduct >= 0.7;
+    // 45度以内ならOK
+    const maxAngle = Math.PI / 4; // 45度
+    return isDirectionWithinAngle(shootDirection, toGoal, maxAngle);
   }
 
   /**
@@ -720,9 +719,7 @@ export class ShootingController {
     }
 
     // ボールからリムの中心（XZ平面）への水平距離
-    const dx = ballPosition.x - rimPosition.x;
-    const dz = ballPosition.z - rimPosition.z;
-    const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+    const horizontalDistance = getDistance2D(ballPosition, rimPosition);
 
     // リムの円周上の最も近い点までの距離
     const distanceFromRimCircle = Math.abs(horizontalDistance - rimRadius);
@@ -732,6 +729,8 @@ export class ShootingController {
       console.log(`[ShootingController] リムに当たった！`);
 
       // リムの円周上の最も近い点を計算
+      const dx = ballPosition.x - rimPosition.x;
+      const dz = ballPosition.z - rimPosition.z;
       const angle = Math.atan2(dz, dx);
       const rimPointX = rimPosition.x + rimRadius * Math.cos(angle);
       const rimPointZ = rimPosition.z + rimRadius * Math.sin(angle);
@@ -793,12 +792,16 @@ export class ShootingController {
       const backboardHeight = GOAL_CONFIG.backboardHeight;
       const backboardDepth = GOAL_CONFIG.backboardDepth;
 
-      // ボールがバックボードの範囲内にあるかチェック
-      const inXRange = Math.abs(ballPosition.x - backboardPos.x) < backboardWidth / 2 + ballRadius;
-      const inYRange = Math.abs(ballPosition.y - backboardPos.y) < backboardHeight / 2 + ballRadius;
-      const inZRange = Math.abs(ballPosition.z - backboardPos.z) < backboardDepth / 2 + ballRadius;
+      // ボールがバックボードの範囲内にあるかチェック（ボール半径を考慮）
+      const isColliding = isPointInBox(
+        ballPosition,
+        backboardPos,
+        backboardWidth / 2 + ballRadius,
+        backboardHeight / 2 + ballRadius,
+        backboardDepth / 2 + ballRadius
+      );
 
-      if (inXRange && inYRange && inZRange) {
+      if (isColliding) {
         console.log(`[ShootingController] バックボードに当たった！`);
 
         // 反発係数
