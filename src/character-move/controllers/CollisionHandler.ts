@@ -3,6 +3,14 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
+import {
+  getDistance2D,
+  getDistance3D,
+  getCircleCollisionInfo,
+  getSphereCollisionInfo,
+  resolveCircleCollisionWithPower,
+  isInRange,
+} from "../utils/CollisionUtils";
 
 /**
  * 衝突判定の設定
@@ -10,7 +18,6 @@ import { CHARACTER_CONFIG } from "../config/gameConfig";
 const BALL_RADIUS = 0.15; // ボールの半径（m）
 const CHARACTER_RADIUS = CHARACTER_CONFIG.radius; // キャラクターの半径（m）- gameConfigから取得
 const BALL_CHARACTER_DISTANCE = BALL_RADIUS + CHARACTER_RADIUS; // ボールとキャラクターの衝突判定距離
-const CHARACTER_CHARACTER_DISTANCE = CHARACTER_RADIUS * 2; // キャラクター同士の衝突判定距離
 
 // 体パーツの判定設定
 const HEAD_RADIUS = 0.15; // 頭の半径（m）
@@ -67,20 +74,17 @@ export class CollisionHandler {
     const characterPosition = character.getPosition();
 
     // 2D平面上の距離を計算（XZ平面）
-    const dx = ballPosition.x - characterPosition.x;
-    const dz = ballPosition.z - characterPosition.z;
-    const distanceXZ = Math.sqrt(dx * dx + dz * dz);
+    const distanceXZ = getDistance2D(ballPosition, characterPosition);
 
     // 高さの判定：ボールがキャラクターの手の届く範囲にあるかチェック
     const characterHeight = character.config.physical.height;
-    const maxReachHeight = characterHeight + HAND_REACH_HEIGHT; // 手を伸ばせる最大高さ
-    const minCatchHeight = 0; // 地面レベル
+    const maxReachHeight = characterHeight + HAND_REACH_HEIGHT;
 
     // ボールの高さ（地面からの高さ）
     const ballHeight = ballPosition.y;
 
     // 高さが手の届く範囲外ならキャッチできない
-    if (ballHeight > maxReachHeight || ballHeight < minCatchHeight) {
+    if (!isInRange(ballHeight, 0, maxReachHeight)) {
       return;
     }
 
@@ -119,15 +123,10 @@ export class CollisionHandler {
       const headY = characterPosition.y + characterHeight / 2 - HEAD_RADIUS;
       const headPosition = new Vector3(characterPosition.x, headY, characterPosition.z);
 
-      // ボールと頭の3D距離を計算
-      const dx = ballPosition.x - headPosition.x;
-      const dy = ballPosition.y - headPosition.y;
-      const dz = ballPosition.z - headPosition.z;
-      const distance3D = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // ボールと頭の3D衝突判定
+      const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, HEAD_RADIUS);
 
-      // 頭とボールの接触判定
-      const contactDistance = HEAD_RADIUS + ballRadius;
-      if (distance3D < contactDistance) {
+      if (headCollision.isColliding) {
         console.log(`[CollisionHandler] ボールがディフェンダーの頭に接触！ブロック発生`);
 
         // 飛行を終了してボールを落とす
@@ -144,17 +143,16 @@ export class CollisionHandler {
       }
 
       // 胴体との接触判定（円柱で近似）
-      const bodyTop = characterPosition.y + characterHeight / 2 - HEAD_RADIUS * 2; // 頭の下
-      const bodyBottom = characterPosition.y - characterHeight / 2 + 0.1; // 足の少し上
-      const bodyRadius = 0.25; // 胴体の半径
+      const bodyTop = characterPosition.y + characterHeight / 2 - HEAD_RADIUS * 2;
+      const bodyBottom = characterPosition.y - characterHeight / 2 + 0.1;
+      const bodyRadius = 0.25;
 
       // ボールが胴体の高さ範囲内にあるかチェック
-      if (ballPosition.y >= bodyBottom && ballPosition.y <= bodyTop) {
-        // XZ平面上の距離
-        const distanceXZ = Math.sqrt(dx * dx + dz * dz);
-        const bodyContactDistance = bodyRadius + ballRadius;
+      if (isInRange(ballPosition.y, bodyBottom, bodyTop)) {
+        // XZ平面上の衝突判定
+        const bodyCollision = getCircleCollisionInfo(ballPosition, ballRadius, characterPosition, bodyRadius);
 
-        if (distanceXZ < bodyContactDistance) {
+        if (bodyCollision.isColliding) {
           console.log(`[CollisionHandler] ボールがディフェンダーの胴体に接触！ブロック発生`);
 
           // 飛行を終了してボールを落とす
@@ -174,58 +172,32 @@ export class CollisionHandler {
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
-    // 2D平面上の距離を計算（XZ平面）
-    const dx = pos2.x - pos1.x;
-    const dz = pos2.z - pos1.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
+    // 衝突情報を取得
+    const collisionInfo = getCircleCollisionInfo(pos1, CHARACTER_RADIUS, pos2, CHARACTER_RADIUS);
 
-    // 衝突判定
-    if (distance < CHARACTER_CHARACTER_DISTANCE && distance > 0.001) {
-      // 重なっている距離
-      const overlap = CHARACTER_CHARACTER_DISTANCE - distance;
+    // 衝突していない場合はスキップ
+    if (!collisionInfo.isColliding) {
+      return;
+    }
 
-      // 押し戻す方向（正規化）- character1から見てcharacter2の方向
-      const directionX = dx / distance;
-      const directionZ = dz / distance;
+    // power値を取得（デフォルトは50）
+    const power1 = character1.playerData?.stats.power ?? 50;
+    const power2 = character2.playerData?.stats.power ?? 50;
 
-      // power値を取得（デフォルトは50）
-      const power1 = character1.playerData?.stats.power ?? 50;
-      const power2 = character2.playerData?.stats.power ?? 50;
+    // パワー値に基づいて衝突を解決
+    const resolution = resolveCircleCollisionWithPower(
+      pos1, CHARACTER_RADIUS, power1,
+      pos2, CHARACTER_RADIUS, power2,
+      0.05 // 少し余裕を追加
+    );
 
-      // power差を計算し、押し返し量を分配
-      // powerDiff > 0: character1の方が強い → character2が多く押される
-      // powerDiff < 0: character2の方が強い → character1が多く押される
+    character1.setPosition(resolution.newPos1);
+    character2.setPosition(resolution.newPos2);
+
+    // デバッグログ（重なり発生時のみ出力）
+    if (collisionInfo.overlap > 0.1) {
       const powerDiff = power1 - power2;
-      const pushRatio = powerDiff / 100; // -1〜+1の範囲
-
-      const totalPush = overlap + 0.05; // 少し余裕を追加
-
-      // pushRatioに応じて押し返し量を分配
-      // pushRatio=1 (power1が100多い) → char1は0%, char2は100%
-      // pushRatio=0 (同じpower) → 両方50%
-      // pushRatio=-1 (power2が100多い) → char1は100%, char2は0%
-      const push1Amount = totalPush * (0.5 - pushRatio * 0.5);
-      const push2Amount = totalPush * (0.5 + pushRatio * 0.5);
-
-      const newPos1 = new Vector3(
-        pos1.x - directionX * push1Amount,
-        pos1.y,
-        pos1.z - directionZ * push1Amount
-      );
-
-      const newPos2 = new Vector3(
-        pos2.x + directionX * push2Amount,
-        pos2.y,
-        pos2.z + directionZ * push2Amount
-      );
-
-      character1.setPosition(newPos1);
-      character2.setPosition(newPos2);
-
-      // デバッグログ（重なり発生時のみ出力）
-      if (overlap > 0.1) {
-        console.log(`[CollisionHandler] 押し合い: ${character1.playerData?.basic?.NAME || 'char1'}(power=${power1}) vs ${character2.playerData?.basic?.NAME || 'char2'}(power=${power2}), 差=${powerDiff}`);
-      }
+      console.log(`[CollisionHandler] 押し合い: ${character1.playerData?.basic?.NAME || 'char1'}(power=${power1}) vs ${character2.playerData?.basic?.NAME || 'char2'}(power=${power2}), 差=${powerDiff}`);
     }
   }
 
@@ -235,12 +207,8 @@ export class CollisionHandler {
   private updateCharacterStates(): void {
     const holder = this.ball.getHolder();
 
-    // ボールが飛行中の場合は状態を変更しない（シュート中のサークル接触判定を維持）
-    if (this.ball.isInFlight()) {
-      return;
-    }
-
-    // ボールが誰も保持していない場合、全員BALL_LOST
+    // ボールが誰も保持していない場合（飛行中含む）、全員BALL_LOST
+    // これにより、ルーズボール時は全員がボールを追いかける
     if (!holder) {
       for (const character of this.allCharacters) {
         character.setState(CharacterState.BALL_LOST);
@@ -286,8 +254,8 @@ export class CollisionHandler {
 
       // 敵を距離順にソート
       const sortedOpponents = opponents.sort((a, b) => {
-        const distA = Vector3.Distance(holderPosition, a.getPosition());
-        const distB = Vector3.Distance(holderPosition, b.getPosition());
+        const distA = getDistance3D(holderPosition, a.getPosition());
+        const distB = getDistance3D(holderPosition, b.getPosition());
         return distA - distB;
       });
 

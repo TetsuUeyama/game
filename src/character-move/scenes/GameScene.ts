@@ -792,14 +792,10 @@ export class GameScene {
 
   /**
    * ボールがコート外に出たか判定
+   * ボールが保持されている場合も判定する（プレイヤーがボールを持ったままコート外に出た場合）
    * @returns コート外に出た場合true
    */
   private checkOutOfBounds(): boolean {
-    // ボールが保持されている場合はチェックしない
-    if (this.ball.isHeld()) {
-      return false;
-    }
-
     const ballPosition = this.ball.getPosition();
     const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
     const halfLength = FIELD_CONFIG.length / 2; // 14m
