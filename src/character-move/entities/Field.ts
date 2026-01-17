@@ -15,10 +15,14 @@ export class Field {
   private goal2Backboard: Mesh; // ゴール2のバックボード
   private goal2Rim: Mesh; // ゴール2のリム
   private goal2Net: Net; // ゴール2のネット
+  private centerCircle: Mesh; // センターサークル
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.mesh = this.createField();
+
+    // センターサークルを作成
+    this.centerCircle = this.createCenterCircle();
 
     // ゴール1（奥側、+Z）を作成
     const goal1 = this.createBasketballGoal(1);
@@ -72,6 +76,47 @@ export class Field {
     }
 
     return ground;
+  }
+
+  /**
+   * センターサークルを作成
+   */
+  private createCenterCircle(): Mesh {
+    const radius = FIELD_CONFIG.centerCircleRadius;
+
+    // 円周上の点を生成してラインで描画
+    const segments = 64;
+    const points: Vector3[] = [];
+
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      points.push(new Vector3(x, 0.02, z)); // 地面より少し上
+    }
+
+    // ラインシステムで円を描画
+    const circle = MeshBuilder.CreateLines(
+      "center-circle",
+      {
+        points: points,
+      },
+      this.scene
+    );
+
+    // ラインの色（白色）
+    circle.color = Color3.FromHexString(FIELD_CONFIG.centerCircleColor);
+
+    console.log(`[Field] センターサークルを作成: 半径=${radius}m`);
+
+    return circle;
+  }
+
+  /**
+   * センターサークルの半径を取得
+   */
+  public getCenterCircleRadius(): number {
+    return FIELD_CONFIG.centerCircleRadius;
   }
 
   /**
@@ -197,6 +242,7 @@ export class Field {
    */
   public dispose(): void {
     this.mesh.dispose();
+    this.centerCircle.dispose();
     this.goal1Backboard.dispose();
     this.goal1Rim.dispose();
     this.goal1Net.dispose();

@@ -23,6 +23,7 @@ import { PlayerData } from "../types/PlayerData";
 import {
   CAMERA_CONFIG,
   LIGHT_CONFIG,
+  FIELD_CONFIG,
   // MODEL_CONFIG, // 一旦無効化
 } from "../config/gameConfig";
 
@@ -64,6 +65,12 @@ export class GameScene {
   // モーション確認モード（入力とモーション再生を停止）
   private isMotionConfirmationMode: boolean = false;
 
+  // スコア管理
+  private allyScore: number = 0;
+  private enemyScore: number = 0;
+  private readonly winningScore: number = 5; // 勝利に必要な得点
+  private winner: 'ally' | 'enemy' | null = null; // 勝者
+
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
     teamConfig?: GameTeamConfig;
@@ -73,8 +80,10 @@ export class GameScene {
     const teamConfig = options?.teamConfig;
     const playerData = options?.playerData;
 
-    // WebGLサポートチェック
-    if (!canvas.getContext("webgl") && !canvas.getContext("webgl2")) {
+    // WebGLサポートチェック（テスト用キャンバスを使用して、実際のキャンバスのコンテキストを消費しない）
+    const testCanvas = document.createElement("canvas");
+    const webglSupported = !!(testCanvas.getContext("webgl2") || testCanvas.getContext("webgl"));
+    if (!webglSupported) {
       throw new Error(
         "WebGL is not supported in this browser. Please use a modern browser that supports WebGL."
       );
@@ -153,6 +162,11 @@ export class GameScene {
         () => [...this.allyCharacters, ...this.enemyCharacters]
       );
       console.log('[GameScene] シュートコントローラーを初期化しました');
+
+      // ゴール時のコールバックを設定
+      this.shootingController.setOnGoalCallback((scoringTeam) => {
+        this.resetAfterGoal(scoringTeam);
+      });
 
       // 全AIコントローラーにShootingControllerを設定
       for (const ai of this.characterAIs) {
@@ -515,6 +529,11 @@ export class GameScene {
     if (this.shootingController) {
       this.shootingController.update(deltaTime);
     }
+
+    // アウトオブバウンズ判定
+    if (this.checkOutOfBounds()) {
+      this.resetAfterOutOfBounds();
+    }
   }
 
   /**
@@ -769,6 +788,245 @@ export class GameScene {
     }
 
     return this.shootingController.getShootRangeInfo(targetShooter);
+  }
+
+  /**
+   * ボールがコート外に出たか判定
+   * @returns コート外に出た場合true
+   */
+  private checkOutOfBounds(): boolean {
+    // ボールが保持されている場合はチェックしない
+    if (this.ball.isHeld()) {
+      return false;
+    }
+
+    const ballPosition = this.ball.getPosition();
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 14m
+
+    // コート境界チェック
+    const isOutX = Math.abs(ballPosition.x) > halfWidth;
+    const isOutZ = Math.abs(ballPosition.z) > halfLength;
+
+    return isOutX || isOutZ;
+  }
+
+  /**
+   * アウトオブバウンズ後のリセット処理
+   * 最後にボールに触れた選手の相手チームがボールを保持してセンターサークル外側から再開
+   */
+  private resetAfterOutOfBounds(): void {
+    const lastToucher = this.ball.getLastToucher();
+
+    console.log(`[GameScene] アウトオブバウンズ発生！最後に触れた選手: ${lastToucher?.playerData?.basic?.NAME || 'なし'}`);
+
+    // ボールの飛行を停止
+    this.ball.endFlight();
+
+    // 相手チームの選手を特定
+    let opponentCharacter: Character | null = null;
+
+    if (lastToucher) {
+      // 最後に触れた選手の相手チームから選ぶ
+      const opponentTeam = lastToucher.team === 'ally' ? this.enemyCharacters : this.allyCharacters;
+      if (opponentTeam.length > 0) {
+        // 最初の選手をボール保持者とする（1対1なので1人しかいない想定）
+        opponentCharacter = opponentTeam[0];
+      }
+    } else {
+      // 最後に触れた選手がいない場合、味方チームの選手をボール保持者とする
+      if (this.allyCharacters.length > 0) {
+        opponentCharacter = this.allyCharacters[0];
+      }
+    }
+
+    if (!opponentCharacter) {
+      console.warn('[GameScene] 再開する選手が見つかりません');
+      return;
+    }
+
+    // センターサークル半径を取得し、キャラクターの半径と余裕を加えた距離を計算
+    const circleRadius = this.field.getCenterCircleRadius();
+    const characterRadius = 0.3; // キャラクターの半径
+    const positionOffset = circleRadius + characterRadius + 0.3; // サークル半径 + キャラ半径 + 余裕
+
+    // ボール保持者のチームに応じて配置位置を決定
+    // ally（味方）は+Zゴールを攻める → -Z側（自陣側）に配置
+    // enemy（敵）は-Zゴールを攻める → +Z側（自陣側）に配置
+    const holderZSign = opponentCharacter.team === 'ally' ? -1 : 1;
+
+    // ボール保持者をセンターサークル外側（自陣側）に配置
+    const holderPosition = new Vector3(
+      0,
+      opponentCharacter.config.physical.height / 2,
+      holderZSign * positionOffset
+    );
+    opponentCharacter.setPosition(holderPosition);
+
+    // ボールをその選手に渡す
+    this.ball.setHolder(opponentCharacter);
+
+    // 相手選手（最後に触れた選手）をセンターサークル外側（反対側）に配置
+    if (lastToucher && lastToucher !== opponentCharacter) {
+      const defenderPosition = new Vector3(
+        0,
+        lastToucher.config.physical.height / 2,
+        -holderZSign * positionOffset // ボール保持者の反対側
+      );
+      lastToucher.setPosition(defenderPosition);
+    }
+
+    console.log(`[GameScene] ${opponentCharacter.playerData?.basic?.NAME || 'Unknown'}のボールでセンターサークル外側から再開（半径=${circleRadius}m）`);
+  }
+
+  /**
+   * ゴール後のリセット処理
+   * ゴールを決められた側がボールを保持してセンターサークル外側から再開
+   * @param scoringTeam ゴールを決めたチーム
+   */
+  private resetAfterGoal(scoringTeam: 'ally' | 'enemy'): void {
+    // 既に勝者が決まっている場合は何もしない
+    if (this.winner) {
+      return;
+    }
+
+    // スコアを更新
+    if (scoringTeam === 'ally') {
+      this.allyScore++;
+    } else {
+      this.enemyScore++;
+    }
+
+    console.log(`[GameScene] ゴール成功！ ${scoringTeam}チームが得点 (味方: ${this.allyScore} - 敵: ${this.enemyScore})`);
+
+    // ボールの飛行を停止
+    this.ball.endFlight();
+
+    // ゴールを決められた側（相手チーム）がボールを持って再開
+    const receivingTeam = scoringTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
+    const scoringTeamCharacters = scoringTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+
+    if (receivingTeam.length === 0) {
+      console.warn('[GameScene] 再開する選手が見つかりません');
+      return;
+    }
+
+    const ballHolder = receivingTeam[0];
+    const opponent = scoringTeamCharacters.length > 0 ? scoringTeamCharacters[0] : null;
+
+    // センターサークル半径を取得し、キャラクターの半径と余裕を加えた距離を計算
+    const circleRadius = this.field.getCenterCircleRadius();
+    const characterRadius = 0.3;
+    const positionOffset = circleRadius + characterRadius + 0.3;
+
+    // ボール保持者のチームに応じて配置位置を決定
+    // ally（味方）は+Zゴールを攻める → -Z側（自陣側）に配置
+    // enemy（敵）は-Zゴールを攻める → +Z側（自陣側）に配置
+    const holderZSign = ballHolder.team === 'ally' ? -1 : 1;
+
+    // ボール保持者をセンターサークル外側（自陣側）に配置
+    const holderPosition = new Vector3(
+      0,
+      ballHolder.config.physical.height / 2,
+      holderZSign * positionOffset
+    );
+    ballHolder.setPosition(holderPosition);
+
+    // ボールを渡す
+    this.ball.setHolder(ballHolder);
+
+    // 相手選手をセンターサークル外側（反対側）に配置
+    if (opponent) {
+      const opponentPosition = new Vector3(
+        0,
+        opponent.config.physical.height / 2,
+        -holderZSign * positionOffset
+      );
+      opponent.setPosition(opponentPosition);
+    }
+
+    console.log(`[GameScene] ${ballHolder.playerData?.basic?.NAME || 'Unknown'}のボールでセンターサークル外側から再開`);
+
+    // 勝利判定
+    if (this.allyScore >= this.winningScore) {
+      this.winner = 'ally';
+      console.log(`[GameScene] 味方チームの勝利！ (${this.allyScore} - ${this.enemyScore})`);
+    } else if (this.enemyScore >= this.winningScore) {
+      this.winner = 'enemy';
+      console.log(`[GameScene] 敵チームの勝利！ (${this.allyScore} - ${this.enemyScore})`);
+    }
+  }
+
+  /**
+   * スコアを取得
+   */
+  public getScore(): { ally: number; enemy: number } {
+    return { ally: this.allyScore, enemy: this.enemyScore };
+  }
+
+  /**
+   * 選手名を取得
+   */
+  public getPlayerNames(): { ally: string; enemy: string } {
+    const allyName = this.allyCharacters[0]?.playerData?.basic?.NAME || 'ALLY';
+    const enemyName = this.enemyCharacters[0]?.playerData?.basic?.NAME || 'ENEMY';
+    return { ally: allyName, enemy: enemyName };
+  }
+
+  /**
+   * 勝者を取得
+   */
+  public getWinner(): 'ally' | 'enemy' | null {
+    return this.winner;
+  }
+
+  /**
+   * 勝利に必要な得点を取得
+   */
+  public getWinningScore(): number {
+    return this.winningScore;
+  }
+
+  /**
+   * ゲームをリセット
+   */
+  public resetGame(): void {
+    this.allyScore = 0;
+    this.enemyScore = 0;
+    this.winner = null;
+
+    // ボール保持者をリセットしてセンターサークルから再開
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    if (allCharacters.length > 0) {
+      const circleRadius = this.field.getCenterCircleRadius();
+      const characterRadius = 0.3;
+      const positionOffset = circleRadius + characterRadius + 0.3;
+
+      // 味方チームがボールを持って開始
+      const ballHolder = this.allyCharacters[0];
+      if (ballHolder) {
+        const holderPosition = new Vector3(
+          0,
+          ballHolder.config.physical.height / 2,
+          -positionOffset
+        );
+        ballHolder.setPosition(holderPosition);
+        this.ball.setHolder(ballHolder);
+      }
+
+      // 敵チームを反対側に配置
+      const opponent = this.enemyCharacters[0];
+      if (opponent) {
+        const opponentPosition = new Vector3(
+          0,
+          opponent.config.physical.height / 2,
+          positionOffset
+        );
+        opponent.setPosition(opponentPosition);
+      }
+    }
+
+    console.log('[GameScene] ゲームをリセットしました');
   }
 
   /**
