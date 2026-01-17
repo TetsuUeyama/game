@@ -4,6 +4,13 @@ import { Ball } from "../entities/Ball";
 import { Field } from "../entities/Field";
 import { GOAL_CONFIG } from "../config/gameConfig";
 import {
+  SHOOT_RANGE,
+  SHOOT_ANGLE,
+  SHOOT_PHYSICS,
+  SHOOT_START_OFFSET,
+  ShootingUtils,
+} from "../config/ShootingConfig";
+import {
   getDistance2D,
   getDirection2D,
   isDirectionWithinAngle,
@@ -33,19 +40,7 @@ interface GoalInfo {
   team: 'ally' | 'enemy';
 }
 
-/**
- * シュートレンジの定義（メートル）
- */
-const SHOOT_RANGE = {
-  THREE_POINT_LINE: 6.75,  // 3Pライン（NBA/FIBA基準）
-  THREE_POINT_MAX: 10.0,   // 3Pシュート最大距離
-  MIDRANGE_MIN: 2.0,       // ミドルレンジ最小距離
-  LAYUP_MAX: 2.0,          // レイアップ最大距離
-  LAYUP_MIN: 0.5,          // レイアップ最小距離（ゴール直下は打てない）
-  THREE_POINT_ANGLE: Math.PI * 5 / 180, // 3Pシュート角度範囲（左右5度 = 合計10度）
-  MIDRANGE_ANGLE: Math.PI * 20 / 180, // ミドルシュート角度範囲（左右20度 = 合計40度）
-  LAYUP_ANGLE: Math.PI * 90 / 180, // レイアップ角度範囲（左右90度 = 合計180度）
-};
+// SHOOT_RANGE, SHOOT_ANGLEはShootingConfigからインポート
 
 /**
  * ゴールのZ位置（Field.tsと同じ計算ロジックで算出）
@@ -106,18 +101,18 @@ export class ShootingController {
     this.threePtRangeMesh = this.createFanMesh(
       "shooter-3pt-range",
       SHOOT_RANGE.THREE_POINT_LINE,
-      10.0, // 3Pラインから10mまで表示
-      SHOOT_RANGE.THREE_POINT_ANGLE,
+      SHOOT_RANGE.THREE_POINT_MAX,
+      SHOOT_ANGLE.THREE_POINT,
       new Color3(0.6, 0.2, 0.8), // 紫色
       0.4
     );
 
-    // ミドルレンジメッシュ（オレンジ色）: 3.0m〜6.75m
+    // ミドルレンジメッシュ（オレンジ色）: 2.0m〜6.75m
     this.midRangeMesh = this.createFanMesh(
       "shooter-mid-range",
       SHOOT_RANGE.MIDRANGE_MIN,
-      SHOOT_RANGE.THREE_POINT_LINE,
-      SHOOT_RANGE.MIDRANGE_ANGLE,
+      SHOOT_RANGE.MIDRANGE_MAX,
+      SHOOT_ANGLE.MIDRANGE,
       new Color3(1.0, 0.6, 0.2), // オレンジ色
       0.4
     );
@@ -125,9 +120,9 @@ export class ShootingController {
     // レイアップレンジメッシュ（緑色）: 0.5m〜2.0m
     this.layupRangeMesh = this.createFanMesh(
       "shooter-layup-range",
-      0.5,
+      SHOOT_RANGE.LAYUP_MIN,
       SHOOT_RANGE.LAYUP_MAX,
-      SHOOT_RANGE.LAYUP_ANGLE,
+      SHOOT_ANGLE.LAYUP,
       new Color3(0.2, 0.8, 0.3), // 緑色
       0.4
     );
@@ -363,13 +358,12 @@ export class ShootingController {
 
     // シュート実行
     const baseTargetPosition = targetGoal.position;
-    const launchAngle = this.calculateLaunchAngle(distance, shootType);
+    const launchAngle = ShootingUtils.getLaunchAngle(shootType);
 
-    // シュート精度によるランダムなズレを追加
+    // ShootingUtilsを使用してシュート精度を計算
     const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
-    const accuracy = this.getShootAccuracy(shootType, shooter);
-    const offsetX = (Math.random() - 0.5) * 2 * accuracy; // -accuracy ~ +accuracy
-    const offsetZ = (Math.random() - 0.5) * 2 * accuracy; // -accuracy ~ +accuracy
+    const accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
+    const { x: offsetX, z: offsetZ } = ShootingUtils.generateRandomOffset(accuracy);
     const targetPosition = new Vector3(
       baseTargetPosition.x + offsetX,
       baseTargetPosition.y,
@@ -378,8 +372,8 @@ export class ShootingController {
 
     // リング半径との比較でゴール可能性を計算
     const rimRadius = GOAL_CONFIG.rimDiameter / 2; // 0.225m
+    const willScore = ShootingUtils.willScoreByOffset(offsetX, offsetZ, rimRadius);
     const totalOffset = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ);
-    const willScore = totalOffset <= rimRadius;
 
     console.log(`[ShootingController] シュート精度デバッグ:
       選手: ${shooter.playerData?.basic?.NAME || 'Unknown'}
@@ -396,7 +390,7 @@ export class ShootingController {
     const shooterHeight = shooter.config.physical.height; // キャラクターの身長
     const headPosition = new Vector3(
       shooterPos.x,
-      shooterPos.y + shooterHeight * 0.5 + 0.3, // 頭の上 + 30cm（キャラクターの中心からの高さ）
+      shooterPos.y + shooterHeight * 0.5 + SHOOT_START_OFFSET.HEAD_OFFSET,
       shooterPos.z
     );
 
@@ -426,7 +420,7 @@ export class ShootingController {
       success: true,
       shootType,
       distance,
-      message: `${this.getShootTypeName(shootType)}シュート！`,
+      message: `${ShootingUtils.getShootTypeName(shootType)}シュート！`,
     };
   }
 
@@ -543,43 +537,15 @@ export class ShootingController {
     // シューターからゴールまでの水平距離
     const distance = getDistance2D(shooterPos, targetGoal.position);
 
-    // シュートタイプを判定（各レンジに最小・最大距離を設定）
-    let shootType: ShootType;
-    let inRange = true;
-
-    if (distance >= SHOOT_RANGE.THREE_POINT_LINE && distance <= SHOOT_RANGE.THREE_POINT_MAX) {
-      // 3Pシュート: 6.75m〜10m
-      shootType = '3pt';
-    } else if (distance >= SHOOT_RANGE.MIDRANGE_MIN && distance < SHOOT_RANGE.THREE_POINT_LINE) {
-      // ミドルレンジ: 2.0m〜6.75m
-      shootType = 'midrange';
-    } else if (distance >= SHOOT_RANGE.LAYUP_MIN && distance < SHOOT_RANGE.LAYUP_MAX) {
-      // レイアップ: 0.5m〜2.0m
-      shootType = 'layup';
-    } else {
-      // レンジ外: 10m以上、または0.5m未満
-      shootType = 'out_of_range';
-      inRange = false;
-    }
+    // ShootingUtilsを使用してシュートタイプを判定
+    const shootType = ShootingUtils.getShootTypeByDistance(distance);
+    let inRange = shootType !== 'out_of_range';
 
     // ゴールへの方向を取得
     const toGoal = getDirection2D(shooterPos, targetGoal.position);
 
-    // シュートタイプに応じた角度範囲でチェック（可視化メッシュと一致させる）
-    let requiredAngle: number;
-    switch (shootType) {
-      case '3pt':
-        requiredAngle = SHOOT_RANGE.THREE_POINT_ANGLE; // 5度
-        break;
-      case 'midrange':
-        requiredAngle = SHOOT_RANGE.MIDRANGE_ANGLE; // 20度
-        break;
-      case 'layup':
-        requiredAngle = SHOOT_RANGE.LAYUP_ANGLE; // 90度
-        break;
-      default:
-        requiredAngle = Math.PI / 6; // 30度（デフォルト）
-    }
+    // ShootingUtilsを使用してシュートタイプに応じた角度範囲を取得
+    const requiredAngle = ShootingUtils.getAngleRangeByShootType(shootType);
 
     // 0番面の方向がゴール方向と合っているかチェック
     if (!isDirectionWithinAngle(shootDirection, toGoal, requiredAngle)) {
@@ -597,67 +563,14 @@ export class ShootingController {
     const shooterPos = shooter.getPosition();
     const toGoal = getDirection2D(shooterPos, targetGoal.position);
 
-    // 45度以内ならOK
-    const maxAngle = Math.PI / 4; // 45度
-    return isDirectionWithinAngle(shootDirection, toGoal, maxAngle);
+    // SHOOT_ANGLE.FACING_GOAL（45度）以内ならOK
+    return isDirectionWithinAngle(shootDirection, toGoal, SHOOT_ANGLE.FACING_GOAL);
   }
 
-  /**
-   * シュートタイプに応じた発射角度を計算
-   */
-  private calculateLaunchAngle(distance: number, shootType: ShootType): number {
-    // 遠距離ほど高い弾道が必要（ゴールにほぼ垂直に落ちるように）
-    switch (shootType) {
-      case '3pt':
-        return Math.PI * 68 / 180; // 68度（高い弾道で垂直に近い角度で落下）
-      case 'midrange':
-        return Math.PI * 63 / 180; // 63度
-      case 'layup':
-        return Math.PI * 55 / 180; // 55度（近距離なので低めでOK）
-      default:
-        return Math.PI * 60 / 180; // デフォルト60度
-    }
-  }
-
-  /**
-   * シュートタイプに応じた精度（ズレの最大値、メートル）を取得
-   * 値が大きいほど精度が低い（ズレが大きい）
-   * @param shootType シュートタイプ
-   * @param shooter シューター（選手データから精度を取得）
-   */
-  private getShootAccuracy(shootType: ShootType, shooter: Character): number {
-    switch (shootType) {
-      case '3pt': {
-        // 選手の3paccuracyを取得（デフォルト50）
-        const accuracy3p = shooter.playerData?.stats['3paccuracy'] ?? 50;
-        // ±(0.05 + 0.75 × (100 - 3paccuracy) / 100) m
-        const maxError = 0.05 + 0.75 * (100 - accuracy3p) / 100;
-        return maxError;
-      }
-      case 'midrange':
-        return 0.3; // ±0.3m
-      case 'layup':
-        return 0.1; // ±0.1m（近距離なので精度が高い）
-      default:
-        return 0.3;
-    }
-  }
-
-  /**
-   * シュートタイプの日本語名を取得
-   */
-  private getShootTypeName(shootType: ShootType): string {
-    switch (shootType) {
-      case '3pt':
-        return '3ポイント';
-      case 'midrange':
-        return 'ミドルレンジ';
-      case 'layup':
-        return 'レイアップ';
-      default:
-        return '不明';
-    }
-  }
+  // calculateLaunchAngle, getShootAccuracy, getShootTypeNameはShootingUtilsに移行済み
+  // - ShootingUtils.getLaunchAngle(shootType)
+  // - ShootingUtils.getAccuracyByShootType(shootType, accuracy3p)
+  // - ShootingUtils.getShootTypeName(shootType)
 
   /**
    * ネットとボールの衝突判定（毎フレーム呼び出し）
@@ -681,9 +594,9 @@ export class ShootingController {
     for (const { net } of nets) {
       if (net.checkBallCollision(ballPosition, ballRadius)) {
         // ボールがネットを通過している場合、ネットに力を加える
-        // 力の大きさはボールの速度に比例（軽く揺らす程度）
-        const force = ballVelocity.scale(0.08); // 速度の8%の力
-        const influenceRadius = ballRadius * 1.5; // ボール半径の1.5倍の範囲に影響
+        // SHOOT_PHYSICSを使用
+        const force = ballVelocity.scale(SHOOT_PHYSICS.NET_FORCE_MULTIPLIER);
+        const influenceRadius = ballRadius * SHOOT_PHYSICS.NET_INFLUENCE_RADIUS;
         net.applyForce(ballPosition, force, influenceRadius);
       }
     }
@@ -753,8 +666,8 @@ export class ShootingController {
       const reflection = toRimPoint.scale(velocityAlongNormal * 2);
       const newHorizontalVelocity = horizontalVelocity.subtract(reflection);
 
-      // 反発係数
-      const bounciness = 0.7;
+      // SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENTを使用
+      const bounciness = SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENT;
 
       // 新しい速度（垂直成分も減衰、水平成分は反射）
       const newVelocity = new Vector3(
@@ -804,8 +717,8 @@ export class ShootingController {
       if (isColliding) {
         console.log(`[ShootingController] バックボードに当たった！`);
 
-        // 反発係数
-        const bounciness = 0.7;
+        // SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENTを使用
+        const bounciness = SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENT;
 
         // Z軸方向の速度を反転（反射）
         const newVelocity = ballVelocity.clone();

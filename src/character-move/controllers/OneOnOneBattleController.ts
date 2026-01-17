@@ -1,6 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
+import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
+import { ONE_ON_ONE_BATTLE, DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
 
 /**
  * 1on1バトルの結果
@@ -19,10 +21,10 @@ export class OneOnOneBattleController {
   private was1on1: boolean = false;
   private in1on1Battle: boolean = false;
   private lastDiceRollTime: number = 0;
-  private diceRollInterval: number = 1000; // サイコロを振る間隔（ミリ秒）
+  // ONE_ON_ONE_BATTLE.DICE_ROLL_INTERVALを使用（DefenseConfigから）
   private oneononeResult: OneOnOneResult | null = null;
   private lastCollisionRedirectTime: number = 0;
-  private collisionRedirectInterval: number = 300; // 方向転換の最小間隔（ミリ秒）
+  // ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVALを使用（DefenseConfigから）
 
   // 外部参照
   private ball: Ball;
@@ -64,7 +66,7 @@ export class OneOnOneBattleController {
     // 1on1バトル中は一定間隔でサイコロを振る
     if (this.in1on1Battle) {
       const currentTime = Date.now();
-      if (currentTime - this.lastDiceRollTime >= this.diceRollInterval) {
+      if (currentTime - this.lastDiceRollTime >= ONE_ON_ONE_BATTLE.DICE_ROLL_INTERVAL) {
         this.perform1on1Battle();
         this.lastDiceRollTime = currentTime;
       }
@@ -120,17 +122,13 @@ export class OneOnOneBattleController {
     // オフェンスが衝突した場合、またはサークルが接触している場合、動き直す
     if ((offenseCollided || circlesInContact) && onBallPlayer && onBallDefender) {
       const currentTime = Date.now();
-      if (currentTime - this.lastCollisionRedirectTime >= this.collisionRedirectInterval) {
+      if (currentTime - this.lastCollisionRedirectTime >= ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVAL) {
         // 新しいランダム方向を設定
         const newDirection = this.getRandomDirection8();
 
-        // オフェンス側の速度をdribblingspeedで調整
-        const baseMoveSpeed = 3.0;
-        let moveSpeed = baseMoveSpeed;
+        // DribbleUtilsを使用してドリブル速度を計算
         const offenseData = onBallPlayer.playerData;
-        if (offenseData && offenseData.stats.dribblingspeed !== undefined) {
-          moveSpeed = baseMoveSpeed * (offenseData.stats.dribblingspeed / 100);
-        }
+        const moveSpeed = DribbleUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
 
         // フェイント判定
         const isFeint = this.checkFeint(onBallPlayer);
@@ -145,17 +143,10 @@ export class OneOnOneBattleController {
         } else {
           console.log(`[OneOnOneBattleController] 動き直し発生！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
 
-          // オフェンス側の動き直し遅延時間を計算（(100 - quickness) * 10 ミリ秒）
+          // DribbleUtilsを使用してオフェンス側の動き直し遅延時間を計算
           const offensePlayerData = onBallPlayer.playerData;
-          let offenseDelayMs = 1000; // デフォルト1秒
-
-          if (offensePlayerData && offensePlayerData.stats.quickness !== undefined) {
-            const quickness = offensePlayerData.stats.quickness;
-            offenseDelayMs = Math.max(0, (100 - quickness) * 10);
-            console.log(`[OneOnOneBattleController] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${quickness})`);
-          } else {
-            console.log(`[OneOnOneBattleController] オフェンスのquicknessデータなし、デフォルト遅延: ${offenseDelayMs}ms`);
-          }
+          const offenseDelayMs = DribbleUtils.calculateQuicknessDelay(offensePlayerData?.stats.quickness);
+          console.log(`[OneOnOneBattleController] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${offensePlayerData?.stats.quickness ?? 'undefined'})`);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
 
@@ -206,17 +197,14 @@ export class OneOnOneBattleController {
 
     // ボールが0番面の時、ランダムでドリブル突破を実行
     const currentFace = onBallPlayer.getCurrentBallFace();
-    if (currentFace === 0) {
-      const breakthroughChance = 0.3; // 30%の確率でドリブル突破
-      if (Math.random() < breakthroughChance) {
-        // 左右ランダムで突破方向を決定
-        const direction = Math.random() < 0.5 ? 'left' : 'right';
-        const success = onBallPlayer.startDribbleBreakthrough(direction);
-        if (success) {
-          onBallPlayer.clearAIMovement();
-          console.log(`[OneOnOneBattleController] AIがドリブル突破を選択: ${direction}方向`);
-          return; // 突破を開始したので通常処理をスキップ
-        }
+    if (currentFace === 0 && DribbleUtils.shouldAIAttemptBreakthrough()) {
+      // 左右ランダムで突破方向を決定
+      const direction = Math.random() < 0.5 ? 'left' : 'right';
+      const success = onBallPlayer.startDribbleBreakthrough(direction);
+      if (success) {
+        onBallPlayer.clearAIMovement();
+        console.log(`[OneOnOneBattleController] AIがドリブル突破を選択: ${direction}方向`);
+        return; // 突破を開始したので通常処理をスキップ
       }
     }
 
@@ -227,24 +215,17 @@ export class OneOnOneBattleController {
     // オフェンス側：ボール保持位置をランダムに変更
     onBallPlayer.randomizeBallPosition();
 
-    // オフェンス側の行動をランダムに選択
-    const offenseActionRoll = Math.random();
-    const turnToGoalChance = 0.25; // 25%の確率でゴール方向を向く
-    const shouldTurnToGoal = offenseActionRoll < turnToGoalChance;
+    // オフェンス側の行動をランダムに選択（DefenseUtilsを使用）
+    const shouldTurnToGoal = DefenseUtils.shouldTurnToGoal();
 
     // オフェンス側：8方向のランダムな移動方向を取得
     const randomDirection = this.getRandomDirection8();
-    const baseMoveSpeed = 3.0;
 
-    // オフェンス側の速度をdribblingspeedで調整
+    // DribbleUtilsを使用してオフェンス速度を計算
     const offensePlayerData = onBallPlayer.playerData;
-    let offenseMoveSpeed = baseMoveSpeed;
-    if (offensePlayerData && offensePlayerData.stats.dribblingspeed !== undefined) {
-      const dribblingSpeedMultiplier = offensePlayerData.stats.dribblingspeed / 100;
-      offenseMoveSpeed = baseMoveSpeed * dribblingSpeedMultiplier;
-      console.log(`[OneOnOneBattleController] オフェンス速度: ${offenseMoveSpeed.toFixed(2)} (dribblingspeed=${offensePlayerData.stats.dribblingspeed})`);
-    }
-    const moveSpeed = offenseMoveSpeed;
+    const moveSpeed = DribbleUtils.calculateDribblingSpeed(offensePlayerData?.stats.dribblingspeed);
+    console.log(`[OneOnOneBattleController] オフェンス速度: ${moveSpeed.toFixed(2)} (dribblingspeed=${offensePlayerData?.stats.dribblingspeed ?? 'undefined'})`);
+
 
     // フェイント判定
     const isFeint = this.checkFeint(onBallPlayer);
@@ -337,26 +318,16 @@ export class OneOnOneBattleController {
 
     const normalizedDirection = moveDirection.normalize();
 
-    // ディフェンダーの遅延時間を計算
+    // DribbleUtilsを使用してディフェンダーの遅延時間を計算
     const defenderPlayerData = defender.playerData;
-    let reactionDelayMs = 1000;
+    let reactionDelayMs: number;
 
     if (isRedirect) {
-      if (defenderPlayerData && defenderPlayerData.stats.quickness !== undefined) {
-        const quickness = defenderPlayerData.stats.quickness;
-        reactionDelayMs = Math.max(0, (100 - quickness) * 10);
-        console.log(`[OneOnOneBattleController] ディフェンダー動き直し遅延: ${reactionDelayMs}ms (quickness=${quickness})`);
-      } else {
-        console.log(`[OneOnOneBattleController] ディフェンダーのquicknessデータなし、デフォルト遅延: ${reactionDelayMs}ms`);
-      }
+      reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
+      console.log(`[OneOnOneBattleController] ディフェンダー動き直し遅延: ${reactionDelayMs}ms (quickness=${defenderPlayerData?.stats.quickness ?? 'undefined'})`);
     } else {
-      if (defenderPlayerData && defenderPlayerData.stats.reflexes !== undefined) {
-        const reflexes = defenderPlayerData.stats.reflexes;
-        reactionDelayMs = Math.max(0, 1000 - reflexes);
-        console.log(`[OneOnOneBattleController] ディフェンダー反応遅延: ${reactionDelayMs}ms (reflexes=${reflexes})`);
-      } else {
-        console.log(`[OneOnOneBattleController] ディフェンダーのreflexesデータなし、デフォルト遅延: ${reactionDelayMs}ms`);
-      }
+      reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
+      console.log(`[OneOnOneBattleController] ディフェンダー反応遅延: ${reactionDelayMs}ms (reflexes=${defenderPlayerData?.stats.reflexes ?? 'undefined'})`);
     }
 
     defender.setAIMovement(normalizedDirection, speed, reactionDelayMs);
@@ -373,27 +344,23 @@ export class OneOnOneBattleController {
     speed: number,
     isRedirect: boolean = false
   ): void {
+    // DribbleUtilsを使用して遅延時間を計算
     const defenderPlayerData = defender.playerData;
-    let reactionDelayMs = 1000;
+    let reactionDelayMs: number;
 
     if (isRedirect) {
-      if (defenderPlayerData && defenderPlayerData.stats.quickness !== undefined) {
-        const quickness = defenderPlayerData.stats.quickness;
-        reactionDelayMs = Math.max(0, (100 - quickness) * 10);
-        console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (quickness=${quickness})`);
-      }
+      reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
+      console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (quickness=${defenderPlayerData?.stats.quickness ?? 'undefined'})`);
     } else {
-      if (defenderPlayerData && defenderPlayerData.stats.reflexes !== undefined) {
-        const reflexes = defenderPlayerData.stats.reflexes;
-        reactionDelayMs = Math.max(0, 1000 - reflexes);
-        console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (reflexes=${reflexes})`);
-      }
+      reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
+      console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (reflexes=${defenderPlayerData?.stats.reflexes ?? 'undefined'})`);
     }
 
     const moveDirection = feintDirection.clone().normalize();
-    defender.setAIMovement(moveDirection, speed * 1.2, reactionDelayMs);
+    const feintSpeed = speed * DRIBBLE_CONFIG.FEINT_SPEED_MULTIPLIER;
+    defender.setAIMovement(moveDirection, feintSpeed, reactionDelayMs);
 
-    console.log(`[OneOnOneBattleController] ディフェンダーがフェイントに釣られる！方向=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}), 速度=${speed * 1.2}`);
+    console.log(`[OneOnOneBattleController] ディフェンダーがフェイントに釣られる！方向=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}), 速度=${feintSpeed}`);
   }
 
   /**
@@ -429,13 +396,9 @@ export class OneOnOneBattleController {
    */
   public checkFeint(offensePlayer: Character): boolean {
     const playerData = offensePlayer.playerData;
-    let feintChance = 0.2;
-
-    if (playerData && playerData.stats.technique !== undefined) {
-      const technique = playerData.stats.technique;
-      feintChance = technique / 200;
-      console.log(`[OneOnOneBattleController] フェイント確率: ${(feintChance * 100).toFixed(1)}% (technique=${technique})`);
-    }
+    // DribbleUtilsを使用してフェイント確率を計算
+    const feintChance = DribbleUtils.calculateFeintChance(playerData?.stats.technique);
+    console.log(`[OneOnOneBattleController] フェイント確率: ${(feintChance * 100).toFixed(1)}% (technique=${playerData?.stats.technique ?? 'undefined'})`);
 
     const roll = Math.random();
     return roll < feintChance;
@@ -465,11 +428,10 @@ export class OneOnOneBattleController {
         onBallDefender.getPosition()
       );
 
-      const offenseRadius = 1.0;
+      // DefenseUtilsを使用して1on1状態を判定
       const defenderRadius = onBallDefender.getFootCircleRadius();
-      const minDistance = offenseRadius + defenderRadius;
-
-      const is1on1 = distance <= minDistance;
+      const is1on1 = DefenseUtils.is1on1State(distance, DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS, defenderRadius);
+      const minDistance = DefenseUtils.calculateContactDistance(DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS, defenderRadius);
 
       if (Date.now() % 1000 < 100) {
         console.log(`[OneOnOneBattleController] 1on1チェック: 距離=${distance.toFixed(2)}m, 最小距離=${minDistance.toFixed(2)}m, 1on1=${is1on1}`);
@@ -625,17 +587,10 @@ export class OneOnOneBattleController {
         if (this.in1on1Battle && onBallPlayer && onBallDefender) {
           const newDirection = this.getRandomDirection8();
 
-          const baseMoveSpeed = 3.0;
-          let moveSpeed = baseMoveSpeed;
+          // DribbleUtilsを使用して速度と遅延を計算
           const offenseData = onBallPlayer.playerData;
-          if (offenseData && offenseData.stats.dribblingspeed !== undefined) {
-            moveSpeed = baseMoveSpeed * (offenseData.stats.dribblingspeed / 100);
-          }
-
-          let offenseDelayMs = 1000;
-          if (offenseData && offenseData.stats.quickness !== undefined) {
-            offenseDelayMs = Math.max(0, (100 - offenseData.stats.quickness) * 10);
-          }
+          const moveSpeed = DribbleUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
+          const offenseDelayMs = DribbleUtils.calculateQuicknessDelay(offenseData?.stats.quickness);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
           this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
