@@ -131,7 +131,6 @@ export class Ball {
 
     // 保持者が設定された場合、飛行状態を終了
     if (character !== null && this.inFlight) {
-      console.log(`[Ball] キャッチされたため飛行状態を終了`);
       this.inFlight = false;
       this.velocity = Vector3.Zero();
     }
@@ -177,7 +176,6 @@ export class Ball {
    */
   public shoot(targetPosition: Vector3, launchAngle: number = Math.PI * 55 / 180, overrideStartPosition?: Vector3): boolean {
     if (this.inFlight) {
-      console.log('[Ball] 既に飛行中のためシュートできません');
       return false;
     }
 
@@ -209,13 +207,6 @@ export class Ball {
     // シューターのクールダウンを設定（シュート直後にシューター自身がキャッチしないようにする）
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
-
-    console.log(`[Ball] シュート開始:
-      開始位置=(${startPosition.x.toFixed(2)}, ${startPosition.y.toFixed(2)}, ${startPosition.z.toFixed(2)})
-      目標位置=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})
-      初速度=(${this.velocity.x.toFixed(2)}, ${this.velocity.y.toFixed(2)}, ${this.velocity.z.toFixed(2)})
-      発射角度=${(launchAngle * 180 / Math.PI).toFixed(1)}度
-      前保持者=${previousHolder ? 'あり' : 'なし'}`);
 
     return true;
   }
@@ -252,13 +243,11 @@ export class Ball {
       if (Math.abs(bounceVelocityY) < MIN_BOUNCE_VELOCITY) {
         this.inFlight = false;
         this.velocity = Vector3.Zero();
-        console.log(`[Ball] 地面に停止: 飛行時間=${this.flightTime.toFixed(2)}秒`);
       } else {
         // バウンド継続：Y速度を反転、XZ速度も少し減衰
         this.velocity.y = bounceVelocityY;
         this.velocity.x *= 0.9;
         this.velocity.z *= 0.9;
-        console.log(`[Ball] バウンド: 速度Y=${bounceVelocityY.toFixed(2)}`);
       }
     }
 
@@ -299,7 +288,6 @@ export class Ball {
     if (denominator <= 0) {
       // フォールバック：単純な速度計算
       v0 = Math.sqrt(horizontalDistance * horizontalDistance + dy * dy) * 2;
-      console.log(`[Ball] 通常の軌道計算不可、フォールバック速度使用: v0=${v0.toFixed(2)}`);
     } else {
       v0 = Math.sqrt(numerator / denominator);
     }

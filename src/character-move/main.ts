@@ -24,8 +24,6 @@ window.addEventListener("DOMContentLoaded", () => {
     // ゲームシーンを作成
     const gameScene = new GameScene(canvas);
 
-    console.log("[Main] character-moveゲームを起動しました");
-
     // グローバルスコープにゲームシーンを保存（デバッグ用）
     window.gameScene = gameScene;
   } catch (error) {

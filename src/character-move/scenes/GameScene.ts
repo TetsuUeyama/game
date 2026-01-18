@@ -141,7 +141,6 @@ export class GameScene {
         const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
         this.characterAIs.push(ai);
       }
-      console.log(`[GameScene] ${this.characterAIs.length}人のAIコントローラーを初期化しました`);
     }
 
     // 1on1バトルコントローラーの初期化
@@ -150,7 +149,6 @@ export class GameScene {
         this.ball,
         () => [...this.allyCharacters, ...this.enemyCharacters]
       );
-      console.log('[GameScene] 1on1バトルコントローラーを初期化しました');
     }
 
     // シュートコントローラーの初期化
@@ -161,7 +159,6 @@ export class GameScene {
         this.field,
         () => [...this.allyCharacters, ...this.enemyCharacters]
       );
-      console.log('[GameScene] シュートコントローラーを初期化しました');
 
       // ゴール時のコールバックを設定
       this.shootingController.setOnGoalCallback((scoringTeam) => {
@@ -172,7 +169,6 @@ export class GameScene {
       for (const ai of this.characterAIs) {
         ai.setShootingController(this.shootingController);
       }
-      console.log('[GameScene] 全AIにShootingControllerを設定しました');
     }
 
     // 入力コントローラーの初期化（プレイヤーキャラクター）
@@ -192,8 +188,6 @@ export class GameScene {
     window.addEventListener("resize", () => {
       this.engine.resize();
     });
-
-    console.log("[GameScene] character-moveゲーム初期化完了");
   }
 
   /**
@@ -251,8 +245,6 @@ export class GameScene {
    * チーム設定に基づいてキャラクターを作成（6対6）
    */
   private createTeams(teamConfig: GameTeamConfig, playerData: Record<string, PlayerData>): void {
-    console.log('[GameScene] チームを作成中...');
-
     // 味方チーム作成
     for (const playerConfig of teamConfig.allyTeam.players) {
       const player = playerData[playerConfig.playerId];
@@ -276,8 +268,6 @@ export class GameScene {
       character.setBodyColor(0.0, 0.4, 1.0);
 
       this.allyCharacters.push(character);
-
-      console.log(`[GameScene] 味方チーム: ${player.basic.NAME} (${playerConfig.position}、身長: ${player.basic.height}cm) を作成`);
     }
 
     // 敵チーム作成
@@ -303,11 +293,7 @@ export class GameScene {
       character.setBodyColor(1.0, 0.0, 0.0);
 
       this.enemyCharacters.push(character);
-
-      console.log(`[GameScene] 敵チーム: ${player.basic.NAME} (${playerConfig.position}、身長: ${player.basic.height}cm) を作成`);
     }
-
-    console.log(`[GameScene] チーム作成完了: 味方${this.allyCharacters.length}人, 敵${this.enemyCharacters.length}人`);
   }
 
   /**
@@ -325,8 +311,6 @@ export class GameScene {
     // プレイヤーは味方チーム
     character.setTeam("ally");
 
-    console.log(`[GameScene] プレイヤーキャラクター作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
-
     return character;
   }
 
@@ -338,8 +322,6 @@ export class GameScene {
     const initialPosition = new Vector3(0, 0.25, 2);
 
     const ball = new Ball(this.scene, initialPosition);
-
-    console.log("[GameScene] ボール作成完了");
 
     return ball;
   }
@@ -362,8 +344,6 @@ export class GameScene {
     // チームを味方に設定
     ally.setTeam("ally");
 
-    console.log(`[GameScene] 味方キャラクター作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
-
     return ally;
   }
 
@@ -385,8 +365,7 @@ export class GameScene {
     // チームを敵に設定
     enemy.setTeam("enemy");
 
-    console.log(`[GameScene] 敵キャラクター1作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
-
+    
     return enemy;
   }
 
@@ -408,8 +387,7 @@ export class GameScene {
     // チームを敵に設定
     enemy.setTeam("enemy");
 
-    console.log(`[GameScene] 敵キャラクター2作成完了 (${config.basic.name}, 身長: ${config.physical.height}m)`);
-
+    
     return enemy;
   }
 
@@ -419,8 +397,6 @@ export class GameScene {
 
   private async loadCharacterModel(): Promise<void> {
     try {
-      console.log("[GameScene] 3Dモデルのロードを試行中...");
-
       // モデルパスを取得
       const modelPath = MODEL_CONFIG.defaultModelPath;
 
@@ -442,7 +418,6 @@ export class GameScene {
       this.character.setModel(model);
 
       this.modelLoaded = true;
-      console.log("[GameScene] 3Dモデルのロードに成功しました");
     } catch (error) {
       console.warn(
         "[GameScene] 3Dモデルのロードに失敗しました。仮のメッシュを使用します。",
@@ -578,8 +553,6 @@ export class GameScene {
     if (characters.length === 0) return;
 
     this.currentTargetIndex = (this.currentTargetIndex + 1) % characters.length;
-    const character = characters[this.currentTargetIndex];
-    console.log(`[GameScene] カメラターゲット: ${this.currentTargetTeam} ${this.currentTargetIndex + 1}人目 (${character.playerData?.basic.NAME || 'Unknown'})`);
   }
 
   /**
@@ -590,8 +563,6 @@ export class GameScene {
     if (characters.length === 0) return;
 
     this.currentTargetIndex = (this.currentTargetIndex - 1 + characters.length) % characters.length;
-    const character = characters[this.currentTargetIndex];
-    console.log(`[GameScene] カメラターゲット: ${this.currentTargetTeam} ${this.currentTargetIndex + 1}人目 (${character.playerData?.basic.NAME || 'Unknown'})`);
   }
 
   /**
@@ -600,8 +571,6 @@ export class GameScene {
   public switchTeam(): void {
     this.currentTargetTeam = this.currentTargetTeam === 'ally' ? 'enemy' : 'ally';
     this.currentTargetIndex = 0;
-    const character = this.getCurrentTargetCharacter();
-    console.log(`[GameScene] チーム切り替え: ${this.currentTargetTeam} 1人目 (${character?.playerData?.basic.NAME || 'Unknown'})`);
   }
 
   /**
@@ -692,8 +661,7 @@ export class GameScene {
       motionController.stop();
     }
 
-    console.log("[GameScene] モーション確認モードを有効化しました");
-  }
+      }
 
   /**
    * 8角形の頂点番号を表示（デバッグ用）
@@ -733,7 +701,7 @@ export class GameScene {
   }
 
   /**
-   * シュートを実行
+   * シュートを実行（アクションシステム経由）
    * @param shooter シュートを打つキャラクター（省略時はオンボールプレイヤー）
    * @returns シュート結果
    */
@@ -753,7 +721,8 @@ export class GameScene {
       };
     }
 
-    return this.shootingController.performShoot(targetShooter);
+    // ActionController経由でシュートを開始（アニメーション付き）
+    return this.shootingController.startShootAction(targetShooter);
   }
 
   /**
@@ -814,8 +783,7 @@ export class GameScene {
   private resetAfterOutOfBounds(): void {
     const lastToucher = this.ball.getLastToucher();
 
-    console.log(`[GameScene] アウトオブバウンズ発生！最後に触れた選手: ${lastToucher?.playerData?.basic?.NAME || 'なし'}`);
-
+    
     // ボールの飛行を停止
     this.ball.endFlight();
 
@@ -872,8 +840,7 @@ export class GameScene {
       lastToucher.setPosition(defenderPosition);
     }
 
-    console.log(`[GameScene] ${opponentCharacter.playerData?.basic?.NAME || 'Unknown'}のボールでセンターサークル外側から再開（半径=${circleRadius}m）`);
-  }
+      }
 
   /**
    * ゴール後のリセット処理
@@ -893,8 +860,7 @@ export class GameScene {
       this.enemyScore++;
     }
 
-    console.log(`[GameScene] ゴール成功！ ${scoringTeam}チームが得点 (味方: ${this.allyScore} - 敵: ${this.enemyScore})`);
-
+    
     // ボールの飛行を停止
     this.ball.endFlight();
 
@@ -941,16 +907,13 @@ export class GameScene {
       opponent.setPosition(opponentPosition);
     }
 
-    console.log(`[GameScene] ${ballHolder.playerData?.basic?.NAME || 'Unknown'}のボールでセンターサークル外側から再開`);
-
+    
     // 勝利判定
     if (this.allyScore >= this.winningScore) {
       this.winner = 'ally';
-      console.log(`[GameScene] 味方チームの勝利！ (${this.allyScore} - ${this.enemyScore})`);
-    } else if (this.enemyScore >= this.winningScore) {
+          } else if (this.enemyScore >= this.winningScore) {
       this.winner = 'enemy';
-      console.log(`[GameScene] 敵チームの勝利！ (${this.allyScore} - ${this.enemyScore})`);
-    }
+          }
   }
 
   /**
@@ -1022,8 +985,7 @@ export class GameScene {
       }
     }
 
-    console.log('[GameScene] ゲームをリセットしました');
-  }
+      }
 
   /**
    * 破棄

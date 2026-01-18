@@ -16,6 +16,7 @@ import {
   isDirectionWithinAngle,
   isPointInBox,
 } from "../utils/CollisionUtils";
+import { ActionType, ActionConfigUtils } from "../config/ActionConfig";
 
 /**
  * シュートの種類
@@ -89,8 +90,6 @@ export class ShootingController {
 
     // シュートレンジメッシュを作成
     this.createShootRangeMeshes();
-
-    console.log(`[ShootingController] ゴールZ位置: GOAL_1=${GOAL_Z_POSITIONS.GOAL_1.toFixed(2)}m, GOAL_2=${GOAL_Z_POSITIONS.GOAL_2.toFixed(2)}m`);
   }
 
   /**
@@ -126,8 +125,6 @@ export class ShootingController {
       new Color3(0.2, 0.8, 0.3), // 緑色
       0.4
     );
-
-    console.log('[ShootingController] シュートレンジメッシュを作成しました');
   }
 
   /**
@@ -216,12 +213,6 @@ export class ShootingController {
     // メッシュを表示
     this.showShootRangeMeshes();
 
-    // デバッグ：初回のみログ出力
-    if (this.threePtRangeMesh && !this.threePtRangeMesh.metadata?.logged) {
-      console.log(`[ShootingController] シュートレンジ表示中: holder=${holder.playerData?.basic?.NAME || 'unknown'}`);
-      this.threePtRangeMesh.metadata = { logged: true };
-    }
-
     // キャラクターの位置と回転を取得
     const position = holder.getPosition();
     const rotation = holder.getRotation();
@@ -303,6 +294,137 @@ export class ShootingController {
   }
 
   /**
+   * シュートタイプから対応するアクションタイプを取得
+   */
+  private getShootActionType(shootType: ShootType): ActionType | null {
+    switch (shootType) {
+      case '3pt':
+        return 'shoot_3pt';
+      case 'midrange':
+        return 'shoot_midrange';
+      case 'layup':
+        return 'shoot_layup';
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * ActionControllerを使用したシュート開始
+   * startup時間中はブロック可能
+   * @param shooter シュートを打つキャラクター
+   * @returns シュート結果（startupフェーズの開始）
+   */
+  public startShootAction(shooter: Character): ShootResult {
+    // 基本チェック
+    if (this.ball.getHolder() !== shooter) {
+      return {
+        success: false,
+        shootType: 'out_of_range',
+        distance: 0,
+        message: 'ボールを保持していません',
+      };
+    }
+
+    if (this.ball.isInFlight()) {
+      return {
+        success: false,
+        shootType: 'out_of_range',
+        distance: 0,
+        message: 'ボールは既に飛行中です',
+      };
+    }
+
+    // シュートレンジ判定
+    const shootDirection = this.getShootDirection(shooter);
+    const targetGoal = this.getTargetGoal(shooter);
+    const { shootType, distance, inRange } = this.checkShootRange(shooter, targetGoal, shootDirection);
+
+    if (!inRange) {
+      return {
+        success: false,
+        shootType: 'out_of_range',
+        distance,
+        message: `シュートレンジ外です（距離: ${distance.toFixed(2)}m）`,
+      };
+    }
+
+    if (!this.isFacingGoal(shooter, targetGoal, shootDirection)) {
+      return {
+        success: false,
+        shootType,
+        distance,
+        message: '0番面がゴール方向を向いていません',
+      };
+    }
+
+    // アクションタイプを取得
+    const actionType = this.getShootActionType(shootType);
+    if (!actionType) {
+      return {
+        success: false,
+        shootType,
+        distance,
+        message: 'シュートタイプが不正です',
+      };
+    }
+
+    // ActionControllerでシュートアクションを開始
+    const actionController = shooter.getActionController();
+    const actionResult = actionController.startAction(actionType);
+
+    if (!actionResult.success) {
+      return {
+        success: false,
+        shootType,
+        distance,
+        message: actionResult.message,
+      };
+    }
+
+    // activeフェーズに入ったらボールを発射するコールバックを設定
+    actionController.setCallbacks({
+      onActive: (action) => {
+        console.log(`[ShootingController] onActive callback called: ${action}`);
+        if (ActionConfigUtils.isShootAction(action)) {
+          // 実際のシュート実行
+          const result = this.performShoot(shooter);
+          console.log(`[ShootingController] performShoot result:`, result);
+        }
+      },
+      onInterrupt: (_action, _interruptedBy) => {
+        // シュートが中断された
+        console.log(`[ShootingController] shoot interrupted`);
+      },
+    });
+
+    return {
+      success: true,
+      shootType,
+      distance,
+      message: `${ShootingUtils.getShootTypeName(shootType)}モーション開始`,
+    };
+  }
+
+  /**
+   * シュートがstartup中かどうかをチェック
+   * ブロック可能な時間帯かどうかを判定
+   */
+  public isShootInStartup(shooter: Character): boolean {
+    const actionController = shooter.getActionController();
+    return actionController.isShootInStartup();
+  }
+
+  /**
+   * シュートをブロックで中断
+   * startup中のシュートをキャンセルする
+   */
+  public interruptShootByBlock(shooter: Character): boolean {
+    const actionController = shooter.getActionController();
+    return actionController.interruptShootByBlock();
+  }
+
+  /**
    * シュートを実行
    * @param shooter シュートを打つキャラクター
    * @returns シュート結果
@@ -370,21 +492,6 @@ export class ShootingController {
       baseTargetPosition.z + offsetZ
     );
 
-    // リング半径との比較でゴール可能性を計算
-    const rimRadius = GOAL_CONFIG.rimDiameter / 2; // 0.225m
-    const willScore = ShootingUtils.willScoreByOffset(offsetX, offsetZ, rimRadius);
-    const totalOffset = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ);
-
-    console.log(`[ShootingController] シュート精度デバッグ:
-      選手: ${shooter.playerData?.basic?.NAME || 'Unknown'}
-      3paccuracy: ${accuracy3pValue}
-      計算式: 0.05 + 0.75 * (100 - ${accuracy3pValue}) / 100 = ${accuracy.toFixed(3)}m
-      オフセット: X=${offsetX.toFixed(3)}m, Z=${offsetZ.toFixed(3)}m
-      合計ズレ: ${totalOffset.toFixed(3)}m
-      リング半径: ${rimRadius.toFixed(3)}m
-      予測: ${willScore ? 'ゴール可能' : 'ゴール外'}`
-    );
-
     // シューターの頭上からボールを発射（相手に取られないように）
     const shooterPos = shooter.getPosition();
     const shooterHeight = shooter.config.physical.height; // キャラクターの身長
@@ -413,8 +520,6 @@ export class ShootingController {
     const isAlly = shooter.team === 'ally';
     this.currentShootGoal = isAlly ? 'goal1' : 'goal2';
     this.currentShooterTeam = shooter.team;
-
-    console.log(`[ShootingController] ${shootType}シュート実行: 距離=${distance.toFixed(2)}m, 目標=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), ゴール=${this.currentShootGoal}`);
 
     return {
       success: true,
@@ -470,7 +575,6 @@ export class ShootingController {
 
         // ボールがリング内を通過したか（ボールの中心がリム内にあればゴール）
         if (distanceFromCenter <= rimRadius) {
-          console.log(`[ShootingController] ゴール成功！ ${goal.name}にシュート決定！ (距離: ${distanceFromCenter.toFixed(3)}m, リム半径: ${rimRadius.toFixed(3)}m)`);
           this.onGoalScored(goal.name);
           this.checkingGoal = false;
           return;
@@ -482,18 +586,6 @@ export class ShootingController {
 
     // ボールが地面に落ちた場合、ゴール判定を終了
     if (!this.ball.isInFlight()) {
-      // どのゴールからどれくらいずれていたか確認
-      const goals = [
-        { z: GOAL_Z_POSITIONS.GOAL_1, name: 'ゴール1' },
-        { z: GOAL_Z_POSITIONS.GOAL_2, name: 'ゴール2' },
-      ];
-      for (const goal of goals) {
-        const distanceFromCenter = Math.sqrt(
-          ballPosition.x * ballPosition.x +
-          (ballPosition.z - goal.z) * (ballPosition.z - goal.z)
-        );
-        console.log(`[ShootingController] シュート外れ: ${goal.name}からの距離=${distanceFromCenter.toFixed(2)}m (リム半径=${rimRadius.toFixed(2)}m)`);
-      }
       this.checkingGoal = false;
     }
   }
@@ -639,8 +731,6 @@ export class ShootingController {
 
     // リムとの衝突判定
     if (distanceFromRimCircle <= ballRadius + rimThickness) {
-      console.log(`[ShootingController] リムに当たった！`);
-
       // リムの円周上の最も近い点を計算
       const dx = ballPosition.x - rimPosition.x;
       const dz = ballPosition.z - rimPosition.z;
@@ -715,8 +805,6 @@ export class ShootingController {
       );
 
       if (isColliding) {
-        console.log(`[ShootingController] バックボードに当たった！`);
-
         // SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENTを使用
         const bounciness = SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENT;
 
@@ -752,9 +840,7 @@ export class ShootingController {
   /**
    * ゴール成功時のコールバック
    */
-  private onGoalScored(goalName: string): void {
-    console.log(`[ShootingController] ${goalName}にスコア！`);
-
+  private onGoalScored(_goalName: string): void {
     // ゴール時のコールバックを呼び出し
     if (this.onGoalCallback && this.currentShooterTeam) {
       this.onGoalCallback(this.currentShooterTeam);

@@ -44,13 +44,9 @@ export class JointController {
       const isCtrlPressed = event.ctrlKey;
 
       if (isCtrlPressed || this.isDragging) {
-        if (isCtrlPressed && !this.isCtrlPressed) {
-          console.log("[JointController] 関節コントロールモード有効（Ctrl+クリック）");
-        }
         this.isCtrlPressed = isCtrlPressed;
         this.handlePointerEvent(pointerInfo);
       } else if (this.isCtrlPressed) {
-        console.log("[JointController] 関節コントロールモード無効");
         this.isCtrlPressed = false;
         if (this.selectedJoint) {
           this.highlightJoint(this.selectedJoint, false);
@@ -60,8 +56,6 @@ export class JointController {
       }
     });
 
-    console.log("[JointController] 関節操作コントローラーを初期化しました");
-    console.log("[JointController] Ctrlキーを押しながら関節をクリック＆ドラッグで操作、Rキーでリセット");
   }
 
   /**
@@ -91,7 +85,6 @@ export class JointController {
 
     if (pickResult && pickResult.hit && pickResult.pickedMesh) {
       const mesh = pickResult.pickedMesh as Mesh;
-      console.log(`[JointController] クリックされたメッシュ: ${mesh.name}`);
 
       if (this.isJoint(mesh)) {
         this.selectedJoint = mesh;
@@ -103,14 +96,9 @@ export class JointController {
 
         this.highlightJoint(mesh, true);
 
-        console.log(`[JointController] 関節を選択: ${mesh.name}`);
-
         if (this.scene.activeCamera) {
           this.scene.activeCamera.detachControl();
-          console.log("[JointController] カメラコントロールを無効化");
         }
-      } else {
-        console.log(`[JointController] ${mesh.name} は関節ではありません`);
       }
     }
   }
@@ -148,7 +136,6 @@ export class JointController {
     if (this.selectedJoint) {
       this.highlightJoint(this.selectedJoint, false);
       this.selectedJoint = null;
-      console.log("[JointController] 関節の選択を解除");
     }
 
     if (this.isDragging) {
@@ -158,7 +145,6 @@ export class JointController {
         const canvas = this.scene.getEngine().getRenderingCanvas();
         if (canvas) {
           this.scene.activeCamera.attachControl(canvas, true);
-          console.log("[JointController] カメラコントロールを再有効化");
         }
       }
     }
@@ -179,10 +165,6 @@ export class JointController {
       name.includes("lower-body") ||
       name.includes("waist-joint")
     );
-
-    if (isJoint) {
-      console.log(`[JointController] ${name} は関節として認識されました`);
-    }
 
     return isJoint;
   }
@@ -207,8 +189,6 @@ export class JointController {
    * すべての関節をリセット
    */
   private resetAllJoints(): void {
-    console.log("[JointController] すべての関節をリセットします");
-
     this.jointNames.forEach(jointName => {
       const joint = this.character.getJoint(jointName);
       if (joint) {
@@ -217,8 +197,6 @@ export class JointController {
         joint.rotation.z = 0;
       }
     });
-
-    console.log("[JointController] リセット完了");
   }
 
   /**

@@ -1,0 +1,327 @@
+import { MotionData, MotionConfig } from "../types/MotionTypes";
+import { buildKeyframes } from "../utils/MotionUtils";
+
+/**
+ * シュートモーション
+ *
+ * 3ポイントシュート、ミドルレンジシュート、レイアップの3種類
+ * ActionControllerのタイミングに合わせてキーフレームを設計
+ */
+
+// ==============================
+// 3ポイントシュート
+// ==============================
+
+/**
+ * 3ポイントシュートモーション
+ *
+ * タイミング（ActionConfigより）:
+ * - startupTime: 400ms = 0.4秒（構え〜リリース直前）
+ * - activeTime: 300ms = 0.3秒（リリース〜フォロースルー）
+ * - recoveryTime: 200ms = 0.2秒（元に戻る）
+ *
+ * キーフレーム構成：
+ * - T0: 構え開始
+ * - T1: ジャンプ開始、ボールを頭上へ
+ * - T2: ジャンプ頂点、リリース直前
+ * - T3: リリース、フォロースルー
+ * - T4: 着地、元に戻る
+ */
+const SHOOT_3PT_T0 = 0.0;
+const SHOOT_3PT_T1 = 0.2;   // 構え（startupの半分）
+const SHOOT_3PT_T2 = 0.4;   // startupTime = リリース直前
+const SHOOT_3PT_T3 = 0.7;   // activeTime終了
+const SHOOT_3PT_T4 = 0.9;   // recoveryTime終了
+
+const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身：後ろに反ってから前に
+  upperBodyX: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: -15, [SHOOT_3PT_T2]: -20, [SHOOT_3PT_T3]: 10, [SHOOT_3PT_T4]: 0},
+  upperBodyY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  upperBodyZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  // 下半身：固定
+  lowerBodyX: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  lowerBodyY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  lowerBodyZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  // 頭：上を向く
+  headX: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: -10, [SHOOT_3PT_T2]: -20, [SHOOT_3PT_T3]: -10, [SHOOT_3PT_T4]: 0},
+  headY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  headZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  // 右腕（シュートハンド）：ボールを持ち上げてリリース
+  rightShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -120, [SHOOT_3PT_T2]: -160, [SHOOT_3PT_T3]: -170, [SHOOT_3PT_T4]: -30},
+  rightShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  rightShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  rightElbowX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 110, [SHOOT_3PT_T3]: 20, [SHOOT_3PT_T4]: 30},
+  rightElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  rightElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  // 左腕（ガイドハンド）：補助
+  leftShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -120, [SHOOT_3PT_T3]: -60, [SHOOT_3PT_T4]: -30},
+  leftShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 20, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 15, [SHOOT_3PT_T4]: 0},
+  leftShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  leftElbowX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 60, [SHOOT_3PT_T2]: 80, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 30},
+  leftElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  leftElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  // 脚：ジャンプ
+  leftHipX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
+  leftHipY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  leftHipZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  rightHipX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
+  rightHipY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  rightHipZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  leftKneeX: {[SHOOT_3PT_T0]: 50, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 10, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 50},
+  leftKneeY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  leftKneeZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+
+  rightKneeX: {[SHOOT_3PT_T0]: 50, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 10, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 50},
+  rightKneeY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  rightKneeZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+};
+
+const SHOOT_3PT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  y: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: -0.3, [SHOOT_3PT_T2]: 0.8, [SHOOT_3PT_T3]: 0.3, [SHOOT_3PT_T4]: 0},
+  z: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+};
+
+export const SHOOT_3PT_MOTION: MotionData = {
+  name: "shoot_3pt",
+  duration: SHOOT_3PT_T4,
+  loop: false,
+  keyframes: buildKeyframes(SHOOT_3PT_JOINT_ANIMATIONS, SHOOT_3PT_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 10 },
+    { jointName: "leftShoulder", priority: 9 },
+    { jointName: "leftElbow", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+    { jointName: "head", priority: 7 },
+  ],
+};
+
+export const SHOOT_3PT_MOTION_CONFIG: MotionConfig = {
+  motionData: SHOOT_3PT_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 40,
+  interruptible: true,
+};
+
+// ==============================
+// ミドルレンジシュート
+// ==============================
+
+/**
+ * ミドルレンジシュートモーション
+ *
+ * タイミング（ActionConfigより）:
+ * - startupTime: 350ms = 0.35秒
+ * - activeTime: 250ms = 0.25秒
+ * - recoveryTime: 200ms = 0.2秒
+ */
+const SHOOT_MID_T0 = 0.0;
+const SHOOT_MID_T1 = 0.17;
+const SHOOT_MID_T2 = 0.35;   // startupTime
+const SHOOT_MID_T3 = 0.6;    // activeTime終了
+const SHOOT_MID_T4 = 0.8;    // recoveryTime終了
+
+const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  upperBodyX: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: -10, [SHOOT_MID_T2]: -15, [SHOOT_MID_T3]: 5, [SHOOT_MID_T4]: 0},
+  upperBodyY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  upperBodyZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  lowerBodyX: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  lowerBodyY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  lowerBodyZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  headX: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: -8, [SHOOT_MID_T2]: -15, [SHOOT_MID_T3]: -5, [SHOOT_MID_T4]: 0},
+  headY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  headZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  rightShoulderX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -100, [SHOOT_MID_T2]: -150, [SHOOT_MID_T3]: -160, [SHOOT_MID_T4]: -30},
+  rightShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  rightShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  rightElbowX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 80, [SHOOT_MID_T2]: 100, [SHOOT_MID_T3]: 15, [SHOOT_MID_T4]: 30},
+  rightElbowY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  rightElbowZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  leftShoulderX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -80, [SHOOT_MID_T2]: -110, [SHOOT_MID_T3]: -50, [SHOOT_MID_T4]: -30},
+  leftShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 15, [SHOOT_MID_T2]: 25, [SHOOT_MID_T3]: 10, [SHOOT_MID_T4]: 0},
+  leftShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  leftElbowX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 50, [SHOOT_MID_T2]: 70, [SHOOT_MID_T3]: 35, [SHOOT_MID_T4]: 30},
+  leftElbowY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  leftElbowZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  leftHipX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -50, [SHOOT_MID_T2]: -5, [SHOOT_MID_T3]: -15, [SHOOT_MID_T4]: -30},
+  leftHipY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  leftHipZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  rightHipX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -50, [SHOOT_MID_T2]: -5, [SHOOT_MID_T3]: -15, [SHOOT_MID_T4]: -30},
+  rightHipY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  rightHipZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  leftKneeX: {[SHOOT_MID_T0]: 50, [SHOOT_MID_T1]: 80, [SHOOT_MID_T2]: 15, [SHOOT_MID_T3]: 35, [SHOOT_MID_T4]: 50},
+  leftKneeY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  leftKneeZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+
+  rightKneeX: {[SHOOT_MID_T0]: 50, [SHOOT_MID_T1]: 80, [SHOOT_MID_T2]: 15, [SHOOT_MID_T3]: 35, [SHOOT_MID_T4]: 50},
+  rightKneeY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  rightKneeZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+};
+
+const SHOOT_MIDRANGE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+  y: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: -0.2, [SHOOT_MID_T2]: 0.6, [SHOOT_MID_T3]: 0.2, [SHOOT_MID_T4]: 0},
+  z: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
+};
+
+export const SHOOT_MIDRANGE_MOTION: MotionData = {
+  name: "shoot_midrange",
+  duration: SHOOT_MID_T4,
+  loop: false,
+  keyframes: buildKeyframes(SHOOT_MIDRANGE_JOINT_ANIMATIONS, SHOOT_MIDRANGE_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 10 },
+    { jointName: "leftShoulder", priority: 9 },
+    { jointName: "leftElbow", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+    { jointName: "head", priority: 7 },
+  ],
+};
+
+export const SHOOT_MIDRANGE_MOTION_CONFIG: MotionConfig = {
+  motionData: SHOOT_MIDRANGE_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 40,
+  interruptible: true,
+};
+
+// ==============================
+// レイアップ
+// ==============================
+
+/**
+ * レイアップモーション
+ *
+ * タイミング（ActionConfigより）:
+ * - startupTime: 250ms = 0.25秒
+ * - activeTime: 300ms = 0.3秒
+ * - recoveryTime: 300ms = 0.3秒
+ */
+const SHOOT_LAYUP_T0 = 0.0;
+const SHOOT_LAYUP_T1 = 0.12;
+const SHOOT_LAYUP_T2 = 0.25;   // startupTime
+const SHOOT_LAYUP_T3 = 0.55;   // activeTime終了
+const SHOOT_LAYUP_T4 = 0.85;   // recoveryTime終了
+
+const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  upperBodyX: {[SHOOT_LAYUP_T0]: 10, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: -10, [SHOOT_LAYUP_T3]: 5, [SHOOT_LAYUP_T4]: 10},
+  upperBodyY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  upperBodyZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  lowerBodyX: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  lowerBodyY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  lowerBodyZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  headX: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: -10, [SHOOT_LAYUP_T2]: -20, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  headY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  headZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  // 右腕：ボールを持ち上げて上方へリリース
+  rightShoulderX: {[SHOOT_LAYUP_T0]: -45, [SHOOT_LAYUP_T1]: -130, [SHOOT_LAYUP_T2]: -170, [SHOOT_LAYUP_T3]: -150, [SHOOT_LAYUP_T4]: -45},
+  rightShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  rightShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  rightElbowX: {[SHOOT_LAYUP_T0]: 45, [SHOOT_LAYUP_T1]: 70, [SHOOT_LAYUP_T2]: 30, [SHOOT_LAYUP_T3]: 10, [SHOOT_LAYUP_T4]: 45},
+  rightElbowY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  rightElbowZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  leftShoulderX: {[SHOOT_LAYUP_T0]: -30, [SHOOT_LAYUP_T1]: -90, [SHOOT_LAYUP_T2]: -100, [SHOOT_LAYUP_T3]: -60, [SHOOT_LAYUP_T4]: -30},
+  leftShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 10, [SHOOT_LAYUP_T2]: 20, [SHOOT_LAYUP_T3]: 10, [SHOOT_LAYUP_T4]: 0},
+  leftShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  leftElbowX: {[SHOOT_LAYUP_T0]: 30, [SHOOT_LAYUP_T1]: 50, [SHOOT_LAYUP_T2]: 60, [SHOOT_LAYUP_T3]: 40, [SHOOT_LAYUP_T4]: 30},
+  leftElbowY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  leftElbowZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  // 脚：片足ジャンプ（右足を上げる）
+  leftHipX: {[SHOOT_LAYUP_T0]: -40, [SHOOT_LAYUP_T1]: -70, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: -20, [SHOOT_LAYUP_T4]: -40},
+  leftHipY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  leftHipZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  rightHipX: {[SHOOT_LAYUP_T0]: -30, [SHOOT_LAYUP_T1]: -60, [SHOOT_LAYUP_T2]: -80, [SHOOT_LAYUP_T3]: -50, [SHOOT_LAYUP_T4]: -30},
+  rightHipY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  rightHipZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  leftKneeX: {[SHOOT_LAYUP_T0]: 60, [SHOOT_LAYUP_T1]: 100, [SHOOT_LAYUP_T2]: 10, [SHOOT_LAYUP_T3]: 40, [SHOOT_LAYUP_T4]: 60},
+  leftKneeY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  leftKneeZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+
+  rightKneeX: {[SHOOT_LAYUP_T0]: 40, [SHOOT_LAYUP_T1]: 80, [SHOOT_LAYUP_T2]: 90, [SHOOT_LAYUP_T3]: 60, [SHOOT_LAYUP_T4]: 40},
+  rightKneeY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  rightKneeZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+};
+
+const SHOOT_LAYUP_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
+  y: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: -0.15, [SHOOT_LAYUP_T2]: 1.0, [SHOOT_LAYUP_T3]: 0.5, [SHOOT_LAYUP_T4]: 0},
+  z: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0.1, [SHOOT_LAYUP_T2]: 0.3, [SHOOT_LAYUP_T3]: 0.2, [SHOOT_LAYUP_T4]: 0},
+};
+
+export const SHOOT_LAYUP_MOTION: MotionData = {
+  name: "shoot_layup",
+  duration: SHOOT_LAYUP_T4,
+  loop: false,
+  keyframes: buildKeyframes(SHOOT_LAYUP_JOINT_ANIMATIONS, SHOOT_LAYUP_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 10 },
+    { jointName: "leftShoulder", priority: 9 },
+    { jointName: "leftElbow", priority: 9 },
+    { jointName: "rightHip", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+    { jointName: "head", priority: 7 },
+  ],
+};
+
+export const SHOOT_LAYUP_MOTION_CONFIG: MotionConfig = {
+  motionData: SHOOT_LAYUP_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 40,
+  interruptible: true,
+};
+
+// ==============================
+// エクスポート
+// ==============================
+
+/**
+ * シュートモーションマップ
+ */
+export const SHOOT_MOTIONS = {
+  shoot_3pt: SHOOT_3PT_MOTION,
+  shoot_midrange: SHOOT_MIDRANGE_MOTION,
+  shoot_layup: SHOOT_LAYUP_MOTION,
+};
+
+/**
+ * シュートモーションコンフィグマップ
+ */
+export const SHOOT_MOTION_CONFIGS = {
+  shoot_3pt: SHOOT_3PT_MOTION_CONFIG,
+  shoot_midrange: SHOOT_MIDRANGE_MOTION_CONFIG,
+  shoot_layup: SHOOT_LAYUP_MOTION_CONFIG,
+};
