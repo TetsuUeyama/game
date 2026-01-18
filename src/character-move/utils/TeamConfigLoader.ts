@@ -26,8 +26,6 @@ export class TeamConfigLoader {
    * @param configPath 設定ファイルのパス（デフォルト: /data/teamConfig.json）
    */
   public static async loadTeamConfig(configPath: string = '/data/teamConfig.json'): Promise<GameTeamConfig> {
-    console.log('[TeamConfigLoader] チーム設定を読み込み中...', configPath);
-
     try {
       const response = await fetch(configPath);
 
@@ -36,10 +34,6 @@ export class TeamConfigLoader {
       }
 
       const config: GameTeamConfig = await response.json();
-
-      console.log('[TeamConfigLoader] チーム設定を読み込みました');
-      console.log('[TeamConfigLoader] 味方チーム:', config.allyTeam.formation, `(${config.allyTeam.players.length}人)`);
-      console.log('[TeamConfigLoader] 敵チーム:', config.enemyTeam.formation, `(${config.enemyTeam.players.length}人)`);
 
       return config;
     } catch (error) {

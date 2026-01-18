@@ -60,8 +60,6 @@ export class Net {
     material.backFaceCulling = false; // 裏面も表示
     mesh.material = material;
 
-    console.log(`[Net] Creating net for ${side} at rim center:`, this.rimCenter);
-
     return mesh;
   }
 
@@ -94,8 +92,6 @@ export class Net {
         });
       }
     }
-
-    console.log(`[Net] Initialized ${this.vertices.length} vertices. Top Y: ${this.rimCenter.y}, Bottom Y: ${this.rimCenter.y - this.netLength}`);
 
     this.updateMeshGeometry();
   }

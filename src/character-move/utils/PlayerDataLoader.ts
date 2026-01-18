@@ -103,8 +103,6 @@ export class PlayerDataLoader {
     // 読み込み開始
     this.loadPromise = (async () => {
       try {
-        console.log(`[PlayerDataLoader] 選手データを読み込み中: ${filePath}`);
-
         const response = await fetch(filePath);
 
         if (!response.ok) {
@@ -118,10 +116,6 @@ export class PlayerDataLoader {
         for (const data of jsonData) {
           players[data.ID] = this.convertToPlayerData(data);
         }
-
-        console.log(
-          `[PlayerDataLoader] ${Object.keys(players).length}人の選手データを読み込みました`
-        );
 
         // キャッシュに保存
         this.cachedPlayers = players;
@@ -166,6 +160,5 @@ export class PlayerDataLoader {
   public static clearCache(): void {
     this.cachedPlayers = null;
     this.loadPromise = null;
-    console.log("[PlayerDataLoader] キャッシュをクリアしました");
   }
 }

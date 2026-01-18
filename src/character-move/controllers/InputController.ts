@@ -198,7 +198,6 @@ export class InputController {
               this.dashMomentumSpeed = currentSpeedMultiplier;
               this.dashJumpDirection = this.currentDashDirection; // ダッシュ方向名も保存
 
-              console.log(`[ダッシュ慣性保存] 方向: ${this.currentDashDirection}, 速度: ${this.dashMomentumSpeed.toFixed(2)}`);
             }
           }
 
@@ -314,7 +313,6 @@ export class InputController {
       } else if (this.dashJumpDirection === "dash_backward") {
         jumpScale *= 0.4; // 後ろ方向は0.4倍
       }
-      console.log(`[ジャンプ高さ調整] 方向: ${this.dashJumpDirection}, 最終スケール: ${jumpScale.toFixed(2)}`);
     }
 
     // ジャンプモーションを再生（スケール付き）
@@ -363,9 +361,6 @@ export class InputController {
         }]);
 
         landingDuration = extendedLandingMotion.duration;
-        console.log(`[着地硬直延長] ダッシュ速度: ${this.dashMomentumSpeed.toFixed(2)}, 硬直時間: ${landingDuration.toFixed(2)}秒`);
-      } else {
-        console.log(`[垂直ジャンプ着地] ジャンプタイプ: ${this.pendingLandingMotion}, 硬直時間: ${landingDuration.toFixed(2)}秒`);
       }
 
       // クールダウンゲージを開始（垂直ジャンプでも表示）
@@ -384,13 +379,37 @@ export class InputController {
     const isLanding = currentMotion === "landing_small" || currentMotion === "landing" || currentMotion === "landing_large";
     const isDashStopping = currentMotion === "dash_stop";
 
-    // デバッグ: ジャンプ中かつ慣性がある場合
-    if (isJumping && this.dashMomentumDirection !== null) {
-      console.log(`[デバッグ] ジャンプ中 - 現在のモーション: ${currentMotion}, 慣性方向: ${this.dashMomentumDirection !== null}, 慣性速度: ${this.dashMomentumSpeed}`);
-    }
+    // アクション実行中（startup/active/recovery）かチェック（ActionControllerベース）
+    const actionController = this.character.getActionController();
+    const currentAction = actionController.getCurrentAction();
+    const currentPhase = actionController.getCurrentPhase();
 
-    // しゃがみ込み中の処理（ジャンプチャージ）
-    if (this.isJumpPressed) {
+    // キャラクターのMotionController（ActionController経由で再生されるモーション）からもモーション名を取得
+    const characterMotionController = this.character.getMotionController();
+    const characterMotionName = characterMotionController.getCurrentMotionName();
+
+    // アクションモーション中かチェック（キャラクターのMotionControllerも確認）
+    const isActionMotion = (currentMotion !== null && (
+      currentMotion.startsWith('shoot_') ||
+      currentMotion.startsWith('pass_') ||
+      currentMotion === 'block_shot' ||
+      currentMotion === 'steal_attempt' ||
+      currentMotion === 'defense_stance' ||
+      currentMotion === 'dribble_breakthrough'
+    )) || (characterMotionName !== null && (
+      characterMotionName.startsWith('shoot_') ||
+      characterMotionName.startsWith('pass_') ||
+      characterMotionName === 'block_shot' ||
+      characterMotionName === 'steal_attempt' ||
+      characterMotionName === 'defense_stance' ||
+      characterMotionName === 'dribble_breakthrough'
+    ));
+
+    // アクション実行中: ActionControllerでアクション中、またはアクションモーション再生中
+    const isActionInProgress = currentAction !== null || currentPhase !== 'idle' || isActionMotion;
+
+    // しゃがみ込み中の処理（ジャンプチャージ）- アクション実行中はスキップ
+    if (this.isJumpPressed && !isActionInProgress) {
       // 押下時間を計算（ミリ秒→秒）
       const pressDuration = (performance.now() - this.jumpPressStartTime) / 1000;
       const targetTime = Math.min(pressDuration, 0.3);
@@ -415,9 +434,9 @@ export class InputController {
       // ダッシュ中の場合は、下のダッシュ処理に続く
     }
 
-    // ダッシュボタンが押されている場合（ただしジャンプ中・着地中・ダッシュ停止中は除く）
+    // ダッシュボタンが押されている場合（ただしジャンプ中・着地中・ダッシュ停止中・アクション実行中は除く）
     // ジャンプチャージ中でダッシュ未開始の場合もダッシュを開始できない
-    if (isDashPressed && !(this.isJumpPressed && this.currentDashDirection === null) && !isJumping && !isLanding && !isDashStopping) {
+    if (isDashPressed && !(this.isJumpPressed && this.currentDashDirection === null) && !isJumping && !isLanding && !isDashStopping && !isActionInProgress) {
       // ダッシュ方向を決定
       let dashMotionName: string | null = null;
 
@@ -506,7 +525,6 @@ export class InputController {
         // ジャンプ中・ジャンプチャージ中でない場合のみ、ダッシュ停止モーションを再生
         if (!isJumping && !this.isJumpPressed) {
           this.motionManager.play("dash_stop", true); // forceで強制再生
-          console.log(`[ダッシュ停止] 加速度: ${accelerationRatio.toFixed(2)}, 硬直時間: ${dashStopMotion.duration.toFixed(2)}秒`);
 
           // クールダウンゲージを開始
           this.cooldownGauge.start(dashStopMotion.duration);
@@ -538,33 +556,27 @@ export class InputController {
       const currentPos = this.character.getPosition();
       const savedX = currentPos.x;
       const savedZ = currentPos.z;
-      console.log(`[更新前の位置] x: ${savedX.toFixed(2)}, z: ${savedZ.toFixed(2)}`);
 
       // モーションマネージャーの更新（ジャンプのY軸移動を適用）
       this.motionManager.update();
 
       // モーション更新後の位置を取得
       const afterMotionPos = this.character.getPosition();
-      console.log(`[更新後の位置] x: ${afterMotionPos.x.toFixed(2)}, y: ${afterMotionPos.y.toFixed(2)}, z: ${afterMotionPos.z.toFixed(2)}`);
 
       // X/Z座標を元に戻してから、慣性移動を適用
       const newPosition = new Vector3(savedX, afterMotionPos.y, savedZ);
       this.character.setPosition(newPosition);
-      console.log(`[復元後の位置] x: ${newPosition.x.toFixed(2)}, y: ${newPosition.y.toFixed(2)}, z: ${newPosition.z.toFixed(2)}`);
 
       // ダッシュ慣性で移動
       const momentumDirection = this.dashMomentumDirection.clone();
       const scaledDirection = momentumDirection.scale(this.dashMomentumSpeed);
-      console.log(`[ジャンプ中の慣性移動] 方向: (${scaledDirection.x.toFixed(2)}, ${scaledDirection.y.toFixed(2)}, ${scaledDirection.z.toFixed(2)})`);
       this.character.move(scaledDirection, deltaTime);
 
       const finalPos = this.character.getPosition();
-      console.log(`[最終位置] x: ${finalPos.x.toFixed(2)}, y: ${finalPos.y.toFixed(2)}, z: ${finalPos.z.toFixed(2)}`);
 
       // 慣性移動後のX/Z座標だけを基準位置として更新（Y座標はジャンプ開始時のまま）
       const updatedBasePos = new Vector3(finalPos.x, this.jumpStartY, finalPos.z);
       this.character.updateMotionBasePosition(updatedBasePos);
-      console.log(`[基準位置更新] x: ${updatedBasePos.x.toFixed(2)}, y: ${updatedBasePos.y.toFixed(2)}, z: ${updatedBasePos.z.toFixed(2)}`);
 
       this.handleRotation(deltaTime);
       return;
@@ -573,8 +585,8 @@ export class InputController {
     // ダッシュ中以外はモーションマネージャーの更新（モーション終了検知と位置更新）
     this.motionManager.update();
 
-    // 着地硬直中・ダッシュ停止中は移動不可
-    if (!isLanding && !isDashStopping) {
+    // 着地硬直中・ダッシュ停止中・アクション実行中は移動不可
+    if (!isLanding && !isDashStopping && !isActionInProgress) {
       // 移動方向を計算
       const moveDirection = this.calculateMoveDirection();
 

@@ -107,8 +107,6 @@ export class Field {
     // ラインの色（白色）
     circle.color = Color3.FromHexString(FIELD_CONFIG.centerCircleColor);
 
-    console.log(`[Field] センターサークルを作成: 半径=${radius}m`);
-
     return circle;
   }
 
@@ -181,8 +179,6 @@ export class Field {
     // ネット
     const rimCenter = rim.position.clone();
     const net = new Net(this.scene, rimCenter, goalNumber === 1 ? "goal1" : "goal2");
-
-    console.log(`[Field] ゴール${goalNumber}を作成: バックボード Z=${zPosition}, リム Z=${rim.position.z}`);
 
     return { backboard, rim, net };
   }

@@ -13,8 +13,6 @@ export class ModelLoader {
    */
   public static async loadGLTF(scene: Scene, modelPath: string): Promise<AbstractMesh> {
     try {
-      console.log(`[ModelLoader] モデルをロード中: ${modelPath}`);
-
       // パスをファイル名とディレクトリに分割
       const lastSlashIndex = modelPath.lastIndexOf("/");
       const rootUrl = modelPath.substring(0, lastSlashIndex + 1);
@@ -27,9 +25,6 @@ export class ModelLoader {
         fileName,
         scene
       );
-
-      console.log(`[ModelLoader] モデルのロードに成功: ${modelPath}`);
-      console.log(`[ModelLoader] メッシュ数: ${result.meshes.length}`);
 
       // ルートメッシュ（最初のメッシュ）を返す
       if (result.meshes.length === 0) {

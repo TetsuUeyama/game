@@ -52,6 +52,16 @@ export class CharacterAI {
     if (this.shootCooldown > 0) {
       this.shootCooldown -= deltaTime;
     }
+
+    // アクション実行中（シュート等）は移動処理をスキップ
+    const actionController = this.character.getActionController();
+    const currentAction = actionController.getCurrentAction();
+    const currentPhase = actionController.getCurrentPhase();
+    if (currentAction !== null || currentPhase !== 'idle') {
+      // アクション中は待機モーションも再生しない（アクションモーションが再生中）
+      return;
+    }
+
     // ゴールキーパーの場合、ゴール前半径5m以内に位置を制限
     if (this.character.playerPosition === 'GK') {
       this.constrainGoalkeeperPosition();
@@ -183,10 +193,6 @@ export class CharacterAI {
 
     // ShootingUtilsを使用してレンジ判定
     if (!ShootingUtils.isInShootRange(distanceToGoal)) {
-      // デバッグ: 定期的にレンジ情報をログ出力
-      if (Math.random() < 0.005) {
-        console.log(`[CharacterAI DEBUG] ${this.character.playerData?.basic?.NAME || 'Unknown'}: 距離=${distanceToGoal.toFixed(2)}m - レンジ外`);
-      }
       return false;
     }
 
@@ -197,9 +203,6 @@ export class CharacterAI {
     // 向きを変えた後、正式にチェック
     const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
 
-    // デバッグ: レンジ内の場合はログ出力
-    console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'}: シュートレンジ内 距離=${distanceToGoal.toFixed(2)}m, タイプ=${rangeInfo.shootType}, inRange=${rangeInfo.inRange}, facingGoal=${rangeInfo.facingGoal}`);
-
     if (!rangeInfo.inRange || !rangeInfo.facingGoal) {
       return false;
     }
@@ -209,33 +212,19 @@ export class CharacterAI {
 
     switch (rangeInfo.shootType) {
       case '3pt':
-        // 3Pシュート：レンジ内で向いていればシュート
-        shouldShoot = true;
-        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} が3Pシュートレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
-        break;
       case 'midrange':
-        // ミドルレンジシュート：レンジ内で向いていればシュート
-        shouldShoot = true;
-        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} がミドルレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
-        break;
       case 'layup':
-        // レイアップ：レンジ内で向いていればシュート
         shouldShoot = true;
-        console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME || 'Unknown'} がレイアップレンジに入りました (距離: ${rangeInfo.distance.toFixed(2)}m)`);
         break;
     }
 
     if (shouldShoot) {
-      // シュート実行
-      const result = this.shootingController.performShoot(this.character);
+      // シュート実行（ActionController経由でアニメーション付き）
+      const result = this.shootingController.startShootAction(this.character);
       if (result.success) {
-        console.log(`[CharacterAI] ${result.message}`);
         // SHOOT_COOLDOWN.AFTER_SHOTを使用してクールダウンを設定
         this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
         return true;
-      } else {
-        // 失敗原因をログ出力
-        console.log(`[CharacterAI] シュート失敗: ${result.message}`);
       }
     }
 

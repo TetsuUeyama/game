@@ -2,6 +2,7 @@ import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMe
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
+import { ActionController } from "../controllers/ActionController";
 import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
@@ -81,6 +82,9 @@ export class Character {
 
   // モーションコントローラー
   private motionController: MotionController;
+
+  // アクションコントローラー
+  private actionController: ActionController;
 
   // 選手データ
   public playerData: PlayerData | null = null;
@@ -244,6 +248,9 @@ export class Character {
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
+
+    // アクションコントローラーを初期化
+    this.actionController = new ActionController(this);
   }
 
   /**
@@ -463,6 +470,9 @@ export class Character {
     // モーションコントローラーを更新
     this.motionController.update(deltaTime);
 
+    // アクションコントローラーを更新
+    this.actionController.update(deltaTime);
+
     // 方向サークルを更新
     this.directionCircle.update();
   }
@@ -574,6 +584,13 @@ export class Character {
   }
 
   /**
+   * アクションコントローラーを取得
+   */
+  public getActionController(): ActionController {
+    return this.actionController;
+  }
+
+  /**
    * キャラクターの色を変更
    * @param r 赤 (0.0 - 1.0)
    * @param g 緑 (0.0 - 1.0)
@@ -653,6 +670,55 @@ export class Character {
 
     // ワールド座標系での手のひらの先端位置を返す
     return handWorldPosition.add(handTipOffset);
+  }
+
+  /**
+   * 左手のひらの先端位置を取得（ワールド座標）
+   */
+  public getLeftHandPosition(): Vector3 {
+    // 左手のひらのワールド座標を取得
+    const handWorldPosition = this.leftHandMesh.getAbsolutePosition();
+
+    // 手のひらの半径分下に移動（手のひらの先端）
+    const handRadius = 0.07;
+    const handTipOffset = new Vector3(0, -handRadius, 0);
+
+    // ワールド座標系での手のひらの先端位置を返す
+    return handWorldPosition.add(handTipOffset);
+  }
+
+  /**
+   * 両手の中間位置を取得（ブロック判定用）
+   */
+  public getHandsCenterPosition(): Vector3 {
+    const rightHand = this.getRightHandPosition();
+    const leftHand = this.getLeftHandPosition();
+
+    return new Vector3(
+      (rightHand.x + leftHand.x) / 2,
+      (rightHand.y + leftHand.y) / 2,
+      (rightHand.z + leftHand.z) / 2
+    );
+  }
+
+  /**
+   * 手を上げた状態での手の位置を取得（ジャンプなし）
+   * シュートブロックのヒットボックス用
+   */
+  public getBlockingHandPosition(): Vector3 {
+    const pos = this.getPosition();
+    const height = this.config.physical.height;
+    const rotation = this.getRotation();
+
+    // 手を上げた状態の高さ（身長 + 0.3m）
+    const handHeight = height + 0.3;
+
+    // 前方0.3mにオフセット
+    const forwardOffset = 0.3;
+    const handX = pos.x + Math.sin(rotation) * forwardOffset;
+    const handZ = pos.z + Math.cos(rotation) * forwardOffset;
+
+    return new Vector3(handX, pos.y + handHeight * 0.5, handZ);
   }
 
   /**
@@ -877,10 +943,6 @@ export class Character {
       // キャラクターの位置を更新（新しいgroundYに合わせる）
       // 現在のXZ座標を保持し、Y座標だけを新しいgroundYに更新
       this.setPosition(new Vector3(this.position.x, this.groundY, this.position.z));
-
-      console.log(`[Character] 身長を${heightInMeters}mに変更しました（スケール: ${scale}、新しいY座標: ${this.groundY}）`);
-    } else {
-      console.warn(`[Character] ルートメッシュが存在しないため、身長の変更をスキップしました`);
     }
   }
 
@@ -962,8 +1024,6 @@ export class Character {
 
     // 名前ラベルを作成
     this.createNameLabel();
-
-    console.log(`[Character] 選手データを設定: ${playerData.basic.NAME} (${position})`);
   }
 
   /**
@@ -1068,7 +1128,6 @@ export class Character {
 
     // ボール保持位置を変更
     this.setBallHoldingPositionIndex(targetIndex);
-    console.log(`[Character] ボールを面${targetFace}に移動しました`);
     return true;
   }
 
@@ -1082,8 +1141,6 @@ export class Character {
     // 戦術に応じて使用する面を設定
     const faces = OFFENSE_STRATEGY_FACES[strategy];
     this.setBallHoldingFaces(faces);
-
-    console.log(`[Character] オフェンス戦術を${strategy}に設定（使用面: ${faces.join(', ')}）`);
   }
 
   /**
@@ -1162,11 +1219,6 @@ export class Character {
 
     // DribbleUtilsを使用して突破可能かチェック
     if (!DribbleUtils.canStartBreakthrough(currentFace, this.isDribbleBreakthrough)) {
-      if (currentFace !== 0) {
-        console.log(`[Character] ドリブル突破不可：ボール位置が0番面ではありません（現在: ${currentFace}）`);
-      } else {
-        console.log('[Character] ドリブル突破不可：既に突破中です');
-      }
       return false;
     }
 
@@ -1182,7 +1234,6 @@ export class Character {
     this.isDribbleBreakthrough = true;
     this.breakthroughStartTime = Date.now();
 
-    console.log(`[Character] ドリブル突破開始！方向: ${direction}, 角度: ${(breakthroughAngle * 180 / Math.PI).toFixed(1)}度`);
     return true;
   }
 
@@ -1208,7 +1259,6 @@ export class Character {
   public endDribbleBreakthrough(): void {
     this.isDribbleBreakthrough = false;
     this.breakthroughDirection = null;
-    console.log('[Character] ドリブル突破終了');
   }
 
   /**
@@ -1286,10 +1336,6 @@ export class Character {
 
     const selfPush = pushDirection.scale(-selfPushAmount); // 自分は相手の反対方向に押される
     const otherPush = pushDirection.scale(otherPushAmount); // 相手は押し返される
-
-    console.log(`[Character] 押し返し計算: myPower=${myPower}, otherPower=${otherPower}, diff=${powerDiff}`);
-    console.log(`[Character] 現在距離=${currentDistance.toFixed(2)}m, 最小距離=${minDistance.toFixed(2)}m, 重なり=${overlap.toFixed(2)}m`);
-    console.log(`[Character] 押し返し結果: self=${selfPushAmount.toFixed(2)}m, other=${otherPushAmount.toFixed(2)}m`);
 
     return { selfPush, otherPush };
   }

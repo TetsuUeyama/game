@@ -24,6 +24,15 @@ const HEAD_RADIUS = 0.15; // 頭の半径（m）
 const HAND_REACH_HEIGHT = 0.3; // 手を伸ばせる高さ（身長からの追加高さ）
 
 /**
+ * ブロック判定結果
+ */
+export interface BlockResult {
+  blocked: boolean;
+  blocker: Character | null;
+  deflected: boolean;  // 軽く触れて軌道がずれた場合
+}
+
+/**
  * 衝突判定コントローラー
  * ボールとキャラクター、キャラクター同士の接触を検出し、重ならないように押し戻す
  */
@@ -97,7 +106,6 @@ export class CollisionHandler {
 
       // ボールを保持させる
       this.ball.setHolder(character);
-      console.log(`[CollisionHandler] Ball picked up by character (height: ${ballHeight.toFixed(2)}m)`);
     }
   }
 
@@ -127,8 +135,6 @@ export class CollisionHandler {
       const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, HEAD_RADIUS);
 
       if (headCollision.isColliding) {
-        console.log(`[CollisionHandler] ボールがディフェンダーの頭に接触！ブロック発生`);
-
         // 飛行を終了してボールを落とす
         this.ball.endFlight();
 
@@ -153,15 +159,119 @@ export class CollisionHandler {
         const bodyCollision = getCircleCollisionInfo(ballPosition, ballRadius, characterPosition, bodyRadius);
 
         if (bodyCollision.isColliding) {
-          console.log(`[CollisionHandler] ボールがディフェンダーの胴体に接触！ブロック発生`);
-
           // 飛行を終了してボールを落とす
           this.ball.endFlight();
 
           return;
         }
       }
+
+      // 手の判定（ActionControllerでblock_shotがアクティブな場合）
+      const actionController = character.getActionController();
+      if (actionController) {
+        const hitbox = actionController.getActiveHitbox();
+        if (hitbox && actionController.isActionActive('block_shot')) {
+          const handCollision = getSphereCollisionInfo(
+            ballPosition,
+            ballRadius,
+            hitbox.worldPosition,
+            hitbox.config.radius
+          );
+
+          if (handCollision.isColliding) {
+            // 接触の強さを計算（重なり量から）
+            const impactStrength = handCollision.overlap / (ballRadius + hitbox.config.radius);
+
+            if (impactStrength > 0.5) {
+              // しっかり触れた場合：ボールを弾く
+              this.ball.endFlight();
+
+              // ボールを逆方向に弾く
+              const deflectDirection = handCollision.direction.scale(-1);
+              const deflectVelocity = deflectDirection.scale(3); // 弾く速度
+              this.ball.setVelocity(deflectVelocity);
+            } else {
+              // 軽く触れた場合：軌道をずらす
+              const currentVelocity = this.ball.getVelocity();
+              const deflection = handCollision.direction.scale(-currentVelocity.length() * 0.3);
+              const newVelocity = currentVelocity.add(deflection);
+              this.ball.setVelocity(newVelocity);
+            }
+
+            return;
+          }
+        }
+      }
     }
+  }
+
+  /**
+   * ディフェンダーの手によるシュートブロック判定
+   * ActionControllerと連携してアクティブな block_shot アクションを検出
+   * @returns ブロック結果
+   */
+  public checkHandBlock(): BlockResult {
+    const result: BlockResult = {
+      blocked: false,
+      blocker: null,
+      deflected: false,
+    };
+
+    if (!this.ball.isInFlight()) {
+      return result;
+    }
+
+    const ballPosition = this.ball.getPosition();
+    const ballRadius = this.ball.getRadius();
+
+    for (const character of this.allCharacters) {
+      const state = character.getState();
+
+      // ディフェンダーのみブロック判定
+      if (state !== CharacterState.ON_BALL_DEFENDER && state !== CharacterState.OFF_BALL_DEFENDER) {
+        continue;
+      }
+
+      const actionController = character.getActionController();
+      if (!actionController) {
+        continue;
+      }
+
+      // block_shotアクションがアクティブかチェック
+      if (!actionController.isActionActive('block_shot')) {
+        continue;
+      }
+
+      const hitbox = actionController.getActiveHitbox();
+      if (!hitbox) {
+        continue;
+      }
+
+      // 手とボールの衝突判定
+      const handCollision = getSphereCollisionInfo(
+        ballPosition,
+        ballRadius,
+        hitbox.worldPosition,
+        hitbox.config.radius
+      );
+
+      if (handCollision.isColliding) {
+        result.blocker = character;
+
+        // 接触の強さで結果を分ける
+        const impactStrength = handCollision.overlap / (ballRadius + hitbox.config.radius);
+
+        if (impactStrength > 0.5) {
+          result.blocked = true;
+        } else {
+          result.deflected = true;
+        }
+
+        return result;
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -193,12 +303,6 @@ export class CollisionHandler {
 
     character1.setPosition(resolution.newPos1);
     character2.setPosition(resolution.newPos2);
-
-    // デバッグログ（重なり発生時のみ出力）
-    if (collisionInfo.overlap > 0.1) {
-      const powerDiff = power1 - power2;
-      console.log(`[CollisionHandler] 押し合い: ${character1.playerData?.basic?.NAME || 'char1'}(power=${power1}) vs ${character2.playerData?.basic?.NAME || 'char2'}(power=${power2}), 差=${powerDiff}`);
-    }
   }
 
   /**

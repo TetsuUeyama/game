@@ -144,6 +144,12 @@ export class MotionManager {
    * loop: falseのモーションが終了したら自動的にデフォルトモーションに戻る
    */
   public update(): void {
+    // アクション実行中はデフォルトモーションへの復帰をスキップ
+    const actionController = this.character.getActionController();
+    if (actionController && actionController.getCurrentAction() !== null) {
+      return;
+    }
+
     // モーションが終了していて、デフォルトモーションが設定されている場合
     if (!this.character.isPlayingMotion()) {
       const currentMotionName = this.getCurrentMotionName();

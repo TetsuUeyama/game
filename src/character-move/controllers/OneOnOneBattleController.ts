@@ -43,8 +43,7 @@ export class OneOnOneBattleController {
 
     // 1on1状態に突入した瞬間（false → true）
     if (!this.was1on1 && is1on1Now) {
-      console.log('[OneOnOneBattleController] 1on1バトル開始！');
-      this.in1on1Battle = true;
+            this.in1on1Battle = true;
 
       // 開始直後に即座にサイコロを振って移動開始
       this.perform1on1Battle();
@@ -53,8 +52,7 @@ export class OneOnOneBattleController {
 
     // 1on1状態から抜けた瞬間（true → false）
     if (this.was1on1 && !is1on1Now) {
-      console.log('[OneOnOneBattleController] 1on1バトル終了');
-      this.in1on1Battle = false;
+            this.in1on1Battle = false;
 
       // AI移動をクリア
       const allCharacters = this.getAllCharacters();
@@ -135,18 +133,14 @@ export class OneOnOneBattleController {
 
         if (isFeint) {
           // フェイント発動：オフェンスは動かないが、ディフェンスはフェイント方向に釣られる
-          console.log(`[OneOnOneBattleController] 動き直しでフェイント発動！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
           onBallPlayer.clearAIMovement(); // オフェンスは動かない
 
           // ディフェンスはフェイント方向に釣られて動く（動き直しなのでquicknessを使用）
           this.setDefenderFeintReaction(onBallDefender, newDirection, moveSpeed, true);
         } else {
-          console.log(`[OneOnOneBattleController] 動き直し発生！(衝突=${offenseCollided}, 接触=${circlesInContact})`);
-
           // DribbleUtilsを使用してオフェンス側の動き直し遅延時間を計算
           const offensePlayerData = onBallPlayer.playerData;
           const offenseDelayMs = DribbleUtils.calculateQuicknessDelay(offensePlayerData?.stats.quickness);
-          console.log(`[OneOnOneBattleController] オフェンス動き直し遅延: ${offenseDelayMs}ms (quickness=${offensePlayerData?.stats.quickness ?? 'undefined'})`);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
 
@@ -203,7 +197,6 @@ export class OneOnOneBattleController {
       const success = onBallPlayer.startDribbleBreakthrough(direction);
       if (success) {
         onBallPlayer.clearAIMovement();
-        console.log(`[OneOnOneBattleController] AIがドリブル突破を選択: ${direction}方向`);
         return; // 突破を開始したので通常処理をスキップ
       }
     }
@@ -224,21 +217,17 @@ export class OneOnOneBattleController {
     // DribbleUtilsを使用してオフェンス速度を計算
     const offensePlayerData = onBallPlayer.playerData;
     const moveSpeed = DribbleUtils.calculateDribblingSpeed(offensePlayerData?.stats.dribblingspeed);
-    console.log(`[OneOnOneBattleController] オフェンス速度: ${moveSpeed.toFixed(2)} (dribblingspeed=${offensePlayerData?.stats.dribblingspeed ?? 'undefined'})`);
-
 
     // フェイント判定
     const isFeint = this.checkFeint(onBallPlayer);
 
     if (shouldTurnToGoal) {
       // ゴール方向を向く
-      console.log('[OneOnOneBattleController] オフェンスがゴール方向を向く行動を選択');
       this.turnTowardsGoal(onBallPlayer);
       onBallPlayer.clearAIMovement();
       this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
     } else if (isFeint) {
       // フェイント発動
-      console.log('[OneOnOneBattleController] フェイント発動！オフェンスは動かずにディフェンスを釣る');
       onBallPlayer.clearAIMovement();
       this.setDefenderFeintReaction(onBallDefender, randomDirection, moveSpeed);
     } else {
@@ -247,16 +236,11 @@ export class OneOnOneBattleController {
       this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
     }
 
-    console.log(`[OneOnOneBattleController] サイコロ結果: オフェンス=${offenseDice}, ディフェンス=${defenseDice}, フェイント=${isFeint}`);
-
     if (offenseDice > defenseDice) {
-      console.log('[OneOnOneBattleController] オフェンス勝利！');
       this.oneononeResult = { winner: 'offense', offenseDice, defenseDice };
     } else if (defenseDice > offenseDice) {
-      console.log('[OneOnOneBattleController] ディフェンス勝利！');
       this.oneononeResult = { winner: 'defense', offenseDice, defenseDice };
     } else {
-      console.log('[OneOnOneBattleController] 引き分け！');
       this.oneononeResult = null;
     }
   }
@@ -324,15 +308,11 @@ export class OneOnOneBattleController {
 
     if (isRedirect) {
       reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
-      console.log(`[OneOnOneBattleController] ディフェンダー動き直し遅延: ${reactionDelayMs}ms (quickness=${defenderPlayerData?.stats.quickness ?? 'undefined'})`);
     } else {
       reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
-      console.log(`[OneOnOneBattleController] ディフェンダー反応遅延: ${reactionDelayMs}ms (reflexes=${defenderPlayerData?.stats.reflexes ?? 'undefined'})`);
     }
 
     defender.setAIMovement(normalizedDirection, speed, reactionDelayMs);
-
-    console.log(`[OneOnOneBattleController] ディフェンダー目標位置: (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)}), 距離=${distanceToTarget.toFixed(2)}m`);
   }
 
   /**
@@ -350,17 +330,13 @@ export class OneOnOneBattleController {
 
     if (isRedirect) {
       reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
-      console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (quickness=${defenderPlayerData?.stats.quickness ?? 'undefined'})`);
     } else {
       reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
-      console.log(`[OneOnOneBattleController] フェイント釣られ遅延: ${reactionDelayMs}ms (reflexes=${defenderPlayerData?.stats.reflexes ?? 'undefined'})`);
     }
 
     const moveDirection = feintDirection.clone().normalize();
     const feintSpeed = speed * DRIBBLE_CONFIG.FEINT_SPEED_MULTIPLIER;
     defender.setAIMovement(moveDirection, feintSpeed, reactionDelayMs);
-
-    console.log(`[OneOnOneBattleController] ディフェンダーがフェイントに釣られる！方向=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}), 速度=${feintSpeed}`);
   }
 
   /**
@@ -388,7 +364,6 @@ export class OneOnOneBattleController {
   private turnTowardsGoal(offensePlayer: Character): void {
     const goalPosition = this.getTargetGoalPosition(offensePlayer);
     offensePlayer.lookAt(goalPosition);
-    console.log(`[OneOnOneBattleController] オフェンスがゴール方向（Z=${goalPosition.z}）を向いた`);
   }
 
   /**
@@ -398,8 +373,6 @@ export class OneOnOneBattleController {
     const playerData = offensePlayer.playerData;
     // DribbleUtilsを使用してフェイント確率を計算
     const feintChance = DribbleUtils.calculateFeintChance(playerData?.stats.technique);
-    console.log(`[OneOnOneBattleController] フェイント確率: ${(feintChance * 100).toFixed(1)}% (technique=${playerData?.stats.technique ?? 'undefined'})`);
-
     const roll = Math.random();
     return roll < feintChance;
   }
@@ -431,11 +404,6 @@ export class OneOnOneBattleController {
       // DefenseUtilsを使用して1on1状態を判定
       const defenderRadius = onBallDefender.getFootCircleRadius();
       const is1on1 = DefenseUtils.is1on1State(distance, DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS, defenderRadius);
-      const minDistance = DefenseUtils.calculateContactDistance(DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS, defenderRadius);
-
-      if (Date.now() % 1000 < 100) {
-        console.log(`[OneOnOneBattleController] 1on1チェック: 距離=${distance.toFixed(2)}m, 最小距離=${minDistance.toFixed(2)}m, 1on1=${is1on1}`);
-      }
 
       return is1on1;
     }
@@ -517,7 +485,6 @@ export class OneOnOneBattleController {
     const onBallPlayer = this.findOnBallPlayer();
 
     if (!onBallPlayer) {
-      console.log('[OneOnOneBattleController] ドリブル突破不可：オンボールプレイヤーがいません');
       return false;
     }
 
@@ -525,7 +492,6 @@ export class OneOnOneBattleController {
 
     if (success) {
       onBallPlayer.clearAIMovement();
-      console.log(`[OneOnOneBattleController] ドリブル突破開始: ${direction}方向`);
     }
 
     return success;
@@ -567,8 +533,6 @@ export class OneOnOneBattleController {
           const minDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
 
           if (distance < minDistance) {
-            console.log('[OneOnOneBattleController] ドリブル突破後の衝突発生！押し返し計算を実行');
-
             const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);
 
             const newOffensePos = offensePos.add(selfPush);
@@ -576,10 +540,6 @@ export class OneOnOneBattleController {
 
             onBallPlayer.setPosition(newOffensePos);
             onBallDefender.setPosition(newDefenderPos);
-
-            console.log(`[OneOnOneBattleController] 押し返し適用: オフェンス移動(${selfPush.x.toFixed(2)}, ${selfPush.z.toFixed(2)}), ディフェンス移動(${otherPush.x.toFixed(2)}, ${otherPush.z.toFixed(2)})`);
-          } else {
-            console.log('[OneOnOneBattleController] ドリブル突破成功！衝突なし');
           }
         }
 
