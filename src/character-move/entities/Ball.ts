@@ -322,6 +322,50 @@ export class Ball {
   }
 
   /**
+   * パスを実行
+   * @param targetPosition パス先の位置
+   * @param targetCharacter パス先のキャラクター（オプション）
+   * @returns パスが成功したかどうか
+   */
+  public pass(targetPosition: Vector3, targetCharacter?: Character): boolean {
+    // 保持者がいない場合はパスできない
+    if (!this.holder) {
+      return false;
+    }
+
+    // 飛行中はパスできない
+    if (this.inFlight) {
+      return false;
+    }
+
+    const previousHolder = this.holder;
+
+    // ボールの開始位置（パスする人の位置）
+    const startPosition = this.mesh.position.clone();
+
+    // 保持を解除
+    this.holder = null;
+
+    // パスは低い角度で直線的に投げる（約15度）
+    const passAngle = Math.PI / 12; // 15度
+
+    // 初速度を計算
+    this.velocity = this.calculateInitialVelocity(startPosition, targetPosition, passAngle);
+
+    // 飛行開始
+    this.inFlight = true;
+    this.flightTime = 0;
+
+    // パスした人がすぐにキャッチしないようにクールダウン設定
+    this.lastShooter = previousHolder;
+    this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME * 0.5; // パスは短めのクールダウン
+
+    console.log(`[Ball] パス実行: ${previousHolder.team} -> ${targetCharacter?.team ?? 'unknown'}`);
+
+    return true;
+  }
+
+  /**
    * 現在の速度を取得
    */
   public getVelocity(): Vector3 {
