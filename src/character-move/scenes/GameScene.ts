@@ -760,6 +760,80 @@ export class GameScene {
   }
 
   /**
+   * パスを実行（ActionController経由）
+   * @param passer パスを出すキャラクター
+   * @param passType パスの種類
+   * @returns 成功/失敗
+   */
+  public performPass(
+    passer: Character,
+    passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest'
+  ): { success: boolean; message: string } {
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== passer) {
+      return { success: false, message: 'ボールを持っていません' };
+    }
+
+    // ActionControllerでパスアクションを開始
+    const actionController = passer.getActionController();
+    const actionResult = actionController.startAction(passType);
+
+    if (!actionResult.success) {
+      return { success: false, message: actionResult.message };
+    }
+
+    // activeフェーズに入ったらボールを投げるコールバックを設定
+    actionController.setCallbacks({
+      onActive: (action) => {
+        if (action.startsWith('pass_')) {
+          // パス先のキャラクターを探す（チームメイト）
+          const teammates = passer.team === 'ally' ? this.allyCharacters : this.enemyCharacters;
+          const passTarget = teammates.find(c => c !== passer);
+
+          if (passTarget) {
+            // ボールをパス（実際のパス処理）
+            const targetPosition = passTarget.getPosition();
+            this.ball.pass(targetPosition, passTarget);
+            console.log(`[GameScene] ${passType}をパス！`);
+          }
+        }
+      },
+    });
+
+    return { success: true, message: `${passType}開始` };
+  }
+
+  /**
+   * ディフェンスアクションを実行（ActionController経由）
+   * @param defender ディフェンスするキャラクター
+   * @param actionType ディフェンスアクションの種類
+   * @returns 成功/失敗
+   */
+  public performDefenseAction(
+    defender: Character,
+    actionType: 'block_shot' | 'steal_attempt' | 'pass_intercept' | 'defense_stance'
+  ): { success: boolean; message: string } {
+    // ActionControllerでディフェンスアクションを開始
+    const actionController = defender.getActionController();
+    const actionResult = actionController.startAction(actionType);
+
+    if (!actionResult.success) {
+      return { success: false, message: actionResult.message };
+    }
+
+    // activeフェーズに入ったらディフェンス判定を行うコールバックを設定
+    actionController.setCallbacks({
+      onActive: (action) => {
+        console.log(`[GameScene] ${action}のアクティブフェーズ`);
+        // ここでブロック判定やスティール判定を行う
+        // 実際の判定処理は後で追加
+      },
+    });
+
+    return { success: true, message: `${actionType}開始` };
+  }
+
+  /**
    * ボールがコート外に出たか判定
    * ボールが保持されている場合も判定する（プレイヤーがボールを持ったままコート外に出た場合）
    * @returns コート外に出た場合true

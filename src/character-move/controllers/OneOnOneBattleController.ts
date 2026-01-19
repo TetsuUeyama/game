@@ -189,14 +189,13 @@ export class OneOnOneBattleController {
       return;
     }
 
-    // ボールが0番面の時、ランダムでドリブル突破を実行
+    // ボールが0番面の時、ランダムでドリブル突破を実行（ActionController経由）
     const currentFace = onBallPlayer.getCurrentBallFace();
     if (currentFace === 0 && DribbleUtils.shouldAIAttemptBreakthrough()) {
       // 左右ランダムで突破方向を決定
       const direction = Math.random() < 0.5 ? 'left' : 'right';
-      const success = onBallPlayer.startDribbleBreakthrough(direction);
+      const success = this.performDribbleBreakthrough(direction);
       if (success) {
-        onBallPlayer.clearAIMovement();
         return; // 突破を開始したので通常処理をスキップ
       }
     }
@@ -479,7 +478,7 @@ export class OneOnOneBattleController {
   }
 
   /**
-   * ドリブル突破を実行
+   * ドリブル突破を実行（ActionController経由）
    */
   public performDribbleBreakthrough(direction: 'left' | 'right'): boolean {
     const onBallPlayer = this.findOnBallPlayer();
@@ -488,13 +487,32 @@ export class OneOnOneBattleController {
       return false;
     }
 
-    const success = onBallPlayer.startDribbleBreakthrough(direction);
+    // ActionControllerでドリブル突破アクションを開始
+    const actionController = onBallPlayer.getActionController();
+    const actionResult = actionController.startAction('dribble_breakthrough');
 
-    if (success) {
-      onBallPlayer.clearAIMovement();
+    if (!actionResult.success) {
+      console.log(`[OneOnOneBattleController] ドリブル突破開始失敗: ${actionResult.message}`);
+      return false;
     }
 
-    return success;
+    // activeフェーズに入ったら実際のドリブル突破移動を開始するコールバックを設定
+    actionController.setCallbacks({
+      onActive: (action) => {
+        if (action === 'dribble_breakthrough') {
+          // 実際のドリブル突破移動を開始
+          const success = onBallPlayer.startDribbleBreakthrough(direction);
+          if (success) {
+            onBallPlayer.clearAIMovement();
+          }
+        }
+      },
+      onComplete: (_action) => {
+        // ドリブル突破完了
+      },
+    });
+
+    return true;
   }
 
   /**

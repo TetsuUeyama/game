@@ -3,6 +3,7 @@ import { MotionData } from "../types/MotionTypes";
 import { SHOOT_MOTIONS } from "../data/ShootMotion";
 import { PASS_MOTIONS } from "../data/PassMotion";
 import { DEFENSE_MOTIONS } from "../data/DefenseMotion";
+import { DRIBBLE_MOTIONS } from "../data/DribbleMotion";
 
 /**
  * アクションカテゴリ
@@ -369,6 +370,6 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
   pass_intercept: DEFENSE_MOTIONS.pass_intercept,
   defense_stance: DEFENSE_MOTIONS.defense_stance,
 
-  // ドリブル突破は別途モーション実装が必要
-  // dribble_breakthrough: undefined,
+  // ドリブル突破モーション
+  dribble_breakthrough: DRIBBLE_MOTIONS.dribble_breakthrough,
 };
