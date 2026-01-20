@@ -48,6 +48,11 @@ export class Ball {
   private shooterCooldown: number = 0;
   private static readonly SHOOTER_COOLDOWN_TIME = 0.5; // 0.5秒間はシューターがキャッチ不可
 
+  // ブロック後のオフェンスチームクールダウン（ブロック後はオフェンス側がキャッチできない）
+  private blockedOffenseTeam: "ally" | "enemy" | null = null;
+  private blockCooldown: number = 0;
+  private static readonly BLOCK_COOLDOWN_TIME = 0.8; // 0.8秒間はオフェンス側がキャッチ不可
+
   // 最後にボールに触れた選手（アウトオブバウンズ判定用）
   private lastToucher: Character | null = null;
 
@@ -207,6 +212,7 @@ export class Ball {
     // シューターのクールダウンを設定（シュート直後にシューター自身がキャッチしないようにする）
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
+    console.log(`[Ball] shoot: シュータークールダウン設定 - lastShooter: ${previousHolder?.playerData?.basic?.NAME}, cooldown: ${this.shooterCooldown}s`);
 
     return true;
   }
@@ -393,7 +399,12 @@ export class Ball {
   public canBeCaughtBy(character: Character): boolean {
     // シューターのクールダウン中は、シューター自身はキャッチできない
     if (this.lastShooter === character && this.shooterCooldown > 0) {
+      console.log(`[Ball] canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (シュータークールダウン中: ${this.shooterCooldown.toFixed(2)}s)`);
       return false;
+    }
+    // デバッグ: lastShooterが設定されているか確認
+    if (this.lastShooter !== null) {
+      console.log(`[Ball] canBeCaughtBy: ${character.playerData?.basic?.NAME} -> true (lastShooter: ${this.lastShooter?.playerData?.basic?.NAME}, cooldown: ${this.shooterCooldown.toFixed(2)}s)`);
     }
     return true;
   }

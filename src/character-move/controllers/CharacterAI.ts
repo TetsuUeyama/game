@@ -9,6 +9,9 @@ import { DASH_FORWARD_MOTION } from "../data/DashMotion";
 import { ShootingController } from "./ShootingController";
 import { SHOOT_COOLDOWN, ShootingUtils } from "../config/ShootingConfig";
 import { DEFENSE_DISTANCE, DEFENSE_MOVEMENT, DefenseUtils } from "../config/DefenseConfig";
+import { ActionConfigUtils } from "../config/ActionConfig";
+import { FieldGridUtils } from "../config/FieldGridConfig";
+import { FIELD_CONFIG } from "../config/gameConfig";
 
 /**
  * キャラクターAIコントローラー
@@ -232,6 +235,74 @@ export class CharacterAI {
   }
 
   /**
+   * シュートブロックを試みる（物理判定ベース）
+   * ディフェンダーがジャンプして手を上げ、ボールに当たったらルーズボールになる
+   * シューターの方向に向かって斜めに飛び、ボールの軌道をブロックする
+   * @param shooter シュートを打っている（または打とうとしている）プレイヤー
+   * @returns ブロックアクションを開始した場合true
+   */
+  private tryBlockShot(shooter: Character): boolean {
+    // シューターのActionController状態を確認
+    const shooterActionController = shooter.getActionController();
+    const shooterAction = shooterActionController.getCurrentAction();
+    const shooterPhase = shooterActionController.getCurrentPhase();
+
+    // シューターがシュートアクション中かチェック（3pt、ミドルレンジのみ）
+    if (!shooterAction || !ActionConfigUtils.isShootAction(shooterAction)) {
+      return false;
+    }
+
+    // レイアップはブロックしない（近距離で素早いため）
+    if (shooterAction === 'shoot_layup') {
+      return false;
+    }
+
+    // startupまたはactiveフェーズでブロックを試みる
+    if (shooterPhase !== 'startup' && shooterPhase !== 'active') {
+      return false;
+    }
+
+    // 距離チェック：近くにいないとブロックできない（3m以内）
+    const myPosition = this.character.getPosition();
+    const shooterPosition = shooter.getPosition();
+    const distance = Vector3.Distance(myPosition, shooterPosition);
+    const blockRange = 3.0; // ブロック可能距離
+
+    if (distance > blockRange) {
+      return false;
+    }
+
+    // 50%の確率でブロックを試みる
+    const blockChance = 0.5;
+    if (Math.random() > blockChance) {
+      return false;
+    }
+
+    // シューターの方向に向きを変える（ボールの軌道に手を入れるため）
+    const toShooter = shooterPosition.subtract(myPosition);
+    toShooter.y = 0;
+    if (toShooter.length() > 0.01) {
+      const angle = Math.atan2(toShooter.x, toShooter.z);
+      this.character.setRotation(angle);
+    }
+
+    // ブロックアクションを開始
+    const actionController = this.character.getActionController();
+    const result = actionController.startAction('block_shot');
+
+    if (result.success) {
+      console.log(`[CharacterAI] ${this.character.team}のディフェンダーがシュートブロックを試みる！（物理判定）`);
+
+      // ブロックジャンプ情報を設定（シューターの方向に飛ぶ）
+      this.character.setBlockJumpTarget(shooter);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * オンボールプレイヤー状態の処理
    */
   private handleOnBallPlayerState(deltaTime: number): void {
@@ -307,8 +378,18 @@ export class CharacterAI {
           const combinedDirection = toGoal.scale(0.6).add(awayDirection.scale(0.4));
           combinedDirection.normalize();
 
+          // 境界チェック（オフェンスはフィールド外に出ない）
+          const boundaryAdjusted = this.adjustDirectionForBoundary(combinedDirection, deltaTime);
+          if (!boundaryAdjusted) {
+            // 境界に達したら停止
+            if (this.character.getCurrentMotionName() !== 'idle') {
+              this.character.playMotion(IDLE_MOTION);
+            }
+            return;
+          }
+
           // 衝突を考慮して移動
-          const adjustedDirection = this.adjustDirectionForCollision(combinedDirection, deltaTime);
+          const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
 
           if (adjustedDirection) {
             this.character.move(adjustedDirection, deltaTime);
@@ -330,8 +411,8 @@ export class CharacterAI {
     const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
     const goalPosition = attackingGoal.position;
 
-    // ゴールに向かって移動
-    this.moveTowards(goalPosition, deltaTime, 2.0); // ゴール2m手前で停止
+    // ゴールに向かって移動（境界チェック付き）
+    this.moveTowardsWithBoundary(goalPosition, deltaTime, 2.0); // ゴール2m手前で停止
   }
 
   /**
@@ -508,6 +589,11 @@ export class CharacterAI {
     const onBallPlayer = this.findOnBallPlayer();
     if (!onBallPlayer) {
       return;
+    }
+
+    // 相手がシュートを打とうとしているかチェックし、ブロックを試みる
+    if (this.tryBlockShot(onBallPlayer)) {
+      return; // ブロックアクション開始したので他の処理をスキップ
     }
 
     const myPosition = this.character.getPosition();
@@ -713,6 +799,71 @@ export class CharacterAI {
       }
     } else {
       // 近い場合は歩く
+      if (this.character.getCurrentMotionName() !== 'walk_forward') {
+        this.character.playMotion(WALK_FORWARD_MOTION);
+      }
+    }
+  }
+
+  /**
+   * 目標位置に向かって移動（境界チェック付き）
+   * オフェンス時に使用 - フィールド外に出ないように移動
+   */
+  private moveTowardsWithBoundary(targetPosition: Vector3, deltaTime: number, stopDistance: number = 0.3): void {
+    const myPosition = this.character.getPosition();
+
+    // 目標位置への方向ベクトルを計算（XZ平面上）
+    const direction = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    );
+
+    // 距離が十分近い場合は移動しない
+    const distance = direction.length();
+    if (distance < stopDistance) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 方向ベクトルを正規化
+    direction.normalize();
+
+    // 境界チェック（オフェンスはフィールド外に出ない）
+    const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+    if (!boundaryAdjusted) {
+      // 境界に達したら停止
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 衝突を考慮して移動方向を調整
+    const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+
+    if (!adjustedDirection) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 移動方向を向く
+    const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
+    this.character.setRotation(angle);
+
+    // 移動
+    this.character.move(adjustedDirection, deltaTime);
+
+    // 距離に応じたモーション再生
+    if (distance > 5.0) {
+      if (this.character.getCurrentMotionName() !== 'dash_forward') {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+    } else {
       if (this.character.getCurrentMotionName() !== 'walk_forward') {
         this.character.playMotion(WALK_FORWARD_MOTION);
       }
@@ -930,6 +1081,96 @@ export class CharacterAI {
     }
 
     // どの方向にも移動できない場合はnull
+    return null;
+  }
+
+  /**
+   * オフェンス時の境界チェック - フィールド外に出ないように移動方向を調整
+   * A列〜O列、1行目〜30行目の範囲内に留まる
+   * @param direction 移動方向
+   * @param deltaTime デルタタイム
+   * @returns 調整後の移動方向（移動不可の場合はnull）
+   */
+  private adjustDirectionForBoundary(direction: Vector3, _deltaTime: number): Vector3 | null {
+    const currentPosition = this.character.getPosition();
+
+    // フィールド境界
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const margin = 0.5; // 境界からのマージン（少し内側で止まる）
+
+    const minX = -halfWidth + margin;
+    const maxX = halfWidth - margin;
+    const minZ = -halfLength + margin;
+    const maxZ = halfLength - margin;
+
+    let adjustedX = direction.x;
+    let adjustedZ = direction.z;
+
+    // 現在位置が左端に近く、さらに左に行こうとしている場合
+    if (currentPosition.x <= minX && direction.x < 0) {
+      adjustedX = 0;
+    }
+    // 現在位置が右端に近く、さらに右に行こうとしている場合
+    if (currentPosition.x >= maxX && direction.x > 0) {
+      adjustedX = 0;
+    }
+    // 現在位置が手前端に近く、さらに手前に行こうとしている場合
+    if (currentPosition.z <= minZ && direction.z < 0) {
+      adjustedZ = 0;
+    }
+    // 現在位置が奥端に近く、さらに奥に行こうとしている場合
+    if (currentPosition.z >= maxZ && direction.z > 0) {
+      adjustedZ = 0;
+    }
+
+    // 両方止まったら移動不可
+    if (adjustedX === 0 && adjustedZ === 0) {
+      return null;
+    }
+
+    // 調整後の方向を正規化
+    const adjustedDirection = new Vector3(adjustedX, 0, adjustedZ);
+    if (adjustedDirection.length() > 0.01) {
+      adjustedDirection.normalize();
+      return adjustedDirection;
+    }
+
+    return null;
+  }
+
+  /**
+   * 現在位置がフィールド境界に近いかチェック
+   * @returns 境界に近い場合true
+   */
+  private isNearBoundary(): boolean {
+    const currentPosition = this.character.getPosition();
+    const halfWidth = FIELD_CONFIG.width / 2;
+    const halfLength = FIELD_CONFIG.length / 2;
+    const threshold = 1.0; // 境界から1m以内
+
+    return (
+      currentPosition.x < -halfWidth + threshold ||
+      currentPosition.x > halfWidth - threshold ||
+      currentPosition.z < -halfLength + threshold ||
+      currentPosition.z > halfLength - threshold
+    );
+  }
+
+  /**
+   * 現在位置の座標情報を取得（デバッグ用）
+   */
+  public getCurrentCellInfo(): { cell: string; block: string } | null {
+    const pos = this.character.getPosition();
+    const cell = FieldGridUtils.worldToCell(pos.x, pos.z);
+    const block = FieldGridUtils.worldToBlock(pos.x, pos.z);
+
+    if (cell && block) {
+      return {
+        cell: `${cell.col}${cell.row}`,
+        block: `${block.col}${block.row}`,
+      };
+    }
     return null;
   }
 

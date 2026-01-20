@@ -101,10 +101,12 @@ export class CollisionHandler {
     if (distanceXZ < BALL_CHARACTER_DISTANCE && distanceXZ > 0.001) {
       // シュート直後のシューター自身はキャッチできない
       if (!this.ball.canBeCaughtBy(character)) {
+        console.log(`[CollisionHandler] キャッチ拒否: ${character.playerData?.basic?.NAME} (クールダウン中)`);
         return;
       }
 
       // ボールを保持させる
+      console.log(`[CollisionHandler] キャッチ成功: ${character.playerData?.basic?.NAME}`);
       this.ball.setHolder(character);
     }
   }
@@ -182,18 +184,30 @@ export class CollisionHandler {
             // 接触の強さを計算（重なり量から）
             const impactStrength = handCollision.overlap / (ballRadius + hitbox.config.radius);
 
-            if (impactStrength > 0.5) {
-              // しっかり触れた場合：ボールを弾く
-              this.ball.endFlight();
+            if (impactStrength > 0.3) {
+              // しっかり触れた場合：ボールを弾いてルーズボールに
+              console.log(`[CollisionHandler] シュートブロック成功！ボールがルーズボールに！`);
 
-              // ボールを逆方向に弾く
+              // ボールを弾く方向を計算（手の位置からボールへの方向 + 上方向）
               const deflectDirection = handCollision.direction.scale(-1);
-              const deflectVelocity = deflectDirection.scale(3); // 弾く速度
+              deflectDirection.y = Math.abs(deflectDirection.y) + 0.5; // 上方向に弾く
+              deflectDirection.normalize();
+
+              // 弾く速度を設定
+              const deflectSpeed = 5.0; // 弾く速度
+              const deflectVelocity = deflectDirection.scale(deflectSpeed);
               this.ball.setVelocity(deflectVelocity);
+
+              // 飛行状態を維持（ルーズボールとして）
+              // ボールは誰も保持していない状態になり、全員がボールを追いかける
+
             } else {
               // 軽く触れた場合：軌道をずらす
+              console.log(`[CollisionHandler] ボールがディフェンダーの手に触れて軌道が変わった！`);
+
               const currentVelocity = this.ball.getVelocity();
-              const deflection = handCollision.direction.scale(-currentVelocity.length() * 0.3);
+              const deflection = handCollision.direction.scale(-currentVelocity.length() * 0.4);
+              deflection.y += 1.0; // 少し上方向にも
               const newVelocity = currentVelocity.add(deflection);
               this.ball.setVelocity(newVelocity);
             }

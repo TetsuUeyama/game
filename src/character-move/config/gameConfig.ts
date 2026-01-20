@@ -17,7 +17,7 @@ export const CHARACTER_CONFIG = {
 
 // フィールド設定（バスケットコートサイズ）
 export const FIELD_CONFIG = {
-  length: 28, // コートの長さ（m）- Z軸方向
+  length: 30, // コートの長さ（m）- Z軸方向（5×5大枠が6つ並ぶ）
   width: 15, // コートの幅（m）- X軸方向
   floorColor: '#8B4513', // 床の色（茶色 - バスケットコート）
   gridSize: 10, // グリッドのサイズ

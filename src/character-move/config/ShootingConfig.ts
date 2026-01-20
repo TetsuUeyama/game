@@ -34,12 +34,13 @@ export const SHOOT_ANGLE = {
 
 /**
  * シュート弾道設定（発射角度：度）
+ * ブロック可能な低めの弾道に設定
  */
 export const SHOOT_LAUNCH_ANGLE = {
-  THREE_POINT: 68,                  // 3Pシュート：68度（高い弾道）
-  MIDRANGE: 63,                     // ミドルレンジ：63度
-  LAYUP: 55,                        // レイアップ：55度（低め）
-  DEFAULT: 60,                      // デフォルト：60度
+  THREE_POINT: 52,                  // 3Pシュート：52度（ブロック可能な低弾道）
+  MIDRANGE: 48,                     // ミドルレンジ：48度（低めの弾道）
+  LAYUP: 45,                        // レイアップ：45度（低め）
+  DEFAULT: 50,                      // デフォルト：50度
 } as const;
 
 /**
