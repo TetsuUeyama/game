@@ -1,6 +1,6 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, LinesMesh } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
-import { CHARACTER_CONFIG } from "../config/gameConfig";
+import { CHARACTER_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
 import { ActionController } from "../controllers/ActionController";
 import { MotionData } from "../types/MotionTypes";
@@ -354,11 +354,14 @@ export class Character {
    */
   public setPosition(position: Vector3): void {
     // Y座標が地面より下にならないように制限
-    const clampedPosition = new Vector3(
+    let clampedPosition = new Vector3(
       position.x,
       Math.max(position.y, this.groundY),
       position.z
     );
+
+    // フィールド境界内にクランプ（A列〜O列、1行目〜30行目）
+    clampedPosition = this.clampToFieldBoundary(clampedPosition);
 
     // モーションオフセットを加算してメッシュ位置を設定
     this.mesh.position = new Vector3(
@@ -367,6 +370,28 @@ export class Character {
       clampedPosition.z
     );
     this.position = clampedPosition;
+  }
+
+  /**
+   * 位置をフィールド境界内にクランプ
+   * コート外に出ないように制約する（A列〜O列、1行目〜30行目）
+   */
+  private clampToFieldBoundary(position: Vector3): Vector3 {
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const margin = 0.3; // 境界からのマージン（キャラクターの半径分）
+
+    // 境界値を計算
+    const minX = -halfWidth + margin;   // -7.2m (A列の内側)
+    const maxX = halfWidth - margin;    // 7.2m (O列の内側)
+    const minZ = -halfLength + margin;  // -14.7m (1行目の内側)
+    const maxZ = halfLength - margin;   // 14.7m (30行目の内側)
+
+    // 位置をクランプ
+    const clampedX = Math.max(minX, Math.min(maxX, position.x));
+    const clampedZ = Math.max(minZ, Math.min(maxZ, position.z));
+
+    return new Vector3(clampedX, position.y, clampedZ);
   }
 
   /**

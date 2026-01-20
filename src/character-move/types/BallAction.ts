@@ -44,8 +44,11 @@ export const FACE_ACTIONS: Record<number, BallAction[]> = {
     { type: ActionType.BALL_HANDLING, direction: 2, displayName: "面2へボールハンドリング" },
     { type: ActionType.BALL_HANDLING, direction: 6, displayName: "面6へボールハンドリング" },
   ],
-  // 面1（オレンジ）: 未設定（後で追加可能）
-  1: [],
+  // 面1（オレンジ）: 左ドリブル突破、正面ドリブル突破
+  1: [
+    { type: ActionType.DRIBBLE, direction: 7, displayName: "左ドリブル突破" },
+    { type: ActionType.DRIBBLE, direction: 0, displayName: "正面ドリブル突破" },
+  ],
   // 面2（黄色）: 未設定（後で追加可能）
   2: [],
   // 面3（緑）: 未設定（後で追加可能）
@@ -56,6 +59,9 @@ export const FACE_ACTIONS: Record<number, BallAction[]> = {
   5: [],
   // 面6（紫）: 未設定（後で追加可能）
   6: [],
-  // 面7（マゼンタ）: 未設定（後で追加可能）
-  7: [],
+  // 面7（マゼンタ）: 右ドリブル突破、正面ドリブル突破
+  7: [
+    { type: ActionType.DRIBBLE, direction: 1, displayName: "右ドリブル突破" },
+    { type: ActionType.DRIBBLE, direction: 0, displayName: "正面ドリブル突破" },
+  ],
 };
