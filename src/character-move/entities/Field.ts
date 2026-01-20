@@ -1,6 +1,6 @@
-import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh } from "@babylonjs/core";
-import { GridMaterial } from "@babylonjs/materials";
+import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, DynamicTexture } from "@babylonjs/core";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
+import { GRID_CONFIG } from "../config/FieldGridConfig";
 import { Net } from "./Net";
 
 /**
@@ -16,6 +16,8 @@ export class Field {
   private goal2Rim: Mesh; // ゴール2のリム
   private goal2Net: Net; // ゴール2のネット
   private centerCircle: Mesh; // センターサークル
+  private gridLines: Mesh[] = []; // カスタムグリッド線
+  private gridLabels: Mesh[] = []; // 座標ラベル
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -23,6 +25,9 @@ export class Field {
 
     // センターサークルを作成
     this.centerCircle = this.createCenterCircle();
+
+    // 座標ラベルを作成
+    this.createGridLabels();
 
     // ゴール1（奥側、+Z）を作成
     const goal1 = this.createBasketballGoal(1);
@@ -54,28 +59,133 @@ export class Field {
 
     ground.position = new Vector3(0, 0, 0);
 
-    // グリッドマテリアルを使用（グリッド線が表示される）
-    try {
-      const gridMaterial = new GridMaterial("field-grid-material", this.scene);
-      gridMaterial.majorUnitFrequency = 5; // メジャーラインの頻度
-      gridMaterial.minorUnitVisibility = 0.3; // マイナーラインの可視性
-      gridMaterial.gridRatio = 1; // グリッドの比率
-      gridMaterial.backFaceCulling = false;
-      gridMaterial.mainColor = Color3.FromHexString(FIELD_CONFIG.floorColor);
-      gridMaterial.lineColor = Color3.FromHexString(FIELD_CONFIG.gridColor);
-      gridMaterial.opacity = 1.0;
+    // 床の色を設定（グリッド線なし）
+    const material = new StandardMaterial("field-material", this.scene);
+    material.diffuseColor = Color3.FromHexString(FIELD_CONFIG.floorColor);
+    material.specularColor = new Color3(0.1, 0.1, 0.1);
+    ground.material = material;
 
-      ground.material = gridMaterial;
-    } catch {
-      // GridMaterialが使えない場合は標準マテリアルを使用
-      console.warn("[Field] GridMaterialが使用できません。StandardMaterialにフォールバックします。");
-      const material = new StandardMaterial("field-material", this.scene);
-      material.diffuseColor = Color3.FromHexString(FIELD_CONFIG.floorColor);
-      material.specularColor = new Color3(0.1, 0.1, 0.1);
-      ground.material = material;
-    }
+    // カスタムグリッドを描画
+    this.createCustomGrid();
 
     return ground;
+  }
+
+  /**
+   * カスタムグリッド線を作成（フィールド端から始まる将棋盤スタイル）
+   */
+  private createCustomGrid(): void {
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const cellSize = 1; // 小さな升目のサイズ（1m）
+    const majorInterval = 5; // 大枠の間隔（5マスごと）
+    const gridY = 0.01; // 地面より少し上
+
+    const minorColor = Color3.FromHexString(FIELD_CONFIG.gridColor);
+    const majorColor = Color3.FromHexString('#4A2508'); // 大枠は濃い色
+
+    // X方向の線（Z軸に平行な線）
+    for (let x = -halfWidth; x <= halfWidth + 0.001; x += cellSize) {
+      const isMajor = Math.abs((x + halfWidth) % majorInterval) < 0.001 ||
+                      Math.abs((x + halfWidth) % majorInterval - majorInterval) < 0.001;
+      const points = [
+        new Vector3(x, gridY, -halfLength),
+        new Vector3(x, gridY, halfLength),
+      ];
+      const line = MeshBuilder.CreateLines(
+        `grid-line-x-${x}`,
+        { points },
+        this.scene
+      );
+      line.color = isMajor ? majorColor : minorColor;
+      this.gridLines.push(line);
+    }
+
+    // Z方向の線（X軸に平行な線）
+    for (let z = -halfLength; z <= halfLength + 0.001; z += cellSize) {
+      const isMajor = Math.abs((z + halfLength) % majorInterval) < 0.001 ||
+                      Math.abs((z + halfLength) % majorInterval - majorInterval) < 0.001;
+      const points = [
+        new Vector3(-halfWidth, gridY, z),
+        new Vector3(halfWidth, gridY, z),
+      ];
+      const line = MeshBuilder.CreateLines(
+        `grid-line-z-${z}`,
+        { points },
+        this.scene
+      );
+      line.color = isMajor ? majorColor : minorColor;
+      this.gridLines.push(line);
+    }
+  }
+
+  /**
+   * 座標ラベルを作成（各マスに座標を表示）
+   */
+  private createGridLabels(): void {
+    const halfWidth = FIELD_CONFIG.width / 2;
+    const halfLength = FIELD_CONFIG.length / 2;
+    const labelY = 0.02;
+    const labelSize = 0.8; // ラベルのサイズ（マスに収まるよう調整）
+
+    // 各マスに座標を表示（A1〜O30）
+    for (let col = 0; col < GRID_CONFIG.cell.colCount; col++) {
+      for (let row = 0; row < GRID_CONFIG.cell.rowCount; row++) {
+        const label = `${GRID_CONFIG.cell.colLabels[col]}${row + 1}`;
+        const x = -halfWidth + col * GRID_CONFIG.cell.size + GRID_CONFIG.cell.size / 2;
+        const z = -halfLength + row * GRID_CONFIG.cell.size + GRID_CONFIG.cell.size / 2;
+
+        const labelMesh = this.createTextLabel(label, x, labelY, z, labelSize);
+        this.gridLabels.push(labelMesh);
+      }
+    }
+  }
+
+  /**
+   * テキストラベルを作成
+   */
+  private createTextLabel(text: string, x: number, y: number, z: number, size: number): Mesh {
+    // テクスチャサイズ（解像度）
+    const textureSize = 128;
+
+    // DynamicTextureでテキストを描画
+    const texture = new DynamicTexture(
+      `label-texture-${text}`,
+      { width: textureSize, height: textureSize },
+      this.scene,
+      true // hasAlpha
+    );
+
+    // 背景を透明にクリア
+    const ctx = texture.getContext() as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, textureSize, textureSize);
+
+    // 文字を描画（濃い色で見やすく）
+    ctx.fillStyle = '#2A1A0A'; // 濃い茶色
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, textureSize / 2, textureSize / 2);
+    texture.update();
+    texture.hasAlpha = true;
+
+    // Planeメッシュにテクスチャを適用
+    const plane = MeshBuilder.CreatePlane(
+      `label-${text}`,
+      { size },
+      this.scene
+    );
+    plane.position = new Vector3(x, y, z);
+    plane.rotation.x = Math.PI / 2; // 地面と平行に
+
+    const material = new StandardMaterial(`label-material-${text}`, this.scene);
+    material.diffuseTexture = texture;
+    material.opacityTexture = texture;
+    material.backFaceCulling = false;
+    material.transparencyMode = 2; // ALPHATEST
+    plane.material = material;
+
+    return plane;
   }
 
   /**
@@ -245,5 +355,15 @@ export class Field {
     this.goal2Backboard.dispose();
     this.goal2Rim.dispose();
     this.goal2Net.dispose();
+    // グリッド線を破棄
+    for (const line of this.gridLines) {
+      line.dispose();
+    }
+    this.gridLines = [];
+    // ラベルを破棄
+    for (const label of this.gridLabels) {
+      label.dispose();
+    }
+    this.gridLabels = [];
   }
 }

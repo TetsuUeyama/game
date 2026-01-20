@@ -41,7 +41,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
   rightShoulderY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: -20, [DRIBBLE_T2]: -30, [DRIBBLE_T3]: -25, [DRIBBLE_T4]: 0},
   rightShoulderZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
-  rightElbowX: {[DRIBBLE_T0]: 45, [DRIBBLE_T1]: 60, [DRIBBLE_T2]: 80, [DRIBBLE_T3]: 70, [DRIBBLE_T4]: 45},
+  rightElbowX: {[DRIBBLE_T0]: -45, [DRIBBLE_T1]: -60, [DRIBBLE_T2]: -80, [DRIBBLE_T3]: -70, [DRIBBLE_T4]: -45},
   rightElbowY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   rightElbowZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
@@ -50,7 +50,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
   leftShoulderY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 20, [DRIBBLE_T2]: 30, [DRIBBLE_T3]: 25, [DRIBBLE_T4]: 0},
   leftShoulderZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
-  leftElbowX: {[DRIBBLE_T0]: 45, [DRIBBLE_T1]: 50, [DRIBBLE_T2]: 40, [DRIBBLE_T3]: 45, [DRIBBLE_T4]: 45},
+  leftElbowX: {[DRIBBLE_T0]: -45, [DRIBBLE_T1]: -50, [DRIBBLE_T2]: -40, [DRIBBLE_T3]: -45, [DRIBBLE_T4]: -45},
   leftElbowY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   leftElbowZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 

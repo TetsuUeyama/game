@@ -54,7 +54,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
-  rightElbowX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 110, [SHOOT_3PT_T3]: 20, [SHOOT_3PT_T4]: 30},
+  rightElbowX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -110, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
   rightElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
@@ -63,7 +63,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   leftShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 20, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 15, [SHOOT_3PT_T4]: 0},
   leftShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
-  leftElbowX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 60, [SHOOT_3PT_T2]: 80, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 30},
+  leftElbowX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: -80, [SHOOT_3PT_T3]: -40, [SHOOT_3PT_T4]: -30},
   leftElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   leftElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
@@ -149,7 +149,7 @@ const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   rightShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
-  rightElbowX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 80, [SHOOT_MID_T2]: 100, [SHOOT_MID_T3]: 15, [SHOOT_MID_T4]: 30},
+  rightElbowX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -80, [SHOOT_MID_T2]: -100, [SHOOT_MID_T3]: -15, [SHOOT_MID_T4]: -30},
   rightElbowY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   rightElbowZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
@@ -157,7 +157,7 @@ const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   leftShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 15, [SHOOT_MID_T2]: 25, [SHOOT_MID_T3]: 10, [SHOOT_MID_T4]: 0},
   leftShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
-  leftElbowX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 50, [SHOOT_MID_T2]: 70, [SHOOT_MID_T3]: 35, [SHOOT_MID_T4]: 30},
+  leftElbowX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -50, [SHOOT_MID_T2]: -70, [SHOOT_MID_T3]: -35, [SHOOT_MID_T4]: -30},
   leftElbowY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   leftElbowZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
@@ -243,7 +243,7 @@ const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
   rightShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
-  rightElbowX: {[SHOOT_LAYUP_T0]: 45, [SHOOT_LAYUP_T1]: 70, [SHOOT_LAYUP_T2]: 30, [SHOOT_LAYUP_T3]: 10, [SHOOT_LAYUP_T4]: 45},
+  rightElbowX: {[SHOOT_LAYUP_T0]: -45, [SHOOT_LAYUP_T1]: -70, [SHOOT_LAYUP_T2]: -30, [SHOOT_LAYUP_T3]: -10, [SHOOT_LAYUP_T4]: -45},
   rightElbowY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
   rightElbowZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
@@ -251,7 +251,7 @@ const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   leftShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 10, [SHOOT_LAYUP_T2]: 20, [SHOOT_LAYUP_T3]: 10, [SHOOT_LAYUP_T4]: 0},
   leftShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
-  leftElbowX: {[SHOOT_LAYUP_T0]: 30, [SHOOT_LAYUP_T1]: 50, [SHOOT_LAYUP_T2]: 60, [SHOOT_LAYUP_T3]: 40, [SHOOT_LAYUP_T4]: 30},
+  leftElbowX: {[SHOOT_LAYUP_T0]: -30, [SHOOT_LAYUP_T1]: -50, [SHOOT_LAYUP_T2]: -60, [SHOOT_LAYUP_T3]: -40, [SHOOT_LAYUP_T4]: -30},
   leftElbowY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
   leftElbowZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 

@@ -2,7 +2,7 @@ import { Vector3, Scene, Mesh, VertexData, StandardMaterial, Color3 } from "@bab
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { Field } from "../entities/Field";
-import { GOAL_CONFIG } from "../config/gameConfig";
+import { GOAL_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
 import {
   SHOOT_RANGE,
   SHOOT_ANGLE,
@@ -47,13 +47,13 @@ interface GoalInfo {
  * ゴールのZ位置（Field.tsと同じ計算ロジックで算出）
  * rimZ = zSign * (fieldHalfLength - backboardDistance - rimOffset)
  */
-const FIELD_HALF_LENGTH = 28 / 2; // FIELD_CONFIG.length / 2
+const FIELD_HALF_LENGTH = FIELD_CONFIG.length / 2; // 30 / 2 = 15m
 const GOAL_Z_OFFSET = FIELD_HALF_LENGTH - GOAL_CONFIG.backboardDistance - GOAL_CONFIG.rimOffset;
-// = 14 - 1.2 - 0.4 = 12.4m
+// = 15 - 1.2 - 0.4 = 13.4m
 
 const GOAL_Z_POSITIONS = {
-  GOAL_1: GOAL_Z_OFFSET,   // +Z方向（敵チームのゴール = 味方が攻める）= 12.4m
-  GOAL_2: -GOAL_Z_OFFSET,  // -Z方向（味方チームのゴール = 敵が攻める）= -12.4m
+  GOAL_1: GOAL_Z_OFFSET,   // +Z方向（敵チームのゴール = 味方が攻める）= 13.4m
+  GOAL_2: -GOAL_Z_OFFSET,  // -Z方向（味方チームのゴール = 敵が攻める）= -13.4m
 };
 
 /**

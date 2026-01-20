@@ -123,6 +123,11 @@ export class Character {
   private breakthroughDirection: Vector3 | null = null; // 突破方向
   private breakthroughStartTime: number = 0; // 突破開始時刻
 
+  // ブロックジャンプ制御
+  private blockJumpTarget: Character | null = null; // ブロック対象のシューター
+  private blockLateralDirection: Vector3 | null = null; // 横移動方向（ボール軌道への移動）
+  private blockLateralSpeed: number = 3.0; // 横移動速度（m/s）
+
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
     this.position = position.clone();
@@ -472,6 +477,9 @@ export class Character {
 
     // アクションコントローラーを更新
     this.actionController.update(deltaTime);
+
+    // ブロックジャンプの横移動を更新
+    this.updateBlockJump(deltaTime);
 
     // 方向サークルを更新
     this.directionCircle.update();
@@ -1401,5 +1409,108 @@ export class Character {
     if (this.mesh) {
       this.mesh.dispose();
     }
+  }
+
+  /**
+   * ブロックジャンプのターゲットを設定
+   * シューターの向きからシュート軌道を予測し、横移動方向を計算
+   */
+  public setBlockJumpTarget(target: Character | null): void {
+    this.blockJumpTarget = target;
+
+    if (target === null) {
+      this.blockLateralDirection = null;
+      return;
+    }
+
+    const shooterPos = target.getPosition();
+    const myPos = this.getPosition();
+    const shooterRotation = target.getRotation();
+
+    // シューターの向いている方向を計算（シュート方向）
+    const shootDirection = new Vector3(
+      Math.sin(shooterRotation),
+      0,
+      Math.cos(shooterRotation)
+    ).normalize();
+
+    // シューターからディフェンダーへのベクトル
+    const toDefender = myPos.subtract(shooterPos);
+    toDefender.y = 0; // 水平面のみ考慮
+
+    // シュート軌道上のディフェンダーに最も近い点を計算
+    // 点から直線への最短距離の公式を使用
+    const dot = Vector3.Dot(toDefender, shootDirection);
+    const closestPointOnTrajectory = shooterPos.add(shootDirection.scale(dot));
+
+    // ディフェンダーから軌道への横方向ベクトル
+    const lateralOffset = closestPointOnTrajectory.subtract(myPos);
+    lateralOffset.y = 0;
+
+    const lateralDistance = lateralOffset.length();
+
+    // 横方向のずれが小さい場合は真っ直ぐ飛ぶ（横移動なし）
+    if (lateralDistance < 0.3) {
+      this.blockLateralDirection = null;
+      console.log(`[Character] ブロックジャンプ：真正面なので横移動なし`);
+    } else if (lateralDistance > 2.0) {
+      // 横方向のずれが大きすぎる場合はブロック不可
+      this.blockLateralDirection = null;
+      console.log(`[Character] ブロックジャンプ：横のずれが大きすぎてブロック不可 (${lateralDistance.toFixed(2)}m)`);
+    } else {
+      // 横移動方向を正規化
+      this.blockLateralDirection = lateralOffset.normalize();
+      // 移動速度は横方向のずれに応じて調整
+      // ジャンプの最高点到達時間（約0.35秒）を目安に計算
+      const jumpPeakTime = 0.35;
+      this.blockLateralSpeed = lateralDistance / jumpPeakTime;
+      console.log(`[Character] ブロックジャンプ：横移動方向=(${this.blockLateralDirection.x.toFixed(2)}, ${this.blockLateralDirection.z.toFixed(2)}), 距離=${lateralDistance.toFixed(2)}m, 速度=${this.blockLateralSpeed.toFixed(2)}m/s`);
+    }
+  }
+
+  /**
+   * ブロックジャンプ中の横移動を更新
+   * block_shotアクションのstartupまたはactiveフェーズ中に呼び出す
+   */
+  public updateBlockJump(deltaTime: number): void {
+    const currentAction = this.actionController.getCurrentAction();
+    const phase = this.actionController.getCurrentPhase();
+
+    // デバッグ: block_shot中の状態を確認
+    if (this.blockJumpTarget !== null) {
+      console.log(`[Character] updateBlockJump: action=${currentAction}, phase=${phase}, lateralDir=${this.blockLateralDirection ? 'set' : 'null'}`);
+    }
+
+    // block_shotアクションのstartupまたはactiveフェーズ中のみ横移動
+    const isBlockJumping = currentAction === 'block_shot' && (phase === 'startup' || phase === 'active');
+
+    if (!isBlockJumping) {
+      // アクションが終了または別フェーズになったらターゲットをクリア
+      if (this.blockJumpTarget !== null && phase !== 'recovery') {
+        console.log(`[Character] ブロックジャンプ終了: phase=${phase}`);
+        this.blockJumpTarget = null;
+        this.blockLateralDirection = null;
+      }
+      return;
+    }
+
+    // 横移動方向が設定されていない場合は何もしない（真正面にいる）
+    if (this.blockLateralDirection === null) {
+      console.log(`[Character] 横移動なし（真正面 or 計算されていない）`);
+      return;
+    }
+
+    // 横移動を適用
+    const movement = this.blockLateralDirection.scale(this.blockLateralSpeed * deltaTime);
+    const newPosition = this.position.add(movement);
+    console.log(`[Character] ブロック横移動実行: dx=${movement.x.toFixed(3)}, dz=${movement.z.toFixed(3)}, newPos=(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
+    this.setPosition(newPosition);
+  }
+
+  /**
+   * ブロックジャンプのターゲットを取得
+   */
+  public getBlockJumpTarget(): Character | null {
+    return this.blockJumpTarget;
   }
 }
