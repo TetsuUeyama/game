@@ -38,10 +38,15 @@ export class CircleSizeController {
     const isHoldingBall = holder === character;
     const actionController = character.getActionController();
     const currentAction = actionController.getCurrentAction();
+    const currentPhase = actionController.getCurrentPhase();
 
     // アクション中の状況を優先
     if (currentAction) {
-      if (currentAction.startsWith('shoot_')) {
+      if (currentAction.startsWith('shoot_') && currentAction !== 'shoot_feint') {
+        // シュートアクションがrecoveryフェーズの場合は硬直中
+        if (currentPhase === 'recovery') {
+          return 'shoot_recovery';
+        }
         return 'shooting';
       }
       if (currentAction.startsWith('pass_')) {
@@ -150,6 +155,13 @@ export class CircleSizeController {
 
         // キャラクターに反映
         character.setFootCircleRadius(state.currentSize);
+      }
+
+      // サイズが0の場合はサークルを非表示、それ以外は表示
+      if (state.targetSize === 0) {
+        character.setFootCircleVisible(false);
+      } else {
+        character.setFootCircleVisible(true);
       }
     }
 

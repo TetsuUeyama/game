@@ -25,6 +25,8 @@ export type ActionType =
   | 'pass_bounce'
   | 'pass_overhead'
   | 'dribble_breakthrough'
+  // フェイント
+  | 'shoot_feint'     // シュートフェイント
   // ディフェンス
   | 'block_shot'      // シュートブロック（手を上げる）
   | 'steal_attempt'   // スティール試行
@@ -183,6 +185,23 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     cooldownTime: 1000,    // 1秒
     priority: 9,
     interruptible: false,  // 一度始まるとキャンセル不可
+  },
+
+  // ==============================
+  // フェイントアクション
+  // ==============================
+
+  // シュートフェイント
+  shoot_feint: {
+    type: 'shoot_feint',
+    category: 'offense',
+    motion: 'shoot_feint',
+    startupTime: 100,      // 0.1秒（飛ぶ振りの開始）
+    activeTime: 150,       // 0.15秒（フェイク動作中、ディフェンスが反応する時間）
+    recoveryTime: 200,     // 0.2秒（フェイントなので短い硬直）
+    cooldownTime: 500,     // 0.5秒（素早く次のアクションへ）
+    priority: 8,
+    interruptible: true,   // キャンセル可能（ドリブルに移行するため）
   },
 
   // ==============================
@@ -363,6 +382,9 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
   pass_chest: PASS_MOTIONS.pass_chest,
   pass_bounce: PASS_MOTIONS.pass_bounce,
   pass_overhead: PASS_MOTIONS.pass_overhead,
+
+  // フェイントモーション（ジャンプしない専用モーション）
+  shoot_feint: SHOOT_MOTIONS.shoot_feint,
 
   // ディフェンスモーション
   block_shot: DEFENSE_MOTIONS.block_shot,

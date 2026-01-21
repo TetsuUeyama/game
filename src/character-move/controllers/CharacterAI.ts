@@ -7,6 +7,7 @@ import { IDLE_MOTION } from "../data/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../data/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../data/DashMotion";
 import { ShootingController } from "./ShootingController";
+import { FeintController } from "./FeintController";
 import { SHOOT_COOLDOWN, ShootingUtils } from "../config/ShootingConfig";
 import { DEFENSE_DISTANCE, DEFENSE_MOVEMENT, DefenseUtils } from "../config/DefenseConfig";
 import { ActionConfigUtils } from "../config/ActionConfig";
@@ -23,9 +24,12 @@ export class CharacterAI {
   private allCharacters: Character[];
   private field: Field;
   private shootingController: ShootingController | null = null;
+  private feintController: FeintController | null = null;
 
   // シュートクールダウン（連続シュート防止）
   private shootCooldown: number = 0;
+  // フェイントクールダウン（連続フェイント防止）
+  private feintCooldown: number = 0;
   // SHOOT_COOLDOWN.AFTER_SHOTを使用（ShootingConfigから）
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
@@ -48,12 +52,24 @@ export class CharacterAI {
   }
 
   /**
+   * FeintControllerを設定
+   */
+  public setFeintController(controller: FeintController): void {
+    this.feintController = controller;
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
     // シュートクールダウンを減少
     if (this.shootCooldown > 0) {
       this.shootCooldown -= deltaTime;
+    }
+
+    // フェイントクールダウンを減少
+    if (this.feintCooldown > 0) {
+      this.feintCooldown -= deltaTime;
     }
 
     // アクション実行中（シュート等）は移動処理をスキップ
@@ -214,7 +230,7 @@ export class CharacterAI {
     let shouldShoot = false;
 
     switch (rangeInfo.shootType) {
-      case '3pt':
+      case '3pt':  // TODO: 一時的に3ptを無効化（フェイント検証用）
       case 'midrange':
       case 'layup':
         shouldShoot = true;
@@ -232,6 +248,81 @@ export class CharacterAI {
     }
 
     return false;
+  }
+
+  /**
+   * シュートフェイントを試みる
+   * 条件: ボールが0面にある、シュートレンジ内、フェイントクールダウン終了
+   * 条件合致時に確率でフェイントを選択
+   * @returns フェイントを実行した場合true
+   */
+  private tryFeint(): boolean {
+    // FeintControllerがない場合は実行不可
+    if (!this.feintController) {
+      return false;
+    }
+
+    // フェイントクールダウン中は実行不可
+    if (this.feintCooldown > 0) {
+      return false;
+    }
+
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    // ボールが0面にあるか確認
+    const currentBallFace = this.character.getCurrentBallFace();
+    if (currentBallFace !== 0) {
+      return false;
+    }
+
+    // シュートレンジ内か確認
+    if (!this.shootingController) {
+      return false;
+    }
+
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+    if (!rangeInfo || !rangeInfo.inRange) {
+      return false;
+    }
+
+    // 条件が揃った場合、確率でフェイントを選択（50%の確率）
+    const feintChance = 0.5;
+    if (Math.random() > feintChance) {
+      return false; // フェイントを選択しなかった
+    }
+
+    // フェイント実行
+    const result = this.feintController.performShootFeint(this.character);
+    if (result && result.success) {
+      // フェイントクールダウンを設定
+      this.feintCooldown = 2.0; // 2秒間フェイント不可
+      console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME}: フェイント実行 - ${result.message}`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * フェイント成功後のドリブル突破を試みる
+   * @returns ドリブル突破を実行した場合true
+   */
+  private tryBreakthroughAfterFeint(): boolean {
+    if (!this.feintController) {
+      return false;
+    }
+
+    // ドリブル突破方向をランダムに決定（左か右）
+    const direction = Math.random() < 0.5 ? 'left' : 'right';
+
+    const success = this.feintController.performBreakthroughAfterFeint(this.character, direction);
+    if (success) {
+      console.log(`[CharacterAI] ${this.character.playerData?.basic?.NAME}: フェイント後のドリブル突破（${direction}）`);
+    }
+    return success;
   }
 
   /**
@@ -306,9 +397,11 @@ export class CharacterAI {
    * オンボールプレイヤー状態の処理
    */
   private handleOnBallPlayerState(deltaTime: number): void {
-    // シュート可能かチェック（最優先）
-    if (this.tryShoot()) {
-      return; // シュートを打った場合は他の処理をスキップ
+    // フェイント成功後のドリブル突破ウィンドウ内ならドリブル突破を試みる
+    if (this.feintController && this.feintController.isInBreakthroughWindow(this.character)) {
+      if (this.tryBreakthroughAfterFeint()) {
+        return;
+      }
     }
 
     // 目の前にディフェンダーがいるかチェック
@@ -344,6 +437,16 @@ export class CharacterAI {
         if (toGoal.length() > 0.01) {
           const angle = Math.atan2(toGoal.x, toGoal.z);
           this.character.setRotation(angle);
+        }
+
+        // 1on1状態: フェイントを先に試みる（確率でフェイントまたはシュートを選択）
+        if (this.tryFeint()) {
+          return; // フェイント実行した場合、シュートは打たない
+        }
+
+        // フェイントを選択しなかった場合、シュートを試みる
+        if (this.tryShoot()) {
+          return;
         }
 
         return;
@@ -407,7 +510,13 @@ export class CharacterAI {
       }
     }
 
-    // ディフェンダーがいないか遠い場合は、ゴールに向かって移動
+    // ディフェンダーがいないか遠い場合
+    // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
+    if (this.tryShoot()) {
+      return;
+    }
+
+    // シュートレンジ外ならゴールに向かって移動
     const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
     const goalPosition = attackingGoal.position;
 
