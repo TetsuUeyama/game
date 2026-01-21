@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
+import { Ball } from "../entities/Ball";
 
 /**
  * 競り合い設定
@@ -9,11 +10,11 @@ export const CONTEST_CONFIG = {
   PUSH_SPEED_BASE: 1.0,           // 基本押し出し速度
   PUSH_SPEED_MAX: 2.0,            // 最大押し出し速度
 
-  // パワー差による影響
-  POWER_DIFF_MULTIPLIER: 0.01,    // パワー差1あたりの速度増加率
+  // ステータス差による影響（オフェンス vs ディフェンス）
+  STAT_DIFF_MULTIPLIER: 0.01,     // ステータス差1あたりの速度増加率
 
-  // 同等パワー時の処理
-  EQUAL_POWER_PUSH_RATIO: 0.5,    // 同等パワー時のお互いの押し出し比率
+  // 同等ステータス時の処理
+  EQUAL_STAT_PUSH_RATIO: 0.5,     // 同等ステータス時のお互いの押し出し比率
 
   // 判定マージン
   OVERLAP_MARGIN: 0.01,           // 重なり解消判定のマージン（m）
@@ -30,14 +31,17 @@ interface ContestPair {
 
 /**
  * 競り合いコントローラー
- * キャラクター同士のサークルが重なった時に、パワー比較で押し合いを処理する
+ * キャラクター同士のサークルが重なった時に、offense/defense値で押し合いを処理する
+ * オフェンス側（ボール保持者）はoffense値、ディフェンス側はdefense値を使用
  */
 export class ContestController {
   private allCharacters: () => Character[];
+  private ball: Ball;
   private activeContests: Map<string, ContestPair> = new Map();
 
-  constructor(getAllCharacters: () => Character[]) {
+  constructor(getAllCharacters: () => Character[], ball: Ball) {
     this.allCharacters = getAllCharacters;
+    this.ball = ball;
   }
 
   /**
@@ -89,31 +93,46 @@ export class ContestController {
   }
 
   /**
-   * パワーに基づいた押し出し比率を計算
+   * キャラクターの競り合いステータスを取得
+   * ボール保持者はoffense値、非保持者はdefense値を使用
+   */
+  private getContestStat(character: Character): number {
+    const holder = this.ball.getHolder();
+    if (holder === character) {
+      // ボール保持者はoffense値を使用
+      return character.playerData?.stats?.offense ?? 50;
+    } else {
+      // 非保持者はdefense値を使用
+      return character.playerData?.stats?.defense ?? 50;
+    }
+  }
+
+  /**
+   * offense/defense値に基づいた押し出し比率を計算
    * @returns { push1: 押し出し比率（char1が押される量）, push2: 押し出し比率（char2が押される量） }
    */
   private calculatePushRatios(char1: Character, char2: Character): { push1: number; push2: number } {
-    // パワー値を取得（デフォルトは50）
-    const power1 = char1.playerData?.stats?.power ?? 50;
-    const power2 = char2.playerData?.stats?.power ?? 50;
+    // ステータス値を取得（ボール保持者はoffense、非保持者はdefense）
+    const stat1 = this.getContestStat(char1);
+    const stat2 = this.getContestStat(char2);
 
-    // パワー差を計算
-    const powerDiff = power2 - power1; // 正の値ならchar1が弱い
+    // ステータス差を計算
+    const statDiff = stat2 - stat1; // 正の値ならchar1が弱い
 
-    if (powerDiff === 0) {
-      // 同等パワーの場合、お互い同じ比率で押される
+    if (statDiff === 0) {
+      // 同等ステータスの場合、お互い同じ比率で押される
       return {
-        push1: CONTEST_CONFIG.EQUAL_POWER_PUSH_RATIO,
-        push2: CONTEST_CONFIG.EQUAL_POWER_PUSH_RATIO,
+        push1: CONTEST_CONFIG.EQUAL_STAT_PUSH_RATIO,
+        push2: CONTEST_CONFIG.EQUAL_STAT_PUSH_RATIO,
       };
     }
 
-    // パワー差に基づいて比率を計算
-    // powerDiff > 0: char1が弱い → char1が多く押される
-    // powerDiff < 0: char2が弱い → char2が多く押される
-    const diffRatio = Math.abs(powerDiff) / 100; // 0-1の範囲
+    // ステータス差に基づいて比率を計算
+    // statDiff > 0: char1が弱い → char1が多く押される
+    // statDiff < 0: char2が弱い → char2が多く押される
+    const diffRatio = Math.abs(statDiff) / 100; // 0-1の範囲
 
-    if (powerDiff > 0) {
+    if (statDiff > 0) {
       // char1が弱い
       return {
         push1: 0.5 + diffRatio * 0.5, // 0.5〜1.0
@@ -132,12 +151,12 @@ export class ContestController {
    * 押し出し速度を計算
    */
   private calculatePushSpeed(char1: Character, char2: Character): number {
-    const power1 = char1.playerData?.stats?.power ?? 50;
-    const power2 = char2.playerData?.stats?.power ?? 50;
+    const stat1 = this.getContestStat(char1);
+    const stat2 = this.getContestStat(char2);
 
-    // パワー差が大きいほど速く押し出す
-    const powerDiff = Math.abs(power1 - power2);
-    const speedBonus = powerDiff * CONTEST_CONFIG.POWER_DIFF_MULTIPLIER;
+    // ステータス差が大きいほど速く押し出す
+    const statDiff = Math.abs(stat1 - stat2);
+    const speedBonus = statDiff * CONTEST_CONFIG.STAT_DIFF_MULTIPLIER;
 
     const speed = CONTEST_CONFIG.PUSH_SPEED_BASE + speedBonus;
     return Math.min(speed, CONTEST_CONFIG.PUSH_SPEED_MAX);
@@ -229,9 +248,12 @@ export class ContestController {
               startTime: Date.now(),
             });
 
-            const power1 = char1.playerData?.stats?.power ?? 50;
-            const power2 = char2.playerData?.stats?.power ?? 50;
-            console.log(`[ContestController] 競り合い開始: ${char1.playerData?.basic?.NAME ?? 'char1'}(power:${power1}) vs ${char2.playerData?.basic?.NAME ?? 'char2'}(power:${power2})`);
+            const stat1 = this.getContestStat(char1);
+            const stat2 = this.getContestStat(char2);
+            const holder = this.ball.getHolder();
+            const char1Role = holder === char1 ? 'offense' : 'defense';
+            const char2Role = holder === char2 ? 'offense' : 'defense';
+            console.log(`[ContestController] 競り合い開始: ${char1.playerData?.basic?.NAME ?? 'char1'}(${char1Role}:${stat1}) vs ${char2.playerData?.basic?.NAME ?? 'char2'}(${char2Role}:${stat2})`);
           }
 
           // 押し出し処理を実行
@@ -290,24 +312,34 @@ export class ContestController {
   public getActiveContests(): Array<{
     char1Name: string;
     char2Name: string;
-    char1Power: number;
-    char2Power: number;
+    char1Stat: number;
+    char2Stat: number;
+    char1Role: 'offense' | 'defense';
+    char2Role: 'offense' | 'defense';
     duration: number;
   }> {
     const result: Array<{
       char1Name: string;
       char2Name: string;
-      char1Power: number;
-      char2Power: number;
+      char1Stat: number;
+      char2Stat: number;
+      char1Role: 'offense' | 'defense';
+      char2Role: 'offense' | 'defense';
       duration: number;
     }> = [];
 
+    const holder = this.ball.getHolder();
+
     for (const contest of this.activeContests.values()) {
+      const char1Role = holder === contest.character1 ? 'offense' : 'defense';
+      const char2Role = holder === contest.character2 ? 'offense' : 'defense';
       result.push({
         char1Name: contest.character1.playerData?.basic?.NAME ?? 'unknown',
         char2Name: contest.character2.playerData?.basic?.NAME ?? 'unknown',
-        char1Power: contest.character1.playerData?.stats?.power ?? 50,
-        char2Power: contest.character2.playerData?.stats?.power ?? 50,
+        char1Stat: this.getContestStat(contest.character1),
+        char2Stat: this.getContestStat(contest.character2),
+        char1Role: char1Role as 'offense' | 'defense',
+        char2Role: char2Role as 'offense' | 'defense',
         duration: (Date.now() - contest.startTime) / 1000,
       });
     }

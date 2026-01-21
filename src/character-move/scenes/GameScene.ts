@@ -16,6 +16,7 @@ import { CollisionHandler } from "../controllers/CollisionHandler";
 import { CharacterAI } from "../controllers/CharacterAI";
 import { OneOnOneBattleController } from "../controllers/OneOnOneBattleController";
 import { ShootingController } from "../controllers/ShootingController";
+import { ContestController } from "../controllers/ContestController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -58,6 +59,9 @@ export class GameScene {
 
   // シュートコントローラー
   private shootingController?: ShootingController;
+
+  // 競り合いコントローラー
+  private contestController?: ContestController;
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -148,6 +152,14 @@ export class GameScene {
       this.oneOnOneBattleController = new OneOnOneBattleController(
         this.ball,
         () => [...this.allyCharacters, ...this.enemyCharacters]
+      );
+    }
+
+    // 競り合いコントローラーの初期化
+    if (allCharacters.length > 0) {
+      this.contestController = new ContestController(
+        () => [...this.allyCharacters, ...this.enemyCharacters],
+        this.ball
       );
     }
 
@@ -468,6 +480,11 @@ export class GameScene {
       if (this.oneOnOneBattleController) {
         this.oneOnOneBattleController.updateDribbleBreakthrough(deltaTime);
         this.oneOnOneBattleController.update1on1Movement(deltaTime);
+      }
+
+      // 競り合いコントローラーの更新（キャラクター同士の押し合い）
+      if (this.contestController) {
+        this.contestController.update(deltaTime);
       }
 
       // 全AIコントローラーを更新
@@ -1079,6 +1096,9 @@ export class GameScene {
     }
     if (this.shootingController) {
       this.shootingController.dispose();
+    }
+    if (this.contestController) {
+      this.contestController.dispose();
     }
     this.ball.dispose();
 
