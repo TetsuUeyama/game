@@ -178,7 +178,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'offense',
     motion: 'dribble_breakthrough',
     startupTime: 100,      // 0.1秒（素早い開始）
-    activeTime: 500,       // 0.5秒（突破時間）
+    activeTime: 1500,      // 1.5秒（突破時間）
     recoveryTime: 200,     // 0.2秒
     cooldownTime: 1000,    // 1秒
     priority: 9,
