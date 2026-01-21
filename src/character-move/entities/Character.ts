@@ -12,6 +12,7 @@ import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrateg
 import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
+import { BASE_CIRCLE_SIZE } from "../config/CircleSizeConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -127,6 +128,8 @@ export class Character {
   private blockJumpTarget: Character | null = null; // ブロック対象のシューター
   private blockLateralDirection: Vector3 | null = null; // 横移動方向（ボール軌道への移動）
   private blockLateralSpeed: number = 3.0; // 横移動速度（m/s）
+  private blockForwardDirection: Vector3 | null = null; // 前方移動方向（サークル縮小分）
+  private blockForwardSpeed: number = 0; // 前方移動速度（m/s）
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -1439,12 +1442,15 @@ export class Character {
   /**
    * ブロックジャンプのターゲットを設定
    * シューターの向きからシュート軌道を予測し、横移動方向を計算
+   * 面0同士が接している場合はサークル縮小分だけ前方に飛ぶ
    */
   public setBlockJumpTarget(target: Character | null): void {
     this.blockJumpTarget = target;
 
     if (target === null) {
       this.blockLateralDirection = null;
+      this.blockForwardDirection = null;
+      this.blockForwardSpeed = 0;
       return;
     }
 
@@ -1491,11 +1497,42 @@ export class Character {
       this.blockLateralSpeed = lateralDistance / jumpPeakTime;
       console.log(`[Character] ブロックジャンプ：横移動方向=(${this.blockLateralDirection.x.toFixed(2)}, ${this.blockLateralDirection.z.toFixed(2)}), 距離=${lateralDistance.toFixed(2)}m, 速度=${this.blockLateralSpeed.toFixed(2)}m/s`);
     }
+
+    // 面0同士が接しているかチェックし、前方移動を計算
+    const distanceToShooter = toDefender.length();
+    const myCircleRadius = this.footCircleRadius;
+    const shooterCircleRadius = target.getFootCircleRadius();
+    const contactDistance = myCircleRadius + shooterCircleRadius;
+
+    // サークル接触判定（余裕を持って0.2m以内なら接触とみなす）
+    const isCircleContact = distanceToShooter <= contactDistance + 0.2;
+
+    if (isCircleContact) {
+      // サークルの縮小分を計算（defense_marking: 1.0m → blocking: 0.3m）
+      const normalCircleSize = BASE_CIRCLE_SIZE.defense_marking;
+      const blockingCircleSize = BASE_CIRCLE_SIZE.blocking;
+      const circleShrinkage = normalCircleSize - blockingCircleSize; // 0.7m
+
+      // シューターへの方向（前方移動方向）
+      const toShooter = shooterPos.subtract(myPos);
+      toShooter.y = 0;
+      if (toShooter.length() > 0.01) {
+        this.blockForwardDirection = toShooter.normalize();
+        // ジャンプの最高点到達時間（約0.35秒）を目安に計算
+        const jumpPeakTime = 0.35;
+        this.blockForwardSpeed = circleShrinkage / jumpPeakTime;
+        console.log(`[Character] ブロックジャンプ：面0接触中、前方移動=${circleShrinkage.toFixed(2)}m, 速度=${this.blockForwardSpeed.toFixed(2)}m/s`);
+      }
+    } else {
+      this.blockForwardDirection = null;
+      this.blockForwardSpeed = 0;
+    }
   }
 
   /**
-   * ブロックジャンプ中の横移動を更新
+   * ブロックジャンプ中の移動を更新
    * block_shotアクションのstartupまたはactiveフェーズ中に呼び出す
+   * 横移動（ボール軌道への移動）と前方移動（サークル縮小分）を適用
    */
   public updateBlockJump(deltaTime: number): void {
     const currentAction = this.actionController.getCurrentAction();
@@ -1503,10 +1540,10 @@ export class Character {
 
     // デバッグ: block_shot中の状態を確認
     if (this.blockJumpTarget !== null) {
-      console.log(`[Character] updateBlockJump: action=${currentAction}, phase=${phase}, lateralDir=${this.blockLateralDirection ? 'set' : 'null'}`);
+      console.log(`[Character] updateBlockJump: action=${currentAction}, phase=${phase}, lateralDir=${this.blockLateralDirection ? 'set' : 'null'}, forwardDir=${this.blockForwardDirection ? 'set' : 'null'}`);
     }
 
-    // block_shotアクションのstartupまたはactiveフェーズ中のみ横移動
+    // block_shotアクションのstartupまたはactiveフェーズ中のみ移動
     const isBlockJumping = currentAction === 'block_shot' && (phase === 'startup' || phase === 'active');
 
     if (!isBlockJumping) {
@@ -1515,21 +1552,35 @@ export class Character {
         console.log(`[Character] ブロックジャンプ終了: phase=${phase}`);
         this.blockJumpTarget = null;
         this.blockLateralDirection = null;
+        this.blockForwardDirection = null;
+        this.blockForwardSpeed = 0;
       }
       return;
     }
 
-    // 横移動方向が設定されていない場合は何もしない（真正面にいる）
-    if (this.blockLateralDirection === null) {
-      console.log(`[Character] 横移動なし（真正面 or 計算されていない）`);
-      return;
+    // 移動量を計算
+    let totalMovement = Vector3.Zero();
+
+    // 横移動を計算
+    if (this.blockLateralDirection !== null) {
+      const lateralMovement = this.blockLateralDirection.scale(this.blockLateralSpeed * deltaTime);
+      totalMovement = totalMovement.add(lateralMovement);
     }
 
-    // 横移動を適用
-    const movement = this.blockLateralDirection.scale(this.blockLateralSpeed * deltaTime);
-    const newPosition = this.position.add(movement);
-    console.log(`[Character] ブロック横移動実行: dx=${movement.x.toFixed(3)}, dz=${movement.z.toFixed(3)}, newPos=(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
-    this.setPosition(newPosition);
+    // 前方移動を計算（サークル縮小分）
+    if (this.blockForwardDirection !== null && this.blockForwardSpeed > 0) {
+      const forwardMovement = this.blockForwardDirection.scale(this.blockForwardSpeed * deltaTime);
+      totalMovement = totalMovement.add(forwardMovement);
+    }
+
+    // 移動がある場合のみ適用
+    if (totalMovement.length() > 0.001) {
+      const newPosition = this.position.add(totalMovement);
+      console.log(`[Character] ブロック移動実行: dx=${totalMovement.x.toFixed(3)}, dz=${totalMovement.z.toFixed(3)}, newPos=(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
+      this.setPosition(newPosition);
+    } else {
+      console.log(`[Character] ブロック移動なし（真正面 or 移動方向未設定）`);
+    }
   }
 
   /**

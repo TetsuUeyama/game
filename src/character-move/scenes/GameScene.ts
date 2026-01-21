@@ -18,6 +18,7 @@ import { OneOnOneBattleController } from "../controllers/OneOnOneBattleControlle
 import { ShootingController } from "../controllers/ShootingController";
 import { ContestController } from "../controllers/ContestController";
 import { CircleSizeController } from "../controllers/CircleSizeController";
+import { FeintController } from "../controllers/FeintController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -66,6 +67,9 @@ export class GameScene {
 
   // サークルサイズコントローラー
   private circleSizeController?: CircleSizeController;
+
+  // フェイントコントローラー
+  private feintController?: FeintController;
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -175,6 +179,14 @@ export class GameScene {
       );
     }
 
+    // フェイントコントローラーの初期化
+    if (allCharacters.length > 0) {
+      this.feintController = new FeintController(
+        () => [...this.allyCharacters, ...this.enemyCharacters],
+        this.ball
+      );
+    }
+
     // シュートコントローラーの初期化
     if (allCharacters.length > 0) {
       this.shootingController = new ShootingController(
@@ -192,6 +204,13 @@ export class GameScene {
       // 全AIコントローラーにShootingControllerを設定
       for (const ai of this.characterAIs) {
         ai.setShootingController(this.shootingController);
+      }
+
+      // 全AIコントローラーにFeintControllerを設定
+      if (this.feintController) {
+        for (const ai of this.characterAIs) {
+          ai.setFeintController(this.feintController);
+        }
       }
     }
 
@@ -502,6 +521,11 @@ export class GameScene {
       // サークルサイズコントローラーの更新（状況に応じたサークルサイズ変更）
       if (this.circleSizeController) {
         this.circleSizeController.update(deltaTime);
+      }
+
+      // フェイントコントローラーの更新
+      if (this.feintController) {
+        this.feintController.update(deltaTime);
       }
 
       // 全AIコントローラーを更新
@@ -868,6 +892,74 @@ export class GameScene {
   }
 
   /**
+   * シュートフェイントを実行
+   * @param feinter フェイントを行うキャラクター（省略時はボール保持者）
+   * @returns フェイント結果
+   */
+  public performShootFeint(feinter?: Character): {
+    success: boolean;
+    defenderReacted: boolean;
+    defender: Character | null;
+    message: string;
+  } | null {
+    if (!this.feintController) {
+      return null;
+    }
+
+    // フェイントするキャラクターを特定
+    const targetFeinter = feinter ?? this.ball.getHolder();
+    if (!targetFeinter) {
+      return {
+        success: false,
+        defenderReacted: false,
+        defender: null,
+        message: 'フェイントを行うキャラクターが見つかりません',
+      };
+    }
+
+    return this.feintController.performShootFeint(targetFeinter);
+  }
+
+  /**
+   * フェイント成功後のドリブル突破を実行
+   * @param character ドリブル突破を行うキャラクター（省略時はボール保持者）
+   * @param direction 突破方向（'left' | 'right' | 'forward'）
+   * @returns 成功した場合true
+   */
+  public performBreakthroughAfterFeint(
+    character?: Character,
+    direction: 'left' | 'right' | 'forward' = 'forward'
+  ): boolean {
+    if (!this.feintController) {
+      return false;
+    }
+
+    const targetCharacter = character ?? this.ball.getHolder();
+    if (!targetCharacter) {
+      return false;
+    }
+
+    return this.feintController.performBreakthroughAfterFeint(targetCharacter, direction);
+  }
+
+  /**
+   * フェイント成功後のドリブル突破ウィンドウ内かどうか
+   * @param character チェックするキャラクター（省略時はボール保持者）
+   */
+  public isInBreakthroughWindow(character?: Character): boolean {
+    if (!this.feintController) {
+      return false;
+    }
+
+    const targetCharacter = character ?? this.ball.getHolder();
+    if (!targetCharacter) {
+      return false;
+    }
+
+    return this.feintController.isInBreakthroughWindow(targetCharacter);
+  }
+
+  /**
    * ボールがコート外に出たか判定
    * ボールが保持されている場合も判定する（プレイヤーがボールを持ったままコート外に出た場合）
    * @returns コート外に出た場合true
@@ -1119,6 +1211,9 @@ export class GameScene {
     }
     if (this.circleSizeController) {
       this.circleSizeController.dispose();
+    }
+    if (this.feintController) {
+      this.feintController.dispose();
     }
     this.ball.dispose();
 

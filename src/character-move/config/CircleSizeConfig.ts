@@ -14,6 +14,7 @@ export type CircleSituation =
   | 'defense_help'      // ヘルプディフェンス
   | 'dribbling'         // ドリブル中
   | 'shooting'          // シュート中
+  | 'shoot_recovery'    // シュート後硬直中（サークル非表示）
   | 'passing'           // パス中
   | 'blocking';         // ブロック中
 
@@ -28,6 +29,7 @@ export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   defense_help: 1.0,      // ヘルプ: 1.0m（変更なし）
   dribbling: 1.0,         // ドリブル中: 1.0m（変更なし）
   shooting: 1.0,          // シュート中: 1.0m（変更なし）
+  shoot_recovery: 0,      // シュート後硬直中: 0（サークル非表示）
   passing: 1.0,           // パス中: 1.0m（変更なし）
   blocking: 0.3,          // ブロック中: 0.3m（ジャンプ中で動けない、小さく）
 };
@@ -47,6 +49,7 @@ export const STAT_INFLUENCE: Record<CircleSituation, {
   defense_help: { stat: 'none', multiplier: 0 },       // 変更なし
   dribbling: { stat: 'none', multiplier: 0 },          // 変更なし
   shooting: { stat: 'none', multiplier: 0 },           // 変更なし
+  shoot_recovery: { stat: 'none', multiplier: 0 },     // シュート後硬直中は固定（非表示）
   passing: { stat: 'none', multiplier: 0 },            // 変更なし
   blocking: { stat: 'none', multiplier: 0 },           // ブロック中は固定サイズ
 };
@@ -155,6 +158,7 @@ export class CircleSizeUtils {
       defense_help: 'ヘルプ',
       dribbling: 'ドリブル',
       shooting: 'シュート',
+      shoot_recovery: 'シュート硬直',
       passing: 'パス',
       blocking: 'ブロック',
     };

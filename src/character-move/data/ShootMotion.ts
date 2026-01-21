@@ -305,6 +305,106 @@ export const SHOOT_LAYUP_MOTION_CONFIG: MotionConfig = {
 };
 
 // ==============================
+// シュートフェイント
+// ==============================
+
+/**
+ * シュートフェイントモーション
+ *
+ * 実際にはジャンプせず、飛ぶ振りだけ
+ * タイミング（ActionConfigより）:
+ * - startupTime: 100ms = 0.1秒
+ * - activeTime: 150ms = 0.15秒
+ * - recoveryTime: 200ms = 0.2秒
+ */
+const SHOOT_FEINT_T0 = 0.0;
+const SHOOT_FEINT_T1 = 0.1;   // startup終了（膝を曲げる）
+const SHOOT_FEINT_T2 = 0.25;  // active終了（腕を上げかけて止める）
+const SHOOT_FEINT_T3 = 0.45;  // recovery終了（元に戻る）
+
+const SHOOT_FEINT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身：少し後ろに反る（シュートの振り）
+  upperBodyX: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: -8, [SHOOT_FEINT_T2]: -5, [SHOOT_FEINT_T3]: 0},
+  upperBodyY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  upperBodyZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  // 下半身：固定
+  lowerBodyX: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  lowerBodyY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  lowerBodyZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  // 頭：少し上を向く
+  headX: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: -8, [SHOOT_FEINT_T2]: -5, [SHOOT_FEINT_T3]: 0},
+  headY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  headZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  // 右腕（シュートハンド）：ボールを持ち上げかけて止める
+  rightShoulderX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -80, [SHOOT_FEINT_T2]: -60, [SHOOT_FEINT_T3]: -30},
+  rightShoulderY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  rightShoulderZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  rightElbowX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -60, [SHOOT_FEINT_T2]: -45, [SHOOT_FEINT_T3]: -30},
+  rightElbowY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  rightElbowZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  // 左腕（ガイドハンド）：補助
+  leftShoulderX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -60, [SHOOT_FEINT_T2]: -45, [SHOOT_FEINT_T3]: -30},
+  leftShoulderY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 10, [SHOOT_FEINT_T2]: 5, [SHOOT_FEINT_T3]: 0},
+  leftShoulderZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  leftElbowX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -45, [SHOOT_FEINT_T2]: -35, [SHOOT_FEINT_T3]: -30},
+  leftElbowY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  leftElbowZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  // 脚：膝を曲げて飛ぶ振り（実際には飛ばない）
+  leftHipX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -50, [SHOOT_FEINT_T2]: -40, [SHOOT_FEINT_T3]: -30},
+  leftHipY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  leftHipZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  rightHipX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -50, [SHOOT_FEINT_T2]: -40, [SHOOT_FEINT_T3]: -30},
+  rightHipY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  rightHipZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  leftKneeX: {[SHOOT_FEINT_T0]: 50, [SHOOT_FEINT_T1]: 70, [SHOOT_FEINT_T2]: 60, [SHOOT_FEINT_T3]: 50},
+  leftKneeY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  leftKneeZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+
+  rightKneeX: {[SHOOT_FEINT_T0]: 50, [SHOOT_FEINT_T1]: 70, [SHOOT_FEINT_T2]: 60, [SHOOT_FEINT_T3]: 50},
+  rightKneeY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  rightKneeZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+};
+
+// フェイントはジャンプしない（y=0のまま）
+const SHOOT_FEINT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+  y: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: -0.1, [SHOOT_FEINT_T2]: -0.05, [SHOOT_FEINT_T3]: 0}, // 膝を曲げた分少し沈む
+  z: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
+};
+
+export const SHOOT_FEINT_MOTION: MotionData = {
+  name: "shoot_feint",
+  duration: SHOOT_FEINT_T3,
+  loop: false,
+  keyframes: buildKeyframes(SHOOT_FEINT_JOINT_ANIMATIONS, SHOOT_FEINT_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 10 },
+    { jointName: "leftShoulder", priority: 9 },
+    { jointName: "leftElbow", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+    { jointName: "head", priority: 7 },
+  ],
+};
+
+export const SHOOT_FEINT_MOTION_CONFIG: MotionConfig = {
+  motionData: SHOOT_FEINT_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 40,
+  interruptible: true,
+};
+
+// ==============================
 // エクスポート
 // ==============================
 
@@ -315,6 +415,7 @@ export const SHOOT_MOTIONS = {
   shoot_3pt: SHOOT_3PT_MOTION,
   shoot_midrange: SHOOT_MIDRANGE_MOTION,
   shoot_layup: SHOOT_LAYUP_MOTION,
+  shoot_feint: SHOOT_FEINT_MOTION,
 };
 
 /**
