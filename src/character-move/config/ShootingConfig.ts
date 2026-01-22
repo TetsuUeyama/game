@@ -34,13 +34,26 @@ export const SHOOT_ANGLE = {
 
 /**
  * シュート弾道設定（発射角度：度）
- * ブロック可能な低めの弾道に設定
  */
 export const SHOOT_LAUNCH_ANGLE = {
-  THREE_POINT: 52,                  // 3Pシュート：52度（ブロック可能な低弾道）
-  MIDRANGE: 48,                     // ミドルレンジ：48度（低めの弾道）
-  LAYUP: 45,                        // レイアップ：45度（低め）
+  THREE_POINT: 60,                  // 3Pシュート：60度（高めの弾道）
+  MIDRANGE: 55,                     // ミドルレンジ：55度（やや高めの弾道）
+  LAYUP: 70,                        // レイアップ：70度（基本の高弾道）
+  LAYUP_CLOSE: 80,                  // レイアップ（近距離）：80度（より優しい弾道）
   DEFAULT: 50,                      // デフォルト：50度
+} as const;
+
+/**
+ * レイアップ距離による角度調整設定
+ */
+export const LAYUP_DISTANCE_ADJUSTMENT = {
+  // 距離閾値（この距離以下でより高い角度を使用）
+  CLOSE_DISTANCE: 1.2,              // 1.2m以下で近距離扱い
+  // 角度補間（距離に応じて線形補間）
+  MIN_DISTANCE: 0.5,                // 最小距離
+  MAX_DISTANCE: 2.0,                // 最大距離（レイアップ範囲）
+  MIN_ANGLE: 80,                    // 最小距離での角度（度）
+  MAX_ANGLE: 70,                    // 最大距離での角度（度）
 } as const;
 
 /**
@@ -149,6 +162,37 @@ export class ShootingUtils {
       default:
         degrees = SHOOT_LAUNCH_ANGLE.DEFAULT;
     }
+    return (Math.PI * degrees) / 180;
+  }
+
+  /**
+   * 距離を考慮した発射角度を取得（ラジアン）
+   * レイアップの場合、距離が近いほど高い角度（優しい弾道）になる
+   * @param shootType シュートタイプ
+   * @param distance ゴールまでの距離（メートル）
+   * @returns 発射角度（ラジアン）
+   */
+  public static getLaunchAngleWithDistance(
+    shootType: '3pt' | 'midrange' | 'layup' | 'out_of_range',
+    distance: number
+  ): number {
+    // レイアップ以外は通常の角度を返す
+    if (shootType !== 'layup') {
+      return this.getLaunchAngle(shootType);
+    }
+
+    // レイアップ：距離に応じて角度を補間
+    const { MIN_DISTANCE, MAX_DISTANCE, MIN_ANGLE, MAX_ANGLE } = LAYUP_DISTANCE_ADJUSTMENT;
+
+    // 距離を範囲内にクランプ
+    const clampedDistance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, distance));
+
+    // 線形補間（距離が近いほど角度が高い）
+    // t = 0（最小距離）→ MIN_ANGLE（80度）
+    // t = 1（最大距離）→ MAX_ANGLE（70度）
+    const t = (clampedDistance - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
+    const degrees = MIN_ANGLE + t * (MAX_ANGLE - MIN_ANGLE);
+
     return (Math.PI * degrees) / 180;
   }
 

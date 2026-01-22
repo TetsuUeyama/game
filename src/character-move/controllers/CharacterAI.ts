@@ -230,8 +230,12 @@ export class CharacterAI {
     let shouldShoot = false;
 
     switch (rangeInfo.shootType) {
-      case '3pt':  // TODO: 一時的に3ptを無効化（フェイント検証用）
+      case '3pt':
+        // 3ptは一時的に無効化（レイアップ検証用）
+        break;
       case 'midrange':
+        // ミドルシュートは一時的に無効化（レイアップ検証用）
+        break;
       case 'layup':
         shouldShoot = true;
         break;
