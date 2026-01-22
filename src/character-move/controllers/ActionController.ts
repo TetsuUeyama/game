@@ -55,6 +55,8 @@ export class ActionController {
    * コールバックを設定
    */
   public setCallbacks(callbacks: ActionCallbacks): void {
+    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
+    console.log(`★★ setCallbacks: ${charName}, hasOnActive: ${!!callbacks.onActive}, currentAction: ${this.state.currentAction}`);
     this.callbacks = callbacks;
   }
 
@@ -150,10 +152,15 @@ export class ActionController {
     this.state.phase = 'startup';
     this.state.phaseStartTime = now;
 
+    // 重要: 新しいアクション開始時に古いコールバックをクリア
+    // これにより、前のアクションのコールバックが誤って呼ばれることを防ぐ
+    this.callbacks = {};
+
     // モーションを再生
     this.playActionMotion(type);
 
-    this.callbacks.onStartup?.(type);
+    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
+    console.log(`★★ startAction: ${charName}, action: ${type}, callbacks cleared`);
     console.log(`[ActionController] ${type}のstartup開始`);
 
     return { success: true, message: `${type}を開始しました` };
@@ -226,9 +233,17 @@ export class ActionController {
    */
   private transitionToActive(now: number): void {
     const action = this.state.currentAction!;
+    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
+    const callbackKeys = Object.keys(this.callbacks);
+    console.log(`★★ transitionToActive: ${charName}, action: ${action}, hasOnActive: ${!!this.callbacks.onActive}, callbackKeys: [${callbackKeys.join(', ')}]`);
     this.state.phase = 'active';
     this.state.phaseStartTime = now;
-    this.callbacks.onActive?.(action);
+    if (this.callbacks.onActive) {
+      console.log(`★★ calling onActive callback for ${charName}`);
+      this.callbacks.onActive(action);
+    } else {
+      console.log(`★★ NO onActive callback for ${charName}!`);
+    }
     console.log(`[ActionController] ${action}のactive開始`);
   }
 
@@ -389,7 +404,26 @@ export class ActionController {
       return;
     }
 
-    // モーションを再生（ブレンド時間0.1秒）
+    // block_shotの場合、jumpパラメーターに基づいてスケールと速度を調整
+    if (type === 'block_shot') {
+      const jumpStat = this.character.playerData?.stats.jump ?? 70;
+      const baseJump = 70; // 基準値
+
+      // ジャンプ高さスケール: jump / 70 （jump=70で1.0、jump=100で1.43、jump=50で0.71）
+      const heightScale = jumpStat / baseJump;
+
+      // モーション速度: ジャンプが高いほど速くなる（物理的に正しい）
+      // sqrt(jump / 70) で計算（jump=70で1.0、jump=100で1.19、jump=50で0.85）
+      const motionSpeed = Math.sqrt(jumpStat / baseJump);
+
+      console.log(`[ActionController] block_shot: jump=${jumpStat}, heightScale=${heightScale.toFixed(2)}, speed=${motionSpeed.toFixed(2)}`);
+
+      // スケール付きでモーション再生
+      motionController.playWithScale(motionData, heightScale, motionSpeed, 0.1);
+      return;
+    }
+
+    // 通常のモーション再生（ブレンド時間0.1秒）
     motionController.play(motionData, 1.0, 0.1);
     console.log(`[ActionController] モーション再生: ${motionData.name}`);
   }
@@ -407,6 +441,40 @@ export class ActionController {
     }
 
     return true;
+  }
+
+  /**
+   * シュートアクションの硬直中（recovery）かどうか
+   */
+  public isShootInRecovery(): boolean {
+    if (this.state.currentAction === null || this.state.phase !== 'recovery') {
+      return false;
+    }
+    return ActionConfigUtils.isShootAction(this.state.currentAction);
+  }
+
+  /**
+   * シュートアクションのクールダウン中かどうか
+   */
+  public isShootOnCooldown(): boolean {
+    const now = Date.now();
+    // 全てのシュートアクションのクールダウンをチェック
+    const shootActions: ActionType[] = ['shoot_3pt', 'shoot_midrange', 'shoot_layup'];
+    for (const action of shootActions) {
+      const cooldownEnd = this.state.cooldowns.get(action) ?? 0;
+      if (now < cooldownEnd) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * シュートアクションの硬直中またはクールダウン中かどうか
+   * ボールに触れても保持できない状態を判定
+   */
+  public isInShootRecoveryOrCooldown(): boolean {
+    return this.isShootInRecovery() || this.isShootOnCooldown();
   }
 
   /**

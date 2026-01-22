@@ -383,9 +383,11 @@ export class ShootingController {
     }
 
     // activeフェーズに入ったらボールを発射するコールバックを設定
+    const shooterName = shooter.playerData?.basic?.NAME ?? 'unknown';
+    console.log(`★★ ShootingController: setting callbacks for ${shooterName}`);
     actionController.setCallbacks({
       onActive: (action) => {
-        console.log(`[ShootingController] onActive callback called: ${action}`);
+        console.log(`★★ [ShootingController] onActive callback called: ${action}, shooter: ${shooterName}`);
         if (ActionConfigUtils.isShootAction(action)) {
           // 実際のシュート実行
           const result = this.performShoot(shooter);

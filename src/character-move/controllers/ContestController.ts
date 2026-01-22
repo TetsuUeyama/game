@@ -248,12 +248,12 @@ export class ContestController {
               startTime: Date.now(),
             });
 
-            const stat1 = this.getContestStat(char1);
-            const stat2 = this.getContestStat(char2);
-            const holder = this.ball.getHolder();
-            const char1Role = holder === char1 ? 'offense' : 'defense';
-            const char2Role = holder === char2 ? 'offense' : 'defense';
-            console.log(`[ContestController] 競り合い開始: ${char1.playerData?.basic?.NAME ?? 'char1'}(${char1Role}:${stat1}) vs ${char2.playerData?.basic?.NAME ?? 'char2'}(${char2Role}:${stat2})`);
+            // const stat1 = this.getContestStat(char1);
+            // const stat2 = this.getContestStat(char2);
+            // const holder = this.ball.getHolder();
+            // const char1Role = holder === char1 ? 'offense' : 'defense';
+            // const char2Role = holder === char2 ? 'offense' : 'defense';
+            // console.log(`[ContestController] 競り合い開始: ${char1.playerData?.basic?.NAME ?? 'char1'}(${char1Role}:${stat1}) vs ${char2.playerData?.basic?.NAME ?? 'char2'}(${char2Role}:${stat2})`);
           }
 
           // 押し出し処理を実行
@@ -263,10 +263,10 @@ export class ContestController {
     }
 
     // 終了した競り合いを削除
-    for (const [pairKey, contest] of this.activeContests) {
+    for (const [pairKey, _contest] of this.activeContests) {
       if (!currentContests.has(pairKey)) {
-        const duration = (Date.now() - contest.startTime) / 1000;
-        console.log(`[ContestController] 競り合い終了: ${contest.character1.playerData?.basic?.NAME ?? 'char1'} vs ${contest.character2.playerData?.basic?.NAME ?? 'char2'} (${duration.toFixed(2)}秒)`);
+        // const duration = (Date.now() - _contest.startTime) / 1000;
+        // console.log(`[ContestController] 競り合い終了: ${_contest.character1.playerData?.basic?.NAME ?? 'char1'} vs ${_contest.character2.playerData?.basic?.NAME ?? 'char2'} (${duration.toFixed(2)}秒)`);
         this.activeContests.delete(pairKey);
       }
     }

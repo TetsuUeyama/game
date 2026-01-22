@@ -46,12 +46,24 @@ export class Ball {
   // シューターのクールダウン（シュート直後にシューター自身がキャッチしないようにする）
   private lastShooter: Character | null = null;
   private shooterCooldown: number = 0;
-  private static readonly SHOOTER_COOLDOWN_TIME = 0.5; // 0.5秒間はシューターがキャッチ不可
+  private static readonly SHOOTER_COOLDOWN_TIME = 3.0; // 3秒間はシューターがキャッチ不可（硬直+クールダウンをカバー）
+
+  // シュート時刻（タイムスタンプベースのバックアップチェック用）
+  private lastShootTime: number = 0;
+  private static readonly SHOOTER_COOLDOWN_MS = 3000; // 3000ミリ秒（タイムスタンプ用）
 
   // ブロック後のオフェンスチームクールダウン（ブロック後はオフェンス側がキャッチできない）
   private blockedOffenseTeam: "ally" | "enemy" | null = null;
   private blockCooldown: number = 0;
   private static readonly BLOCK_COOLDOWN_TIME = 0.8; // 0.8秒間はオフェンス側がキャッチ不可
+
+  // 弾き後のクールダウン（弾かれた直後は全員がキャッチ不可）
+  private deflectionCooldown: number = 0;
+  private static readonly DEFLECTION_COOLDOWN_TIME = 0.3; // 0.3秒間は全員がキャッチ不可
+
+  // 弾き時刻（タイムスタンプベースのバックアップチェック用）
+  private lastDeflectionTime: number = 0;
+  private static readonly DEFLECTION_COOLDOWN_MS = 300; // 300ミリ秒（タイムスタンプ用）
 
   // 最後にボールに触れた選手（アウトオブバウンズ判定用）
   private lastToucher: Character | null = null;
@@ -155,9 +167,19 @@ export class Ball {
     // シューターのクールダウンを減少
     if (this.shooterCooldown > 0) {
       this.shooterCooldown -= deltaTime;
-      if (this.shooterCooldown <= 0) {
+    }
+
+    // lastShooterのクリアはタイムスタンプベースで行う（deltaTime単位問題を回避）
+    if (this.lastShooter !== null) {
+      const elapsedMs = Date.now() - this.lastShootTime;
+      if (elapsedMs >= Ball.SHOOTER_COOLDOWN_MS) {
         this.lastShooter = null;
       }
+    }
+
+    // 弾き後のクールダウンを減少
+    if (this.deflectionCooldown > 0) {
+      this.deflectionCooldown -= deltaTime;
     }
 
     if (this.holder) {
@@ -212,6 +234,7 @@ export class Ball {
     // シューターのクールダウンを設定（シュート直後にシューター自身がキャッチしないようにする）
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
+    this.lastShootTime = Date.now(); // タイムスタンプベースのバックアップ
     console.log(`[Ball] shoot: シュータークールダウン設定 - lastShooter: ${previousHolder?.playerData?.basic?.NAME}, cooldown: ${this.shooterCooldown}s`);
 
     return true;
@@ -328,6 +351,14 @@ export class Ball {
   }
 
   /**
+   * 飛行を開始/再開（弾かれた時など）
+   * ボールが停止している状態から再び飛行状態にする
+   */
+  public startFlight(): void {
+    this.inFlight = true;
+  }
+
+  /**
    * パスを実行
    * @param targetPosition パス先の位置
    * @param targetCharacter パス先のキャラクター（オプション）
@@ -395,18 +426,55 @@ export class Ball {
   /**
    * 指定したキャラクターがボールをキャッチできるかどうか
    * シュート直後はシューター自身がキャッチできない
+   * 弾かれた直後は全員がキャッチできない
    */
   public canBeCaughtBy(character: Character): boolean {
-    // シューターのクールダウン中は、シューター自身はキャッチできない
-    if (this.lastShooter === character && this.shooterCooldown > 0) {
-      console.log(`[Ball] canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (シュータークールダウン中: ${this.shooterCooldown.toFixed(2)}s)`);
+    // 弾き後のクールダウン中は、全員がキャッチできない（deltaTimeベース）
+    if (this.deflectionCooldown > 0) {
+      console.log(`★ canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (弾きクールダウン中: ${this.deflectionCooldown.toFixed(2)}s)`);
       return false;
     }
-    // デバッグ: lastShooterが設定されているか確認
-    if (this.lastShooter !== null) {
-      console.log(`[Ball] canBeCaughtBy: ${character.playerData?.basic?.NAME} -> true (lastShooter: ${this.lastShooter?.playerData?.basic?.NAME}, cooldown: ${this.shooterCooldown.toFixed(2)}s)`);
+
+    // タイムスタンプベースのバックアップチェック（弾きクールダウン）
+    // deltaTimeの単位問題を回避するため、タイムスタンプでも確認
+    if (this.lastDeflectionTime > 0) {
+      const elapsedSinceDeflection = Date.now() - this.lastDeflectionTime;
+      if (elapsedSinceDeflection < Ball.DEFLECTION_COOLDOWN_MS) {
+        console.log(`★ canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (弾きタイムスタンプチェック: ${elapsedSinceDeflection}ms < ${Ball.DEFLECTION_COOLDOWN_MS}ms)`);
+        return false;
+      }
     }
+
+    // シューターのクールダウン中は、シューター自身はキャッチできない
+    // deltaTimeベースのクールダウンチェック
+    if (this.lastShooter === character && this.shooterCooldown > 0) {
+      console.log(`★ canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (シュータークールダウン中: ${this.shooterCooldown.toFixed(2)}s)`);
+      return false;
+    }
+
+    // タイムスタンプベースのバックアップチェック（deltaTimeの単位問題を回避）
+    // シューター自身は、シュート後3秒間はキャッチできない
+    if (this.lastShooter === character) {
+      const elapsedMs = Date.now() - this.lastShootTime;
+      if (elapsedMs < Ball.SHOOTER_COOLDOWN_MS) {
+        console.log(`★ canBeCaughtBy: ${character.playerData?.basic?.NAME} -> false (タイムスタンプチェック: ${elapsedMs}ms < ${Ball.SHOOTER_COOLDOWN_MS}ms)`);
+        return false;
+      }
+    }
+
+    // デバッグ: lastShooterが設定されているか確認
+    console.log(`★ canBeCaughtBy: ${character.playerData?.basic?.NAME} -> true (lastShooter: ${this.lastShooter?.playerData?.basic?.NAME ?? 'null'}, cooldown: ${this.shooterCooldown.toFixed(2)}s)`);
     return true;
+  }
+
+  /**
+   * 弾き後のクールダウンを設定
+   * ボールが弾かれた直後は一定時間全員がキャッチできない
+   */
+  public setDeflectionCooldown(): void {
+    this.deflectionCooldown = Ball.DEFLECTION_COOLDOWN_TIME;
+    this.lastDeflectionTime = Date.now(); // タイムスタンプベースのバックアップ
+    console.log(`[Ball] 弾きクールダウン設定: ${this.deflectionCooldown}s, timestamp: ${this.lastDeflectionTime}`);
   }
 
   /**
