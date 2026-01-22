@@ -89,7 +89,7 @@ export class Character {
 
   // 選手データ
   public playerData: PlayerData | null = null;
-  public playerPosition: 'GK' | 'DF' | 'MF' | 'FW' | null = null;
+  public playerPosition: 'GK' | 'DF' | 'MF' | 'FW' | 'C' | null = null;
 
   // 名前表示用
   private nameLabel: Mesh | null = null;
@@ -1054,7 +1054,7 @@ export class Character {
   /**
    * 選手データを設定する
    */
-  public setPlayerData(playerData: PlayerData, position: 'GK' | 'DF' | 'MF' | 'FW'): void {
+  public setPlayerData(playerData: PlayerData, position: 'GK' | 'DF' | 'MF' | 'FW' | 'C'): void {
     this.playerData = playerData;
     this.playerPosition = position;
 
