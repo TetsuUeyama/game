@@ -482,7 +482,8 @@ export class ShootingController {
 
     // シュート実行
     const baseTargetPosition = targetGoal.position;
-    const launchAngle = ShootingUtils.getLaunchAngle(shootType);
+    // 距離に応じた発射角度を取得（レイアップは近いほど高い弾道）
+    const launchAngle = ShootingUtils.getLaunchAngleWithDistance(shootType, distance);
 
     // ShootingUtilsを使用してシュート精度を計算
     const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
@@ -635,6 +636,14 @@ export class ShootingController {
     const shootType = ShootingUtils.getShootTypeByDistance(distance);
     let inRange = shootType !== 'out_of_range';
 
+    // ゴールの前方にいるかチェック（バックボードの裏からは打てない）
+    // allyはgoal1（+Z）を攻める → shooterPos.z < goalPos.z なら前方
+    // enemyはgoal2（-Z）を攻める → shooterPos.z > goalPos.z なら前方
+    const isInFrontOfGoal = this.isShooterInFrontOfGoal(shooter, targetGoal);
+    if (!isInFrontOfGoal) {
+      inRange = false;
+    }
+
     // ゴールへの方向を取得
     const toGoal = getDirection2D(shooterPos, targetGoal.position);
 
@@ -648,6 +657,27 @@ export class ShootingController {
     }
 
     return { shootType, distance, inRange };
+  }
+
+  /**
+   * シューターがゴールの前方（コート内側）にいるかチェック
+   * バックボードの裏からはシュートを打てない
+   */
+  private isShooterInFrontOfGoal(shooter: Character, targetGoal: GoalInfo): boolean {
+    const shooterPos = shooter.getPosition();
+    const goalZ = targetGoal.position.z;
+
+    // allyチームは+Z方向のゴールを攻める（shooter.z < goal.z なら前方）
+    // enemyチームは-Z方向のゴールを攻める（shooter.z > goal.z なら前方）
+    const isAlly = shooter.team === 'ally';
+
+    if (isAlly) {
+      // goal1（+Z側）を攻める場合、シューターはゴールより手前（-Z側）にいる必要がある
+      return shooterPos.z < goalZ;
+    } else {
+      // goal2（-Z側）を攻める場合、シューターはゴールより奥（+Z側）にいる必要がある
+      return shooterPos.z > goalZ;
+    }
   }
 
   /**

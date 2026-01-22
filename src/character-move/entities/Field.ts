@@ -6,15 +6,20 @@ import { Net } from "./Net";
 /**
  * フィールド（地面）エンティティ
  */
+// ボール半径（シュート目標マーカー用）
+const BALL_RADIUS = 0.15;
+
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
   private goal1Backboard: Mesh; // ゴール1のバックボード
   private goal1Rim: Mesh; // ゴール1のリム
   private goal1Net: Net; // ゴール1のネット
+  private goal1TargetMarker: Mesh; // ゴール1のシュート目標マーカー
   private goal2Backboard: Mesh; // ゴール2のバックボード
   private goal2Rim: Mesh; // ゴール2のリム
   private goal2Net: Net; // ゴール2のネット
+  private goal2TargetMarker: Mesh; // ゴール2のシュート目標マーカー
   private centerCircle: Mesh; // センターサークル
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
@@ -34,12 +39,14 @@ export class Field {
     this.goal1Backboard = goal1.backboard;
     this.goal1Rim = goal1.rim;
     this.goal1Net = goal1.net;
+    this.goal1TargetMarker = goal1.targetMarker;
 
     // ゴール2（手前側、-Z）を作成
     const goal2 = this.createBasketballGoal(2);
     this.goal2Backboard = goal2.backboard;
     this.goal2Rim = goal2.rim;
     this.goal2Net = goal2.net;
+    this.goal2TargetMarker = goal2.targetMarker;
   }
 
   /**
@@ -231,7 +238,7 @@ export class Field {
    * バスケットゴールを作成
    * @param goalNumber ゴール番号（1または2）
    */
-  private createBasketballGoal(goalNumber: number): { backboard: Mesh; rim: Mesh; net: Net } {
+  private createBasketballGoal(goalNumber: number): { backboard: Mesh; rim: Mesh; net: Net; targetMarker: Mesh } {
     const fieldHalfLength = FIELD_CONFIG.length / 2;
 
     // ゴール1は+Z側（奥）、ゴール2は-Z側（手前）
@@ -286,11 +293,31 @@ export class Field {
     rimMaterial.emissiveColor = Color3.FromHexString(GOAL_CONFIG.rimColor).scale(0.3);
     rim.material = rimMaterial;
 
+    // シュート目標マーカー（リム中心の、ボール半径分高い位置）
+    const targetMarker = MeshBuilder.CreateSphere(
+      `target-marker-${goalNumber}`,
+      {
+        diameter: 0.08, // 小さな点（直径8cm）
+        segments: 8,
+      },
+      this.scene
+    );
+    targetMarker.position = new Vector3(
+      0,
+      GOAL_CONFIG.rimHeight + BALL_RADIUS, // リム高さ + ボール半径
+      zPosition - zSign * GOAL_CONFIG.rimOffset // リムと同じZ位置
+    );
+    const markerMaterial = new StandardMaterial(`marker-material-${goalNumber}`, this.scene);
+    markerMaterial.diffuseColor = new Color3(1, 1, 0); // 黄色
+    markerMaterial.emissiveColor = new Color3(1, 1, 0); // 発光
+    targetMarker.material = markerMaterial;
+    targetMarker.isPickable = false; // クリック判定なし
+
     // ネット
     const rimCenter = rim.position.clone();
     const net = new Net(this.scene, rimCenter, goalNumber === 1 ? "goal1" : "goal2");
 
-    return { backboard, rim, net };
+    return { backboard, rim, net, targetMarker };
   }
 
   /**
@@ -352,9 +379,11 @@ export class Field {
     this.goal1Backboard.dispose();
     this.goal1Rim.dispose();
     this.goal1Net.dispose();
+    this.goal1TargetMarker.dispose();
     this.goal2Backboard.dispose();
     this.goal2Rim.dispose();
     this.goal2Net.dispose();
+    this.goal2TargetMarker.dispose();
     // グリッド線を破棄
     for (const line of this.gridLines) {
       line.dispose();

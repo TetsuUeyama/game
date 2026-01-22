@@ -27,7 +27,7 @@ export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   offense_no_ball: 1.0,   // オフボール: 1.0m（変更なし）
   defense_marking: 1.0,   // マーキング: 1.0m（変更なし）
   defense_help: 1.0,      // ヘルプ: 1.0m（変更なし）
-  dribbling: 1.0,         // ドリブル中: 1.0m（変更なし）
+  dribbling: 0.5,         // ドリブル中: 0.5m（機動力重視で小さく）
   shooting: 1.0,          // シュート中: 1.0m（変更なし）
   shoot_recovery: 0,      // シュート後硬直中: 0（サークル非表示）
   passing: 1.0,           // パス中: 1.0m（変更なし）
