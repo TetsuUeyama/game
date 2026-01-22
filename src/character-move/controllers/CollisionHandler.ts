@@ -477,7 +477,13 @@ export class CollisionHandler {
   private updateCharacterStates(): void {
     const holder = this.ball.getHolder();
 
-    // ボールが誰も保持していない場合（飛行中含む）、全員BALL_LOST
+    // ボールが飛行中（シュート中）の場合は状態を更新しない
+    // シュートが外れて誰かが保持するか、ゲーム再開になるまで現在の状態を維持
+    if (this.ball.isInFlight()) {
+      return;
+    }
+
+    // ボールが誰も保持していない場合（ルーズボール時）、全員BALL_LOST
     // これにより、ルーズボール時は全員がボールを追いかける
     if (!holder) {
       for (const character of this.allCharacters) {

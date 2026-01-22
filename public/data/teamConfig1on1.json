@@ -1,23 +1,35 @@
 {
   "allyTeam": {
-    "formation": "1on1",
+    "formation": "2on2",
     "players": [
       {
         "playerId": "4015",
         "position": "FW",
         "x": 0,
         "z": -5
+      },
+      {
+        "playerId": "2",
+        "position": "C",
+        "x": -3,
+        "z": -3
       }
     ]
   },
   "enemyTeam": {
-    "formation": "1on1",
+    "formation": "2on2",
     "players": [
       {
         "playerId": "1",
         "position": "DF",
         "x": 0,
         "z": 5
+      },
+      {
+        "playerId": "3",
+        "position": "C",
+        "x": 3,
+        "z": 3
       }
     ]
   }
