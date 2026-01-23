@@ -12,6 +12,7 @@ export type CircleSituation =
   | 'offense_no_ball'   // ボール非保持（オフェンス側チーム）
   | 'defense_marking'   // マーキング中（ディフェンス）
   | 'defense_help'      // ヘルプディフェンス
+  | 'loose_ball'        // ルーズボール時
   | 'dribbling'         // ドリブル中
   | 'shooting'          // シュート中
   | 'shoot_recovery'    // シュート後硬直中（サークル非表示）
@@ -24,9 +25,10 @@ export type CircleSituation =
 export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   default: 1.0,           // デフォルト: 1.0m
   offense_with_ball: 1.0, // ボール保持: 1.0m（変更なし）
-  offense_no_ball: 1.0,   // オフボール: 1.0m（変更なし）
+  offense_no_ball: 0.5,   // オフボールオフェンス: 0.5m（半分）
   defense_marking: 1.0,   // マーキング: 1.0m（変更なし）
-  defense_help: 1.0,      // ヘルプ: 1.0m（変更なし）
+  defense_help: 0.5,      // オフボールディフェンス: 0.5m（半分）
+  loose_ball: 0.5,        // ルーズボール時: 0.5m（半分）
   dribbling: 0.5,         // ドリブル中: 0.5m（機動力重視で小さく）
   shooting: 1.0,          // シュート中: 1.0m（変更なし）
   shoot_recovery: 0,      // シュート後硬直中: 0（サークル非表示）
@@ -47,6 +49,7 @@ export const STAT_INFLUENCE: Record<CircleSituation, {
   offense_no_ball: { stat: 'none', multiplier: 0 },    // 変更なし
   defense_marking: { stat: 'none', multiplier: 0 },    // 変更なし
   defense_help: { stat: 'none', multiplier: 0 },       // 変更なし
+  loose_ball: { stat: 'none', multiplier: 0 },         // ルーズボール時
   dribbling: { stat: 'none', multiplier: 0 },          // 変更なし
   shooting: { stat: 'none', multiplier: 0 },           // 変更なし
   shoot_recovery: { stat: 'none', multiplier: 0 },     // シュート後硬直中は固定（非表示）
@@ -156,6 +159,7 @@ export class CircleSizeUtils {
       offense_no_ball: 'オフボール',
       defense_marking: 'マーキング',
       defense_help: 'ヘルプ',
+      loose_ball: 'ルーズボール',
       dribbling: 'ドリブル',
       shooting: 'シュート',
       shoot_recovery: 'シュート硬直',
