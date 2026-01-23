@@ -1188,6 +1188,70 @@ export class GameScene {
       }
 
   /**
+   * ポジション配置ボードからの位置を適用
+   * @param allyPositions 味方チームの配置
+   * @param enemyPositions 敵チームの配置
+   */
+  public applyTeamPositions(
+    allyPositions: Array<{ playerId: string; worldX: number; worldZ: number }>,
+    enemyPositions: Array<{ playerId: string; worldX: number; worldZ: number }>
+  ): void {
+    // 味方チームの位置を適用
+    for (let i = 0; i < this.allyCharacters.length && i < allyPositions.length; i++) {
+      const character = this.allyCharacters[i];
+      const position = allyPositions[i];
+      const newPosition = new Vector3(
+        position.worldX,
+        character.config.physical.height / 2,
+        position.worldZ
+      );
+      character.setPosition(newPosition);
+    }
+
+    // 敵チームの位置を適用
+    for (let i = 0; i < this.enemyCharacters.length && i < enemyPositions.length; i++) {
+      const character = this.enemyCharacters[i];
+      const position = enemyPositions[i];
+      const newPosition = new Vector3(
+        position.worldX,
+        character.config.physical.height / 2,
+        position.worldZ
+      );
+      character.setPosition(newPosition);
+    }
+
+    console.log(`[GameScene] チーム位置を適用: ally=${allyPositions.length}, enemy=${enemyPositions.length}`);
+  }
+
+  /**
+   * 現在のチーム位置をボード形式で取得
+   */
+  public getCurrentPositionsAsBoard(): {
+    allyPositions: Array<{ playerId: string; worldX: number; worldZ: number }>;
+    enemyPositions: Array<{ playerId: string; worldX: number; worldZ: number }>;
+  } {
+    const allyPositions = this.allyCharacters.map((character, index) => {
+      const pos = character.getPosition();
+      return {
+        playerId: (index + 1).toString(),
+        worldX: pos.x,
+        worldZ: pos.z,
+      };
+    });
+
+    const enemyPositions = this.enemyCharacters.map((character, index) => {
+      const pos = character.getPosition();
+      return {
+        playerId: (this.allyCharacters.length + index + 1).toString(),
+        worldX: pos.x,
+        worldZ: pos.z,
+      };
+    });
+
+    return { allyPositions, enemyPositions };
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {

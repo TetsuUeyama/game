@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
 import { TeamConfigLoader } from '@/character-move/utils/TeamConfigLoader';
 import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
 import { CameraSwitchPanel } from './CameraSwitchPanel';
+import { PositionBoardPanel } from './PositionBoardPanel';
+import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -18,6 +20,7 @@ export default function CharacterMove1on1Game() {
   const [winner, setWinner] = useState<'ally' | 'enemy' | null>(null);
   const [winningScore, setWinningScore] = useState<number>(5);
   const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ALLY', enemy: 'ENEMY' });
+  const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -138,6 +141,28 @@ export default function CharacterMove1on1Game() {
     }
   };
 
+  // ポジション配置を適用
+  const handleApplyPositions = useCallback((
+    allyPositions: BoardPlayerPosition[],
+    enemyPositions: BoardPlayerPosition[]
+  ) => {
+    if (!gameSceneRef.current) return;
+
+    const allyPosArray = allyPositions.map(p => ({
+      playerId: p.playerId,
+      worldX: p.worldX,
+      worldZ: p.worldZ,
+    }));
+
+    const enemyPosArray = enemyPositions.map(p => ({
+      playerId: p.playerId,
+      worldX: p.worldX,
+      worldZ: p.worldZ,
+    }));
+
+    gameSceneRef.current.applyTeamPositions(allyPosArray, enemyPosArray);
+  }, []);
+
   // エラー表示
   if (error) {
     return (
@@ -213,6 +238,29 @@ export default function CharacterMove1on1Game() {
 
         {/* カメラ切り替えパネル */}
         {!loading && <CameraSwitchPanel gameScene={gameSceneRef.current} />}
+
+        {/* ポジション配置ボードトグルボタン */}
+        {!loading && (
+          <button
+            onClick={() => setIsPositionBoardVisible(!isPositionBoardVisible)}
+            className={`absolute top-4 right-4 z-40 px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg ${
+              isPositionBoardVisible
+                ? 'bg-yellow-500 hover:bg-yellow-600 text-black'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            }`}
+          >
+            {isPositionBoardVisible ? '配置ボード閉' : '配置ボード'}
+          </button>
+        )}
+
+        {/* ポジション配置ボードパネル */}
+        {!loading && (
+          <PositionBoardPanel
+            isVisible={isPositionBoardVisible}
+            onClose={() => setIsPositionBoardVisible(false)}
+            onApplyPositions={handleApplyPositions}
+          />
+        )}
 
         {/* 勝利オーバーレイ */}
         {winner && (

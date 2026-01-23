@@ -85,7 +85,8 @@ export class CircleSizeController {
       }
     }
 
-    return 'default';
+    // ボール保持者がいない = ルーズボール状態
+    return 'loose_ball';
   }
 
   /**
