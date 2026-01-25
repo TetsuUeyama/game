@@ -5,8 +5,6 @@ import { Field } from "../entities/Field";
 import { ShootingController } from "./ShootingController";
 import { FeintController } from "./FeintController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
-import { DEFENSE_DISTANCE } from "../config/DefenseConfig";
-import { Vector3 } from "@babylonjs/core";
 import {
   LooseBallAI,
   OnBallOffenseAI,
@@ -14,6 +12,7 @@ import {
   OffBallOffenseAI,
   OffBallDefenseAI
 } from "./ai";
+import { PassCallback } from "./ai/OnBallOffenseAI";
 
 /**
  * キャラクターAIコントローラー
@@ -66,6 +65,13 @@ export class CharacterAI {
   }
 
   /**
+   * パスコールバックを設定
+   */
+  public setPassCallback(callback: PassCallback): void {
+    this.onBallOffenseAI.setPassCallback(callback);
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
@@ -79,11 +85,6 @@ export class CharacterAI {
     if (currentAction !== null || currentPhase !== 'idle') {
       // アクション中は待機モーションも再生しない（アクションモーションが再生中）
       return;
-    }
-
-    // ゴールキーパーの場合、ゴール前半径5m以内に位置を制限
-    if (this.character.playerPosition === 'GK') {
-      this.constrainGoalkeeperPosition();
     }
 
     const state = this.character.getState();
@@ -106,40 +107,9 @@ export class CharacterAI {
         this.offBallOffenseAI.update(deltaTime);
         break;
       case CharacterState.OFF_BALL_DEFENDER:
-        // オフボールディフェンス（相手センターをマーク）
+        // オフボールディフェンス（同ポジションマッチアップ）
         this.offBallDefenseAI.update(deltaTime);
         break;
-    }
-  }
-
-  /**
-   * ゴールキーパーの位置をゴール前半径5m以内に制限
-   */
-  private constrainGoalkeeperPosition(): void {
-    const myPosition = this.character.getPosition();
-
-    // 自チームのゴール位置を取得
-    const goal = this.character.team === "ally" ? this.field.getGoal2Backboard() : this.field.getGoal1Backboard();
-    const goalPosition = goal.position;
-
-    // ゴールからの距離を計算（XZ平面上）
-    const dx = myPosition.x - goalPosition.x;
-    const dz = myPosition.z - goalPosition.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    // DEFENSE_DISTANCE.GOALKEEPER_MAX_RADIUSを超えた場合、位置を制限
-    const maxRadius = DEFENSE_DISTANCE.GOALKEEPER_MAX_RADIUS;
-    if (distance > maxRadius) {
-      // ゴール方向への単位ベクトル
-      const dirX = dx / distance;
-      const dirZ = dz / distance;
-
-      // 半径5m以内の位置に修正
-      const newX = goalPosition.x + dirX * maxRadius;
-      const newZ = goalPosition.z + dirZ * maxRadius;
-
-      // キャラクターの位置を更新
-      this.character.setPosition(new Vector3(newX, myPosition.y, newZ));
     }
   }
 

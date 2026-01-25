@@ -16,9 +16,9 @@ export type PositionBoardType = 'allyOffense' | 'allyDefense' | 'enemyOffense' |
 export type TeamType = 'ally' | 'enemy';
 
 /**
- * ポジション種別
+ * ポジション種別（バスケットボール）
  */
-export type PlayerPosition = 'GK' | 'DF' | 'MF' | 'FW';
+export type PlayerPosition = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 /**
  * ボード上のプレイヤー位置情報
@@ -84,8 +84,9 @@ export const BOARD_TYPE_LABELS: Record<PositionBoardType, string> = {
  * ポジションの表示名
  */
 export const POSITION_LABELS: Record<PlayerPosition, string> = {
-  GK: 'GK',
-  DF: 'DF',
-  MF: 'MF',
-  FW: 'FW',
+  PG: 'PG',
+  SG: 'SG',
+  SF: 'SF',
+  PF: 'PF',
+  C: 'C',
 };

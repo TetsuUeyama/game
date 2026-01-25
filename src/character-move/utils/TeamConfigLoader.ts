@@ -5,7 +5,7 @@
 
 export interface PlayerConfig {
   playerId: string;
-  position: 'GK' | 'DF' | 'MF' | 'FW';
+  position: 'PG' | 'SG' | 'SF' | 'PF' | 'C';
   x: number;
   z: number;
 }

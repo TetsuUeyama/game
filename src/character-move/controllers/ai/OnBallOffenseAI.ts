@@ -7,8 +7,18 @@ import { ShootingController } from "../ShootingController";
 import { FeintController } from "../FeintController";
 import { SHOOT_COOLDOWN, ShootingUtils } from "../../config/ShootingConfig";
 import { DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
+import { PASS_COOLDOWN, PassUtils } from "../../config/PassConfig";
 import { IDLE_MOTION } from "../../data/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../data/WalkMotion";
+
+/**
+ * パス実行時のコールバック型
+ */
+export type PassCallback = (
+  passer: Character,
+  target: Character,
+  passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead'
+) => { success: boolean; message: string };
 
 /**
  * オンボールオフェンス時のAI
@@ -17,11 +27,14 @@ import { WALK_FORWARD_MOTION } from "../../data/WalkMotion";
 export class OnBallOffenseAI extends BaseStateAI {
   private shootingController: ShootingController | null = null;
   private feintController: FeintController | null = null;
+  private passCallback: PassCallback | null = null;
 
   // シュートクールダウン（連続シュート防止）
   private shootCooldown: number = 0;
   // フェイントクールダウン（連続フェイント防止）
   private feintCooldown: number = 0;
+  // パスクールダウン（連続パス防止）
+  private passCooldown: number = 0;
 
   constructor(
     character: Character,
@@ -47,6 +60,13 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
+   * パスコールバックを設定
+   */
+  public setPassCallback(callback: PassCallback): void {
+    this.passCallback = callback;
+  }
+
+  /**
    * クールダウンを更新
    */
   public updateCooldowns(deltaTime: number): void {
@@ -55,6 +75,9 @@ export class OnBallOffenseAI extends BaseStateAI {
     }
     if (this.feintCooldown > 0) {
       this.feintCooldown -= deltaTime;
+    }
+    if (this.passCooldown > 0) {
+      this.passCooldown -= deltaTime;
     }
   }
 
@@ -104,7 +127,12 @@ export class OnBallOffenseAI extends BaseStateAI {
           this.character.setRotation(angle);
         }
 
-        // 1on1状態: フェイントを先に試みる（確率でフェイントまたはシュートを選択）
+        // 1on1状態: まずパスを試みる（ポジションに応じた判定）
+        if (this.tryPass()) {
+          return;
+        }
+
+        // パスしなかった場合、フェイントを試みる（確率でフェイントまたはシュートを選択）
         if (this.tryFeint()) {
           return; // フェイント実行した場合、シュートは打たない
         }
@@ -178,6 +206,11 @@ export class OnBallOffenseAI extends BaseStateAI {
     // ディフェンダーがいないか遠い場合
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     if (this.tryShoot()) {
+      return;
+    }
+
+    // シュートできない場合、パスを試みる
+    if (this.tryPass()) {
       return;
     }
 
@@ -328,5 +361,107 @@ export class OnBallOffenseAI extends BaseStateAI {
       console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}: フェイント後のドリブル突破（${direction}）`);
     }
     return success;
+  }
+
+  /**
+   * パスを試みる
+   * - センター(C)がゴール下以外でボールを持ったらPGにパス
+   * - PGがゴール下にいるCにパスを通す
+   * @returns パスを実行した場合true
+   */
+  private tryPass(): boolean {
+    // パスコールバックがない場合は実行不可
+    if (!this.passCallback) {
+      return false;
+    }
+
+    // パスクールダウン中は実行不可
+    if (this.passCooldown > 0) {
+      return false;
+    }
+
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    const myPosition = this.character.playerPosition;
+    const myPos = this.character.getPosition();
+
+    // 攻めるべきゴールを取得
+    const attackingGoal = this.character.team === 'ally'
+      ? this.field.getGoal1Rim()
+      : this.field.getGoal2Rim();
+    const goalPosition = attackingGoal.position;
+
+    // 自分がゴール下にいるかどうかを判定
+    const amINearGoal = PassUtils.isNearGoal(
+      { x: myPos.x, z: myPos.z },
+      { x: goalPosition.x, z: goalPosition.z }
+    );
+
+    // チームメイトを取得
+    const teammates = this.allCharacters.filter(
+      c => c.team === this.character.team && c !== this.character
+    );
+
+    let passTarget: Character | null = null;
+
+    // センター(C)がゴール下以外でボールを持っている場合 → PGにパス
+    if (myPosition === 'C' && !amINearGoal) {
+      passTarget = teammates.find(c => c.playerPosition === 'PG') || null;
+      if (passTarget) {
+        console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}(C): ゴール下以外なのでPGにパス`);
+      }
+    }
+
+    // PGがボールを持っている場合 → ゴール下にいるCにパス
+    if (myPosition === 'PG' && !passTarget) {
+      const centerPlayer = teammates.find(c => c.playerPosition === 'C');
+      if (centerPlayer) {
+        const centerPos = centerPlayer.getPosition();
+        const isCenterNearGoal = PassUtils.isNearGoal(
+          { x: centerPos.x, z: centerPos.z },
+          { x: goalPosition.x, z: goalPosition.z }
+        );
+        if (isCenterNearGoal) {
+          passTarget = centerPlayer;
+          console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}(PG): ゴール下のCにパス`);
+        }
+      }
+    }
+
+    // パスターゲットがいない場合は実行しない
+    if (!passTarget) {
+      return false;
+    }
+
+    // パス先との距離を確認
+    const targetPos = passTarget.getPosition();
+    const distance = Vector3.Distance(myPos, targetPos);
+    if (!PassUtils.isPassableDistance(distance)) {
+      return false;
+    }
+
+    // パスターゲットの方を向く
+    const toTarget = new Vector3(
+      targetPos.x - myPos.x,
+      0,
+      targetPos.z - myPos.z
+    );
+    if (toTarget.length() > 0.01) {
+      const angle = Math.atan2(toTarget.x, toTarget.z);
+      this.character.setRotation(angle);
+    }
+
+    // パス実行（コールバック経由）
+    const result = this.passCallback(this.character, passTarget, 'pass_chest');
+    if (result.success) {
+      this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
+      console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}: パス成功 - ${result.message}`);
+      return true;
+    }
+
+    return false;
   }
 }

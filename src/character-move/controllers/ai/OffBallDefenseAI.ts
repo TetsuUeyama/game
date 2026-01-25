@@ -132,19 +132,23 @@ export class OffBallDefenseAI extends BaseStateAI {
   }
 
   /**
-   * マークする相手を探す（相手チームのセンター優先）
+   * マークする相手を探す（同ポジションマッチアップ）
+   * ディフェンスは相手チームの同ポジションをマークする
    */
   private findMarkTarget(): Character | null {
     const opponentTeam = this.character.team === 'ally' ? 'enemy' : 'ally';
+    const myPosition = this.character.playerPosition;
 
-    // まず相手チームのセンターを探す
-    for (const char of this.allCharacters) {
-      if (char.team === opponentTeam && char.playerPosition === 'C') {
-        return char;
+    // 同ポジションの相手を探す
+    if (myPosition) {
+      for (const char of this.allCharacters) {
+        if (char.team === opponentTeam && char.playerPosition === myPosition) {
+          return char;
+        }
       }
     }
 
-    // センターがいなければオフボールプレイヤーを探す
+    // 同ポジションが見つからなければオフボールプレイヤーを探す
     return this.findOffBallPlayer();
   }
 

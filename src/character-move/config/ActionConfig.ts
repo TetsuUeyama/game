@@ -103,8 +103,6 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     activeTime: 300,       // 0.3秒
     recoveryTime: 2000,    // 2秒（硬直時間）
     cooldownTime: 2000,    // 2秒（再使用禁止時間）
-
-
     priority: 10,
     interruptible: true,   // startup中はブロックでキャンセル
   },
