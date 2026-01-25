@@ -865,8 +865,6 @@ export class GameScene {
             // ボールをパス（実際のパス処理）
             const targetPosition = passTarget.getPosition();
             this.ball.pass(targetPosition, passTarget);
-            const targetName = passTarget.playerData?.basic?.NAME || passTarget.playerPosition || 'unknown';
-            console.log(`[GameScene] ${passType}を${targetName}にパス！`);
           }
         }
       },
@@ -895,8 +893,7 @@ export class GameScene {
 
     // activeフェーズに入ったらディフェンス判定を行うコールバックを設定
     actionController.setCallbacks({
-      onActive: (action) => {
-        console.log(`[GameScene] ${action}のアクティブフェーズ`);
+      onActive: (_action) => {
         // ここでブロック判定やスティール判定を行う
         // 実際の判定処理は後で追加
       },
@@ -1233,8 +1230,6 @@ export class GameScene {
       );
       character.setPosition(newPosition);
     }
-
-    console.log(`[GameScene] チーム位置を適用: ally=${allyPositions.length}, enemy=${enemyPositions.length}`);
   }
 
   /**

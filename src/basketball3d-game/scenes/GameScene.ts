@@ -1,4 +1,7 @@
 import {Scene, Engine, ArcRotateCamera, HemisphericLight, DirectionalLight, Vector3, Color3} from "@babylonjs/core";
+import HavokPhysics from "@babylonjs/havok";
+import {HavokPlugin} from "@babylonjs/core/Physics/v2/Plugins/havokPlugin";
+import {PhysicsConstants} from "../../physics/PhysicsConfig";
 import {Court} from "../entities/Court";
 import {Player, HandPose} from "../entities/Player";
 import {Ball} from "../entities/Ball";
@@ -38,6 +41,9 @@ export class GameScene {
   private player1JumpAction: JumpAction;
   private player1JumpRequested: boolean = false;
 
+  // 物理エンジンの初期化状態
+  private physicsInitialized: boolean = false;
+
   // プレイヤー1の移動キー状態
   private keyW: boolean = false;
   private keyA: boolean = false;
@@ -69,6 +75,9 @@ export class GameScene {
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color3(0.1, 0.1, 0.15).toColor4();
 
+    // 物理エンジンの非同期初期化を開始
+    this.initializePhysics();
+
     // カメラの設定
     this.camera = this.createCamera(canvas);
 
@@ -96,7 +105,7 @@ export class GameScene {
       (_goalOwner) => this.resetBallToCenter(),
       (_playerId) => {
         // ボール拾得時のコールバック（必要に応じて処理を追加）
-      }
+      },
     );
     this.movementController = new MovementController(this.player1, this.player2, this.player2Enabled);
 
@@ -121,6 +130,60 @@ export class GameScene {
     this.player2.setMovementDebugMode(true);
 
     console.log("[GameScene] 3Dバスケットゲーム初期化完了");
+  }
+
+  /**
+   * 物理エンジン（Havok）を非同期で初期化
+   */
+  private async initializePhysics(): Promise<void> {
+    try {
+      console.log("[GameScene] Initializing Havok physics engine...");
+      const havokInstance = await HavokPhysics();
+      const havokPlugin = new HavokPlugin(true, havokInstance);
+
+      // シーンに物理エンジンを有効化（重力を設定）
+      this.scene.enablePhysics(PhysicsConstants.GRAVITY, havokPlugin);
+
+      this.physicsInitialized = true;
+      console.log("[GameScene] Havok physics engine initialized successfully");
+
+      // ボールの物理を再初期化（物理エンジンが有効になった後）
+      this.reinitializeBallPhysics();
+    } catch (error) {
+      console.error("[GameScene] Failed to initialize Havok physics:", error);
+      console.warn("[GameScene] Falling back to manual physics simulation");
+    }
+  }
+
+  /**
+   * ボールの物理を再初期化（物理エンジン初期化後に呼び出す）
+   */
+  private reinitializeBallPhysics(): void {
+    // ボールを一度破棄して再作成
+    const currentPosition = this.ball.getPosition();
+    const currentOwner = this.ball.owner;
+    this.ball.dispose();
+
+    this.ball = new Ball(this.scene, currentPosition);
+    if (currentOwner !== null) {
+      this.ball.pickUp(currentOwner);
+    }
+
+    // コントローラーのボール参照を更新
+    this.shootController = new ShootController(this.ball, this.player1, this.player2);
+    this.collisionHandler = new CollisionHandler(
+      this.ball,
+      this.player1,
+      this.player2,
+      this.player2Enabled,
+      this.court.backboards,
+      (_goalOwner) => this.resetBallToCenter(),
+      (_playerId) => {
+        // ボール拾得時のコールバック
+      },
+    );
+
+    console.log("[GameScene] Ball physics reinitialized with Havok");
   }
 
   /**
@@ -288,7 +351,7 @@ export class GameScene {
       const targetPos = new Vector3(
         currentPos.x + moveX * 10.0, // 10m先を目標に設定
         currentPos.y,
-        currentPos.z + moveZ * 10.0
+        currentPos.z + moveZ * 10.0,
       );
 
       // 移動
@@ -389,7 +452,7 @@ export class GameScene {
       "Player 1 (Light)",
       startPosition,
       new Color3(0, 0.5, 1), // 青色
-      stats
+      stats,
     );
 
     console.log("[GameScene] Player 1 (70kg) 作成完了");
@@ -415,7 +478,7 @@ export class GameScene {
       "Player 2 (Heavy)",
       startPosition,
       new Color3(1, 0.2, 0), // 赤色
-      stats
+      stats,
     );
 
     // Player2の初期向きを設定（コート中央に向ける = -Z方向）
@@ -546,15 +609,7 @@ export class GameScene {
     // Player1用のGameContextを作成
     const player1GoalZ = this.movementController.getRimCenterZ("player2");
     const player1OpponentGoalZ = this.movementController.getRimCenterZ("player1");
-    const player1Context = GameContextHelper.create(
-      this.player1,
-      this.player2Enabled ? this.player2 : null,
-      this.ball,
-      player1GoalZ,
-      player1OpponentGoalZ,
-      deltaTime,
-      this.player2Enabled
-    );
+    const player1Context = GameContextHelper.create(this.player1, this.player2Enabled ? this.player2 : null, this.ball, player1GoalZ, player1OpponentGoalZ, deltaTime, this.player2Enabled);
 
     // Player1の状態を更新（移動とアクションを自動実行）
     this.player1.stateManager.update(player1Context);
@@ -564,11 +619,7 @@ export class GameScene {
       // ダッシュ先の目標位置を設定（進行方向に5m先）
       const player1Pos = this.player1.getPosition();
       const direction = this.player1.direction;
-      const dashTargetPos = new Vector3(
-        player1Pos.x + Math.sin(direction) * 5.0,
-        player1Pos.y,
-        player1Pos.z + Math.cos(direction) * 5.0
-      );
+      const dashTargetPos = new Vector3(player1Pos.x + Math.sin(direction) * 5.0, player1Pos.y, player1Pos.z + Math.cos(direction) * 5.0);
       this.player1DashAction.setTarget(dashTargetPos);
 
       // ダッシュアクションを実行
@@ -594,15 +645,7 @@ export class GameScene {
     if (this.player2Enabled) {
       const player2GoalZ = this.movementController.getRimCenterZ("player1");
       const player2OpponentGoalZ = this.movementController.getRimCenterZ("player2");
-      const player2Context = GameContextHelper.create(
-        this.player2,
-        this.player1,
-        this.ball,
-        player2GoalZ,
-        player2OpponentGoalZ,
-        deltaTime,
-        this.player2Enabled
-      );
+      const player2Context = GameContextHelper.create(this.player2, this.player1, this.ball, player2GoalZ, player2OpponentGoalZ, deltaTime, this.player2Enabled);
 
       // Player2の状態を更新（移動とアクションを自動実行）
       this.player2.stateManager.update(player2Context);

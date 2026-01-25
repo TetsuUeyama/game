@@ -492,7 +492,6 @@ export class OneOnOneBattleController {
     const actionResult = actionController.startAction('dribble_breakthrough');
 
     if (!actionResult.success) {
-      console.log(`[OneOnOneBattleController] ドリブル突破開始失敗: ${actionResult.message}`);
       return false;
     }
 

@@ -1,4 +1,5 @@
 import { Vector3 } from '@babylonjs/core';
+import { PhysicsConstants, getOptimalShootAngle, degreesToRadians, radiansToDegrees } from '../../physics/PhysicsConfig';
 
 /**
  * シュート計算の結果
@@ -23,7 +24,7 @@ export function calculateShootTrajectory(
   targetPosition: Vector3,
   preferredAngle?: number
 ): ShootCalculationResult {
-  const gravity = 9.81; // 重力加速度 (m/s²)
+  const gravity = PhysicsConstants.GRAVITY_MAGNITUDE;
 
   // シューターからターゲットへのベクトル
   const toTarget = targetPosition.subtract(shooterPosition);
@@ -39,23 +40,11 @@ export function calculateShootTrajectory(
 
   if (preferredAngle !== undefined) {
     // 指定された角度を使用
-    shootAngle = (preferredAngle * Math.PI) / 180;
+    shootAngle = degreesToRadians(preferredAngle);
   } else {
-    // 距離に応じて最適な角度を自動計算
-    // 近距離でも高い弧を描くように調整
-    // 極近距離（0-2m）: 55度（高い弧）
-    // 近距離（2-5m）: 52度
-    // 中距離（5-10m）: 50度
-    // 遠距離（10m以上）: 48度
-    if (horizontalDistance < 2) {
-      shootAngle = (75 * Math.PI) / 180;
-    } else if (horizontalDistance < 5) {
-      shootAngle = (72 * Math.PI) / 180;
-    } else if (horizontalDistance < 10) {
-      shootAngle = (65 * Math.PI) / 180;
-    } else {
-      shootAngle = (48 * Math.PI) / 180;
-    }
+    // 距離に応じて最適な角度を自動計算（PhysicsConfigの関数を使用）
+    const optimalAngleDegrees = getOptimalShootAngle(horizontalDistance);
+    shootAngle = degreesToRadians(optimalAngleDegrees);
   }
 
   // 放物線運動の公式を使用して初速度を計算
@@ -86,7 +75,7 @@ export function calculateShootTrajectory(
   // 負の値やNaNの場合は、より大きな角度で再計算
   if (initialSpeedSquared <= 0 || isNaN(initialSpeedSquared)) {
     // フォールバック：60度で計算
-    shootAngle = (60 * Math.PI) / 180;
+    shootAngle = degreesToRadians(60);
     initialSpeedSquared = (gravity * horizontalDistance) / Math.sin(2 * shootAngle);
   }
 
@@ -115,7 +104,7 @@ export function calculateShootTrajectory(
 
   return {
     velocity,
-    angle: (shootAngle * 180) / Math.PI,
+    angle: radiansToDegrees(shootAngle),
     initialSpeed,
     flightTime,
     maxHeight,
@@ -134,7 +123,7 @@ export function isShootPhysicallyPossible(
   targetPosition: Vector3,
   maxSpeed: number = 15
 ): boolean {
-  const gravity = 9.81;
+  const gravity = PhysicsConstants.GRAVITY_MAGNITUDE;
   const toTarget = targetPosition.subtract(shooterPosition);
   const horizontalDistance = Math.sqrt(toTarget.x * toTarget.x + toTarget.z * toTarget.z);
   const verticalDistance = toTarget.y;

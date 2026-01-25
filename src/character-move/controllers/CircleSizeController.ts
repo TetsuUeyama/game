@@ -3,7 +3,6 @@ import { Ball } from "../entities/Ball";
 import {
   CircleSituation,
   CircleSizeUtils,
-  CIRCLE_ANIMATION,
 } from "../config/CircleSizeConfig";
 
 /**
@@ -139,11 +138,6 @@ export class CircleSizeController {
 
         // 新しい目標サイズを計算
         state.targetSize = CircleSizeUtils.calculateCircleSize(newSituation, stats);
-
-        console.log(
-          `[CircleSizeController] ${character.playerData?.basic?.NAME ?? 'unknown'}: ` +
-          `${CircleSizeUtils.getSituationName(newSituation)} → サイズ ${state.targetSize.toFixed(2)}m`
-        );
       }
 
       // サイズをスムーズに補間
