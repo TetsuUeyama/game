@@ -55,8 +55,6 @@ export class ActionController {
    * コールバックを設定
    */
   public setCallbacks(callbacks: ActionCallbacks): void {
-    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
-    console.log(`★★ setCallbacks: ${charName}, hasOnActive: ${!!callbacks.onActive}, currentAction: ${this.state.currentAction}`);
     this.callbacks = callbacks;
   }
 
@@ -144,7 +142,6 @@ export class ActionController {
     if (this.state.currentAction !== null) {
       const interruptedAction = this.state.currentAction;
       this.callbacks.onInterrupt?.(interruptedAction, type);
-      console.log(`[ActionController] ${interruptedAction}を${type}で中断`);
     }
 
     // 新しいアクションを開始
@@ -158,10 +155,6 @@ export class ActionController {
 
     // モーションを再生
     this.playActionMotion(type);
-
-    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
-    console.log(`★★ startAction: ${charName}, action: ${type}, callbacks cleared`);
-    console.log(`[ActionController] ${type}のstartup開始`);
 
     return { success: true, message: `${type}を開始しました` };
   }
@@ -187,7 +180,6 @@ export class ActionController {
     const cancelledAction = this.state.currentAction;
     this.resetState();
 
-    console.log(`[ActionController] ${cancelledAction}をキャンセルしました`);
     return { success: true, message: `${cancelledAction}をキャンセルしました` };
   }
 
@@ -233,18 +225,11 @@ export class ActionController {
    */
   private transitionToActive(now: number): void {
     const action = this.state.currentAction!;
-    const charName = this.character.playerData?.basic?.NAME ?? 'unknown';
-    const callbackKeys = Object.keys(this.callbacks);
-    console.log(`★★ transitionToActive: ${charName}, action: ${action}, hasOnActive: ${!!this.callbacks.onActive}, callbackKeys: [${callbackKeys.join(', ')}]`);
     this.state.phase = 'active';
     this.state.phaseStartTime = now;
     if (this.callbacks.onActive) {
-      console.log(`★★ calling onActive callback for ${charName}`);
       this.callbacks.onActive(action);
-    } else {
-      console.log(`★★ NO onActive callback for ${charName}!`);
     }
-    console.log(`[ActionController] ${action}のactive開始`);
   }
 
   /**
@@ -255,7 +240,6 @@ export class ActionController {
     this.state.phase = 'recovery';
     this.state.phaseStartTime = now;
     this.callbacks.onRecovery?.(action);
-    console.log(`[ActionController] ${action}のrecovery開始`);
   }
 
   /**
@@ -270,7 +254,6 @@ export class ActionController {
     }
 
     this.callbacks.onComplete?.(action);
-    console.log(`[ActionController] ${action}完了（クールダウン: ${def.cooldownTime}ms）`);
 
     this.resetState();
   }
@@ -394,13 +377,11 @@ export class ActionController {
   private playActionMotion(type: ActionType): void {
     const motionData = ACTION_MOTIONS[type];
     if (!motionData) {
-      console.log(`[ActionController] モーションデータが見つかりません: ${type}`);
       return;
     }
 
     const motionController = this.character.getMotionController();
     if (!motionController) {
-      console.log(`[ActionController] MotionControllerが見つかりません`);
       return;
     }
 
@@ -416,8 +397,6 @@ export class ActionController {
       // sqrt(jump / 70) で計算（jump=70で1.0、jump=100で1.19、jump=50で0.85）
       const motionSpeed = Math.sqrt(jumpStat / baseJump);
 
-      console.log(`[ActionController] block_shot: jump=${jumpStat}, heightScale=${heightScale.toFixed(2)}, speed=${motionSpeed.toFixed(2)}`);
-
       // スケール付きでモーション再生
       motionController.playWithScale(motionData, heightScale, motionSpeed, 0.1);
       return;
@@ -425,7 +404,6 @@ export class ActionController {
 
     // 通常のモーション再生（ブレンド時間0.1秒）
     motionController.play(motionData, 1.0, 0.1);
-    console.log(`[ActionController] モーション再生: ${motionData.name}`);
   }
 
   /**
@@ -504,7 +482,6 @@ export class ActionController {
     this.callbacks.onInterrupt?.(interruptedAction, 'block_shot');
     this.resetState();
 
-    console.log(`[ActionController] ${interruptedAction}がブロックで中断されました`);
     return true;
   }
 

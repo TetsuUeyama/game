@@ -337,7 +337,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (result && result.success) {
       // フェイントクールダウンを設定
       this.feintCooldown = 2.0; // 2秒間フェイント不可
-      console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}: フェイント実行 - ${result.message}`);
       return true;
     }
 
@@ -356,11 +355,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     // ドリブル突破方向をランダムに決定（左か右）
     const direction = Math.random() < 0.5 ? 'left' : 'right';
 
-    const success = this.feintController.performBreakthroughAfterFeint(this.character, direction);
-    if (success) {
-      console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}: フェイント後のドリブル突破（${direction}）`);
-    }
-    return success;
+    return this.feintController.performBreakthroughAfterFeint(this.character, direction);
   }
 
   /**
@@ -410,9 +405,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     // センター(C)がゴール下以外でボールを持っている場合 → PGにパス
     if (myPosition === 'C' && !amINearGoal) {
       passTarget = teammates.find(c => c.playerPosition === 'PG') || null;
-      if (passTarget) {
-        console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}(C): ゴール下以外なのでPGにパス`);
-      }
     }
 
     // PGがボールを持っている場合 → ゴール下にいるCにパス
@@ -426,7 +418,6 @@ export class OnBallOffenseAI extends BaseStateAI {
         );
         if (isCenterNearGoal) {
           passTarget = centerPlayer;
-          console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}(PG): ゴール下のCにパス`);
         }
       }
     }
@@ -458,7 +449,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     const result = this.passCallback(this.character, passTarget, 'pass_chest');
     if (result.success) {
       this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
-      console.log(`[OnBallOffenseAI] ${this.character.playerData?.basic?.NAME}: パス成功 - ${result.message}`);
       return true;
     }
 

@@ -1,3 +1,4 @@
+import { Scalar } from "@babylonjs/core";
 import {Character} from "../entities/Character";
 import {MotionData, MotionState, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset} from "../types/MotionTypes";
 
@@ -278,21 +279,21 @@ export class MotionController {
   }
 
   /**
-   * 2つの回転を線形補間
+   * 2つの回転を線形補間（Babylon.js Scalar API使用）
    */
   private lerpRotation(from: JointRotation, to: JointRotation, t: number): JointRotation {
     return {
-      x: this.lerp(from.x, to.x, t),
-      y: this.lerp(from.y, to.y, t),
-      z: this.lerp(from.z, to.z, t),
+      x: Scalar.Lerp(from.x, to.x, t),
+      y: Scalar.Lerp(from.y, to.y, t),
+      z: Scalar.Lerp(from.z, to.z, t),
     };
   }
 
   /**
-   * 線形補間
+   * 線形補間（Babylon.js Scalar API使用）
    */
   private lerp(from: number, to: number, t: number): number {
-    return from + (to - from) * t;
+    return Scalar.Lerp(from, to, t);
   }
 
   /**

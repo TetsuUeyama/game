@@ -62,7 +62,7 @@ export class CollisionHandler {
 
     // ブロック成功した場合、このフレームではキャッチ判定をスキップ
     if (this.blockSucceededThisFrame) {
-      console.log(`[CollisionHandler] ブロック成功のためキャッチ判定をスキップ`);
+      // ブロック成功時はキャッチ判定をスキップ
     } else {
       // ボールとキャラクターの衝突判定（キャッチ）
       for (const character of this.allCharacters) {
@@ -110,28 +110,20 @@ export class CollisionHandler {
 
     // XZ平面上の衝突判定
     if (distanceXZ < BALL_CHARACTER_DISTANCE && distanceXZ > 0.001) {
-      // デバッグ: キャッチ判定に入ったことをログ出力
-      console.log(`★★★ キャッチ判定: ${character.playerData?.basic?.NAME}, 距離=${distanceXZ.toFixed(2)}m, ボール飛行中=${this.ball.isInFlight()}`);
-
       // シュート直後のシューター自身はキャッチできない（クールダウン中）
       if (!this.ball.canBeCaughtBy(character)) {
-        // ボールを弾く（リングに当たった時のように）
         this.deflectBallFromCharacter(character, ballPosition);
-        console.log(`[CollisionHandler] クールダウン中のためボールを弾く: ${character.playerData?.basic?.NAME}`);
         return;
       }
 
       // シュートアクションの硬直中またはクールダウン中はボールを弾く
       const actionController = character.getActionController();
       if (actionController && actionController.isInShootRecoveryOrCooldown()) {
-        // ボールを弾く（リングに当たった時のように）
         this.deflectBallFromCharacter(character, ballPosition);
-        console.log(`[CollisionHandler] シュート硬直中のためボールを弾く: ${character.playerData?.basic?.NAME}`);
         return;
       }
 
       // ボールを保持させる
-      console.log(`★★★ キャッチ成功: ${character.playerData?.basic?.NAME}, ボール飛行中=${this.ball.isInFlight()}`);
       this.ball.setHolder(character);
     }
   }
@@ -198,8 +190,6 @@ export class CollisionHandler {
     // ボールを飛行状態にする（停止していた場合も再び動くようにする）
     this.ball.startFlight();
 
-    console.log(`[CollisionHandler] キャラクター反射: 入射速度=${incomingSpeed.toFixed(1)}, 弾き速度=${deflectSpeed.toFixed(1)}, 当たり高さ=${normalizedHitHeight.toFixed(2)}`);
-
     // 弾き後のクールダウンを設定（一定時間誰も保持できない）
     this.ball.setDeflectionCooldown();
   }
@@ -237,8 +227,6 @@ export class CollisionHandler {
       const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, HEAD_RADIUS);
 
       if (headCollision.isColliding) {
-        console.log(`[CollisionHandler] ボールがディフェンダーの頭に当たった！`);
-
         // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
         this.blockSucceededThisFrame = true;
 
@@ -269,8 +257,6 @@ export class CollisionHandler {
         const bodyCollision = getCircleCollisionInfo(ballPosition, ballRadius, characterPosition, bodyRadius);
 
         if (bodyCollision.isColliding) {
-          console.log(`[CollisionHandler] ボールがディフェンダーの胴体に当たった！`);
-
           // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
           this.blockSucceededThisFrame = true;
 
@@ -313,8 +299,6 @@ export class CollisionHandler {
 
             if (impactStrength > 0.3) {
               // しっかり触れた場合：物理的な反射を計算
-              console.log(`★★★ シュートブロック成功！ボールがルーズボールに！`);
-
               // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
               this.blockSucceededThisFrame = true;
 
@@ -341,14 +325,11 @@ export class CollisionHandler {
               const deflectVelocity = reflectDirection.scale(deflectSpeed);
               this.ball.setVelocity(deflectVelocity);
 
-              console.log(`[CollisionHandler] 反射: 入射速度=${incomingSpeed.toFixed(1)}, 弾き速度=${deflectSpeed.toFixed(1)}, 当たり位置Y=${hitOffsetY.toFixed(2)}`);
-
               // 弾き後のクールダウンを設定（一定時間誰も保持できない）
               this.ball.setDeflectionCooldown();
 
             } else {
               // 軽く触れた場合：入射角度を考慮して軌道をずらす
-              console.log(`★★★ ボールがディフェンダーの手に触れて軌道が変わった！`);
 
               // ブロック成功フラグを設定（軽く触れた場合も同様）
               this.blockSucceededThisFrame = true;

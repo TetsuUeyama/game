@@ -1483,11 +1483,9 @@ export class Character {
     // 横方向のずれが小さい場合は真っ直ぐ飛ぶ（横移動なし）
     if (lateralDistance < 0.3) {
       this.blockLateralDirection = null;
-      console.log(`[Character] ブロックジャンプ：真正面なので横移動なし`);
     } else if (lateralDistance > 2.0) {
       // 横方向のずれが大きすぎる場合はブロック不可
       this.blockLateralDirection = null;
-      console.log(`[Character] ブロックジャンプ：横のずれが大きすぎてブロック不可 (${lateralDistance.toFixed(2)}m)`);
     } else {
       // 横移動方向を正規化
       this.blockLateralDirection = lateralOffset.normalize();
@@ -1495,7 +1493,6 @@ export class Character {
       // ジャンプの最高点到達時間（約0.35秒）を目安に計算
       const jumpPeakTime = 0.35;
       this.blockLateralSpeed = lateralDistance / jumpPeakTime;
-      console.log(`[Character] ブロックジャンプ：横移動方向=(${this.blockLateralDirection.x.toFixed(2)}, ${this.blockLateralDirection.z.toFixed(2)}), 距離=${lateralDistance.toFixed(2)}m, 速度=${this.blockLateralSpeed.toFixed(2)}m/s`);
     }
 
     // 面0同士が接しているかチェックし、前方移動を計算
@@ -1521,7 +1518,6 @@ export class Character {
         // ジャンプの最高点到達時間（約0.35秒）を目安に計算
         const jumpPeakTime = 0.35;
         this.blockForwardSpeed = circleShrinkage / jumpPeakTime;
-        console.log(`[Character] ブロックジャンプ：面0接触中、前方移動=${circleShrinkage.toFixed(2)}m, 速度=${this.blockForwardSpeed.toFixed(2)}m/s`);
       }
     } else {
       this.blockForwardDirection = null;
@@ -1538,18 +1534,12 @@ export class Character {
     const currentAction = this.actionController.getCurrentAction();
     const phase = this.actionController.getCurrentPhase();
 
-    // デバッグ: block_shot中の状態を確認
-    if (this.blockJumpTarget !== null) {
-      console.log(`[Character] updateBlockJump: action=${currentAction}, phase=${phase}, lateralDir=${this.blockLateralDirection ? 'set' : 'null'}, forwardDir=${this.blockForwardDirection ? 'set' : 'null'}`);
-    }
-
     // block_shotアクションのstartupまたはactiveフェーズ中のみ移動
     const isBlockJumping = currentAction === 'block_shot' && (phase === 'startup' || phase === 'active');
 
     if (!isBlockJumping) {
       // アクションが終了または別フェーズになったらターゲットをクリア
       if (this.blockJumpTarget !== null && phase !== 'recovery') {
-        console.log(`[Character] ブロックジャンプ終了: phase=${phase}`);
         this.blockJumpTarget = null;
         this.blockLateralDirection = null;
         this.blockForwardDirection = null;
@@ -1576,10 +1566,7 @@ export class Character {
     // 移動がある場合のみ適用
     if (totalMovement.length() > 0.001) {
       const newPosition = this.position.add(totalMovement);
-      console.log(`[Character] ブロック移動実行: dx=${totalMovement.x.toFixed(3)}, dz=${totalMovement.z.toFixed(3)}, newPos=(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
       this.setPosition(newPosition);
-    } else {
-      console.log(`[Character] ブロック移動なし（真正面 or 移動方向未設定）`);
     }
   }
 

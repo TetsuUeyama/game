@@ -383,20 +383,14 @@ export class ShootingController {
     }
 
     // activeフェーズに入ったらボールを発射するコールバックを設定
-    const shooterName = shooter.playerData?.basic?.NAME ?? 'unknown';
-    console.log(`★★ ShootingController: setting callbacks for ${shooterName}`);
     actionController.setCallbacks({
       onActive: (action) => {
-        console.log(`★★ [ShootingController] onActive callback called: ${action}, shooter: ${shooterName}`);
         if (ActionConfigUtils.isShootAction(action)) {
-          // 実際のシュート実行
-          const result = this.performShoot(shooter);
-          console.log(`[ShootingController] performShoot result:`, result);
+          this.performShoot(shooter);
         }
       },
       onInterrupt: (_action, _interruptedBy) => {
         // シュートが中断された
-        console.log(`[ShootingController] shoot interrupted`);
       },
     });
 
@@ -489,14 +483,26 @@ export class ShootingController {
     const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
     const accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
     const { x: offsetX, z: offsetZ } = ShootingUtils.generateRandomOffset(accuracy);
+
+    // リング奥側を狙うためのオフセット（シューターからリムへの方向に0.12m追加）
+    const shooterPos = shooter.getPosition();
+    const toRim = new Vector3(
+      baseTargetPosition.x - shooterPos.x,
+      0,
+      baseTargetPosition.z - shooterPos.z
+    );
+    if (toRim.length() > 0.01) {
+      toRim.normalize();
+    }
+    const backRimOffset = 0.12; // リング半径の約半分（リング奥側を狙う）
+
     const targetPosition = new Vector3(
-      baseTargetPosition.x + offsetX,
+      baseTargetPosition.x + offsetX + toRim.x * backRimOffset,
       baseTargetPosition.y,
-      baseTargetPosition.z + offsetZ
+      baseTargetPosition.z + offsetZ + toRim.z * backRimOffset
     );
 
     // シューターの頭上からボールを発射（相手に取られないように）
-    const shooterPos = shooter.getPosition();
     const shooterHeight = shooter.config.physical.height; // キャラクターの身長
     const headPosition = new Vector3(
       shooterPos.x,
@@ -780,7 +786,7 @@ export class ShootingController {
         toRimPoint.normalize();
       }
 
-      // 速度を反射（水平方向のみ、垂直方向は減衰）
+      // 速度を反射（水平方向）
       const horizontalVelocity = new Vector3(ballVelocity.x, 0, ballVelocity.z);
       const velocityAlongNormal = Vector3.Dot(horizontalVelocity, toRimPoint);
 
@@ -791,10 +797,18 @@ export class ShootingController {
       // SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENTを使用
       const bounciness = SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENT;
 
-      // 新しい速度（垂直成分も減衰、水平成分は反射）
+      // 垂直成分の処理：リムは円筒形なので、上から当たったら上に跳ね返す
+      // ボールがリムより上にあり、下降中の場合は上向きに反射
+      let newVelocityY = ballVelocity.y * bounciness;
+      if (ballPosition.y >= rimPosition.y && ballVelocity.y < 0) {
+        // 上から当たった場合：垂直速度を反転して上に跳ね返す
+        newVelocityY = -ballVelocity.y * bounciness;
+      }
+
+      // 新しい速度
       const newVelocity = new Vector3(
         newHorizontalVelocity.x * bounciness,
-        ballVelocity.y * bounciness,
+        newVelocityY,
         newHorizontalVelocity.z * bounciness
       );
 

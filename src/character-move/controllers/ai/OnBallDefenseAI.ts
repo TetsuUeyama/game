@@ -149,8 +149,6 @@ export class OnBallDefenseAI extends BaseStateAI {
     const result = actionController.startAction('block_shot');
 
     if (result.success) {
-      console.log(`[OnBallDefenseAI] ${this.character.team}のディフェンダーがシュートブロックを試みる！（物理判定）`);
-
       // ブロックジャンプ情報を設定（シューターの方向に飛ぶ）
       this.character.setBlockJumpTarget(shooter);
 

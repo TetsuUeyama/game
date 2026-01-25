@@ -99,7 +99,6 @@ export class FeintController {
     const nearestDefender = this.findNearestDefender(feinter);
 
     if (!nearestDefender) {
-      console.log(`[FeintController] ${feinter.playerData?.basic?.NAME}: シュートフェイント（近くにディフェンダーなし）`);
       return {
         success: true,
         defenderReacted: false,
@@ -111,12 +110,6 @@ export class FeintController {
     // ディフェンダーの反応判定
     const reactionChance = this.calculateReactionChance(feinter, nearestDefender);
     const didReact = Math.random() < reactionChance;
-
-    console.log(
-      `[FeintController] ${feinter.playerData?.basic?.NAME}: シュートフェイント → ` +
-      `${nearestDefender.playerData?.basic?.NAME} 反応確率${(reactionChance * 100).toFixed(0)}% → ` +
-      `${didReact ? '反応！' : '反応せず'}`
-    );
 
     if (didReact) {
       // ディフェンダーがブロックに飛ぶ
@@ -198,11 +191,7 @@ export class FeintController {
 
     // 現在のアクションをキャンセルしてブロックを実行
     actionController.cancelAction();
-    const result = actionController.startAction('block_shot');
-
-    if (result.success) {
-      console.log(`[FeintController] ${defender.playerData?.basic?.NAME}: フェイントに反応してブロック実行`);
-    }
+    actionController.startAction('block_shot');
   }
 
   /**
@@ -248,11 +237,10 @@ export class FeintController {
    */
   public performBreakthroughAfterFeint(
     character: Character,
-    direction: 'left' | 'right' | 'forward'
+    _direction: 'left' | 'right' | 'forward'
   ): boolean {
     // フェイント成功ウィンドウ内か確認
     if (!this.isInBreakthroughWindow(character)) {
-      console.log(`[FeintController] ${character.playerData?.basic?.NAME}: フェイント成功ウィンドウ外`);
       return false;
     }
 
@@ -266,10 +254,6 @@ export class FeintController {
     const result = actionController.startAction('dribble_breakthrough');
 
     if (result.success) {
-      console.log(
-        `[FeintController] ${character.playerData?.basic?.NAME}: ` +
-        `フェイント後のドリブル突破（${direction}）`
-      );
       this.clearBreakthroughWindow(character);
       return true;
     }
