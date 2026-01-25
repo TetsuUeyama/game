@@ -212,6 +212,13 @@ export class GameScene {
           ai.setFeintController(this.feintController);
         }
       }
+
+      // 全AIコントローラーにパスコールバックを設定
+      for (const ai of this.characterAIs) {
+        ai.setPassCallback((passer, target, passType) => {
+          return this.performPass(passer, passType, target);
+        });
+      }
     }
 
     // 入力コントローラーの初期化（プレイヤーキャラクター）
@@ -821,11 +828,13 @@ export class GameScene {
    * パスを実行（ActionController経由）
    * @param passer パスを出すキャラクター
    * @param passType パスの種類
+   * @param target パス先のキャラクター（省略時はチームメイトの最初の一人）
    * @returns 成功/失敗
    */
   public performPass(
     passer: Character,
-    passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest'
+    passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest',
+    target?: Character
   ): { success: boolean; message: string } {
     // ボールを持っているか確認
     if (this.ball.getHolder() !== passer) {
@@ -844,15 +853,20 @@ export class GameScene {
     actionController.setCallbacks({
       onActive: (action) => {
         if (action.startsWith('pass_')) {
-          // パス先のキャラクターを探す（チームメイト）
-          const teammates = passer.team === 'ally' ? this.allyCharacters : this.enemyCharacters;
-          const passTarget = teammates.find(c => c !== passer);
+          // パス先のキャラクターを決定
+          let passTarget = target;
+          if (!passTarget) {
+            // ターゲット未指定の場合はチームメイトの最初の一人
+            const teammates = passer.team === 'ally' ? this.allyCharacters : this.enemyCharacters;
+            passTarget = teammates.find(c => c !== passer);
+          }
 
           if (passTarget) {
             // ボールをパス（実際のパス処理）
             const targetPosition = passTarget.getPosition();
             this.ball.pass(targetPosition, passTarget);
-            console.log(`[GameScene] ${passType}をパス！`);
+            const targetName = passTarget.playerData?.basic?.NAME || passTarget.playerPosition || 'unknown';
+            console.log(`[GameScene] ${passType}を${targetName}にパス！`);
           }
         }
       },

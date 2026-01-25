@@ -49,53 +49,49 @@ export const POSITION_BOARD_UI_CONFIG = {
 } as const;
 
 /**
- * デフォルトポジション設定
- * 各ボードには1チーム分（6人）のみを表示
+ * デフォルトポジション設定（バスケットボール5人制）
+ * 各ボードには1チーム分（5人）のみを表示
  */
 
 // 味方オフェンス時の味方配置（攻撃的）
 const createAllyOffensePlayers = (): BoardPlayerPosition[] => [
-  { playerId: '1', team: 'ally', position: 'GK', cell: { col: 'H', row: 28 }, worldX: 0.5, worldZ: 12.5 },
-  { playerId: '2', team: 'ally', position: 'DF', cell: { col: 'F', row: 22 }, worldX: -1.5, worldZ: 6.5 },
-  { playerId: '3', team: 'ally', position: 'DF', cell: { col: 'J', row: 22 }, worldX: 1.5, worldZ: 6.5 },
-  { playerId: '4', team: 'ally', position: 'MF', cell: { col: 'E', row: 15 }, worldX: -2.5, worldZ: -0.5 },
-  { playerId: '5', team: 'ally', position: 'MF', cell: { col: 'K', row: 15 }, worldX: 2.5, worldZ: -0.5 },
-  { playerId: '6', team: 'ally', position: 'FW', cell: { col: 'H', row: 8 }, worldX: 0.5, worldZ: -7.5 },
+  { playerId: '1', team: 'ally', position: 'PG', cell: { col: 'H', row: 20 }, worldX: 0, worldZ: 5 },
+  { playerId: '2', team: 'ally', position: 'SG', cell: { col: 'E', row: 17 }, worldX: -5, worldZ: 2 },
+  { playerId: '3', team: 'ally', position: 'SF', cell: { col: 'K', row: 17 }, worldX: 5, worldZ: 2 },
+  { playerId: '4', team: 'ally', position: 'PF', cell: { col: 'F', row: 12 }, worldX: -4, worldZ: -3 },
+  { playerId: '5', team: 'ally', position: 'C', cell: { col: 'J', row: 12 }, worldX: 4, worldZ: -3 },
 ];
 
 // 味方ディフェンス時の味方配置（守備的）
 const createAllyDefensePlayers = (): BoardPlayerPosition[] => [
-  { playerId: '1', team: 'ally', position: 'GK', cell: { col: 'H', row: 29 }, worldX: 0.5, worldZ: 13.5 },
-  { playerId: '2', team: 'ally', position: 'DF', cell: { col: 'E', row: 26 }, worldX: -2.5, worldZ: 10.5 },
-  { playerId: '3', team: 'ally', position: 'DF', cell: { col: 'K', row: 26 }, worldX: 2.5, worldZ: 10.5 },
-  { playerId: '4', team: 'ally', position: 'MF', cell: { col: 'F', row: 22 }, worldX: -1.5, worldZ: 6.5 },
-  { playerId: '5', team: 'ally', position: 'MF', cell: { col: 'J', row: 22 }, worldX: 1.5, worldZ: 6.5 },
-  { playerId: '6', team: 'ally', position: 'FW', cell: { col: 'H', row: 18 }, worldX: 0.5, worldZ: 2.5 },
+  { playerId: '1', team: 'ally', position: 'PG', cell: { col: 'H', row: 25 }, worldX: 0, worldZ: 10 },
+  { playerId: '2', team: 'ally', position: 'SG', cell: { col: 'E', row: 22 }, worldX: -5, worldZ: 7 },
+  { playerId: '3', team: 'ally', position: 'SF', cell: { col: 'K', row: 22 }, worldX: 5, worldZ: 7 },
+  { playerId: '4', team: 'ally', position: 'PF', cell: { col: 'F', row: 18 }, worldX: -4, worldZ: 3 },
+  { playerId: '5', team: 'ally', position: 'C', cell: { col: 'J', row: 18 }, worldX: 4, worldZ: 3 },
 ];
 
 // 相手オフェンス時の相手配置（攻撃的）
 const createEnemyOffensePlayers = (): BoardPlayerPosition[] => [
-  { playerId: '7', team: 'enemy', position: 'GK', cell: { col: 'H', row: 3 }, worldX: 0.5, worldZ: -12.5 },
-  { playerId: '8', team: 'enemy', position: 'DF', cell: { col: 'F', row: 9 }, worldX: -1.5, worldZ: -6.5 },
-  { playerId: '9', team: 'enemy', position: 'DF', cell: { col: 'J', row: 9 }, worldX: 1.5, worldZ: -6.5 },
-  { playerId: '10', team: 'enemy', position: 'MF', cell: { col: 'E', row: 16 }, worldX: -2.5, worldZ: 0.5 },
-  { playerId: '11', team: 'enemy', position: 'MF', cell: { col: 'K', row: 16 }, worldX: 2.5, worldZ: 0.5 },
-  { playerId: '12', team: 'enemy', position: 'FW', cell: { col: 'H', row: 23 }, worldX: 0.5, worldZ: 7.5 },
+  { playerId: '7', team: 'enemy', position: 'PG', cell: { col: 'H', row: 11 }, worldX: 0, worldZ: -5 },
+  { playerId: '8', team: 'enemy', position: 'SG', cell: { col: 'E', row: 14 }, worldX: -5, worldZ: -2 },
+  { playerId: '9', team: 'enemy', position: 'SF', cell: { col: 'K', row: 14 }, worldX: 5, worldZ: -2 },
+  { playerId: '10', team: 'enemy', position: 'PF', cell: { col: 'F', row: 19 }, worldX: -4, worldZ: 3 },
+  { playerId: '11', team: 'enemy', position: 'C', cell: { col: 'J', row: 19 }, worldX: 4, worldZ: 3 },
 ];
 
 // 相手ディフェンス時の相手配置（守備的）
 const createEnemyDefensePlayers = (): BoardPlayerPosition[] => [
-  { playerId: '7', team: 'enemy', position: 'GK', cell: { col: 'H', row: 2 }, worldX: 0.5, worldZ: -13.5 },
-  { playerId: '8', team: 'enemy', position: 'DF', cell: { col: 'E', row: 5 }, worldX: -2.5, worldZ: -10.5 },
-  { playerId: '9', team: 'enemy', position: 'DF', cell: { col: 'K', row: 5 }, worldX: 2.5, worldZ: -10.5 },
-  { playerId: '10', team: 'enemy', position: 'MF', cell: { col: 'F', row: 9 }, worldX: -1.5, worldZ: -6.5 },
-  { playerId: '11', team: 'enemy', position: 'MF', cell: { col: 'J', row: 9 }, worldX: 1.5, worldZ: -6.5 },
-  { playerId: '12', team: 'enemy', position: 'FW', cell: { col: 'H', row: 13 }, worldX: 0.5, worldZ: -2.5 },
+  { playerId: '7', team: 'enemy', position: 'PG', cell: { col: 'H', row: 6 }, worldX: 0, worldZ: -10 },
+  { playerId: '8', team: 'enemy', position: 'SG', cell: { col: 'E', row: 9 }, worldX: -5, worldZ: -7 },
+  { playerId: '9', team: 'enemy', position: 'SF', cell: { col: 'K', row: 9 }, worldX: 5, worldZ: -7 },
+  { playerId: '10', team: 'enemy', position: 'PF', cell: { col: 'F', row: 13 }, worldX: -4, worldZ: -3 },
+  { playerId: '11', team: 'enemy', position: 'C', cell: { col: 'J', row: 13 }, worldX: 4, worldZ: -3 },
 ];
 
 /**
  * デフォルトの配置ボード設定を生成
- * 各ボードには1チーム分（6人）のみを表示
+ * 各ボードには1チーム分（5人）のみを表示
  */
 export function createDefaultPositionBoardConfig(): PositionBoardConfig {
   const timestamp = new Date().toISOString();
