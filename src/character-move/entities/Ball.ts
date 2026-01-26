@@ -33,9 +33,6 @@ export class Ball {
   // 物理モード管理
   private isKinematicMode: boolean = true;
 
-  // フォールバック用速度（物理エンジンがない場合）
-  private fallbackVelocity: Vector3 = Vector3.Zero();
-
   // 飛行中の状態管理
   private inFlight: boolean = false;
   private flightTime: number = 0;
@@ -98,8 +95,9 @@ export class Ball {
    */
   private initializePhysics(): void {
     // シーンに物理エンジンが有効化されているか確認
+    // Havok物理エンジンは非同期で初期化されるため、後でreinitializePhysics()が呼ばれる
     if (!this.scene.getPhysicsEngine()) {
-      console.warn("[Ball] Physics engine not enabled on scene, will use fallback physics");
+      console.log("[Ball] Havok physics engine not yet initialized, waiting for reinitializePhysics()");
       return;
     }
 
@@ -167,16 +165,13 @@ export class Ball {
 
   /**
    * 外部から力を加える（継続的な力、例: 風）
+   * Havok物理エンジンを使用
    * @param force 力ベクトル（ニュートン）
    * @param point 力を加える点（省略時は重心）
    */
   public applyForce(force: Vector3, point?: Vector3): void {
     if (!this.physicsAggregate) {
-      // フォールバック: 力を加速度に変換して速度に反映
-      // F = ma より a = F/m
-      const acceleration = force.scale(1 / PhysicsConstants.BALL.MASS);
-      // 1フレーム分の速度変化として近似（deltaTime=1/60秒）
-      this.fallbackVelocity.addInPlace(acceleration.scale(1 / 60));
+      console.warn("[Ball] Havok physics required for applyForce");
       return;
     }
 
@@ -189,15 +184,13 @@ export class Ball {
 
   /**
    * 外部からインパルス（衝撃）を加える（瞬間的な力、例: 衝突、シュート）
+   * Havok物理エンジンを使用
    * @param impulse インパルスベクトル（kg·m/s = N·s）
    * @param point インパルスを加える点（省略時は重心）
    */
   public applyImpulse(impulse: Vector3, point?: Vector3): void {
     if (!this.physicsAggregate) {
-      // フォールバック: インパルスを速度変化に変換
-      // J = m·Δv より Δv = J/m
-      const deltaVelocity = impulse.scale(1 / PhysicsConstants.BALL.MASS);
-      this.fallbackVelocity.addInPlace(deltaVelocity);
+      console.warn("[Ball] Havok physics required for applyImpulse");
       return;
     }
 
@@ -239,7 +232,6 @@ export class Ball {
       this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
       this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
     }
-    this.fallbackVelocity = Vector3.Zero();
   }
 
   /**
@@ -288,7 +280,6 @@ export class Ball {
       if (resetVelocity) {
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
-        this.fallbackVelocity = Vector3.Zero();
       }
     }
   }
@@ -315,7 +306,6 @@ export class Ball {
       this.inFlight = false;
       // 物理演算を停止（ANIMATEDモードに切り替え）
       this.setKinematic(true);
-      this.fallbackVelocity = Vector3.Zero();
       if (this.physicsAggregate) {
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
@@ -369,12 +359,13 @@ export class Ball {
 
   /**
    * 飛行中の物理処理
-   * Havokがある場合は衝突判定のみ、ない場合はフォールバック処理
+   * Havok物理エンジンが衝突・重力・減衰を自動処理
    */
-  private updateFlightPhysics(deltaTime: number): void {
+  private updateFlightPhysics(_deltaTime: number): void {
     if (!this.physicsAggregate) {
-      // 物理エンジンなしのフォールバック
-      this.updatePhysicsFallback(deltaTime);
+      // Havok物理エンジンが必須
+      console.error("[Ball] Havok physics engine required but not available");
+      this.inFlight = false;
       return;
     }
 
@@ -393,76 +384,17 @@ export class Ball {
   }
 
   /**
-   * 物理エンジンなしのフォールバック物理処理
-   * 重力・反発係数・摩擦を手動で計算
-   */
-  private updatePhysicsFallback(deltaTime: number): void {
-    const velocity = this.fallbackVelocity;
-    const currentPos = this.mesh.position;
-    const radius = PhysicsConstants.BALL.RADIUS;
-
-    // 重力を適用 (a = g)
-    velocity.y -= PhysicsConstants.GRAVITY_MAGNITUDE * deltaTime;
-
-    // 空気抵抗は飛行中は適用しない（室内バスケでは無視できるレベル）
-    // 地面での転がり時のみ摩擦を適用（後述）
-
-    // 位置を更新
-    const newPosition = new Vector3(
-      currentPos.x + velocity.x * deltaTime,
-      currentPos.y + velocity.y * deltaTime,
-      currentPos.z + velocity.z * deltaTime
-    );
-
-    // 地面との衝突判定（バウンド）
-    if (newPosition.y <= radius && velocity.y < 0) {
-      newPosition.y = radius;
-
-      // 反発係数を適用（NBA規定: 0.83）
-      const bounceVelocityY = -velocity.y * PhysicsConstants.BALL.RESTITUTION;
-
-      // バウンド時の摩擦（水平速度の減衰）
-      const frictionFactor = 1 - PhysicsConstants.BALL.FRICTION * 0.3;
-      velocity.x *= frictionFactor;
-      velocity.z *= frictionFactor;
-
-      // 最小バウンド速度以下なら停止
-      if (Math.abs(bounceVelocityY) < PhysicsConstants.BALL.MIN_BOUNCE_VELOCITY) {
-        velocity.y = 0;
-
-        // 水平速度も小さければ完全停止
-        const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
-        if (horizontalSpeed < 0.1) {
-          this.inFlight = false;
-          velocity.x = 0;
-          velocity.z = 0;
-              }
-      } else {
-        velocity.y = bounceVelocityY;
-      }
-    }
-
-    // 地面上での摩擦（転がり）
-    if (newPosition.y <= radius + 0.01 && velocity.y >= 0) {
-      const groundFriction = 1 - PhysicsConstants.BALL.FRICTION * deltaTime * 2;
-      velocity.x *= groundFriction;
-      velocity.z *= groundFriction;
-    }
-
-    this.mesh.position = newPosition;
-    this.fallbackVelocity = velocity;
-  }
-
-  /**
    * シュートを開始
    * @param targetPosition 目標位置
    * @param launchAngle 発射角度（ラジアン）
    * @param overrideStartPosition 開始位置のオーバーライド
+   * @param curveValue シューターのcurve値（0-99、バックスピンの強さに影響）
    */
   public shoot(
     targetPosition: Vector3,
     launchAngle: number = Math.PI * 55 / 180,
-    overrideStartPosition?: Vector3
+    overrideStartPosition?: Vector3,
+    curveValue: number = 50
   ): boolean {
     if (this.inFlight) return false;
 
@@ -477,31 +409,53 @@ export class Ball {
       ? overrideStartPosition.clone()
       : this.mesh.position.clone();
 
+    // メッシュの位置を設定
     this.mesh.position = startPosition.clone();
     this.targetPosition = targetPosition.clone();
 
     // 初速度を計算
     const velocity = this.calculateInitialVelocity(startPosition, targetPosition, launchAngle);
 
-    // フォールバック用にも速度を保存
-    this.fallbackVelocity = velocity.clone();
+    // バックスピンを計算
+    // curve値が高いほど強いバックスピン（5〜25 rad/s）
+    const backspinStrength = 5 + (curveValue / 99) * 20;
+    const angularVelocity = this.calculateBackspin(startPosition, targetPosition, backspinStrength);
 
-    // 物理エンジンで飛行（DYNAMICモードに切り替え）
-    this.setKinematic(false);
-
+    // Havok物理エンジンが必須
     if (this.physicsAggregate) {
+      // 物理ボディを一度破棄して新しい位置で再作成
+      this.physicsAggregate.dispose();
+      this.mesh.position = startPosition.clone();
+
+      // 新しい物理ボディを作成（DYNAMIC）
+      this.physicsAggregate = new PhysicsAggregate(
+        this.mesh,
+        PhysicsShapeType.SPHERE,
+        {
+          mass: PhysicsConstants.BALL.MASS,
+          restitution: PhysicsConstants.BALL.RESTITUTION,
+          friction: PhysicsConstants.BALL.FRICTION,
+        },
+        this.scene
+      );
+
+      // ダンピングを設定
+      this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
+      this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
+
       // 速度を設定
       this.physicsAggregate.body.setLinearVelocity(velocity);
+      this.physicsAggregate.body.setAngularVelocity(angularVelocity);
 
-      // 回転を追加（バックスピン）
-      this.physicsAggregate.body.setAngularVelocity(new Vector3(
-        (Math.random() - 0.5) * 5,
-        (Math.random() - 0.5) * 2,
-        (Math.random() - 0.5) * 5
-      ));
+      // 重要: disablePreStep = true で物理エンジンがボールの位置を完全に制御
+      // false のままだとメッシュ位置が物理ボディに同期され続け、軌道が正しく計算されない
+      this.physicsAggregate.body.disablePreStep = true;
 
-      // 速度設定後にDYNAMICモードを最終化
-      this.finalizeDynamicMode();
+      this.isKinematicMode = false;
+    } else {
+      // 物理エンジンなしの場合はエラー
+      console.error("[Ball] Havok physics engine required for shoot");
+      return false;
     }
 
     this.inFlight = true;
@@ -513,6 +467,39 @@ export class Ball {
     this.lastShootTime = Date.now();
 
     return true;
+  }
+
+  /**
+   * バックスピンの角速度を計算
+   * シュート方向に対して逆回転（進行方向と逆向きに回転）
+   * @param start 開始位置
+   * @param target 目標位置
+   * @param strength 回転の強さ（rad/s）
+   */
+  private calculateBackspin(start: Vector3, target: Vector3, strength: number): Vector3 {
+    // シュート方向（水平成分のみ）
+    const direction = new Vector3(
+      target.x - start.x,
+      0,
+      target.z - start.z
+    );
+
+    if (direction.length() < 0.01) {
+      // 真上へのシュートの場合、X軸周りのバックスピン
+      return new Vector3(-strength, 0, 0);
+    }
+
+    direction.normalize();
+
+    // バックスピンの回転軸は進行方向に対して垂直（右手方向）
+    // 進行方向が(dx, 0, dz)の場合、回転軸は(-dz, 0, dx)を90度回転
+    // バックスピンは進行方向の反対側に回転するので、
+    // 回転軸はシュート方向を左に90度回転した方向
+    const rotationAxis = new Vector3(-direction.z, 0, direction.x);
+
+    // バックスピンは上から見て時計回りに回転（進行方向に対して後ろ側が上がる）
+    // これにより、着地時にボールが後ろに戻る効果がある
+    return rotationAxis.scale(strength);
   }
 
   /**
@@ -585,7 +572,6 @@ export class Ball {
   public endFlight(): void {
     this.inFlight = false;
     this.setKinematic(true);
-    this.fallbackVelocity = Vector3.Zero();
     if (this.physicsAggregate) {
       this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
       this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
@@ -618,14 +604,14 @@ export class Ball {
     const passAngle = Math.PI / 12; // 15度
     const velocity = this.calculateInitialVelocity(startPosition, targetPosition, passAngle);
 
-    // フォールバック用にも速度を保存
-    this.fallbackVelocity = velocity.clone();
-
-    // DYNAMICモードに切り替えて物理演算を有効化
+    // Havok物理エンジンで速度を設定
     this.setKinematic(false);
     if (this.physicsAggregate) {
       this.physicsAggregate.body.setLinearVelocity(velocity);
       this.finalizeDynamicMode();
+    } else {
+      console.warn("[Ball] Havok physics required for pass");
+      return false;
     }
 
     this.inFlight = true;
@@ -638,25 +624,26 @@ export class Ball {
 
   /**
    * 現在の速度を取得
+   * Havok物理エンジンから取得
    */
   public getVelocity(): Vector3 {
     if (this.physicsAggregate && !this.isKinematicMode) {
       return this.physicsAggregate.body.getLinearVelocity();
     }
-    return this.fallbackVelocity.clone();
+    // Havok物理エンジンが必須
+    return Vector3.Zero();
   }
 
   /**
    * 速度を設定
-   * 物理ボディとフォールバック両方に設定
+   * Havok物理エンジンを使用
    */
   public setVelocity(velocity: Vector3): void {
-    // フォールバック用にも保存
-    this.fallbackVelocity = velocity.clone();
-
-    if (this.physicsAggregate) {
-      this.physicsAggregate.body.setLinearVelocity(velocity);
+    if (!this.physicsAggregate) {
+      console.warn("[Ball] Havok physics required for setVelocity");
+      return;
     }
+    this.physicsAggregate.body.setLinearVelocity(velocity);
   }
 
   /**

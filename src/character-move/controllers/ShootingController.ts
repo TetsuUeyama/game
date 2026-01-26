@@ -3,6 +3,7 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { Field } from "../entities/Field";
 import { GOAL_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
+import { PhysicsConstants } from "../../physics/PhysicsConfig";
 import {
   SHOOT_RANGE,
   SHOOT_ANGLE,
@@ -14,7 +15,6 @@ import {
   getDistance2D,
   getDirection2D,
   isDirectionWithinAngle,
-  isPointInBox,
 } from "../utils/CollisionUtils";
 import { ActionType, ActionConfigUtils } from "../config/ActionConfig";
 
@@ -510,7 +510,9 @@ export class ShootingController {
       shooterPos.z
     );
 
-    const shootStarted = this.ball.shoot(targetPosition, launchAngle, headPosition);
+    // シューターのcurve値を取得（バックスピンの強さに影響）
+    const curveValue = shooter.playerData?.stats.curve ?? 50;
+    const shootStarted = this.ball.shoot(targetPosition, launchAngle, headPosition, curveValue);
 
     if (!shootStarted) {
       return {
@@ -549,11 +551,8 @@ export class ShootingController {
     // ネットとボールの衝突判定（毎フレーム）
     this.updateNetCollisions();
 
-    // リムとバックボードの衝突判定（毎フレーム）
-    if (this.ball.isInFlight()) {
-      this.handleRimCollisions();
-      this.handleBackboardCollisions();
-    }
+    // リムとバックボードの衝突判定はHavok物理エンジンが自動処理
+    // Field.tsで設定された物理ボディ（rim1Physics, rim2Physics, backboard1Physics, backboard2Physics）が衝突を処理
 
     if (!this.checkingGoal || !this.ball.isInFlight()) {
       this.checkingGoal = false;
@@ -619,8 +618,12 @@ export class ShootingController {
     const isAlly = shooter.team === 'ally';
     const goalZ = isAlly ? GOAL_Z_POSITIONS.GOAL_1 : GOAL_Z_POSITIONS.GOAL_2;
 
+    // ターゲット位置はリム中心の、ボール半径分高い位置
+    // ボールの中心がこの点を通過するように狙う
+    const targetY = GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS;
+
     return {
-      position: new Vector3(0, GOAL_CONFIG.rimHeight, goalZ),
+      position: new Vector3(0, targetY, goalZ),
       team: isAlly ? 'enemy' : 'ally',
     };
   }
@@ -728,157 +731,6 @@ export class ShootingController {
         const force = ballVelocity.scale(SHOOT_PHYSICS.NET_FORCE_MULTIPLIER);
         const influenceRadius = ballRadius * SHOOT_PHYSICS.NET_INFLUENCE_RADIUS;
         net.applyForce(ballPosition, force, influenceRadius);
-      }
-    }
-  }
-
-  /**
-   * リムとの衝突判定（両ゴール）
-   */
-  private handleRimCollisions(): void {
-    // ゴール1（+Z側）
-    this.handleRimCollision(GOAL_Z_POSITIONS.GOAL_1);
-    // ゴール2（-Z側）
-    this.handleRimCollision(GOAL_Z_POSITIONS.GOAL_2);
-  }
-
-  /**
-   * 1つのリムとの衝突判定
-   */
-  private handleRimCollision(rimZ: number): void {
-    const ballPosition = this.ball.getPosition();
-    const ballVelocity = this.ball.getVelocity();
-    const ballRadius = this.ball.getRadius();
-
-    // リムの位置と半径
-    const rimPosition = new Vector3(0, GOAL_CONFIG.rimHeight, rimZ);
-    const rimRadius = GOAL_CONFIG.rimDiameter / 2;
-    const rimThickness = GOAL_CONFIG.rimThickness;
-
-    // ボールがリムの高さ付近にいるかチェック
-    const heightDiff = Math.abs(ballPosition.y - rimPosition.y);
-    if (heightDiff > ballRadius + rimThickness) {
-      return;
-    }
-
-    // ボールからリムの中心（XZ平面）への水平距離
-    const horizontalDistance = getDistance2D(ballPosition, rimPosition);
-
-    // リムの円周上の最も近い点までの距離
-    const distanceFromRimCircle = Math.abs(horizontalDistance - rimRadius);
-
-    // リムとの衝突判定
-    if (distanceFromRimCircle <= ballRadius + rimThickness) {
-      // リムの円周上の最も近い点を計算
-      const dx = ballPosition.x - rimPosition.x;
-      const dz = ballPosition.z - rimPosition.z;
-      const angle = Math.atan2(dz, dx);
-      const rimPointX = rimPosition.x + rimRadius * Math.cos(angle);
-      const rimPointZ = rimPosition.z + rimRadius * Math.sin(angle);
-
-      // ボールからリム接触点への方向
-      const toRimPoint = new Vector3(
-        rimPointX - ballPosition.x,
-        0,
-        rimPointZ - ballPosition.z
-      );
-      if (toRimPoint.length() > 0.001) {
-        toRimPoint.normalize();
-      }
-
-      // 速度を反射（水平方向）
-      const horizontalVelocity = new Vector3(ballVelocity.x, 0, ballVelocity.z);
-      const velocityAlongNormal = Vector3.Dot(horizontalVelocity, toRimPoint);
-
-      // 反射ベクトルを計算
-      const reflection = toRimPoint.scale(velocityAlongNormal * 2);
-      const newHorizontalVelocity = horizontalVelocity.subtract(reflection);
-
-      // SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENTを使用
-      const bounciness = SHOOT_PHYSICS.RIM_BOUNCE_COEFFICIENT;
-
-      // 垂直成分の処理：リムは円筒形なので、上から当たったら上に跳ね返す
-      // ボールがリムより上にあり、下降中の場合は上向きに反射
-      let newVelocityY = ballVelocity.y * bounciness;
-      if (ballPosition.y >= rimPosition.y && ballVelocity.y < 0) {
-        // 上から当たった場合：垂直速度を反転して上に跳ね返す
-        newVelocityY = -ballVelocity.y * bounciness;
-      }
-
-      // 新しい速度
-      const newVelocity = new Vector3(
-        newHorizontalVelocity.x * bounciness,
-        newVelocityY,
-        newHorizontalVelocity.z * bounciness
-      );
-
-      this.ball.setVelocity(newVelocity);
-
-      // ボールをリムから離す
-      const separation = toRimPoint.scale(-(ballRadius + rimThickness - distanceFromRimCircle));
-      const newPosition = ballPosition.add(separation);
-      this.ball.setPosition(newPosition);
-    }
-  }
-
-  /**
-   * バックボードとの衝突判定
-   */
-  private handleBackboardCollisions(): void {
-    const ballPosition = this.ball.getPosition();
-    const ballVelocity = this.ball.getVelocity();
-    const ballRadius = this.ball.getRadius();
-
-    // 両方のバックボードをチェック
-    const backboards = [
-      this.field.getGoal1Backboard(),
-      this.field.getGoal2Backboard(),
-    ];
-
-    for (const backboard of backboards) {
-      const backboardPos = backboard.position;
-      const backboardWidth = GOAL_CONFIG.backboardWidth;
-      const backboardHeight = GOAL_CONFIG.backboardHeight;
-      const backboardDepth = GOAL_CONFIG.backboardDepth;
-
-      // ボールがバックボードの範囲内にあるかチェック（ボール半径を考慮）
-      const isColliding = isPointInBox(
-        ballPosition,
-        backboardPos,
-        backboardWidth / 2 + ballRadius,
-        backboardHeight / 2 + ballRadius,
-        backboardDepth / 2 + ballRadius
-      );
-
-      if (isColliding) {
-        // SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENTを使用
-        const bounciness = SHOOT_PHYSICS.BACKBOARD_BOUNCE_COEFFICIENT;
-
-        // Z軸方向の速度を反転（反射）
-        const newVelocity = ballVelocity.clone();
-        newVelocity.z = -ballVelocity.z * bounciness;
-        newVelocity.x *= bounciness;
-        newVelocity.y *= bounciness;
-
-        this.ball.setVelocity(newVelocity);
-
-        // ボールをバックボードから離す
-        if (ballVelocity.z > 0) {
-          // 前から来た場合
-          this.ball.setPosition(new Vector3(
-            ballPosition.x,
-            ballPosition.y,
-            backboardPos.z - backboardDepth / 2 - ballRadius
-          ));
-        } else {
-          // 後ろから来た場合
-          this.ball.setPosition(new Vector3(
-            ballPosition.x,
-            ballPosition.y,
-            backboardPos.z + backboardDepth / 2 + ballRadius
-          ));
-        }
-        break; // 1フレームで1つのバックボードのみ処理
       }
     }
   }

@@ -72,10 +72,9 @@ export const SHOOT_ACCURACY = {
 
 /**
  * シュート物理設定
+ * リム・バックボードの反発係数はHavok物理エンジン（PhysicsConfig.ts）で設定
  */
 export const SHOOT_PHYSICS = {
-  RIM_BOUNCE_COEFFICIENT: 0.7,      // リム反発係数
-  BACKBOARD_BOUNCE_COEFFICIENT: 0.7, // バックボード反発係数
   NET_FORCE_MULTIPLIER: 0.08,       // ネットへの力の倍率（速度の8%）
   NET_INFLUENCE_RADIUS: 1.5,        // ネットへの影響半径（ボール半径の倍数）
 } as const;
