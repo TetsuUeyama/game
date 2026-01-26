@@ -1,81 +1,107 @@
-import {Scene, Mesh, Vector3, VertexData, StandardMaterial, Color3} from "@babylonjs/core";
-import {GOAL_CONFIG} from "../config/gameConfig";
+import {
+  Scene,
+  Mesh,
+  Vector3,
+  VertexData,
+  StandardMaterial,
+  Color3,
+  MeshBuilder,
+  PhysicsAggregate,
+  PhysicsShapeType,
+  PhysicsMotionType,
+  Physics6DoFConstraint,
+  PhysicsConstraintAxis,
+} from "@babylonjs/core";
+import { GOAL_CONFIG } from "../config/gameConfig";
 
 /**
- * ネットの頂点情報
+ * ネットノード（紐の結び目）
  */
-interface NetVertex {
-  position: Vector3; // 現在の位置
-  velocity: Vector3; // 速度
-  restPosition: Vector3; // 静止時の位置
+interface NetNode {
+  mesh: Mesh;
+  physics: PhysicsAggregate | null;
   isFixed: boolean; // リムに固定されているか
+  row: number; // 縦位置
+  col: number; // 円周位置
+  restPosition: Vector3; // 静止位置
 }
 
 /**
  * バスケットゴールのネットクラス
+ * Havok物理エンジンを使用した紐シミュレーション
  */
 export class Net {
-  public mesh: Mesh;
+  public mesh: Mesh; // 表示用メッシュ
   private scene: Scene;
-  private vertices: NetVertex[] = [];
+  private nodes: NetNode[] = [];
+  private constraints: Physics6DoFConstraint[] = [];
   private rimCenter: Vector3;
   private rimRadius: number;
-
-  // 物理パラメータ
-  private readonly stiffness: number;
-  private readonly damping: number;
-  private readonly gravity = new Vector3(0, -9.81, 0);
+  private side: "goal1" | "goal2";
 
   // メッシュ構造
   private readonly segmentsVertical: number;
   private readonly segmentsCircular: number;
   private readonly netLength: number;
 
+  // 物理パラメータ
+  private readonly nodeRadius = 0.015; // ノードの半径（小さな球）
+  private readonly nodeMass = 0.01; // ノードの質量（軽い）
+
+  // 物理エンジン初期化済みフラグ
+  private physicsInitialized = false;
+
+  // ネットのアクティブ状態管理
+  private isActive = false; // ボールが触れて揺れている状態
+  private activeTimer = 0; // アクティブ状態の残り時間
+  private readonly activeDuration = 2.0; // アクティブ状態の継続時間（秒）
+  private readonly settleThreshold = 0.01; // 静止判定の速度閾値
+
   constructor(scene: Scene, rimCenter: Vector3, side: "goal1" | "goal2") {
     this.scene = scene;
     this.rimCenter = rimCenter;
     this.rimRadius = GOAL_CONFIG.rimDiameter / 2;
+    this.side = side;
 
     this.segmentsVertical = GOAL_CONFIG.netSegmentsVertical;
     this.segmentsCircular = GOAL_CONFIG.netSegmentsCircular;
     this.netLength = GOAL_CONFIG.netLength;
-    this.stiffness = GOAL_CONFIG.netStiffness;
-    this.damping = GOAL_CONFIG.netDamping;
 
-    this.mesh = this.createNetMesh(side);
-    this.initializeVertices();
+    // 表示用メッシュを作成（初期状態）
+    this.mesh = this.createDisplayMesh();
+
+    // ノードを作成（メッシュのみ、物理はまだ）
+    this.createNodes();
   }
 
   /**
-   * ネットメッシュを作成
+   * 表示用のワイヤーフレームメッシュを作成
    */
-  private createNetMesh(side: "goal1" | "goal2"): Mesh {
-    const mesh = new Mesh(`net-${side}`, this.scene);
+  private createDisplayMesh(): Mesh {
+    const mesh = new Mesh(`net-${this.side}`, this.scene);
 
-    // マテリアル（白い半透明のネット）
-    const material = new StandardMaterial(`net-material-${side}`, this.scene);
+    const material = new StandardMaterial(`net-material-${this.side}`, this.scene);
     material.diffuseColor = Color3.FromHexString(GOAL_CONFIG.netColor);
     material.alpha = 0.8;
-    material.wireframe = true; // ワイヤーフレーム表示でネット感を出す
-    material.backFaceCulling = false; // 裏面も表示
+    material.wireframe = true;
+    material.backFaceCulling = false;
     mesh.material = material;
 
     return mesh;
   }
 
   /**
-   * 頂点を初期化
+   * ネットのノード（結び目）を作成
    */
-  private initializeVertices(): void {
-    this.vertices = [];
+  private createNodes(): void {
+    this.nodes = [];
 
-    // 円錐形のネットを作成
     for (let v = 0; v <= this.segmentsVertical; v++) {
-      const t = v / this.segmentsVertical; // 0（上）から1（下）
-      const y = -t * this.netLength; // 下に向かって伸びる
+      const t = v / this.segmentsVertical;
+      const y = -t * this.netLength;
 
       // 円錐形：上は広く、下は狭い
-      const radiusAtHeight = this.rimRadius * (1 - t * 0.7); // 下に行くほど30%狭まる
+      const radiusAtHeight = this.rimRadius * (1 - t * 0.7);
 
       for (let c = 0; c < this.segmentsCircular; c++) {
         const angle = (c / this.segmentsCircular) * Math.PI * 2;
@@ -84,28 +110,229 @@ export class Net {
 
         const worldPos = this.rimCenter.add(new Vector3(x, y, z));
 
-        this.vertices.push({
-          position: worldPos.clone(),
-          velocity: Vector3.Zero(),
-          restPosition: worldPos.clone(),
+        // ノード用の小さな球体メッシュ（非表示）
+        const nodeMesh = MeshBuilder.CreateSphere(
+          `net-node-${this.side}-${v}-${c}`,
+          { diameter: this.nodeRadius * 2, segments: 4 },
+          this.scene
+        );
+        nodeMesh.position = worldPos.clone();
+        nodeMesh.isVisible = false; // ノード自体は非表示
+
+        this.nodes.push({
+          mesh: nodeMesh,
+          physics: null,
           isFixed: v === 0, // 最上層（リム）のみ固定
+          row: v,
+          col: c,
+          restPosition: worldPos.clone(), // 静止位置を保存
         });
       }
     }
 
-    this.updateMeshGeometry();
+    // 初期表示を更新
+    this.updateDisplayMesh();
   }
 
   /**
-   * メッシュのジオメトリを更新
+   * Havok物理を初期化（シーンに物理エンジンが有効になった後に呼び出す）
    */
-  private updateMeshGeometry(): void {
+  public initializePhysics(): void {
+    if (this.physicsInitialized) return;
+
+    if (!this.scene.getPhysicsEngine()) {
+      console.warn("[Net] Physics engine not enabled on scene");
+      return;
+    }
+
+    // 各ノードに物理ボディを追加
+    for (const node of this.nodes) {
+      if (node.isFixed) {
+        // 固定ノード：STATIC（リムに固定）
+        node.physics = new PhysicsAggregate(
+          node.mesh,
+          PhysicsShapeType.SPHERE,
+          {
+            mass: 0,
+            restitution: 0.1,
+            friction: 0.5,
+          },
+          this.scene
+        );
+      } else {
+        // 動的ノード：初期状態はANIMATED（静止）
+        node.physics = new PhysicsAggregate(
+          node.mesh,
+          PhysicsShapeType.SPHERE,
+          {
+            mass: this.nodeMass,
+            restitution: 0.1,
+            friction: 0.5,
+          },
+          this.scene
+        );
+
+        // ダンピングを設定（揺れを抑える）
+        node.physics.body.setLinearDamping(2.0); // 高いダンピングで素早く静止
+        node.physics.body.setAngularDamping(2.0);
+
+        // 初期状態はANIMATED（静止状態）
+        node.physics.body.setMotionType(PhysicsMotionType.ANIMATED);
+        node.physics.body.disablePreStep = false;
+      }
+    }
+
+    // 距離制約を作成（隣接ノード間を接続）
+    this.createConstraints();
+
+    this.physicsInitialized = true;
+    this.isActive = false;
+  }
+
+  /**
+   * ネットをアクティブ状態にする（物理シミュレーション開始）
+   */
+  private activatePhysics(): void {
+    if (this.isActive) return;
+
+    this.isActive = true;
+    this.activeTimer = this.activeDuration;
+
+    for (const node of this.nodes) {
+      if (node.isFixed || !node.physics) continue;
+
+      // DYNAMICモードに切り替えて物理シミュレーションを有効化
+      node.physics.body.setMotionType(PhysicsMotionType.DYNAMIC);
+      node.physics.body.disablePreStep = true;
+    }
+  }
+
+  /**
+   * ネットを静止状態に戻す
+   */
+  private deactivatePhysics(): void {
+    if (!this.isActive) return;
+
+    this.isActive = false;
+    this.activeTimer = 0;
+
+    for (const node of this.nodes) {
+      if (node.isFixed || !node.physics) continue;
+
+      // ANIMATEDモードに切り替えて静止
+      node.physics.body.setMotionType(PhysicsMotionType.ANIMATED);
+      node.physics.body.disablePreStep = false;
+      node.physics.body.setLinearVelocity(Vector3.Zero());
+      node.physics.body.setAngularVelocity(Vector3.Zero());
+
+      // 静止位置に戻す
+      node.mesh.position = node.restPosition.clone();
+    }
+  }
+
+  /**
+   * ネットが十分に静止したかチェック
+   */
+  private isSettled(): boolean {
+    for (const node of this.nodes) {
+      if (node.isFixed || !node.physics) continue;
+
+      const velocity = node.physics.body.getLinearVelocity();
+      if (velocity.length() > this.settleThreshold) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * ノード間の距離制約を作成
+   */
+  private createConstraints(): void {
+    for (let v = 0; v <= this.segmentsVertical; v++) {
+      for (let c = 0; c < this.segmentsCircular; c++) {
+        const currentIndex = v * this.segmentsCircular + c;
+        const currentNode = this.nodes[currentIndex];
+
+        if (!currentNode.physics) continue;
+
+        // 右隣との接続（水平方向）
+        const rightCol = (c + 1) % this.segmentsCircular;
+        const rightIndex = v * this.segmentsCircular + rightCol;
+        const rightNode = this.nodes[rightIndex];
+
+        if (rightNode.physics) {
+          this.createDistanceConstraint(currentNode, rightNode);
+        }
+
+        // 下との接続（垂直方向）
+        if (v < this.segmentsVertical) {
+          const belowIndex = (v + 1) * this.segmentsCircular + c;
+          const belowNode = this.nodes[belowIndex];
+
+          if (belowNode.physics) {
+            this.createDistanceConstraint(currentNode, belowNode);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 2つのノード間に距離制約を作成
+   */
+  private createDistanceConstraint(nodeA: NetNode, nodeB: NetNode): void {
+    if (!nodeA.physics || !nodeB.physics) return;
+
+    // 現在の距離を計算
+    const posA = nodeA.mesh.position;
+    const posB = nodeB.mesh.position;
+    const distance = Vector3.Distance(posA, posB);
+
+    // 6DoF制約を使用して距離を維持
+    const constraint = new Physics6DoFConstraint(
+      {
+        pivotA: Vector3.Zero(),
+        pivotB: Vector3.Zero(),
+        axisA: new Vector3(1, 0, 0),
+        axisB: new Vector3(1, 0, 0),
+        perpAxisA: new Vector3(0, 1, 0),
+        perpAxisB: new Vector3(0, 1, 0),
+      },
+      [
+        {
+          axis: PhysicsConstraintAxis.LINEAR_X,
+          minLimit: -distance * 0.1,
+          maxLimit: distance * 0.1,
+        },
+        {
+          axis: PhysicsConstraintAxis.LINEAR_Y,
+          minLimit: -distance * 0.1,
+          maxLimit: distance * 0.1,
+        },
+        {
+          axis: PhysicsConstraintAxis.LINEAR_Z,
+          minLimit: -distance * 0.1,
+          maxLimit: distance * 0.1,
+        },
+      ],
+      this.scene
+    );
+
+    nodeA.physics.body.addConstraint(nodeB.physics.body, constraint);
+    this.constraints.push(constraint);
+  }
+
+  /**
+   * 表示用メッシュのジオメトリを更新
+   */
+  private updateDisplayMesh(): void {
     const positions: number[] = [];
     const indices: number[] = [];
 
     // 位置データを作成
-    for (const vertex of this.vertices) {
-      positions.push(vertex.position.x, vertex.position.y, vertex.position.z);
+    for (const node of this.nodes) {
+      positions.push(node.mesh.position.x, node.mesh.position.y, node.mesh.position.z);
     }
 
     // インデックスを作成（三角形メッシュ）
@@ -116,113 +343,68 @@ export class Net {
         const below = (v + 1) * this.segmentsCircular + c;
         const belowNext = (v + 1) * this.segmentsCircular + ((c + 1) % this.segmentsCircular);
 
-        // 2つの三角形で四角形を作る
         indices.push(current, below, next);
         indices.push(next, below, belowNext);
       }
     }
 
-    // VertexDataを作成
     const vertexData = new VertexData();
     vertexData.positions = positions;
     vertexData.indices = indices;
 
-    // 法線を自動計算
     const normals: number[] = [];
     VertexData.ComputeNormals(positions, indices, normals);
     vertexData.normals = normals;
 
-    // メッシュに適用
     vertexData.applyToMesh(this.mesh, true);
   }
 
   /**
-   * 物理シミュレーションを更新
+   * 物理シミュレーションを更新（毎フレーム）
+   * Havok物理エンジンがノードの位置を自動更新
    */
   update(deltaTime: number): void {
-    // スプリング力と重力を計算
-    for (let i = 0; i < this.vertices.length; i++) {
-      const vertex = this.vertices[i];
+    if (!this.physicsInitialized) {
+      // Havok物理エンジンが必須
+      return;
+    }
 
-      if (vertex.isFixed) {
-        // 固定された頂点は動かない
-        vertex.position.copyFrom(vertex.restPosition);
-        vertex.velocity.set(0, 0, 0);
-        continue;
+    // アクティブ状態の管理
+    if (this.isActive) {
+      this.activeTimer -= deltaTime;
+
+      // タイマー切れまたは十分に静止したら非アクティブに
+      if (this.activeTimer <= 0 || this.isSettled()) {
+        this.deactivatePhysics();
       }
 
-      // 重力（非常に弱く）
-      const force = this.gravity.scale(0.005); // 重力を弱める
-
-      // スプリング力（隣接頂点との繋がり）
-      const neighbors = this.getNeighbors(i);
-      for (const neighborIndex of neighbors) {
-        const neighbor = this.vertices[neighborIndex];
-        const delta = neighbor.position.subtract(vertex.position);
-        const distance = delta.length();
-        const restDistance = neighbor.restPosition.subtract(vertex.restPosition).length();
-
-        if (distance > 0.001) {
-          // フックの法則: F = k * (x - x0)
-          const springForce = delta.normalize().scale(this.stiffness * 2.0 * (distance - restDistance));
-          force.addInPlace(springForce);
-        }
-      }
-
-      // 静止位置へのスプリング力（形状を保つ）- 最重要
-      const toRest = vertex.restPosition.subtract(vertex.position);
-      force.addInPlace(toRest.scale(this.stiffness * 8.0)); // 復元力を大幅に強化
-
-      // 速度を更新（減衰を適用）
-      vertex.velocity.addInPlace(force.scale(deltaTime));
-      vertex.velocity.scaleInPlace(this.damping);
-
-      // 位置を更新
-      vertex.position.addInPlace(vertex.velocity.scale(deltaTime));
+      // アクティブ時のみ表示用メッシュを更新
+      this.updateDisplayMesh();
     }
-
-    // メッシュを更新
-    this.updateMeshGeometry();
-  }
-
-  /**
-   * 隣接する頂点のインデックスを取得
-   */
-  private getNeighbors(index: number): number[] {
-    const neighbors: number[] = [];
-    const v = Math.floor(index / this.segmentsCircular); // 縦位置
-    const c = index % this.segmentsCircular; // 円周位置
-
-    // 左右の隣接
-    const left = v * this.segmentsCircular + ((c - 1 + this.segmentsCircular) % this.segmentsCircular);
-    const right = v * this.segmentsCircular + ((c + 1) % this.segmentsCircular);
-    neighbors.push(left, right);
-
-    // 上下の隣接
-    if (v > 0) {
-      const above = (v - 1) * this.segmentsCircular + c;
-      neighbors.push(above);
-    }
-    if (v < this.segmentsVertical) {
-      const below = (v + 1) * this.segmentsCircular + c;
-      neighbors.push(below);
-    }
-
-    return neighbors;
+    // 非アクティブ時はメッシュ更新不要（静止位置のまま）
   }
 
   /**
    * 外部から力を加える（ボールとの衝突など）
    */
   applyForce(position: Vector3, force: Vector3, radius: number): void {
-    for (const vertex of this.vertices) {
-      if (vertex.isFixed) continue;
+    if (!this.physicsInitialized) return;
 
-      const distance = Vector3.Distance(vertex.position, position);
+    // 力を加える前にアクティブ状態にする
+    this.activatePhysics();
+
+    for (const node of this.nodes) {
+      if (node.isFixed || !node.physics) continue;
+
+      const distance = Vector3.Distance(node.mesh.position, position);
       if (distance < radius) {
-        // 距離に応じて力を減衰
         const attenuation = 1 - distance / radius;
-        vertex.velocity.addInPlace(force.scale(attenuation));
+
+        // Havok物理でインパルスを適用
+        node.physics.body.applyImpulse(
+          force.scale(attenuation * 0.01),
+          node.mesh.position
+        );
       }
     }
   }
@@ -231,13 +413,11 @@ export class Net {
    * ネットとの衝突判定（ボールが通過したか）
    */
   checkBallCollision(ballPosition: Vector3, ballRadius: number): boolean {
-    // ボールがネットの範囲内にあるか簡易チェック
     const distanceFromRim = Vector3.Distance(
       new Vector3(ballPosition.x, this.rimCenter.y, ballPosition.z),
       new Vector3(this.rimCenter.x, this.rimCenter.y, this.rimCenter.z)
     );
 
-    // リムの半径内で、リムの高さより下にある場合（ボールの半径も考慮）
     if (distanceFromRim < this.rimRadius + ballRadius && ballPosition.y < this.rimCenter.y + ballRadius) {
       return true;
     }
@@ -249,7 +429,19 @@ export class Net {
    * 破棄
    */
   dispose(): void {
+    // 制約を破棄
+    for (const constraint of this.constraints) {
+      constraint.dispose();
+    }
+    this.constraints = [];
+
+    // ノードを破棄
+    for (const node of this.nodes) {
+      node.physics?.dispose();
+      node.mesh.dispose();
+    }
+    this.nodes = [];
+
     this.mesh.dispose();
-    this.vertices = [];
   }
 }

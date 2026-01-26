@@ -1,13 +1,18 @@
-import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, DynamicTexture } from "@babylonjs/core";
+import {
+  Scene,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  Vector3,
+  Mesh,
+  DynamicTexture,
+  PhysicsAggregate,
+  PhysicsShapeType,
+} from "@babylonjs/core";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
 import { GRID_CONFIG } from "../config/FieldGridConfig";
 import { Net } from "./Net";
-
-/**
- * フィールド（地面）エンティティ
- */
-// ボール半径（シュート目標マーカー用）
-const BALL_RADIUS = 0.15;
+import { PhysicsConstants } from "../../physics/PhysicsConfig";
 
 export class Field {
   private scene: Scene;
@@ -23,6 +28,13 @@ export class Field {
   private centerCircle: Mesh; // センターサークル
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
+
+  // 物理ボディ
+  private groundPhysics: PhysicsAggregate | null = null;
+  private backboard1Physics: PhysicsAggregate | null = null;
+  private backboard2Physics: PhysicsAggregate | null = null;
+  private rim1Physics: PhysicsAggregate | null = null;
+  private rim2Physics: PhysicsAggregate | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -304,7 +316,7 @@ export class Field {
     );
     targetMarker.position = new Vector3(
       0,
-      GOAL_CONFIG.rimHeight + BALL_RADIUS, // リム高さ + ボール半径
+      GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
       zPosition - zSign * GOAL_CONFIG.rimOffset // リムと同じZ位置
     );
     const markerMaterial = new StandardMaterial(`marker-material-${goalNumber}`, this.scene);
@@ -371,9 +383,91 @@ export class Field {
   }
 
   /**
+   * Havok物理エンジンで地面・バックボード・リムの物理ボディを初期化
+   */
+  public initializePhysics(): void {
+    // シーンに物理エンジンが有効化されているか確認
+    if (!this.scene.getPhysicsEngine()) {
+      console.warn("[Field] Physics engine not enabled on scene");
+      return;
+    }
+
+    // 地面の静的物理ボディ
+    this.groundPhysics = new PhysicsAggregate(
+      this.mesh,
+      PhysicsShapeType.BOX,
+      {
+        mass: 0, // 静的オブジェクト
+        restitution: PhysicsConstants.GROUND.RESTITUTION,
+        friction: PhysicsConstants.GROUND.FRICTION,
+      },
+      this.scene
+    );
+
+    // バックボード1の静的物理ボディ
+    this.backboard1Physics = new PhysicsAggregate(
+      this.goal1Backboard,
+      PhysicsShapeType.BOX,
+      {
+        mass: 0,
+        restitution: PhysicsConstants.BACKBOARD.RESTITUTION,
+        friction: PhysicsConstants.BACKBOARD.FRICTION,
+      },
+      this.scene
+    );
+
+    // バックボード2の静的物理ボディ
+    this.backboard2Physics = new PhysicsAggregate(
+      this.goal2Backboard,
+      PhysicsShapeType.BOX,
+      {
+        mass: 0,
+        restitution: PhysicsConstants.BACKBOARD.RESTITUTION,
+        friction: PhysicsConstants.BACKBOARD.FRICTION,
+      },
+      this.scene
+    );
+
+    // リム1の静的物理ボディ（トーラス形状はMESHで近似）
+    this.rim1Physics = new PhysicsAggregate(
+      this.goal1Rim,
+      PhysicsShapeType.MESH,
+      {
+        mass: 0,
+        restitution: PhysicsConstants.RIM.RESTITUTION,
+        friction: PhysicsConstants.RIM.FRICTION,
+      },
+      this.scene
+    );
+
+    // リム2の静的物理ボディ
+    this.rim2Physics = new PhysicsAggregate(
+      this.goal2Rim,
+      PhysicsShapeType.MESH,
+      {
+        mass: 0,
+        restitution: PhysicsConstants.RIM.RESTITUTION,
+        friction: PhysicsConstants.RIM.FRICTION,
+      },
+      this.scene
+    );
+
+    // ネットの物理を初期化
+    this.goal1Net.initializePhysics();
+    this.goal2Net.initializePhysics();
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {
+    // 物理ボディを破棄
+    this.groundPhysics?.dispose();
+    this.backboard1Physics?.dispose();
+    this.backboard2Physics?.dispose();
+    this.rim1Physics?.dispose();
+    this.rim2Physics?.dispose();
+
     this.mesh.dispose();
     this.centerCircle.dispose();
     this.goal1Backboard.dispose();

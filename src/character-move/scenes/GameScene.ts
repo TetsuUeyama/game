@@ -84,6 +84,12 @@ export class GameScene {
   private readonly winningScore: number = 5; // 勝利に必要な得点
   private winner: 'ally' | 'enemy' | null = null; // 勝者
 
+  // ゴール後のリセット待機状態
+  private pendingGoalReset: boolean = false;
+  private pendingGoalScoringTeam: 'ally' | 'enemy' | null = null;
+  private goalResetTimer: number = 0;
+  private readonly goalResetDelay: number = 3.0; // ゴール後のリセットまでの最大待機時間（秒）
+
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
     teamConfig?: GameTeamConfig;
@@ -119,9 +125,7 @@ export class GameScene {
     this.scene.clearColor = new Color4(0.5, 0.7, 0.9, 1.0); // 空色の背景
 
     // Havok物理エンジンの初期化（非同期で実行）
-    // 注意: 地面・バックボード・リムに物理ボディを追加するまでは無効化
-    // フォールバック物理を使用（Ball.tsのupdatePhysicsFallback）
-    // this.initializePhysicsAsync();
+    this.initializePhysicsAsync();
 
     // カメラの設定
     this.camera = this.createCamera(canvas);
@@ -391,12 +395,18 @@ export class GameScene {
       const physicsManager = PhysicsManager.getInstance();
       await physicsManager.initialize(this.scene);
 
+      // 地面に静的物理ボディを追加（ボールが床を通り抜けないように）
+      if (this.field) {
+        this.field.initializePhysics();
+      }
+
       // 物理エンジン初期化後にボールの物理を再初期化
       if (this.ball) {
         this.ball.reinitializePhysics();
       }
     } catch (error) {
-      console.warn("[GameScene] Havok physics initialization failed, using fallback physics:", error);
+      console.error("[GameScene] Havok physics initialization failed:", error);
+      throw new Error("Havok physics engine is required but failed to initialize");
     }
   }
 
@@ -594,8 +604,18 @@ export class GameScene {
       this.shootingController.update(deltaTime);
     }
 
-    // アウトオブバウンズ判定
-    if (this.checkOutOfBounds()) {
+    // ゴール後のリセット待機中の処理
+    if (this.pendingGoalReset) {
+      this.goalResetTimer -= deltaTime;
+
+      // ボールが地面でバウンドした（飛行終了）か、タイムアウトした場合にリセット
+      if (!this.ball.isInFlight() || this.goalResetTimer <= 0) {
+        this.executeGoalReset();
+      }
+    }
+
+    // アウトオブバウンズ判定（ゴール後のリセット待機中は判定しない）
+    if (!this.pendingGoalReset && this.checkOutOfBounds()) {
       this.resetAfterOutOfBounds();
     }
   }
@@ -1078,13 +1098,18 @@ export class GameScene {
       }
 
   /**
-   * ゴール後のリセット処理
-   * ゴールを決められた側がボールを保持してセンターサークル外側から再開
+   * ゴール後のリセット処理を開始
+   * ボールが床でバウンドするまで待ってからリセット
    * @param scoringTeam ゴールを決めたチーム
    */
   private resetAfterGoal(scoringTeam: 'ally' | 'enemy'): void {
     // 既に勝者が決まっている場合は何もしない
     if (this.winner) {
+      return;
+    }
+
+    // 既にリセット待機中の場合は何もしない
+    if (this.pendingGoalReset) {
       return;
     }
 
@@ -1095,7 +1120,34 @@ export class GameScene {
       this.enemyScore++;
     }
 
-    
+    // リセット待機状態を設定（ボールが床に落ちてバウンドするまで待つ）
+    this.pendingGoalReset = true;
+    this.pendingGoalScoringTeam = scoringTeam;
+    this.goalResetTimer = this.goalResetDelay;
+
+    // 勝利判定
+    if (this.allyScore >= this.winningScore) {
+      this.winner = 'ally';
+    } else if (this.enemyScore >= this.winningScore) {
+      this.winner = 'enemy';
+    }
+  }
+
+  /**
+   * ゴール後のリセットを実行
+   */
+  private executeGoalReset(): void {
+    if (!this.pendingGoalReset || !this.pendingGoalScoringTeam) {
+      return;
+    }
+
+    const scoringTeam = this.pendingGoalScoringTeam;
+
+    // リセット待機状態をクリア
+    this.pendingGoalReset = false;
+    this.pendingGoalScoringTeam = null;
+    this.goalResetTimer = 0;
+
     // ボールの飛行を停止
     this.ball.endFlight();
 
@@ -1141,14 +1193,6 @@ export class GameScene {
       );
       opponent.setPosition(opponentPosition);
     }
-
-    
-    // 勝利判定
-    if (this.allyScore >= this.winningScore) {
-      this.winner = 'ally';
-          } else if (this.enemyScore >= this.winningScore) {
-      this.winner = 'enemy';
-          }
   }
 
   /**
