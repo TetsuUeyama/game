@@ -22,6 +22,7 @@ import { FeintController } from "../controllers/FeintController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../utils/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
+import { PhysicsManager } from "../../physics/PhysicsManager";
 // import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
@@ -116,6 +117,11 @@ export class GameScene {
     // シーンの作成
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.5, 0.7, 0.9, 1.0); // 空色の背景
+
+    // Havok物理エンジンの初期化（非同期で実行）
+    // 注意: 地面・バックボード・リムに物理ボディを追加するまでは無効化
+    // フォールバック物理を使用（Ball.tsのupdatePhysicsFallback）
+    // this.initializePhysicsAsync();
 
     // カメラの設定
     this.camera = this.createCamera(canvas);
@@ -374,6 +380,24 @@ export class GameScene {
     const ball = new Ball(this.scene, initialPosition);
 
     return ball;
+  }
+
+  /**
+   * Havok物理エンジンを非同期で初期化
+   * ボールやキャラクターの物理演算に使用される
+   */
+  private async initializePhysicsAsync(): Promise<void> {
+    try {
+      const physicsManager = PhysicsManager.getInstance();
+      await physicsManager.initialize(this.scene);
+
+      // 物理エンジン初期化後にボールの物理を再初期化
+      if (this.ball) {
+        this.ball.reinitializePhysics();
+      }
+    } catch (error) {
+      console.warn("[GameScene] Havok physics initialization failed, using fallback physics:", error);
+    }
   }
 
   /**

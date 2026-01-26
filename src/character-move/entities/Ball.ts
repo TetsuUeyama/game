@@ -737,6 +737,21 @@ export class Ball {
   }
 
   /**
+   * 物理エンジンを再初期化
+   * Havokが後から有効になった場合に呼び出す
+   */
+  public reinitializePhysics(): void {
+    // 既存の物理ボディがあれば破棄
+    if (this.physicsAggregate) {
+      this.physicsAggregate.dispose();
+      this.physicsAggregate = null;
+    }
+
+    // 物理エンジンを再初期化
+    this.initializePhysics();
+  }
+
+  /**
    * 破棄
    */
   dispose(): void {

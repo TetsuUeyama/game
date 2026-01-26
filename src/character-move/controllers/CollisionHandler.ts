@@ -195,27 +195,21 @@ export class CollisionHandler {
   }
 
   /**
-   * ディフェンダーの体パーツによるボールブロック判定
+   * 全キャラクターの体パーツによるボール衝突判定
+   * ディフェンダー・オフェンス問わず、ボールが体に当たったら反射する
    */
   private checkDefenderBodyBlock(): void {
     const ballPosition = this.ball.getPosition();
     const ballRadius = this.ball.getRadius();
+    const ballVelocity = this.ball.getVelocity();
 
     for (const character of this.allCharacters) {
-      const state = character.getState();
-
-      // ActionControllerを取得（後でも使うので先に取得）
-      const actionController = character.getActionController();
-
-      // block_shotアクションがアクティブかどうかをチェック
-      const isBlockingActive = actionController?.isActionActive('block_shot') ?? false;
-
-      // ディフェンダー状態、またはblock_shotアクション実行中のみブロック判定
-      // （ボール飛行中は全員BALL_LOSTになるため、アクション状態も確認する）
-      if (!isBlockingActive && state !== CharacterState.ON_BALL_DEFENDER && state !== CharacterState.OFF_BALL_DEFENDER) {
+      // シュート直後のシューター自身はスキップ
+      if (!this.ball.canBeCaughtBy(character)) {
         continue;
       }
 
+      const actionController = character.getActionController();
       const characterPosition = character.getPosition();
       const characterHeight = character.config.physical.height;
 
@@ -227,22 +221,30 @@ export class CollisionHandler {
       const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, HEAD_RADIUS);
 
       if (headCollision.isColliding) {
-        // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
         this.blockSucceededThisFrame = true;
 
-        // 飛行を終了してボールを落とす
-        this.ball.endFlight();
+        // 頭に当たった場合：上向きに反射
+        const bounciness = 0.6;
+        const normal = headCollision.direction.normalize();
 
-        // ボールを接触点付近に配置（少し上に）
-        this.ball.setPosition(new Vector3(
-          ballPosition.x,
-          headY + HEAD_RADIUS + ballRadius + 0.1,
-          ballPosition.z
-        ));
+        // 入射ベクトルを反射
+        const dotProduct = Vector3.Dot(ballVelocity, normal);
+        const reflection = normal.scale(2 * dotProduct);
+        const newVelocity = ballVelocity.subtract(reflection).scale(bounciness);
 
-        // 弾き後のクールダウンを設定（一定時間誰も保持できない）
+        // 最低限上向きに弾く
+        if (newVelocity.y < 1.0) {
+          newVelocity.y = 1.0;
+        }
+
+        this.ball.setVelocity(newVelocity);
+
+        // ボールを頭から離す
+        const separationDir = ballPosition.subtract(headPosition).normalize();
+        const newPosition = headPosition.add(separationDir.scale(HEAD_RADIUS + ballRadius + 0.05));
+        this.ball.setPosition(newPosition);
+
         this.ball.setDeflectionCooldown();
-
         return;
       }
 
@@ -257,15 +259,42 @@ export class CollisionHandler {
         const bodyCollision = getCircleCollisionInfo(ballPosition, ballRadius, characterPosition, bodyRadius);
 
         if (bodyCollision.isColliding) {
-          // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
           this.blockSucceededThisFrame = true;
 
-          // 飛行を終了してボールを落とす
-          this.ball.endFlight();
+          // 胴体に当たった場合：水平方向に反射
+          const bounciness = 0.5;
 
-          // 弾き後のクールダウンを設定（一定時間誰も保持できない）
+          // 水平方向の法線（キャラクターからボールへの方向）
+          const normal = new Vector3(
+            ballPosition.x - characterPosition.x,
+            0,
+            ballPosition.z - characterPosition.z
+          ).normalize();
+
+          // 水平成分の反射
+          const horizontalVel = new Vector3(ballVelocity.x, 0, ballVelocity.z);
+          const dotProduct = Vector3.Dot(horizontalVel, normal);
+          const reflection = normal.scale(2 * dotProduct);
+          const newHorizontalVel = horizontalVel.subtract(reflection).scale(bounciness);
+
+          // 垂直成分は維持（少し減衰）
+          const newVelocity = new Vector3(
+            newHorizontalVel.x,
+            ballVelocity.y * 0.8,
+            newHorizontalVel.z
+          );
+
+          this.ball.setVelocity(newVelocity);
+
+          // ボールを胴体から離す
+          const newPosition = new Vector3(
+            characterPosition.x + normal.x * (bodyRadius + ballRadius + 0.05),
+            ballPosition.y,
+            characterPosition.z + normal.z * (bodyRadius + ballRadius + 0.05)
+          );
+          this.ball.setPosition(newPosition);
+
           this.ball.setDeflectionCooldown();
-
           return;
         }
       }
