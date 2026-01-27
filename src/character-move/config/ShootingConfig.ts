@@ -34,6 +34,7 @@ export const SHOOT_ANGLE = {
 
 /**
  * シュート弾道設定（発射角度：度）
+ * ※レガシー設定：新しいアーチ高さ設定を使用する場合は SHOOT_ARC_HEIGHT を参照
  */
 export const SHOOT_LAUNCH_ANGLE = {
   THREE_POINT: 60,                  // 3Pシュート：60度（高めの弾道）
@@ -45,6 +46,7 @@ export const SHOOT_LAUNCH_ANGLE = {
 
 /**
  * レイアップ距離による角度調整設定
+ * ※レガシー設定：新しいアーチ高さ設定を使用する場合は SHOOT_ARC_HEIGHT を参照
  */
 export const LAYUP_DISTANCE_ADJUSTMENT = {
   // 距離閾値（この距離以下でより高い角度を使用）
@@ -54,6 +56,20 @@ export const LAYUP_DISTANCE_ADJUSTMENT = {
   MAX_DISTANCE: 2.0,                // 最大距離（レイアップ範囲）
   MIN_ANGLE: 80,                    // 最小距離での角度（度）
   MAX_ANGLE: 70,                    // 最大距離での角度（度）
+} as const;
+
+/**
+ * シュートアーチ高さ設定（メートル）
+ * 発射位置と目標位置を結ぶ直線からの最大高さ
+ * 放物線: Y = 4h × t × (1 - t) で、t=0.5（中間点）でY=hとなる
+ */
+export const SHOOT_ARC_HEIGHT = {
+  // 基本アーチ高さ（シュートタイプ別）
+  THREE_POINT: 2.8,                 // 3Pシュート：1.8m（高めのアーチ）
+  MIDRANGE: 1.5,                    // ミドルレンジ：1.5m
+  LAYUP: 0.8,                       // レイアップ：0.8m（低めのアーチ）
+  LAYUP_CLOSE: 0.5,                 // レイアップ（近距離）：0.5m
+  DEFAULT: 1.2,                     // デフォルト：1.2m
 } as const;
 
 /**
@@ -271,5 +287,112 @@ export class ShootingUtils {
       default:
         return '不明';
     }
+  }
+
+  /**
+   * シュートタイプに応じたアーチ高さを取得
+   * @param shootType シュートタイプ
+   * @param distance ゴールまでの距離（レイアップ時の調整用）
+   * @returns アーチ高さ（メートル）
+   */
+  public static getArcHeight(
+    shootType: '3pt' | 'midrange' | 'layup' | 'out_of_range',
+    distance?: number
+  ): number {
+    switch (shootType) {
+      case '3pt':
+        return SHOOT_ARC_HEIGHT.THREE_POINT;
+      case 'midrange':
+        return SHOOT_ARC_HEIGHT.MIDRANGE;
+      case 'layup':
+        // レイアップは距離に応じて補間
+        if (distance !== undefined && distance < LAYUP_DISTANCE_ADJUSTMENT.CLOSE_DISTANCE) {
+          return SHOOT_ARC_HEIGHT.LAYUP_CLOSE;
+        }
+        return SHOOT_ARC_HEIGHT.LAYUP;
+      default:
+        return SHOOT_ARC_HEIGHT.DEFAULT;
+    }
+  }
+
+  /**
+   * アーチ高さから初速度を計算（新しい放物線計算方式）
+   *
+   * 放物線: Y = 4h × t × (1 - t)
+   * ここで t は 0（発射位置）から 1（目標位置）の進行度
+   * t = 0.5（中間点）で Y = h（最高到達点）
+   *
+   * 物理との対応:
+   *   飛行時間 T = √(8h/g)
+   *   vx = (x2 - x1) / T
+   *   vy = (y2 - y1 + 4h) / T
+   *   vz = (z2 - z1) / T
+   *
+   * @param startX 発射位置X
+   * @param startY 発射位置Y
+   * @param startZ 発射位置Z
+   * @param targetX 目標位置X
+   * @param targetY 目標位置Y
+   * @param targetZ 目標位置Z
+   * @param arcHeight アーチ高さ h（直線Lからの最大高さ）
+   * @param gravity 重力加速度（デフォルト: 9.81）
+   * @returns { vx, vy, vz, flightTime } 初速度と飛行時間
+   */
+  public static calculateVelocityFromArcHeight(
+    startX: number,
+    startY: number,
+    startZ: number,
+    targetX: number,
+    targetY: number,
+    targetZ: number,
+    arcHeight: number,
+    gravity: number = 9.81
+  ): { vx: number; vy: number; vz: number; flightTime: number } {
+    // 飛行時間: T = √(8h/g)
+    const flightTime = Math.sqrt((8 * arcHeight) / gravity);
+
+    // 各成分の速度
+    const vx = (targetX - startX) / flightTime;
+    const vy = (targetY - startY + 4 * arcHeight) / flightTime;
+    const vz = (targetZ - startZ) / flightTime;
+
+    return { vx, vy, vz, flightTime };
+  }
+
+  /**
+   * 放物線上の位置を計算（デバッグ・可視化用）
+   * @param startX 発射位置X
+   * @param startY 発射位置Y
+   * @param startZ 発射位置Z
+   * @param targetX 目標位置X
+   * @param targetY 目標位置Y
+   * @param targetZ 目標位置Z
+   * @param arcHeight アーチ高さ
+   * @param t 進行度（0〜1）
+   * @returns { x, y, z } 放物線上の位置
+   */
+  public static getParabolaPosition(
+    startX: number,
+    startY: number,
+    startZ: number,
+    targetX: number,
+    targetY: number,
+    targetZ: number,
+    arcHeight: number,
+    t: number
+  ): { x: number; y: number; z: number } {
+    // 直線上の基準位置
+    const baseX = startX + t * (targetX - startX);
+    const baseY = startY + t * (targetY - startY);
+    const baseZ = startZ + t * (targetZ - startZ);
+
+    // 放物線によるY方向オフセット: 4h × t × (1 - t)
+    const yOffset = 4 * arcHeight * t * (1 - t);
+
+    return {
+      x: baseX,
+      y: baseY + yOffset,
+      z: baseZ,
+    };
   }
 }

@@ -514,12 +514,14 @@ export class ShootingController {
       baseTargetPosition.z + offsetZ + toRim.z * backRimOffset
     );
 
-    // 発射位置からターゲットまでの実際の水平距離で発射角度を計算
+    // 発射位置からターゲットまでの実際の水平距離を計算
     const actualHorizontalDistance = Math.sqrt(
       Math.pow(targetPosition.x - headPosition.x, 2) +
       Math.pow(targetPosition.z - headPosition.z, 2)
     );
-    const launchAngle = ShootingUtils.getLaunchAngleWithDistance(shootType, actualHorizontalDistance);
+
+    // 新しい放物線計算: アーチ高さから初速度を計算
+    const arcHeight = ShootingUtils.getArcHeight(shootType, actualHorizontalDistance);
 
     // デバッグ: シュートパラメータをログ出力（値の一貫性を確認用）
     console.log(`[ShootDebug] shooterPos: (${shooterPos.x.toFixed(4)}, ${shooterPos.z.toFixed(4)})`);
@@ -527,11 +529,11 @@ export class ShootingController {
     console.log(`[ShootDebug] headPos: (${headPosition.x.toFixed(4)}, ${headPosition.y.toFixed(4)}, ${headPosition.z.toFixed(4)})`);
     console.log(`[ShootDebug] target: (${targetPosition.x.toFixed(4)}, ${targetPosition.y.toFixed(4)}, ${targetPosition.z.toFixed(4)})`);
     console.log(`[ShootDebug] accuracy: ${accuracy.toFixed(6)}, offset: (${offsetX.toFixed(6)}, ${offsetZ.toFixed(6)})`);
-    console.log(`[ShootDebug] launchAngle: ${(launchAngle * 180 / Math.PI).toFixed(4)} deg, distance: ${actualHorizontalDistance.toFixed(4)}m`);
+    console.log(`[ShootDebug] arcHeight: ${arcHeight.toFixed(4)}m, distance: ${actualHorizontalDistance.toFixed(4)}m`);
 
     // シューターのcurve値を取得（バックスピンの強さに影響）
     const curveValue = shooter.playerData?.stats.curve ?? 50;
-    const shootStarted = this.ball.shoot(targetPosition, launchAngle, headPosition, curveValue);
+    const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue);
 
     if (!shootStarted) {
       return {

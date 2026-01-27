@@ -317,7 +317,8 @@ export class Field {
     );
     targetMarker.position = new Vector3(
       0,
-      GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
+      // GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
+      GOAL_CONFIG.rimHeight - 0.14* PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
       zPosition - zSign * GOAL_CONFIG.rimOffset // リムと同じZ位置
     );
     const markerMaterial = new StandardMaterial(`marker-material-${goalNumber}`, this.scene);
