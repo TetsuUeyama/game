@@ -521,6 +521,14 @@ export class ShootingController {
     );
     const launchAngle = ShootingUtils.getLaunchAngleWithDistance(shootType, actualHorizontalDistance);
 
+    // デバッグ: シュートパラメータをログ出力（値の一貫性を確認用）
+    console.log(`[ShootDebug] shooterPos: (${shooterPos.x.toFixed(4)}, ${shooterPos.z.toFixed(4)})`);
+    console.log(`[ShootDebug] rotation: ${shooterRotation.toFixed(6)} rad`);
+    console.log(`[ShootDebug] headPos: (${headPosition.x.toFixed(4)}, ${headPosition.y.toFixed(4)}, ${headPosition.z.toFixed(4)})`);
+    console.log(`[ShootDebug] target: (${targetPosition.x.toFixed(4)}, ${targetPosition.y.toFixed(4)}, ${targetPosition.z.toFixed(4)})`);
+    console.log(`[ShootDebug] accuracy: ${accuracy.toFixed(6)}, offset: (${offsetX.toFixed(6)}, ${offsetZ.toFixed(6)})`);
+    console.log(`[ShootDebug] launchAngle: ${(launchAngle * 180 / Math.PI).toFixed(4)} deg, distance: ${actualHorizontalDistance.toFixed(4)}m`);
+
     // シューターのcurve値を取得（バックスピンの強さに影響）
     const curveValue = shooter.playerData?.stats.curve ?? 50;
     const shootStarted = this.ball.shoot(targetPosition, launchAngle, headPosition, curveValue);

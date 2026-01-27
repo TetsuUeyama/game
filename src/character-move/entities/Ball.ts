@@ -570,11 +570,16 @@ export class Ball {
       directionXZ.scaleInPlace(1 / dirLength);
     }
 
-    return new Vector3(
+    const velocity = new Vector3(
       directionXZ.x * vHorizontal,
       vVertical,
       directionXZ.z * vHorizontal
     );
+
+    // デバッグ: 計算された初速度をログ出力
+    console.log(`[BallDebug] v0: ${v0.toFixed(4)} m/s, velocity: (${velocity.x.toFixed(4)}, ${velocity.y.toFixed(4)}, ${velocity.z.toFixed(4)})`);
+
+    return velocity;
   }
 
   /**

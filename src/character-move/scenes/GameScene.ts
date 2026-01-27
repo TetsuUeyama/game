@@ -78,6 +78,9 @@ export class GameScene {
   // モーション確認モード（入力とモーション再生を停止）
   private isMotionConfirmationMode: boolean = false;
 
+  // 一時停止状態（シュートチェックモードなど他のモードが動作中）
+  private isPaused: boolean = false;
+
   // スコア管理
   private allyScore: number = 0;
   private enemyScore: number = 0;
@@ -535,6 +538,11 @@ export class GameScene {
    * 更新処理（毎フレーム）
    */
   private update(deltaTime: number): void {
+    // 一時停止中はゲームロジックをすべてスキップ（レンダリングのみ継続）
+    if (this.isPaused) {
+      return;
+    }
+
     // モーション確認モードでは入力とモーション再生をスキップ
     if (!this.isMotionConfirmationMode) {
       // 入力コントローラーを更新
@@ -1326,6 +1334,31 @@ export class GameScene {
     });
 
     return { allyPositions, enemyPositions };
+  }
+
+  /**
+   * ゲームを一時停止
+   * シュートチェックモードなど、別のモードが動作する際に呼び出す
+   */
+  public pause(): void {
+    this.isPaused = true;
+    console.log('[GameScene] ゲームを一時停止しました');
+  }
+
+  /**
+   * ゲームを再開
+   */
+  public resume(): void {
+    this.isPaused = false;
+    this.lastFrameTime = Date.now(); // デルタタイムの計算をリセット
+    console.log('[GameScene] ゲームを再開しました');
+  }
+
+  /**
+   * 一時停止状態かどうかを取得
+   */
+  public getIsPaused(): boolean {
+    return this.isPaused;
   }
 
   /**

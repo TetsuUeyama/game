@@ -293,7 +293,13 @@ export default function CharacterMove1on1Game() {
         {!loading && !winner && (
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50">
             <button
-              onClick={() => setIsShootCheckMode(true)}
+              onClick={() => {
+                // ゲームを一時停止してシュートチェックモードを開始
+                if (gameSceneRef.current) {
+                  gameSceneRef.current.pause();
+                }
+                setIsShootCheckMode(true);
+              }}
               className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-xl transition-colors border-2 border-purple-400"
             >
               シュートチェックモード
@@ -304,7 +310,13 @@ export default function CharacterMove1on1Game() {
 
       {/* シュートチェックモードパネル */}
       {isShootCheckMode && (
-        <ShootCheckModePanel onClose={() => setIsShootCheckMode(false)} />
+        <ShootCheckModePanel onClose={() => {
+          setIsShootCheckMode(false);
+          // ゲームを再開
+          if (gameSceneRef.current) {
+            gameSceneRef.current.resume();
+          }
+        }} />
       )}
     </div>
   );
