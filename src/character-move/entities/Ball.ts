@@ -12,6 +12,7 @@ import {
 } from "@babylonjs/core";
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
+import { ShootingUtils } from "../config/ShootingConfig";
 
 /**
  * 3Dバスケットボールエンティティ
@@ -468,6 +469,124 @@ export class Ball {
 
       // 重要: disablePreStep = true で物理エンジンがボールの位置を完全に制御
       // false のままだとメッシュ位置が物理ボディに同期され続け、軌道が正しく計算されない
+      this.physicsAggregate.body.disablePreStep = true;
+
+      this.isKinematicMode = false;
+    } else {
+      // 物理エンジンなしの場合はエラー
+      console.error("[Ball] Havok physics engine required for shoot");
+      return false;
+    }
+
+    this.inFlight = true;
+    this.flightTime = 0;
+
+    // クールダウン設定
+    this.lastShooter = previousHolder;
+    this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
+    this.lastShootTime = Date.now();
+
+    return true;
+  }
+
+  /**
+   * シュートを開始（アーチ高さベースの新しい放物線計算）
+   *
+   * 放物線: Y = 4h × t × (1 - t)
+   * 発射位置と目標位置を結ぶ直線を基準軸とし、
+   * その直線からの最大垂直距離がアーチ高さ h となる放物線
+   *
+   * @param targetPosition 目標位置（リング中央上）
+   * @param arcHeight アーチ高さ（直線からの最大高さ、メートル）
+   * @param overrideStartPosition 開始位置のオーバーライド
+   * @param curveValue シューターのcurve値（0-99、バックスピンの強さに影響）
+   */
+  public shootWithArcHeight(
+    targetPosition: Vector3,
+    arcHeight: number,
+    overrideStartPosition?: Vector3,
+    curveValue: number = 50
+  ): boolean {
+    if (this.inFlight) return false;
+
+    const previousHolder = this.holder;
+    this.holder = null;
+
+    if (previousHolder) {
+      this.lastToucher = previousHolder;
+    }
+
+    const startPosition = overrideStartPosition
+      ? overrideStartPosition.clone()
+      : this.mesh.position.clone();
+
+    // メッシュの位置を設定
+    this.mesh.position = startPosition.clone();
+    this.targetPosition = targetPosition.clone();
+
+    // 新しい放物線計算: アーチ高さから初速度を計算
+    const velocityResult = ShootingUtils.calculateVelocityFromArcHeight(
+      startPosition.x,
+      startPosition.y,
+      startPosition.z,
+      targetPosition.x,
+      targetPosition.y,
+      targetPosition.z,
+      arcHeight,
+      PhysicsConstants.GRAVITY_MAGNITUDE
+    );
+
+    const velocity = new Vector3(
+      velocityResult.vx,
+      velocityResult.vy,
+      velocityResult.vz
+    );
+
+    // デバッグ: 計算された初速度をログ出力
+    const v0 = velocity.length();
+    console.log(`[BallDebug] arcHeight: ${arcHeight.toFixed(4)}m, flightTime: ${velocityResult.flightTime.toFixed(4)}s`);
+    console.log(`[BallDebug] v0: ${v0.toFixed(4)} m/s, velocity: (${velocity.x.toFixed(4)}, ${velocity.y.toFixed(4)}, ${velocity.z.toFixed(4)})`);
+
+    // バックスピンを計算
+    // curve値が高いほど強いバックスピン（5〜25 rad/s）
+    const backspinStrength = 5 + (curveValue / 99) * 20;
+    const angularVelocity = this.calculateBackspin(startPosition, targetPosition, backspinStrength);
+
+    // Havok物理エンジンが必須
+    if (this.physicsAggregate) {
+      // 物理ボディを一度破棄して新しい位置で再作成
+      this.physicsAggregate.dispose();
+      this.mesh.position = startPosition.clone();
+
+      // 新しい物理ボディを作成（DYNAMIC）
+      this.physicsAggregate = new PhysicsAggregate(
+        this.mesh,
+        PhysicsShapeType.SPHERE,
+        {
+          mass: PhysicsConstants.BALL.MASS,
+          restitution: PhysicsConstants.BALL.RESTITUTION,
+          friction: PhysicsConstants.BALL.FRICTION,
+        },
+        this.scene
+      );
+
+      // マテリアル設定: 反発係数を両オブジェクトの積で計算
+      this.physicsAggregate.shape.material = {
+        restitution: PhysicsConstants.BALL.RESTITUTION,
+        restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+        friction: PhysicsConstants.BALL.FRICTION,
+        frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      };
+
+      // ダンピングを設定
+      this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
+      this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
+
+      // 速度を設定
+      this.physicsAggregate.body.setLinearVelocity(velocity);
+      this.physicsAggregate.body.setAngularVelocity(angularVelocity);
+
+      // 重要: disablePreStep = true で物理エンジンがボールの位置を完全に制御
       this.physicsAggregate.body.disablePreStep = true;
 
       this.isKinematicMode = false;
