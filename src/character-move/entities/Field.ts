@@ -8,6 +8,7 @@ import {
   DynamicTexture,
   PhysicsAggregate,
   PhysicsShapeType,
+  PhysicsMaterialCombineMode,
 } from "@babylonjs/core";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
 import { GRID_CONFIG } from "../config/FieldGridConfig";
@@ -439,6 +440,13 @@ export class Field {
       },
       this.scene
     );
+    // マテリアル設定: 反発係数を両オブジェクトの積で計算
+    this.rim1Physics.shape.material = {
+      restitution: PhysicsConstants.RIM.RESTITUTION,
+      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      friction: PhysicsConstants.RIM.FRICTION,
+      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+    };
 
     // リム2の静的物理ボディ
     this.rim2Physics = new PhysicsAggregate(
@@ -451,6 +459,13 @@ export class Field {
       },
       this.scene
     );
+    // マテリアル設定: 反発係数を両オブジェクトの積で計算
+    this.rim2Physics.shape.material = {
+      restitution: PhysicsConstants.RIM.RESTITUTION,
+      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      friction: PhysicsConstants.RIM.FRICTION,
+      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+    };
 
     // ネットの物理を初期化
     this.goal1Net.initializePhysics();

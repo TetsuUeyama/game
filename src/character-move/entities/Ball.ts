@@ -8,6 +8,7 @@ import {
   PhysicsAggregate,
   PhysicsShapeType,
   PhysicsMotionType,
+  PhysicsMaterialCombineMode,
 } from "@babylonjs/core";
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
@@ -114,6 +115,15 @@ export class Ball {
         },
         this.scene
       );
+
+      // マテリアル設定: 反発係数を両オブジェクトの積で計算
+      // これにより、リム(0.7) × ボール(0.83) = 0.581 で反発する
+      this.physicsAggregate.shape.material = {
+        restitution: PhysicsConstants.BALL.RESTITUTION,
+        restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+        friction: PhysicsConstants.BALL.FRICTION,
+        frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      };
 
       // ダンピング（空気抵抗・回転減衰）を設定
       this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
@@ -438,6 +448,15 @@ export class Ball {
         },
         this.scene
       );
+
+      // マテリアル設定: 反発係数を両オブジェクトの積で計算
+      // これにより、リム(0.7) × ボール(0.83) = 0.581 で反発する
+      this.physicsAggregate.shape.material = {
+        restitution: PhysicsConstants.BALL.RESTITUTION,
+        restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+        friction: PhysicsConstants.BALL.FRICTION,
+        frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      };
 
       // ダンピングを設定
       this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
