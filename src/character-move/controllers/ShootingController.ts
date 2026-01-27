@@ -476,16 +476,28 @@ export class ShootingController {
 
     // シュート実行
     const baseTargetPosition = targetGoal.position;
-    // 距離に応じた発射角度を取得（レイアップは近いほど高い弾道）
-    const launchAngle = ShootingUtils.getLaunchAngleWithDistance(shootType, distance);
+    const shooterPos = shooter.getPosition();
+
+    // シューターの頭上前方からボールを発射（相手に取られないように）
+    // キャラクターの向いている方向（0番面方向）に0.3mオフセット
+    const shooterHeight = shooter.config.physical.height; // キャラクターの身長
+    const shooterRotation = shooter.getRotation();
+    const forwardOffsetDistance = 0.3; // 前方へのオフセット距離
+    const forwardOffsetX = Math.sin(shooterRotation) * forwardOffsetDistance;
+    const forwardOffsetZ = Math.cos(shooterRotation) * forwardOffsetDistance;
+    const headPosition = new Vector3(
+      shooterPos.x + forwardOffsetX,
+      shooterPos.y + shooterHeight * 0.5 + SHOOT_START_OFFSET.HEAD_OFFSET,
+      shooterPos.z + forwardOffsetZ
+    );
 
     // ShootingUtilsを使用してシュート精度を計算
     const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
     const accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
     const { x: offsetX, z: offsetZ } = ShootingUtils.generateRandomOffset(accuracy);
 
-    // リング奥側を狙うためのオフセット（シューターからリムへの方向に0.12m追加）
-    const shooterPos = shooter.getPosition();
+    // リング奥側を狙うためのオフセット（シューター中心からリムへの方向に0.12m追加）
+    // ※ターゲット位置はシューター中心から計算（発射位置ではない）
     const toRim = new Vector3(
       baseTargetPosition.x - shooterPos.x,
       0,
@@ -494,7 +506,7 @@ export class ShootingController {
     if (toRim.length() > 0.01) {
       toRim.normalize();
     }
-    const backRimOffset = 0.12; // リング半径の約半分（リング奥側を狙う）
+    const backRimOffset = 0.04 // リング半径の約半分（リング奥側を狙う）
 
     const targetPosition = new Vector3(
       baseTargetPosition.x + offsetX + toRim.x * backRimOffset,
@@ -502,13 +514,12 @@ export class ShootingController {
       baseTargetPosition.z + offsetZ + toRim.z * backRimOffset
     );
 
-    // シューターの頭上からボールを発射（相手に取られないように）
-    const shooterHeight = shooter.config.physical.height; // キャラクターの身長
-    const headPosition = new Vector3(
-      shooterPos.x,
-      shooterPos.y + shooterHeight * 0.5 + SHOOT_START_OFFSET.HEAD_OFFSET,
-      shooterPos.z
+    // 発射位置からターゲットまでの実際の水平距離で発射角度を計算
+    const actualHorizontalDistance = Math.sqrt(
+      Math.pow(targetPosition.x - headPosition.x, 2) +
+      Math.pow(targetPosition.z - headPosition.z, 2)
     );
+    const launchAngle = ShootingUtils.getLaunchAngleWithDistance(shootType, actualHorizontalDistance);
 
     // シューターのcurve値を取得（バックスピンの強さに影響）
     const curveValue = shooter.playerData?.stats.curve ?? 50;
@@ -620,7 +631,7 @@ export class ShootingController {
 
     // ターゲット位置はリム中心の、ボール半径分高い位置
     // ボールの中心がこの点を通過するように狙う
-    const targetY = GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS;
+    const targetY = GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS + 0.55;
 
     return {
       position: new Vector3(0, targetY, goalZ),

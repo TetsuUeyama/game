@@ -56,7 +56,7 @@ export const PhysicsConstants = {
   // リム
   RIM: {
     RESTITUTION: 0.7,
-    FRICTION: 0.3,
+    FRICTION: 0.01,
     RADIUS: 0.225, // リムの半径（m）
   },
 } as const;

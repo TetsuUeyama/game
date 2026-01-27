@@ -61,12 +61,14 @@ export const LAYUP_DISTANCE_ADJUSTMENT = {
  */
 export const SHOOT_ACCURACY = {
   // 3Pシュートの精度計算式の係数
-  THREE_POINT_BASE_ERROR: 0.05,     // 基本誤差（3paccuracy=100でもこの誤差は残る）
-  THREE_POINT_MAX_ERROR: 0.75,      // 最大追加誤差（3paccuracy=0の場合）
+  // THREE_POINT_BASE_ERROR: 0.05,     // 基本誤差（3paccuracy=100でもこの誤差は残る）
+  // THREE_POINT_MAX_ERROR: 0.1,      // 最大追加誤差（3paccuracy=0の場合）
+  THREE_POINT_BASE_ERROR: 0,     // 基本誤差（3paccuracy=100でもこの誤差は残る）
+  THREE_POINT_MAX_ERROR: 0,      // 最大追加誤差（3paccuracy=0の場合）
 
   // 固定精度
-  MIDRANGE: 0.3,                    // ミドルレンジ：±0.3m
-  LAYUP: 0.1,                       // レイアップ：±0.1m（高精度）
+  MIDRANGE: 0.01,                    // ミドルレンジ：±0.3m
+  LAYUP: 0.01,                       // レイアップ：±0.1m（高精度）
   DEFAULT: 0.3,                     // デフォルト：±0.3m
 } as const;
 
@@ -201,7 +203,7 @@ export class ShootingUtils {
    * @returns 最大誤差（メートル）
    */
   public static calculate3PAccuracy(accuracy3p: number | undefined): number {
-    const accuracy = accuracy3p ?? 50;
+    const accuracy = accuracy3p ?? 100;
     // 計算式: 0.05 + 0.75 × (100 - 3paccuracy) / 100
     return SHOOT_ACCURACY.THREE_POINT_BASE_ERROR +
       SHOOT_ACCURACY.THREE_POINT_MAX_ERROR * (100 - accuracy) / 100;
