@@ -521,7 +521,16 @@ export class ShootingController {
     );
 
     // 新しい放物線計算: アーチ高さから初速度を計算
-    const arcHeight = ShootingUtils.getArcHeight(shootType, actualHorizontalDistance);
+    const baseArcHeight = ShootingUtils.getArcHeight(shootType, actualHorizontalDistance);
+
+    // 選手データによるアーチ高さ・ボール半径の調整
+    // 3pt: 3paccuracyを使用、ミドル/レイアップ: shootaccuracyを使用
+    const statValue = shootType === '3pt'
+      ? (shooter.playerData?.stats['3paccuracy'] ?? 42)
+      : (shooter.playerData?.stats.shootccuracy ?? 42);
+    const arcHeightAdjust = (statValue - 42) / 100;  // m
+    const radiusAdjust = (statValue - 42) / 3000;    // m（正の値で小さくなる）
+    const arcHeight = baseArcHeight + arcHeightAdjust;
 
     // デバッグ: シュートパラメータをログ出力（値の一貫性を確認用）
     console.log(`[ShootDebug] shooterPos: (${shooterPos.x.toFixed(4)}, ${shooterPos.z.toFixed(4)})`);
@@ -529,11 +538,11 @@ export class ShootingController {
     console.log(`[ShootDebug] headPos: (${headPosition.x.toFixed(4)}, ${headPosition.y.toFixed(4)}, ${headPosition.z.toFixed(4)})`);
     console.log(`[ShootDebug] target: (${targetPosition.x.toFixed(4)}, ${targetPosition.y.toFixed(4)}, ${targetPosition.z.toFixed(4)})`);
     console.log(`[ShootDebug] accuracy: ${accuracy.toFixed(6)}, offset: (${offsetX.toFixed(6)}, ${offsetZ.toFixed(6)})`);
-    console.log(`[ShootDebug] arcHeight: ${arcHeight.toFixed(4)}m, distance: ${actualHorizontalDistance.toFixed(4)}m`);
+    console.log(`[ShootDebug] arcHeight: ${arcHeight.toFixed(4)}m (base: ${baseArcHeight.toFixed(4)}, adjust: ${arcHeightAdjust.toFixed(4)}), radiusAdjust: ${radiusAdjust.toFixed(6)}m`);
 
     // シューターのcurve値を取得（バックスピンの強さに影響）
     const curveValue = shooter.playerData?.stats.curve ?? 50;
-    const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue);
+    const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue, radiusAdjust);
 
     if (!shootStarted) {
       return {
@@ -641,7 +650,7 @@ export class ShootingController {
 
     // ターゲット位置はリム中心の、ボール半径分高い位置
     // ボールの中心がこの点を通過するように狙う
-    const targetY = GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS + 0.55;
+    const targetY = GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS;
 
     return {
       position: new Vector3(0, targetY, goalZ),

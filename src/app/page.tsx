@@ -1,9 +1,8 @@
-'use client'
+import { redirect } from 'next/navigation';
 
-import { PokerGameView } from "../views/poker/PokerGameView"
-
-// import { PokerGameView } from '@/views/poker/PokerGameView'
-
-export default function GamePage() {
-  return <PokerGameView />
+/**
+ * ルートページ - character-move-1on1にリダイレクト
+ */
+export default function Home() {
+  redirect('/character-move-1on1');
 }
