@@ -30,23 +30,15 @@ import { createDashStopMotion, DASH_STOP_MOTION_CONFIG } from "../motion/DashSto
 import { JumpChargeGauge } from "../ui/JumpChargeGauge";
 import { DashGauge } from "../ui/DashGauge";
 import { CooldownGauge } from "../ui/CooldownGauge";
-
-/**
- * 入力状態
- */
-interface InputState {
-  forward: boolean; // W
-  backward: boolean; // S
-  left: boolean; // A
-  right: boolean; // D
-  rotateLeft: boolean; // Q
-  rotateRight: boolean; // E
-  jump: boolean; // Space
-  dashForward: boolean; // 1
-  dashBackward: boolean; // 2
-  dashLeft: boolean; // 3
-  dashRight: boolean; // 4
-}
+import {
+  WALK_SPEED_MULTIPLIERS,
+  DASH_SPEED_MULTIPLIERS,
+  JUMP_CONFIG,
+  DASH_CONFIG,
+  LANDING_CONFIG,
+  InputState,
+  DEFAULT_INPUT_STATE,
+} from "../config/InputConfig";
 
 /**
  * 入力コントローラー
@@ -84,19 +76,7 @@ export class InputController {
     this.cooldownGauge = new CooldownGauge(scene);
 
     // 入力状態を初期化
-    this.inputState = {
-      forward: false,
-      backward: false,
-      left: false,
-      right: false,
-      rotateLeft: false,
-      rotateRight: false,
-      jump: false,
-      dashForward: false,
-      dashBackward: false,
-      dashLeft: false,
-      dashRight: false,
-    };
+    this.inputState = { ...DEFAULT_INPUT_STATE };
 
     // モーションコントローラーを取得
     this.motionController = character.getMotionController();
@@ -180,15 +160,15 @@ export class InputController {
             const dashDirection = this.getDashDirection(this.currentDashDirection);
             if (dashDirection) {
               // 方向別の速度倍率を取得
-              let directionMultiplier = 1.0;
+              let directionMultiplier = DASH_SPEED_MULTIPLIERS.FORWARD;
               if (this.currentDashDirection === "dash_left" || this.currentDashDirection === "dash_right") {
-                directionMultiplier = 0.7; // 横方向は0.7倍
+                directionMultiplier = DASH_SPEED_MULTIPLIERS.SIDE;
               } else if (this.currentDashDirection === "dash_backward") {
-                directionMultiplier = 0.4; // 後ろ方向は0.4倍
+                directionMultiplier = DASH_SPEED_MULTIPLIERS.BACKWARD;
               }
 
               // 現在のダッシュ速度を計算
-              const accelerationRatio = this.dashAccelerationTime / 1.0;
+              const accelerationRatio = this.dashAccelerationTime / DASH_CONFIG.MAX_ACCELERATION_TIME;
               const minSpeed = 2.0 * directionMultiplier;
               const maxSpeed = 3.5 * directionMultiplier;
               const currentSpeedMultiplier = minSpeed + (maxSpeed - minSpeed) * accelerationRatio;
@@ -292,26 +272,26 @@ export class InputController {
     let jumpScale: number;
     let landingMotionName: string;
 
-    if (pressDuration < 0.05) {
-      // 小ジャンプ: 0.5倍の高さ、短い硬直
-      jumpScale = 0.5;
+    if (pressDuration < JUMP_CONFIG.SMALL_JUMP_THRESHOLD) {
+      // 小ジャンプ
+      jumpScale = JUMP_CONFIG.SMALL_JUMP_SCALE;
       landingMotionName = "landing_small";
-    } else if (pressDuration < 0.2) {
-      // 中ジャンプ: 1.0倍の高さ、中程度の硬直
-      jumpScale = 1.0;
+    } else if (pressDuration < JUMP_CONFIG.MEDIUM_JUMP_THRESHOLD) {
+      // 中ジャンプ
+      jumpScale = JUMP_CONFIG.MEDIUM_JUMP_SCALE;
       landingMotionName = "landing";
     } else {
-      // 大ジャンプ: 1.5倍の高さ、長い硬直
-      jumpScale = 1.5;
+      // 大ジャンプ
+      jumpScale = JUMP_CONFIG.LARGE_JUMP_SCALE;
       landingMotionName = "landing_large";
     }
 
     // ダッシュ方向に応じてジャンプの高さを調整
     if (this.dashJumpDirection) {
       if (this.dashJumpDirection === "dash_left" || this.dashJumpDirection === "dash_right") {
-        jumpScale *= 0.7; // 横方向は0.7倍
+        jumpScale *= DASH_SPEED_MULTIPLIERS.SIDE;
       } else if (this.dashJumpDirection === "dash_backward") {
-        jumpScale *= 0.4; // 後ろ方向は0.4倍
+        jumpScale *= DASH_SPEED_MULTIPLIERS.BACKWARD;
       }
     }
 
@@ -337,17 +317,17 @@ export class InputController {
     // ジャンプが終了して着地硬直が待機中の場合
     if (this.pendingLandingMotion && currentMotion === "jump" && !isPlaying) {
       // 基本の着地時間を取得
-      let landingDuration = 0.1; // デフォルト
+      let landingDuration = LANDING_CONFIG.SMALL_LANDING_DURATION;
       if (this.pendingLandingMotion === "landing_small") {
-        landingDuration = 0.1;
+        landingDuration = LANDING_CONFIG.SMALL_LANDING_DURATION;
       } else if (this.pendingLandingMotion === "landing") {
-        landingDuration = 0.3;
+        landingDuration = LANDING_CONFIG.MEDIUM_LANDING_DURATION;
       } else if (this.pendingLandingMotion === "landing_large") {
-        landingDuration = 0.3;
+        landingDuration = LANDING_CONFIG.LARGE_LANDING_DURATION;
       }
 
       // ダッシュジャンプの場合、着地モーションの長さを速度に応じて延長
-      if (this.dashMomentumSpeed > 0.5) {
+      if (this.dashMomentumSpeed > LANDING_CONFIG.DASH_MOMENTUM_THRESHOLD) {
         // ダッシュ速度に基づいて着地硬直を延長
         const extendedLandingMotion = createExtendedLandingMotion(this.pendingLandingMotion, this.dashMomentumSpeed);
 
@@ -412,7 +392,7 @@ export class InputController {
     if (this.isJumpPressed && !isActionInProgress) {
       // 押下時間を計算（ミリ秒→秒）
       const pressDuration = (performance.now() - this.jumpPressStartTime) / 1000;
-      const targetTime = Math.min(pressDuration, 0.3);
+      const targetTime = Math.min(pressDuration, JUMP_CONFIG.MAX_CROUCH_TIME);
 
       // ダッシュ中でない場合のみcrouchモーションを再生
       if (!isDashPressed || isJumping || isLanding) {
@@ -460,21 +440,21 @@ export class InputController {
         }
 
         // 加速時間を増加（最大1秒）
-        this.dashAccelerationTime = Math.min(this.dashAccelerationTime + deltaTime, 1.0);
+        this.dashAccelerationTime = Math.min(this.dashAccelerationTime + deltaTime, DASH_CONFIG.MAX_ACCELERATION_TIME);
 
         // 加速割合を計算（0.0 ~ 1.0）
-        const accelerationRatio = this.dashAccelerationTime / 1.0;
+        const accelerationRatio = this.dashAccelerationTime / DASH_CONFIG.MAX_ACCELERATION_TIME;
 
         // キャラクター設定から速度倍率を取得
         const dashSpeedMin = this.character.config.movement.dashSpeedMin;
         const dashSpeedMax = this.character.config.movement.dashSpeedMax;
 
         // 方向別の速度倍率を取得
-        let directionMultiplier = 1.0;
+        let directionMultiplier = DASH_SPEED_MULTIPLIERS.FORWARD;
         if (dashMotionName === "dash_left" || dashMotionName === "dash_right") {
-          directionMultiplier = 0.7; // 横方向は0.7倍
+          directionMultiplier = DASH_SPEED_MULTIPLIERS.SIDE;
         } else if (dashMotionName === "dash_backward") {
-          directionMultiplier = 0.4; // 後ろ方向は0.4倍
+          directionMultiplier = DASH_SPEED_MULTIPLIERS.BACKWARD;
         }
 
         // 速度倍率を計算（キャラクター設定に基づいて加速）
@@ -510,7 +490,7 @@ export class InputController {
       // ダッシュボタンが離された場合
       if (this.currentDashDirection !== null) {
         // 加速度に応じたダッシュ停止モーションを生成して再生
-        const accelerationRatio = this.dashAccelerationTime / 1.0;
+        const accelerationRatio = this.dashAccelerationTime / DASH_CONFIG.MAX_ACCELERATION_TIME;
         const dashStopMotion = createDashStopMotion(accelerationRatio);
 
         // モーションマネージャーに登録してから再生
@@ -603,20 +583,20 @@ export class InputController {
         const walkSpeed = this.character.config.movement.walkSpeed;
 
         // モーション名に基づいて歩行速度倍率を決定
-        let speedMultiplier = 1.0; // 前進は1.0倍（基準）
+        let speedMultiplier = WALK_SPEED_MULTIPLIERS.FORWARD;
         if (motionName === "walk_backward") {
-          speedMultiplier = 0.5; // 後退は0.5倍
+          speedMultiplier = WALK_SPEED_MULTIPLIERS.BACKWARD;
         } else if (motionName === "walk_left" || motionName === "walk_right") {
-          speedMultiplier = 0.8; // 左右は0.8倍
+          speedMultiplier = WALK_SPEED_MULTIPLIERS.SIDE;
         } else if (motionName === "walk_forward_left" || motionName === "walk_forward_right") {
-          speedMultiplier = 0.9; // 斜め前進は0.9倍
+          speedMultiplier = WALK_SPEED_MULTIPLIERS.DIAGONAL_FORWARD;
         } else if (motionName === "walk_backward_left" || motionName === "walk_backward_right") {
-          speedMultiplier = 0.65; // 斜め後退は0.65倍（後退とサイドの中間）
+          speedMultiplier = WALK_SPEED_MULTIPLIERS.DIAGONAL_BACKWARD;
         }
 
         // キャラクター設定の速度と方向倍率を適用して移動
         const finalSpeed = walkSpeed * speedMultiplier;
-        const scaledDirection = moveDirection.scale(finalSpeed / 5.0); // 5.0で正規化（元の基準速度）
+        const scaledDirection = moveDirection.scale(finalSpeed / DASH_CONFIG.BASE_SPEED_NORMALIZER);
         this.character.move(scaledDirection, deltaTime);
 
         // モーションを再生

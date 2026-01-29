@@ -5,7 +5,7 @@ import { Field } from "../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
 import { ShootingController } from "../controllers/action/ShootingController";
 import { FeintController } from "../controllers/action/FeintController";
-import { SHOOT_COOLDOWN, ShootingUtils } from "../config/ShootingConfig";
+import { SHOOT_COOLDOWN, ShootingUtils } from "../config/action/ShootingConfig";
 import { DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
 import { PASS_COOLDOWN, PassUtils } from "../config/PassConfig";
 import { IDLE_MOTION } from "../motion/IdleMotion";

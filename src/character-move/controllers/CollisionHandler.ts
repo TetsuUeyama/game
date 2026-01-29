@@ -2,7 +2,6 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
-import { CHARACTER_CONFIG } from "../config/gameConfig";
 import {
   getDistance2D,
   getDistance3D,
@@ -11,26 +10,20 @@ import {
   resolveCircleCollisionWithPower,
   isInRange,
 } from "../utils/CollisionUtils";
+import {
+  BALL_COLLISION_CONFIG,
+  CHARACTER_COLLISION_CONFIG,
+  BODY_PART_CONFIG,
+  BLOCK_CONFIG,
+  REFLECTION_CONFIG,
+  BlockResult,
+} from "../config/CollisionConfig";
 
-/**
- * 衝突判定の設定
- */
-const BALL_RADIUS = 0.15; // ボールの半径（m）
-const CHARACTER_RADIUS = CHARACTER_CONFIG.radius; // キャラクターの半径（m）- gameConfigから取得
-const BALL_CHARACTER_DISTANCE = BALL_RADIUS + CHARACTER_RADIUS; // ボールとキャラクターの衝突判定距離
+// 設定から計算される値
+const BALL_CHARACTER_DISTANCE = BALL_COLLISION_CONFIG.BALL_RADIUS + CHARACTER_COLLISION_CONFIG.CHARACTER_RADIUS;
 
-// 体パーツの判定設定
-const HEAD_RADIUS = 0.15; // 頭の半径（m）
-const HAND_REACH_HEIGHT = 0.3; // 手を伸ばせる高さ（身長からの追加高さ）
-
-/**
- * ブロック判定結果
- */
-export interface BlockResult {
-  blocked: boolean;
-  blocker: Character | null;
-  deflected: boolean;  // 軽く触れて軌道がずれた場合
-}
+// 型をre-export
+export type { BlockResult };
 
 /**
  * 衝突判定コントローラー
@@ -98,7 +91,7 @@ export class CollisionHandler {
 
     // 高さの判定：ボールがキャラクターの手の届く範囲にあるかチェック
     const characterHeight = character.config.physical.height;
-    const maxReachHeight = characterHeight + HAND_REACH_HEIGHT;
+    const maxReachHeight = characterHeight + BODY_PART_CONFIG.HAND_REACH_HEIGHT;
 
     // ボールの高さ（地面からの高さ）
     const ballHeight = ballPosition.y;
@@ -170,21 +163,20 @@ export class CollisionHandler {
     reflectDirection.y += normalizedHitHeight * 0.4;
 
     // リングに当たった時のように上方向にしっかり弾く
-    // 最低限の上方向成分を確保（0.6でより高く跳ねる）
-    if (reflectDirection.y < 0.6) {
-      reflectDirection.y = 0.6;
+    // 最低限の上方向成分を確保
+    if (reflectDirection.y < REFLECTION_CONFIG.MIN_UPWARD_COMPONENT) {
+      reflectDirection.y = REFLECTION_CONFIG.MIN_UPWARD_COMPONENT;
     }
 
     reflectDirection.normalize();
 
     // 弾く速度を強化（リングに当たった時のように遠くに弾く）
-    // 最低5.0 m/s、入射速度が速い場合はその70%を保持
-    const deflectSpeed = Math.max(5.0, incomingSpeed * 0.7);
+    const deflectSpeed = Math.max(BALL_COLLISION_CONFIG.DEFLECT_MIN_SPEED, incomingSpeed * BALL_COLLISION_CONFIG.DEFLECT_SPEED_RETENTION);
     const newVelocity = reflectDirection.scale(deflectSpeed);
     this.ball.setVelocity(newVelocity);
 
-    // ボールをキャラクターからしっかり離す（0.5m）
-    const newBallPosition = ballPosition.add(reflectDirection.scale(0.5));
+    // ボールをキャラクターからしっかり離す
+    const newBallPosition = ballPosition.add(reflectDirection.scale(BALL_COLLISION_CONFIG.DEFLECT_SEPARATION));
     this.ball.setPosition(newBallPosition);
 
     // ボールを飛行状態にする（停止していた場合も再び動くようにする）
@@ -214,17 +206,17 @@ export class CollisionHandler {
       const characterHeight = character.config.physical.height;
 
       // 頭の位置を計算（キャラクターの中心Y + 身長の半分 - 頭の半径）
-      const headY = characterPosition.y + characterHeight / 2 - HEAD_RADIUS;
+      const headY = characterPosition.y + characterHeight / 2 - BODY_PART_CONFIG.HEAD_RADIUS;
       const headPosition = new Vector3(characterPosition.x, headY, characterPosition.z);
 
       // ボールと頭の3D衝突判定
-      const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, HEAD_RADIUS);
+      const headCollision = getSphereCollisionInfo(ballPosition, ballRadius, headPosition, BODY_PART_CONFIG.HEAD_RADIUS);
 
       if (headCollision.isColliding) {
         this.blockSucceededThisFrame = true;
 
         // 頭に当たった場合：上向きに反射
-        const bounciness = 0.6;
+        const bounciness = BLOCK_CONFIG.HEAD_BOUNCINESS;
         const normal = headCollision.direction.normalize();
 
         // 入射ベクトルを反射
@@ -233,15 +225,15 @@ export class CollisionHandler {
         const newVelocity = ballVelocity.subtract(reflection).scale(bounciness);
 
         // 最低限上向きに弾く
-        if (newVelocity.y < 1.0) {
-          newVelocity.y = 1.0;
+        if (newVelocity.y < BLOCK_CONFIG.HEAD_MIN_UPWARD_VELOCITY) {
+          newVelocity.y = BLOCK_CONFIG.HEAD_MIN_UPWARD_VELOCITY;
         }
 
         this.ball.setVelocity(newVelocity);
 
         // ボールを頭から離す
         const separationDir = ballPosition.subtract(headPosition).normalize();
-        const newPosition = headPosition.add(separationDir.scale(HEAD_RADIUS + ballRadius + 0.05));
+        const newPosition = headPosition.add(separationDir.scale(BODY_PART_CONFIG.HEAD_RADIUS + ballRadius + 0.05));
         this.ball.setPosition(newPosition);
 
         this.ball.setDeflectionCooldown();
@@ -249,9 +241,9 @@ export class CollisionHandler {
       }
 
       // 胴体との接触判定（円柱で近似）
-      const bodyTop = characterPosition.y + characterHeight / 2 - HEAD_RADIUS * 2;
-      const bodyBottom = characterPosition.y - characterHeight / 2 + 0.1;
-      const bodyRadius = 0.25;
+      const bodyTop = characterPosition.y + characterHeight / 2 - BODY_PART_CONFIG.HEAD_RADIUS * 2;
+      const bodyBottom = characterPosition.y - characterHeight / 2 + BODY_PART_CONFIG.BODY_BOTTOM_OFFSET;
+      const bodyRadius = BODY_PART_CONFIG.BODY_RADIUS;
 
       // ボールが胴体の高さ範囲内にあるかチェック
       if (isInRange(ballPosition.y, bodyBottom, bodyTop)) {
@@ -262,7 +254,7 @@ export class CollisionHandler {
           this.blockSucceededThisFrame = true;
 
           // 胴体に当たった場合：水平方向に反射
-          const bounciness = 0.5;
+          const bounciness = BLOCK_CONFIG.BODY_BOUNCINESS;
 
           // 水平方向の法線（キャラクターからボールへの方向）
           const normal = new Vector3(
@@ -280,7 +272,7 @@ export class CollisionHandler {
           // 垂直成分は維持（少し減衰）
           const newVelocity = new Vector3(
             newHorizontalVel.x,
-            ballVelocity.y * 0.8,
+            ballVelocity.y * BLOCK_CONFIG.BODY_VERTICAL_DAMPING,
             newHorizontalVel.z
           );
 
@@ -326,7 +318,7 @@ export class CollisionHandler {
             // handCollision.direction は手の中心からボールへの方向
             const hitOffsetY = ballPosition.y - hitbox.worldPosition.y; // 上に当たったら正、下に当たったら負
 
-            if (impactStrength > 0.3) {
+            if (impactStrength > BLOCK_CONFIG.HAND_IMPACT_THRESHOLD) {
               // しっかり触れた場合：物理的な反射を計算
               // ブロック成功フラグを設定（同じフレーム内でのキャッチ判定をスキップ）
               this.blockSucceededThisFrame = true;
@@ -340,17 +332,17 @@ export class CollisionHandler {
               // 手の上側に当たった場合 → 上方向に弾く補正
               // 手の下側に当たった場合 → 下方向に弾く補正
               const hitOffsetFactor = hitOffsetY / hitbox.config.radius; // -1 ~ 1 の範囲
-              reflectDirection.y += hitOffsetFactor * 0.5; // 当たり位置に応じて上下方向を調整
+              reflectDirection.y += hitOffsetFactor * REFLECTION_CONFIG.HAND_HIT_OFFSET_FACTOR; // 当たり位置に応じて上下方向を調整
 
               // 最低限上方向に弾く（地面に叩きつけないように）
-              if (reflectDirection.y < 0.2) {
-                reflectDirection.y = 0.2;
+              if (reflectDirection.y < BLOCK_CONFIG.HAND_MIN_UPWARD_VELOCITY) {
+                reflectDirection.y = BLOCK_CONFIG.HAND_MIN_UPWARD_VELOCITY;
               }
 
               reflectDirection.normalize();
 
               // 弾く速度（入射速度の一部を保持 + 固定値）
-              const deflectSpeed = Math.max(4.0, incomingSpeed * 0.5);
+              const deflectSpeed = Math.max(BLOCK_CONFIG.HAND_DEFLECT_MIN_SPEED, incomingSpeed * BLOCK_CONFIG.HAND_DEFLECT_SPEED_RETENTION);
               const deflectVelocity = reflectDirection.scale(deflectSpeed);
               this.ball.setVelocity(deflectVelocity);
 
@@ -364,8 +356,8 @@ export class CollisionHandler {
               this.blockSucceededThisFrame = true;
 
               // 入射方向に対して横にずらす + 当たり位置で上下調整
-              const deflection = normal.scale(-incomingSpeed * 0.3);
-              deflection.y += hitOffsetY * 0.3 + 0.5; // 当たり位置 + 基本的に上方向
+              const deflection = normal.scale(-incomingSpeed * BLOCK_CONFIG.LIGHT_TOUCH_SPEED_FACTOR);
+              deflection.y += hitOffsetY * BLOCK_CONFIG.LIGHT_TOUCH_SPEED_FACTOR + BLOCK_CONFIG.LIGHT_TOUCH_UPWARD_VELOCITY; // 当たり位置 + 基本的に上方向
 
               const newVelocity = incomingVelocity.add(deflection);
               this.ball.setVelocity(newVelocity);
@@ -437,7 +429,7 @@ export class CollisionHandler {
         // 接触の強さで結果を分ける
         const impactStrength = handCollision.overlap / (ballRadius + hitbox.config.radius);
 
-        if (impactStrength > 0.5) {
+        if (impactStrength > BLOCK_CONFIG.HAND_STRONG_IMPACT_THRESHOLD) {
           result.blocked = true;
         } else {
           result.deflected = true;
@@ -459,7 +451,7 @@ export class CollisionHandler {
     const pos2 = character2.getPosition();
 
     // 衝突情報を取得
-    const collisionInfo = getCircleCollisionInfo(pos1, CHARACTER_RADIUS, pos2, CHARACTER_RADIUS);
+    const collisionInfo = getCircleCollisionInfo(pos1, CHARACTER_COLLISION_CONFIG.CHARACTER_RADIUS, pos2, CHARACTER_COLLISION_CONFIG.CHARACTER_RADIUS);
 
     // 衝突していない場合はスキップ
     if (!collisionInfo.isColliding) {
@@ -472,9 +464,9 @@ export class CollisionHandler {
 
     // パワー値に基づいて衝突を解決
     const resolution = resolveCircleCollisionWithPower(
-      pos1, CHARACTER_RADIUS, power1,
-      pos2, CHARACTER_RADIUS, power2,
-      0.05 // 少し余裕を追加
+      pos1, CHARACTER_COLLISION_CONFIG.CHARACTER_RADIUS, power1,
+      pos2, CHARACTER_COLLISION_CONFIG.CHARACTER_RADIUS, power2,
+      CHARACTER_COLLISION_CONFIG.COLLISION_MARGIN
     );
 
     character1.setPosition(resolution.newPos1);

@@ -3,15 +3,14 @@ import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../../config/DribbleConfig";
 import { ONE_ON_ONE_BATTLE, DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
+import {
+  OneOnOneResult,
+  ONE_ON_ONE_BATTLE_CONFIG,
+  POSITIONING_CONFIG,
+} from "../../config/action/OneOnOneBattleConfig";
 
-/**
- * 1on1バトルの結果
- */
-export interface OneOnOneResult {
-  winner: 'offense' | 'defense';
-  offenseDice: number;
-  defenseDice: number;
-}
+// 型をre-export
+export type { OneOnOneResult };
 
 /**
  * 1on1バトルを管理するコントローラー
@@ -114,7 +113,7 @@ export class OneOnOneBattleController {
         new Vector3(onBallDefender.getPosition().x, 0, onBallDefender.getPosition().z)
       );
       const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
-      circlesInContact = distance <= contactDistance + 0.1; // 少し余裕を持たせる
+      circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
     }
 
     // オフェンスが衝突した場合、またはサークルが接触している場合、動き直す
@@ -193,16 +192,16 @@ export class OneOnOneBattleController {
     const currentFace = onBallPlayer.getCurrentBallFace();
     if (currentFace === 0 && DribbleUtils.shouldAIAttemptBreakthrough()) {
       // 左右ランダムで突破方向を決定
-      const direction = Math.random() < 0.5 ? 'left' : 'right';
+      const direction = Math.random() < ONE_ON_ONE_BATTLE_CONFIG.BREAKTHROUGH_LEFT_CHANCE ? 'left' : 'right';
       const success = this.performDribbleBreakthrough(direction);
       if (success) {
         return; // 突破を開始したので通常処理をスキップ
       }
     }
 
-    // サイコロを振る（1〜6）
-    const offenseDice = Math.floor(Math.random() * 6) + 1;
-    const defenseDice = Math.floor(Math.random() * 6) + 1;
+    // サイコロを振る
+    const offenseDice = Math.floor(Math.random() * ONE_ON_ONE_BATTLE_CONFIG.DICE_SIDES) + 1;
+    const defenseDice = Math.floor(Math.random() * ONE_ON_ONE_BATTLE_CONFIG.DICE_SIDES) + 1;
 
     // オフェンス側：ボール保持位置をランダムに変更
     onBallPlayer.randomizeBallPosition();
@@ -258,7 +257,7 @@ export class OneOnOneBattleController {
     const defenderPos = defender.getPosition();
 
     // 守るゴールの位置を決定
-    const goalZ = defender.team === "ally" ? -25 : 25;
+    const goalZ = defender.team === "ally" ? ONE_ON_ONE_BATTLE_CONFIG.ALLY_DEFEND_GOAL_Z : ONE_ON_ONE_BATTLE_CONFIG.ENEMY_DEFEND_GOAL_Z;
     const goalPosition = new Vector3(0, 0, goalZ);
 
     // オフェンス→ゴールの方向ベクトルを計算
@@ -294,7 +293,7 @@ export class OneOnOneBattleController {
 
     const distanceToTarget = moveDirection.length();
 
-    if (distanceToTarget < 0.05) {
+    if (distanceToTarget < POSITIONING_CONFIG.DEFENDER_STOP_DISTANCE) {
       defender.clearAIMovement();
       return;
     }
@@ -353,7 +352,7 @@ export class OneOnOneBattleController {
    * オフェンス側が攻めるゴールの位置を取得
    */
   public getTargetGoalPosition(offensePlayer: Character): Vector3 {
-    const goalZ = offensePlayer.team === "ally" ? 25 : -25;
+    const goalZ = offensePlayer.team === "ally" ? ONE_ON_ONE_BATTLE_CONFIG.ALLY_ATTACK_GOAL_Z : ONE_ON_ONE_BATTLE_CONFIG.ENEMY_ATTACK_GOAL_Z;
     return new Vector3(0, 0, goalZ);
   }
 

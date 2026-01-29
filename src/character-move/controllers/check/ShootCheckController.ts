@@ -5,48 +5,19 @@ import { Field } from "../../entities/Field";
 import { ShootingController, ShootType } from "../action/ShootingController";
 import { GRID_CONFIG, FieldGridUtils, CellCoord } from "../../config/FieldGridConfig";
 import { DEFAULT_CHARACTER_CONFIG } from "../../types/CharacterStats";
+import {
+  SHOOT_CHECK_TIMING,
+  SHOOT_CHECK_DETECTION,
+  SHOOT_CHECK_GOAL_POSITION,
+  CellShootResult,
+  ShootCheckState,
+  ShotTypeFilter,
+  ShootCheckConfig,
+  ShootCheckProgress,
+} from "../../config/check/ShootCheckConfig";
 
-/**
- * 升目ごとのシュート結果
- */
-export interface CellShootResult {
-  cellName: string;
-  col: string;
-  row: number;
-  worldX: number;
-  worldZ: number;
-  shootType: ShootType | 'out_of_range';
-  totalShots: number;
-  successCount: number;
-  failureCount: number;
-  successRate: number;
-  completed: boolean;
-}
-
-/**
- * シュートチェックの進行状態
- */
-export type ShootCheckState =
-  | 'idle'           // 待機中
-  | 'running'        // 実行中
-  | 'paused'         // 一時停止
-  | 'completed'      // 完了
-  | 'aborted';       // 中断
-
-
-  /**
- * シュートタイプフィルター
- */
-export type ShotTypeFilter = 'all' | '3pt' | 'midrange' | 'layup';
-
-/**
- * シュートチェックの設定
- */
-export interface ShootCheckConfig {
-  shotsPerCell: number;      // 1升目あたりのシュート数
-  targetGoal: 'goal1' | 'goal2';  // 攻めるゴール
-  shotTypeFilter?: ShotTypeFilter;  // シュートタイプフィルター（デフォルト: 'all'）
-}
+// 型をre-export
+export type { CellShootResult, ShootCheckState, ShotTypeFilter, ShootCheckConfig, ShootCheckProgress };
 
 /**
  * シュートチェックコントローラー
@@ -87,12 +58,10 @@ export class ShootCheckController {
   private waitingForBallRelease: boolean = false; // ボール発射待ち（アニメーション中）
   private lastBallPosition: Vector3 = Vector3.Zero();
   private shotStartTime: number = 0;
-  private readonly shotTimeoutMs: number = 8000; // 8秒でタイムアウト（アニメーション時間含む）
 
   // バウンド検知用
   private ballReachedPeak: boolean = false; // ボールが最高点を通過したか
   private lastBallY: number = 0;
-  private readonly floorBounceHeight: number = 0.3; // 床バウンド検知の高さ（ボール半径+マージン）
 
   // ゴール判定用
   private goalScored: boolean = false;
@@ -213,7 +182,9 @@ export class ShootCheckController {
     this.character.setPosition(new Vector3(worldPos.x, characterHeight / 2, worldPos.z));
 
     // ゴール方向を向く
-    const goalZ = this.config.targetGoal === 'goal1' ? 13.4 : -13.4;
+    const goalZ = this.config.targetGoal === 'goal1'
+      ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+      : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
     const goalPosition = new Vector3(0, 0, goalZ);
     this.character.lookAt(goalPosition);
 
@@ -349,7 +320,9 @@ export class ShootCheckController {
     this.character.setPosition(new Vector3(worldPos.x, characterHeight / 2, worldPos.z));
 
     // ゴール方向を向く
-    const goalZ = this.config.targetGoal === 'goal1' ? 13.4 : -13.4;
+    const goalZ = this.config.targetGoal === 'goal1'
+      ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+      : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
     const goalPosition = new Vector3(0, 0, goalZ);
     this.character.lookAt(goalPosition);
 
@@ -390,7 +363,7 @@ export class ShootCheckController {
       // 次の升目へ
       this.currentCellIndex++;
       // 少し遅延を入れて次の升目へ
-      setTimeout(() => this.moveToCurrentCell(), 50);
+      setTimeout(() => this.moveToCurrentCell(), SHOOT_CHECK_TIMING.OUT_OF_RANGE_SKIP_DELAY_MS);
       return;
     }
 
@@ -415,7 +388,7 @@ export class ShootCheckController {
 
       // 次の升目へ
       this.currentCellIndex++;
-      setTimeout(() => this.moveToCurrentCell(), 10);
+      setTimeout(() => this.moveToCurrentCell(), SHOOT_CHECK_TIMING.FILTER_SKIP_DELAY_MS);
       return;
     }
 
@@ -436,7 +409,9 @@ export class ShootCheckController {
     }
 
     // ゴール方向を向く（毎回確実に向ける）
-    const goalZ = this.config.targetGoal === 'goal1' ? 13.4 : -13.4;
+    const goalZ = this.config.targetGoal === 'goal1'
+      ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+      : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
     const goalPosition = new Vector3(0, 0, goalZ);
     this.character.lookAt(goalPosition);
 
@@ -507,7 +482,7 @@ export class ShootCheckController {
       }
     } else {
       this.currentCellIndex++;
-      setTimeout(() => this.moveToCurrentCell(), 100);
+      setTimeout(() => this.moveToCurrentCell(), SHOOT_CHECK_TIMING.CELL_CHANGE_DELAY_MS);
     }
   }
 
@@ -528,7 +503,7 @@ export class ShootCheckController {
    */
   private checkShotResult(): void {
     // タイムアウトチェック
-    if (Date.now() - this.shotStartTime > this.shotTimeoutMs) {
+    if (Date.now() - this.shotStartTime > SHOOT_CHECK_TIMING.SHOT_TIMEOUT_MS) {
       // タイムアウト→失敗として扱う
       this.waitingForBallRelease = false;
       this.ballReachedPeak = false;
@@ -567,7 +542,7 @@ export class ShootCheckController {
     }
 
     // 床バウンド検知：最高点を通過後、床付近に達したら失敗
-    if (this.ballReachedPeak && currentY <= this.floorBounceHeight) {
+    if (this.ballReachedPeak && currentY <= SHOOT_CHECK_DETECTION.FLOOR_BOUNCE_HEIGHT) {
       this.ballReachedPeak = false;
       this.onShotComplete(false);
       return;
@@ -614,7 +589,7 @@ export class ShootCheckController {
         this.ball.setHolder(this.character);
         this.shootNextShot();
       }
-    }, 200);
+    }, SHOOT_CHECK_TIMING.SHOT_INTERVAL_DELAY_MS);
   }
 
   /**
@@ -681,17 +656,4 @@ export class ShootCheckController {
     this.waitingForShot = false;
     this.results.clear();
   }
-}
-
-/**
- * シュートチェック進捗情報
- */
-export interface ShootCheckProgress {
-  totalCells: number;
-  completedCells: number;
-  currentCell: string;
-  currentCellShots: number;
-  shotsPerCell: number;
-  state: ShootCheckState;
-  shotTypeFilter: ShotTypeFilter;
 }

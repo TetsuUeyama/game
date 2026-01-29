@@ -7,50 +7,17 @@ import { DEFAULT_CHARACTER_CONFIG } from "../../types/CharacterStats";
 import { CharacterState } from "../../types/CharacterState";
 import { CharacterAI } from "../CharacterAI";
 import { FeintController } from "../action/FeintController";
+import {
+  DRIBBLE_CHECK_DISTANCE,
+  DRIBBLE_CHECK_TIMING,
+  DribbleCheckResult,
+  DribbleCheckConfig,
+  DribbleCheckState,
+  DribbleCheckProgress,
+} from "../../config/check/DribbleCheckConfig";
 
-/**
- * ドリブルチェックの結果
- */
-export interface DribbleCheckResult {
-  trialNumber: number;
-  success: boolean;           // 成功したか（目標到達）
-  timeToReach: number | null; // 到達時間（秒）、失敗時はnull
-  stealOccurred: boolean;     // スティールが発生したか
-  reason: 'reached' | 'timeout' | 'steal' | 'out_of_bounds';
-}
-
-/**
- * ドリブルチェックの設定
- */
-export interface DribbleCheckConfig {
-  dribblerCell: { col: string; row: number };   // ドリブラーの配置マス
-  defenderCell: { col: string; row: number };   // ディフェンダーの配置マス
-  targetCell: { col: string; row: number };     // 目標マス
-  trialsPerConfig: number;                       // 試行回数（デフォルト: 10）
-  timeoutSeconds: number;                        // タイムアウト秒数（デフォルト: 30）
-  targetGoal: 'goal1' | 'goal2';                 // 攻めるゴール
-}
-
-/**
- * ドリブルチェックの進行状態
- */
-export type DribbleCheckState =
-  | 'idle'           // 待機中
-  | 'running'        // 実行中
-  | 'paused'         // 一時停止
-  | 'completed'      // 完了
-  | 'aborted';       // 中断
-
-/**
- * ドリブルチェック進捗情報
- */
-export interface DribbleCheckProgress {
-  totalTrials: number;
-  completedTrials: number;
-  currentTrialNumber: number;
-  elapsedTime: number;        // 現在の試行の経過時間
-  state: DribbleCheckState;
-}
+// 型をre-export
+export type { DribbleCheckResult, DribbleCheckConfig, DribbleCheckState, DribbleCheckProgress };
 
 /**
  * ドリブルチェックコントローラー
@@ -77,7 +44,6 @@ export class DribbleCheckController {
 
   // 目標位置
   private targetPosition: Vector3 = Vector3.Zero();
-  private readonly targetReachDistance: number = 1.0; // 目標に到達したとみなす距離
 
   // 結果
   private results: DribbleCheckResult[] = [];
@@ -107,8 +73,8 @@ export class DribbleCheckController {
     this.feintController = feintController;
     this.config = {
       ...config,
-      trialsPerConfig: config.trialsPerConfig ?? 10,
-      timeoutSeconds: config.timeoutSeconds ?? 30,
+      trialsPerConfig: config.trialsPerConfig ?? DRIBBLE_CHECK_TIMING.DEFAULT_TRIALS_PER_CONFIG,
+      timeoutSeconds: config.timeoutSeconds ?? DRIBBLE_CHECK_TIMING.DEFAULT_TIMEOUT_SECONDS,
     };
   }
 
@@ -330,7 +296,7 @@ export class DribbleCheckController {
       this.targetPosition
     );
 
-    if (distanceToTarget <= this.targetReachDistance) {
+    if (distanceToTarget <= DRIBBLE_CHECK_DISTANCE.TARGET_REACH_DISTANCE) {
       // 目標に到達
       this.completeTrial({
         trialNumber: this.currentTrialNumber,
@@ -370,11 +336,9 @@ export class DribbleCheckController {
     }
 
     // 境界外チェック
-    const fieldHalfWidth = 7.5;
-    const fieldHalfLength = 15;
     if (
-      Math.abs(dribblerPos.x) > fieldHalfWidth + 0.5 ||
-      Math.abs(dribblerPos.z) > fieldHalfLength + 0.5
+      Math.abs(dribblerPos.x) > DRIBBLE_CHECK_DISTANCE.FIELD_HALF_WIDTH + DRIBBLE_CHECK_DISTANCE.OUT_OF_BOUNDS_MARGIN ||
+      Math.abs(dribblerPos.z) > DRIBBLE_CHECK_DISTANCE.FIELD_HALF_LENGTH + DRIBBLE_CHECK_DISTANCE.OUT_OF_BOUNDS_MARGIN
     ) {
       this.completeTrial({
         trialNumber: this.currentTrialNumber,
@@ -410,7 +374,7 @@ export class DribbleCheckController {
       if (this.state === 'running') {
         this.startNextTrial();
       }
-    }, 1000);
+    }, DRIBBLE_CHECK_TIMING.TRIAL_INTERVAL_DELAY_MS);
   }
 
   /**

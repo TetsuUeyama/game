@@ -1,5 +1,11 @@
 import { Scene, Mesh, PointerEventTypes, PointerInfo, StandardMaterial, KeyboardEventTypes } from "@babylonjs/core";
 import { Character } from "../entities/Character";
+import {
+  JOINT_CONFIG,
+  JOINT_NAMES,
+  JOINT_MESH_PATTERNS,
+  JOINT_HIGHLIGHT,
+} from "../config/JointConfig";
 
 /**
  * 関節操作コントローラー
@@ -14,15 +20,6 @@ export class JointController {
   private previousPointerX: number = 0;
   private previousPointerY: number = 0;
   private isCtrlPressed: boolean = false;
-
-  // 関節名の一覧
-  private readonly jointNames = [
-    "head", "upperBody", "lowerBody",
-    "leftShoulder", "rightShoulder",
-    "leftElbow", "rightElbow",
-    "leftHip", "rightHip",
-    "leftKnee", "rightKnee"
-  ];
 
   constructor(scene: Scene, character: Character) {
     this.scene = scene;
@@ -116,11 +113,11 @@ export class JointController {
     const deltaX = event.clientX - this.previousPointerX;
     const deltaY = event.clientY - this.previousPointerY;
 
-    if (Math.abs(deltaX) < 0.1 && Math.abs(deltaY) < 0.1) {
+    if (Math.abs(deltaX) < JOINT_CONFIG.MIN_MOVEMENT_THRESHOLD && Math.abs(deltaY) < JOINT_CONFIG.MIN_MOVEMENT_THRESHOLD) {
       return;
     }
 
-    const rotationSpeed = 0.01;
+    const rotationSpeed = JOINT_CONFIG.ROTATION_SPEED;
 
     this.selectedJoint.rotation.y += deltaX * rotationSpeed;
     this.selectedJoint.rotation.x -= deltaY * rotationSpeed;
@@ -155,18 +152,7 @@ export class JointController {
    */
   private isJoint(mesh: Mesh): boolean {
     const name = mesh.name;
-    const isJoint = (
-      name.includes("shoulder") ||
-      name.includes("elbow") ||
-      name.includes("hip") ||
-      name.includes("knee") ||
-      name.includes("head") ||
-      name.includes("upper-body") ||
-      name.includes("lower-body") ||
-      name.includes("waist-joint")
-    );
-
-    return isJoint;
+    return JOINT_MESH_PATTERNS.some(pattern => name.includes(pattern));
   }
 
   /**
@@ -176,11 +162,8 @@ export class JointController {
     if (mesh.material) {
       const material = mesh.material as StandardMaterial;
       if (material.emissiveColor) {
-        if (highlight) {
-          material.emissiveColor.set(0.5, 0.5, 0.0);
-        } else {
-          material.emissiveColor.set(0, 0, 0);
-        }
+        const color = highlight ? JOINT_HIGHLIGHT.ACTIVE_COLOR : JOINT_HIGHLIGHT.INACTIVE_COLOR;
+        material.emissiveColor.set(color.r, color.g, color.b);
       }
     }
   }
@@ -189,7 +172,7 @@ export class JointController {
    * すべての関節をリセット
    */
   private resetAllJoints(): void {
-    this.jointNames.forEach(jointName => {
+    JOINT_NAMES.forEach(jointName => {
       const joint = this.character.getJoint(jointName);
       if (joint) {
         joint.rotation.x = 0;
