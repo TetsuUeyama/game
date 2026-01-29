@@ -311,6 +311,8 @@ export class Ball {
 
     if (character !== null) {
       this.lastToucher = character;
+      // ボールサイズを元に戻す
+      this.mesh.scaling = Vector3.One();
     }
 
     if (character !== null && this.inFlight) {
@@ -500,12 +502,14 @@ export class Ball {
    * @param arcHeight アーチ高さ（直線からの最大高さ、メートル）
    * @param overrideStartPosition 開始位置のオーバーライド
    * @param curveValue シューターのcurve値（0-99、バックスピンの強さに影響）
+   * @param radiusAdjust ボール半径の調整値（正の値で小さくなる）
    */
   public shootWithArcHeight(
     targetPosition: Vector3,
     arcHeight: number,
     overrideStartPosition?: Vector3,
-    curveValue: number = 50
+    curveValue: number = 50,
+    radiusAdjust: number = 0
   ): boolean {
     if (this.inFlight) return false;
 
@@ -557,6 +561,12 @@ export class Ball {
       // 物理ボディを一度破棄して新しい位置で再作成
       this.physicsAggregate.dispose();
       this.mesh.position = startPosition.clone();
+
+      // ボールサイズの調整（選手データに基づく）
+      const baseRadius = PhysicsConstants.BALL.RADIUS;
+      const adjustedRadius = Math.max(baseRadius - radiusAdjust, baseRadius * 0.5); // 最小で元の50%
+      const scale = adjustedRadius / baseRadius;
+      this.mesh.scaling = new Vector3(scale, scale, scale);
 
       // 新しい物理ボディを作成（DYNAMIC）
       this.physicsAggregate = new PhysicsAggregate(
@@ -876,6 +886,9 @@ export class Ball {
       this.physicsAggregate.dispose();
       this.physicsAggregate = null;
     }
+
+    // ボールサイズを元に戻す
+    this.mesh.scaling = Vector3.One();
 
     // 物理エンジンを再初期化
     this.initializePhysics();

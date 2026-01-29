@@ -65,7 +65,7 @@ export const LAYUP_DISTANCE_ADJUSTMENT = {
  */
 export const SHOOT_ARC_HEIGHT = {
   // 基本アーチ高さ（シュートタイプ別）
-  THREE_POINT: 2.8,                 // 3Pシュート：1.8m（高めのアーチ）
+  THREE_POINT: 2.2,                 // 3Pシュート：1.8m（高めのアーチ）
   MIDRANGE: 1.5,                    // ミドルレンジ：1.5m
   LAYUP: 0.8,                       // レイアップ：0.8m（低めのアーチ）
   LAYUP_CLOSE: 0.5,                 // レイアップ（近距離）：0.5m
