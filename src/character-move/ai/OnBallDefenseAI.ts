@@ -4,7 +4,7 @@ import { Ball } from "../entities/Ball";
 import { Field } from "../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
 import { DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
-import { ActionConfigUtils } from "../config/ActionConfig";
+import { ActionConfigUtils } from "../config/action/ActionConfig";
 import { IDLE_MOTION } from "../motion/IdleMotion";
 
 /**

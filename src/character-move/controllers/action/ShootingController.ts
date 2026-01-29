@@ -1,3 +1,6 @@
+
+
+
 import { Vector3, Scene, Mesh, VertexData, StandardMaterial, Color3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
@@ -10,14 +13,14 @@ import {
   SHOOT_PHYSICS,
   SHOOT_START_OFFSET,
   ShootingUtils,
-} from "../../config/ShootingConfig";
+} from "../../config/action/ShootingConfig";
 import { ParabolaUtils } from "../../utils/parabolaUtils";
 import {
   getDistance2D,
   getDirection2D,
   isDirectionWithinAngle,
 } from "../../utils/CollisionUtils";
-import { ActionType, ActionConfigUtils } from "../../config/ActionConfig";
+import { ActionType, ActionConfigUtils } from "../../config/action/ActionConfig";
 
 /**
  * シュートの種類

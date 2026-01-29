@@ -1,6 +1,7 @@
 import { Scalar } from "@babylonjs/core";
 import {Character} from "../entities/Character";
 import {MotionData, MotionState, MotionConfig, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset} from "../types/MotionTypes";
+import { MOTION_BLEND_CONFIG, MOTION_SPEED_CONFIG, MOTION_POSITION_CONFIG } from "../config/MotionConfig";
 
 /**
  * モーションコントローラー
@@ -20,16 +21,16 @@ export class MotionController {
       isPlaying: false,
       currentTime: 0,
       currentMotion: null,
-      speed: 1.0,
+      speed: MOTION_SPEED_CONFIG.DEFAULT_SPEED,
       isBlending: false,
       blendTime: 0,
-      blendDuration: 0.3, // デフォルト0.3秒でブレンド
+      blendDuration: MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION,
       previousJoints: null,
       previousPosition: null,
       nextMotion: null,
       lastAppliedPosition: null,
       basePosition: null,
-      positionScale: 1.0,
+      positionScale: MOTION_POSITION_CONFIG.DEFAULT_POSITION_SCALE,
     };
   }
 
@@ -89,8 +90,8 @@ export class MotionController {
       }
     }
 
-    // ブレンド時間を取得（デフォルト: 0.3秒）
-    const blendDuration = config.blendDuration ?? 0.3;
+    // ブレンド時間を取得
+    const blendDuration = config.blendDuration ?? MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION;
 
     // モーションを再生
     this.play(config.motionData, 1.0, blendDuration);
@@ -139,10 +140,10 @@ export class MotionController {
     }
 
     // ブレンド時間を取得
-    const blendDuration = config.blendDuration ?? 0.3;
+    const blendDuration = config.blendDuration ?? MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION;
 
     // モーションを再生（スケール付き）
-    this.playWithScale(config.motionData, positionScale, 1.0, blendDuration);
+    this.playWithScale(config.motionData, positionScale, MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration);
     return true;
   }
 
@@ -203,7 +204,7 @@ export class MotionController {
    * モーションを再生開始
    * 既にモーションが再生中の場合は、ブレンドして遷移する
    */
-  public play(motion: MotionData, speed: number = 1.0, blendDuration: number = 0.3): void {
+  public play(motion: MotionData, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
     // 既にモーションが再生中の場合は、ブレンドを開始
     if (this.state.isPlaying && this.state.currentMotion) {
       // 現在の関節状態を保存
@@ -215,7 +216,7 @@ export class MotionController {
       this.state.blendDuration = blendDuration;
       // lastAppliedPositionは保持（新しいモーションのオフセットとの差分を取るため）
       // 位置スケールをリセット
-      this.state.positionScale = 1.0;
+      this.state.positionScale = MOTION_POSITION_CONFIG.DEFAULT_POSITION_SCALE;
     } else {
       // 新規再生
       this.state.currentMotion = motion;
@@ -229,7 +230,7 @@ export class MotionController {
       // 初回のみ位置オフセットをリセット
       this.state.lastAppliedPosition = null;
       // 位置スケールをリセット
-      this.state.positionScale = 1.0;
+      this.state.positionScale = MOTION_POSITION_CONFIG.DEFAULT_POSITION_SCALE;
     }
   }
 
@@ -237,7 +238,7 @@ export class MotionController {
    * モーションを位置オフセットのスケール付きで再生
    * ジャンプの高さを変えるなど、位置オフセットをスケールする場合に使用
    */
-  public playWithScale(motion: MotionData, positionScale: number, speed: number = 1.0, blendDuration: number = 0.3): void {
+  public playWithScale(motion: MotionData, positionScale: number, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
     // 既にモーションが再生中の場合は、ブレンドを開始
     if (this.state.isPlaying && this.state.currentMotion) {
       // 現在の関節状態を保存

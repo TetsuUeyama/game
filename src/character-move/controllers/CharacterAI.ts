@@ -6,6 +6,7 @@ import { Field } from "../entities/Field";
 import { ShootingController } from "./action/ShootingController";
 import { FeintController } from "./action/FeintController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
+import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
 import {
   LooseBallAI,
   OnBallOffenseAI,
@@ -46,9 +47,7 @@ export class CharacterAI {
     this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field);
 
     // オフェンス側のボール保持位置を設定
-    // 緑(3)・シアン(4)・青(5)以外の5箇所を使用
-    // つまり、赤(0)・オレンジ(1)・黄色(2)・紫(6)・マゼンタ(7)
-    this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
+    this.character.setBallHoldingFaces([...BALL_HOLDING_CONFIG.OFFENSE_HOLDING_FACES]);
   }
 
   /**

@@ -8,7 +8,7 @@ import {
   ActionConfigUtils,
   HitboxConfig,
   ACTION_MOTIONS,
-} from "../../config/ActionConfig";
+} from "../../config/action/ActionConfig";
 import { Character } from "../../entities/Character";
 
 /**
