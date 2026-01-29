@@ -9,10 +9,11 @@ import {
   PhysicsShapeType,
   PhysicsMotionType,
   PhysicsMaterialCombineMode,
+  LinesMesh,
 } from "@babylonjs/core";
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
-import { ShootingUtils } from "../config/ShootingConfig";
+import { ParabolaUtils } from "../utils/parabolaUtils";
 
 /**
  * 3Dバスケットボールエンティティ
@@ -60,6 +61,11 @@ export class Ball {
 
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
+
+  // 軌道可視化用メッシュ
+  private trajectoryLineMesh: LinesMesh | null = null;
+  private trajectoryParabolaMesh: LinesMesh | null = null;
+  private trajectoryVisible: boolean = true;
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -529,7 +535,7 @@ export class Ball {
     this.targetPosition = targetPosition.clone();
 
     // 新しい放物線計算: アーチ高さから初速度を計算
-    const velocityResult = ShootingUtils.calculateVelocityFromArcHeight(
+    const velocityResult = ParabolaUtils.calculateVelocityFromArcHeight(
       startPosition.x,
       startPosition.y,
       startPosition.z,
@@ -546,10 +552,8 @@ export class Ball {
       velocityResult.vz
     );
 
-    // デバッグ: 計算された初速度をログ出力
-    const v0 = velocity.length();
-    console.log(`[BallDebug] arcHeight: ${arcHeight.toFixed(4)}m, flightTime: ${velocityResult.flightTime.toFixed(4)}s`);
-    console.log(`[BallDebug] v0: ${v0.toFixed(4)} m/s, velocity: (${velocity.x.toFixed(4)}, ${velocity.y.toFixed(4)}, ${velocity.z.toFixed(4)})`);
+    // 軌道を可視化
+    this.visualizeTrajectory(startPosition, targetPosition, arcHeight);
 
     // バックスピンを計算
     // curve値が高いほど強いバックスピン（5〜25 rad/s）
@@ -894,10 +898,81 @@ export class Ball {
     this.initializePhysics();
   }
 
+  // ==================== 軌道可視化 ====================
+
+  /**
+   * 軌道の可視化を作成
+   * @param start 発射位置
+   * @param target 目標位置
+   * @param arcHeight アーチ高さ
+   */
+  private visualizeTrajectory(start: Vector3, target: Vector3, arcHeight: number): void {
+    // 既存の可視化を削除
+    this.clearTrajectoryVisualization();
+
+    if (!this.trajectoryVisible) return;
+
+    // 直線（発射位置→目標位置）
+    const linePoints = [start.clone(), target.clone()];
+    this.trajectoryLineMesh = MeshBuilder.CreateLines(
+      "trajectory-line",
+      { points: linePoints },
+      this.scene
+    );
+    this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
+
+    // 放物線（ParabolaUtilsを使用）
+    const parabolaPoints: Vector3[] = [];
+    const segments = 50;
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const pos = ParabolaUtils.getPositionOnParabola(start, target, arcHeight, t);
+      parabolaPoints.push(new Vector3(pos.x, pos.y, pos.z));
+    }
+    this.trajectoryParabolaMesh = MeshBuilder.CreateLines(
+      "trajectory-parabola",
+      { points: parabolaPoints },
+      this.scene
+    );
+    this.trajectoryParabolaMesh.color = new Color3(0, 1, 1); // シアン
+  }
+
+  /**
+   * 軌道の可視化を削除
+   */
+  private clearTrajectoryVisualization(): void {
+    if (this.trajectoryLineMesh) {
+      this.trajectoryLineMesh.dispose();
+      this.trajectoryLineMesh = null;
+    }
+    if (this.trajectoryParabolaMesh) {
+      this.trajectoryParabolaMesh.dispose();
+      this.trajectoryParabolaMesh = null;
+    }
+  }
+
+  /**
+   * 軌道可視化の表示/非表示を設定
+   */
+  public setTrajectoryVisible(visible: boolean): void {
+    this.trajectoryVisible = visible;
+    if (!visible) {
+      this.clearTrajectoryVisualization();
+    }
+  }
+
+  /**
+   * 軌道可視化の表示/非表示を切り替え
+   */
+  public toggleTrajectoryVisible(): void {
+    this.setTrajectoryVisible(!this.trajectoryVisible);
+  }
+
   /**
    * 破棄
    */
   dispose(): void {
+    this.clearTrajectoryVisualization();
     if (this.physicsAggregate) {
       this.physicsAggregate.dispose();
     }
