@@ -1,5 +1,5 @@
-import { Character } from "../entities/Character";
-import { Ball } from "../entities/Ball";
+import { Character } from "../../entities/Character";
+import { Ball } from "../../entities/Ball";
 
 /**
  * フェイント設定

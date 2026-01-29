@@ -1,12 +1,12 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../../entities/Character";
-import { Ball } from "../../entities/Ball";
-import { Field } from "../../entities/Field";
-import { CharacterState } from "../../types/CharacterState";
-import { IDLE_MOTION } from "../../data/IdleMotion";
-import { WALK_FORWARD_MOTION } from "../../data/WalkMotion";
-import { DASH_FORWARD_MOTION } from "../../data/DashMotion";
-import { FIELD_CONFIG } from "../../config/gameConfig";
+import { Character } from "../entities/Character";
+import { Ball } from "../entities/Ball";
+import { Field } from "../entities/Field";
+import { CharacterState } from "../types/CharacterState";
+import { IDLE_MOTION } from "../motion/IdleMotion";
+import { WALK_FORWARD_MOTION } from "../motion/WalkMotion";
+import { DASH_FORWARD_MOTION } from "../motion/DashMotion";
+import { FIELD_CONFIG } from "../config/gameConfig";
 
 /**
  * 状態別AIの基底クラス

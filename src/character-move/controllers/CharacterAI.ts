@@ -1,9 +1,10 @@
+import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { Field } from "../entities/Field";
-import { ShootingController } from "./ShootingController";
-import { FeintController } from "./FeintController";
+import { ShootingController } from "./action/ShootingController";
+import { FeintController } from "./action/FeintController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import {
   LooseBallAI,
@@ -11,8 +12,8 @@ import {
   OnBallDefenseAI,
   OffBallOffenseAI,
   OffBallDefenseAI
-} from "./ai";
-import { PassCallback } from "./ai/OnBallOffenseAI";
+} from "../ai";
+import { PassCallback } from "../ai/OnBallOffenseAI";
 
 /**
  * キャラクターAIコントローラー
@@ -69,6 +70,14 @@ export class CharacterAI {
    */
   public setPassCallback(callback: PassCallback): void {
     this.onBallOffenseAI.setPassCallback(callback);
+  }
+
+  /**
+   * 目標位置オーバーライドを設定
+   * 設定するとゴールではなくこの位置に向かい、シュート・パスは行わない
+   */
+  public setTargetPositionOverride(position: Vector3 | null): void {
+    this.onBallOffenseAI.setTargetPositionOverride(position);
   }
 
   /**

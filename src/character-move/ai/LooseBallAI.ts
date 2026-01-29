@@ -1,11 +1,11 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../../entities/Character";
-import { Ball } from "../../entities/Ball";
-import { Field } from "../../entities/Field";
+import { Character } from "../entities/Character";
+import { Ball } from "../entities/Ball";
+import { Field } from "../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
-import { IDLE_MOTION } from "../../data/IdleMotion";
-import { WALK_FORWARD_MOTION } from "../../data/WalkMotion";
-import { DASH_FORWARD_MOTION } from "../../data/DashMotion";
+import { IDLE_MOTION } from "../motion/IdleMotion";
+import { WALK_FORWARD_MOTION } from "../motion/WalkMotion";
+import { DASH_FORWARD_MOTION } from "../motion/DashMotion";
 
 /**
  * ルーズボール時のAI

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ShootCheckScene } from '@/character-move/scenes/ShootCheckScene';
-import { ShootCheckProgress, CellShootResult, ShootCheckConfig } from '@/character-move/controllers/ShootCheckController';
+import { ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter } from '@/character-move/controllers/check/ShootCheckController';
 import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
 import { PlayerData } from '@/character-move/types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
@@ -38,6 +38,7 @@ export function ShootCheckModePanel({ onClose }: ShootCheckModePanelProps) {
   // 設定
   const [targetGoal, setTargetGoal] = useState<'goal1' | 'goal2'>('goal1');
   const [shotsPerCell] = useState<number>(100);
+  const [shotTypeFilter, setShotTypeFilter] = useState<ShotTypeFilter>('all');
 
   // チェックモード（全マス or 単一セル）
   const [checkMode, setCheckMode] = useState<CheckMode>('all');
@@ -101,6 +102,7 @@ export function ShootCheckModePanel({ onClose }: ShootCheckModePanelProps) {
         const config: ShootCheckConfig = {
           shotsPerCell,
           targetGoal,
+          shotTypeFilter,
         };
 
         // モードに応じてシュートチェックを開始
@@ -142,7 +144,7 @@ export function ShootCheckModePanel({ onClose }: ShootCheckModePanelProps) {
         sceneRef.current = null;
       }
     };
-  }, [phase, selectedPlayerId, players, shotsPerCell, targetGoal, checkMode, selectedCol, selectedRow]);
+  }, [phase, selectedPlayerId, players, shotsPerCell, targetGoal, checkMode, selectedCol, selectedRow, shotTypeFilter]);
 
   // シュートチェック開始
   const handleStart = useCallback(() => {
@@ -327,6 +329,35 @@ export function ShootCheckModePanel({ onClose }: ShootCheckModePanelProps) {
                   </div>
                 )}
 
+                {/* シュートタイプフィルター（全マスモード時のみ表示） */}
+                {checkMode === 'all' && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      シュートタイプ
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { value: 'all', label: '全シュート' },
+                        { value: '3pt', label: '3Pのみ' },
+                        { value: 'midrange', label: 'ミドルのみ' },
+                        { value: 'layup', label: 'レイアップのみ' },
+                      ] as const).map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setShotTypeFilter(value)}
+                          className={`py-2 rounded-lg font-semibold text-sm transition-all ${
+                            shotTypeFilter === value
+                              ? 'bg-cyan-500 text-white ring-2 ring-cyan-400 ring-offset-2 ring-offset-gray-800'
+                              : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-200'
+                          }`}
+                        >
+                          {shotTypeFilter === value && '● '}{label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* シュート数表示 */}
                 <div className="mb-8">
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -408,7 +439,14 @@ export function ShootCheckModePanel({ onClose }: ShootCheckModePanelProps) {
             {/* 進捗バー */}
             <div className="flex-1 mr-4">
               <div className="flex items-center justify-between text-sm text-gray-300 mb-1">
-                <span>進捗: {progress.completedCells} / {progress.totalCells} マス</span>
+                <span>
+                  進捗: {progress.completedCells} / {progress.totalCells} マス
+                  {progress.shotTypeFilter !== 'all' && (
+                    <span className="ml-2 px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded text-xs">
+                      {getShotTypeFilterLabel(progress.shotTypeFilter)}
+                    </span>
+                  )}
+                </span>
                 <span>現在: {progress.currentCell} ({progress.currentCellShots}/{progress.shotsPerCell}本)</span>
               </div>
               <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden">
@@ -481,5 +519,23 @@ function getShootTypeName(shootType: string): string {
       return 'レンジ外';
     default:
       return shootType;
+  }
+}
+
+/**
+ * シュートタイプフィルターのラベルを取得
+ */
+function getShotTypeFilterLabel(filter: ShotTypeFilter): string {
+  switch (filter) {
+    case 'all':
+      return '全シュート';
+    case '3pt':
+      return '3Pのみ';
+    case 'midrange':
+      return 'ミドルのみ';
+    case 'layup':
+      return 'レイアップのみ';
+    default:
+      return filter;
   }
 }

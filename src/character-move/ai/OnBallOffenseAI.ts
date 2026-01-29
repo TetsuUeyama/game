@@ -1,15 +1,15 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../../entities/Character";
-import { Ball } from "../../entities/Ball";
-import { Field } from "../../entities/Field";
+import { Character } from "../entities/Character";
+import { Ball } from "../entities/Ball";
+import { Field } from "../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
-import { ShootingController } from "../ShootingController";
-import { FeintController } from "../FeintController";
-import { SHOOT_COOLDOWN, ShootingUtils } from "../../config/ShootingConfig";
-import { DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
-import { PASS_COOLDOWN, PassUtils } from "../../config/PassConfig";
-import { IDLE_MOTION } from "../../data/IdleMotion";
-import { WALK_FORWARD_MOTION } from "../../data/WalkMotion";
+import { ShootingController } from "../controllers/action/ShootingController";
+import { FeintController } from "../controllers/action/FeintController";
+import { SHOOT_COOLDOWN, ShootingUtils } from "../config/ShootingConfig";
+import { DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
+import { PASS_COOLDOWN, PassUtils } from "../config/PassConfig";
+import { IDLE_MOTION } from "../motion/IdleMotion";
+import { WALK_FORWARD_MOTION } from "../motion/WalkMotion";
 
 /**
  * パス実行時のコールバック型
@@ -35,6 +35,9 @@ export class OnBallOffenseAI extends BaseStateAI {
   private feintCooldown: number = 0;
   // パスクールダウン（連続パス防止）
   private passCooldown: number = 0;
+
+  // 目標位置オーバーライド（設定時はゴールではなくこの位置に向かう）
+  private targetPositionOverride: Vector3 | null = null;
 
   constructor(
     character: Character,
@@ -67,6 +70,21 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
+   * 目標位置オーバーライドを設定
+   * 設定するとゴールではなくこの位置に向かい、シュートは行わない
+   */
+  public setTargetPositionOverride(position: Vector3 | null): void {
+    this.targetPositionOverride = position;
+  }
+
+  /**
+   * 目標位置オーバーライドをクリア
+   */
+  public clearTargetPositionOverride(): void {
+    this.targetPositionOverride = null;
+  }
+
+  /**
    * クールダウンを更新
    */
   public updateCooldowns(deltaTime: number): void {
@@ -92,6 +110,9 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
     }
 
+    // 目標位置を決定（オーバーライドがあればそれを使用、なければゴール）
+    const targetPosition = this.getTargetPosition();
+
     // 目の前にディフェンダーがいるかチェック
     const onBallDefender = this.findOnBallDefender();
 
@@ -114,31 +135,32 @@ export class OnBallOffenseAI extends BaseStateAI {
           this.character.playMotion(IDLE_MOTION);
         }
 
-        // オフェンス側は常にゴール方向を向く（最優先）
-        const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
-        const goalPosition = attackingGoal.position;
-        const toGoal = new Vector3(
-          goalPosition.x - myPosition.x,
+        // オフェンス側は常に目標方向を向く（最優先）
+        const toTarget = new Vector3(
+          targetPosition.x - myPosition.x,
           0,
-          goalPosition.z - myPosition.z
+          targetPosition.z - myPosition.z
         );
-        if (toGoal.length() > 0.01) {
-          const angle = Math.atan2(toGoal.x, toGoal.z);
+        if (toTarget.length() > 0.01) {
+          const angle = Math.atan2(toTarget.x, toTarget.z);
           this.character.setRotation(angle);
         }
 
         // 1on1状態: まずパスを試みる（ポジションに応じた判定）
-        if (this.tryPass()) {
+        // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
+        if (!this.targetPositionOverride && this.tryPass()) {
           return;
         }
 
         // パスしなかった場合、フェイントを試みる（確率でフェイントまたはシュートを選択）
+        // 目標位置オーバーライド時はフェイント確率を上げる
         if (this.tryFeint()) {
           return; // フェイント実行した場合、シュートは打たない
         }
 
         // フェイントを選択しなかった場合、シュートを試みる
-        if (this.tryShoot()) {
+        // 目標位置オーバーライド時はシュートしない
+        if (!this.targetPositionOverride && this.tryShoot()) {
           return;
         }
 
@@ -158,20 +180,16 @@ export class OnBallOffenseAI extends BaseStateAI {
         if (awayDirection.length() > 0.01) {
           awayDirection.normalize();
 
-          // 攻めるべきゴールを決定
-          const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
-          const goalPosition = attackingGoal.position;
-
-          // ゴール方向とディフェンダーから離れる方向を組み合わせる
-          const toGoal = new Vector3(
-            goalPosition.x - myPosition.x,
+          // 目標方向とディフェンダーから離れる方向を組み合わせる
+          const toTarget = new Vector3(
+            targetPosition.x - myPosition.x,
             0,
-            goalPosition.z - myPosition.z
+            targetPosition.z - myPosition.z
           );
-          toGoal.normalize();
+          toTarget.normalize();
 
-          // 60%ゴール方向、40%ディフェンダーから離れる方向
-          const combinedDirection = toGoal.scale(0.6).add(awayDirection.scale(0.4));
+          // 60%目標方向、40%ディフェンダーから離れる方向
+          const combinedDirection = toTarget.scale(0.6).add(awayDirection.scale(0.4));
           combinedDirection.normalize();
 
           // 境界チェック（オフェンスはフィールド外に出ない）
@@ -205,21 +223,31 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // ディフェンダーがいないか遠い場合
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
-    if (this.tryShoot()) {
+    // 目標位置オーバーライド時はシュートしない
+    if (!this.targetPositionOverride && this.tryShoot()) {
       return;
     }
 
     // シュートできない場合、パスを試みる
-    if (this.tryPass()) {
+    // 目標位置オーバーライド時はパスしない
+    if (!this.targetPositionOverride && this.tryPass()) {
       return;
     }
 
-    // シュートレンジ外ならゴールに向かって移動
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
-    const goalPosition = attackingGoal.position;
+    // 目標位置に向かって移動（境界チェック付き）
+    const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
+    this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance);
+  }
 
-    // ゴールに向かって移動（境界チェック付き）
-    this.moveTowardsWithBoundary(goalPosition, deltaTime, 2.0); // ゴール2m手前で停止
+  /**
+   * 目標位置を取得（オーバーライドがあればそれを、なければゴール位置を返す）
+   */
+  private getTargetPosition(): Vector3 {
+    if (this.targetPositionOverride) {
+      return this.targetPositionOverride;
+    }
+    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
+    return attackingGoal.position;
   }
 
   /**
@@ -290,7 +318,7 @@ export class OnBallOffenseAI extends BaseStateAI {
 
   /**
    * シュートフェイントを試みる
-   * 条件: ボールが0面にある、シュートレンジ内、フェイントクールダウン終了
+   * 条件: ボールが0面にある、シュートレンジ内（または目標位置オーバーライド時）、フェイントクールダウン終了
    * 条件合致時に確率でフェイントを選択
    * @returns フェイントを実行した場合true
    */
@@ -316,18 +344,22 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // シュートレンジ内か確認
-    if (!this.shootingController) {
-      return false;
+    // 目標位置オーバーライド時はシュートレンジチェックをスキップ
+    if (!this.targetPositionOverride) {
+      // シュートレンジ内か確認
+      if (!this.shootingController) {
+        return false;
+      }
+
+      const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+      if (!rangeInfo || !rangeInfo.inRange) {
+        return false;
+      }
     }
 
-    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
-    if (!rangeInfo || !rangeInfo.inRange) {
-      return false;
-    }
-
-    // 条件が揃った場合、確率でフェイントを選択（50%の確率）
-    const feintChance = 0.5;
+    // 条件が揃った場合、確率でフェイントを選択
+    // 目標位置オーバーライド時は確率を上げる（80%）、通常時は50%
+    const feintChance = this.targetPositionOverride ? 0.8 : 0.5;
     if (Math.random() > feintChance) {
       return false; // フェイントを選択しなかった
     }

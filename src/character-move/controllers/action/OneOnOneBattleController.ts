@@ -1,8 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../entities/Character";
-import { Ball } from "../entities/Ball";
-import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
-import { ONE_ON_ONE_BATTLE, DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
+import { Character } from "../../entities/Character";
+import { Ball } from "../../entities/Ball";
+import { DRIBBLE_CONFIG, DribbleUtils } from "../../config/DribbleConfig";
+import { ONE_ON_ONE_BATTLE, DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
 
 /**
  * 1on1バトルの結果

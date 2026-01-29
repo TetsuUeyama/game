@@ -168,10 +168,10 @@ export const MOTION: MotionData = {
 `src/character-move/controllers/InputController.ts` でモーションを登録します。
 
 ```typescript
-import { RUN_MOTION_CONFIG } from "../data/RunMotion";
+import { RUN_MOTION_CONFIG } from "../motion/RunMotion";
 
 // コンストラクタ内
-this.motionManager.registerMotions([
+this.motionController.registerMotions([
   IDLE_MOTION_CONFIG,
   WALK_MOTION_CONFIG,
   RUN_MOTION_CONFIG, // 追加
@@ -193,13 +193,13 @@ public update(deltaTime: number): void {
 
     // Shiftキーで走る
     if (this.inputState.shift) {
-      this.motionManager.play("run");
+      this.motionController.playByName("run");
     } else {
-      this.motionManager.play("walk");
+      this.motionController.playByName("walk");
     }
   } else {
     // 停止時は自動的にデフォルトモーション（アイドル）に戻る
-    this.motionManager.playDefault();
+    this.motionController.playDefault();
   }
 
   this.handleRotation(deltaTime);
@@ -239,7 +239,7 @@ public update(deltaTime: number): void {
 
 2. **自動遷移**
    - `InputController` で条件が満たされなくなった時（例: ボタンを離した時）
-   - `motionManager.playDefault()` を呼び出すだけで、自動的にデフォルトモーションにブレンドされます
+   - `motionController.playDefault()` を呼び出すだけで、自動的にデフォルトモーションにブレンドされます
 
 ## まとめ
 
@@ -247,7 +247,7 @@ public update(deltaTime: number): void {
 
 1. モーションデータファイルを作成（キーフレームと設定を定義）
 2. InputControllerに登録（`registerMotions` に追加）
-3. トリガー条件を追加（`update` メソッド内で `motionManager.play("モーション名")` を呼ぶ）
+3. トリガー条件を追加（`update` メソッド内で `motionController.playByName("モーション名")` を呼ぶ）
 
 これだけで、自動的に：
 - ブレンディング

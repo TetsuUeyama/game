@@ -1,6 +1,6 @@
 import { Scene, Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
-import { MotionManager } from "../managers/MotionManager";
+import { MotionController } from "./MotionController";
 import {
   WALK_FORWARD_MOTION_CONFIG,
   WALK_BACKWARD_MOTION_CONFIG,
@@ -10,23 +10,23 @@ import {
   WALK_FORWARD_RIGHT_MOTION_CONFIG,
   WALK_BACKWARD_LEFT_MOTION_CONFIG,
   WALK_BACKWARD_RIGHT_MOTION_CONFIG,
-} from "../data/WalkMotion";
-import { IDLE_MOTION_CONFIG } from "../data/IdleMotion";
-import { JUMP_MOTION_CONFIG } from "../data/JumpMotion";
+} from "../motion/WalkMotion";
+import { IDLE_MOTION_CONFIG } from "../motion/IdleMotion";
+import { JUMP_MOTION_CONFIG } from "../motion/JumpMotion";
 import {
   LANDING_SMALL_MOTION_CONFIG,
   LANDING_MOTION_CONFIG,
   LANDING_LARGE_MOTION_CONFIG,
   createExtendedLandingMotion,
-} from "../data/LandingMotion";
-import { CROUCH_MOTION_CONFIG } from "../data/CrouchMotion";
+} from "../motion/LandingMotion";
+import { CROUCH_MOTION_CONFIG } from "../motion/CrouchMotion";
 import {
   DASH_FORWARD_MOTION_CONFIG,
   DASH_BACKWARD_MOTION_CONFIG,
   DASH_LEFT_MOTION_CONFIG,
   DASH_RIGHT_MOTION_CONFIG,
-} from "../data/DashMotion";
-import { createDashStopMotion, DASH_STOP_MOTION_CONFIG } from "../data/DashStopMotion";
+} from "../motion/DashMotion";
+import { createDashStopMotion, DASH_STOP_MOTION_CONFIG } from "../motion/DashStopMotion";
 import { JumpChargeGauge } from "../ui/JumpChargeGauge";
 import { DashGauge } from "../ui/DashGauge";
 import { CooldownGauge } from "../ui/CooldownGauge";
@@ -56,7 +56,7 @@ export class InputController {
   private scene: Scene;
   private character: Character;
   private inputState: InputState;
-  private motionManager: MotionManager;
+  private motionController: MotionController;
   private jumpPressStartTime: number = 0; // ジャンプボタン押下開始時刻
   private isJumpPressed: boolean = false; // ジャンプボタンが押されているか
   private pendingLandingMotion: string | null = null; // ジャンプ後に再生する着地硬直モーション
@@ -98,11 +98,11 @@ export class InputController {
       dashRight: false,
     };
 
-    // モーションマネージャーを初期化
-    this.motionManager = new MotionManager(character);
+    // モーションコントローラーを取得
+    this.motionController = character.getMotionController();
 
     // モーションを登録
-    this.motionManager.registerMotions([
+    this.motionController.registerMotions([
       IDLE_MOTION_CONFIG, // デフォルトモーション
       WALK_FORWARD_MOTION_CONFIG, // 前進モーション
       WALK_BACKWARD_MOTION_CONFIG, // 後退モーション
@@ -205,7 +205,7 @@ export class InputController {
           if (!isDashing) {
             // 現在のモーションを停止してからcrouchを再生（ブレンドなしで即座に切り替え）
             this.character.stopMotion();
-            this.motionManager.play("crouch", true); // forceで強制再生
+            this.motionController.playByName("crouch", true); // forceで強制再生
             // すぐに一時停止して初期状態（時間0）に設定
             this.character.pauseMotion();
             this.character.setMotionTime(0);
@@ -316,7 +316,7 @@ export class InputController {
     }
 
     // ジャンプモーションを再生（スケール付き）
-    this.motionManager.playWithPositionScale("jump", jumpScale);
+    this.motionController.playByNameWithPositionScale("jump", jumpScale);
 
     // 着地硬直モーション名を保存（ジャンプ終了後に再生）
     this.pendingLandingMotion = landingMotionName;
@@ -328,7 +328,7 @@ export class InputController {
    * @param deltaTime フレーム時間（秒）
    */
   public update(deltaTime: number): void {
-    const currentMotion = this.motionManager.getCurrentMotionName();
+    const currentMotion = this.motionController.getCurrentMotionName();
     const isPlaying = this.character.isPlayingMotion();
 
     // ダッシュキーが押されているかチェック
@@ -352,7 +352,7 @@ export class InputController {
         const extendedLandingMotion = createExtendedLandingMotion(this.pendingLandingMotion, this.dashMomentumSpeed);
 
         // 延長された着地モーションを登録
-        this.motionManager.registerMotions([{
+        this.motionController.registerMotions([{
           motionData: extendedLandingMotion,
           isDefault: false,
           blendDuration: 0.1,
@@ -367,7 +367,7 @@ export class InputController {
       this.cooldownGauge.start(landingDuration);
 
       // 着地硬直モーションを再生
-      this.motionManager.play(this.pendingLandingMotion, true); // forceで強制再生
+      this.motionController.playByName(this.pendingLandingMotion, true); // forceで強制再生
       this.pendingLandingMotion = null;
       // モーション更新は着地硬直が自動的にidleに戻るため不要
       this.handleRotation(deltaTime);
@@ -487,7 +487,7 @@ export class InputController {
 
         // ジャンプチャージ中でなければダッシュモーションを再生
         if (!this.isJumpPressed && currentMotion !== dashMotionName) {
-          this.motionManager.play(dashMotionName, true);
+          this.motionController.playByName(dashMotionName, true);
         }
 
         // ダッシュゲージを更新（ジャンプチャージ中でも表示）
@@ -514,7 +514,7 @@ export class InputController {
         const dashStopMotion = createDashStopMotion(accelerationRatio);
 
         // モーションマネージャーに登録してから再生
-        this.motionManager.registerMotions([{
+        this.motionController.registerMotions([{
           motionData: dashStopMotion,
           isDefault: false,
           blendDuration: 0.05,
@@ -524,7 +524,7 @@ export class InputController {
 
         // ジャンプ中・ジャンプチャージ中でない場合のみ、ダッシュ停止モーションを再生
         if (!isJumping && !this.isJumpPressed) {
-          this.motionManager.play("dash_stop", true); // forceで強制再生
+          this.motionController.playByName("dash_stop", true); // forceで強制再生
 
           // クールダウンゲージを開始
           this.cooldownGauge.start(dashStopMotion.duration);
@@ -558,7 +558,7 @@ export class InputController {
       const savedZ = currentPos.z;
 
       // モーションマネージャーの更新（ジャンプのY軸移動を適用）
-      this.motionManager.update();
+      this.motionController.updateMotionManager();
 
       // モーション更新後の位置を取得
       const afterMotionPos = this.character.getPosition();
@@ -583,7 +583,7 @@ export class InputController {
     }
 
     // ダッシュ中以外はモーションマネージャーの更新（モーション終了検知と位置更新）
-    this.motionManager.update();
+    this.motionController.updateMotionManager();
 
     // 着地硬直中・ダッシュ停止中・アクション実行中は移動不可
     if (!isLanding && !isDashStopping && !isActionInProgress) {
@@ -620,10 +620,10 @@ export class InputController {
         this.character.move(scaledDirection, deltaTime);
 
         // モーションを再生
-        this.motionManager.play(motionName);
+        this.motionController.playByName(motionName);
       } else {
         // 移動していない場合はデフォルトモーション（アイドル）に戻る
-        this.motionManager.playDefault();
+        this.motionController.playDefault();
       }
     }
 
@@ -786,10 +786,10 @@ export class InputController {
   }
 
   /**
-   * モーションマネージャーを取得
+   * モーションコントローラーを取得
    */
-  public getMotionManager(): MotionManager {
-    return this.motionManager;
+  public getMotionController(): MotionController {
+    return this.motionController;
   }
 
   /**
