@@ -1,7 +1,14 @@
 /**
  * 放物線計算ユーティリティ
  * シュートの弾道計算に関する定数とメソッドを提供
- * 空気抵抗（線形ダンピング）を考慮した計算をサポート
+
+*
+ * 設計方針:
+ * - 解析解（閉形式）を使用して浮動小数点誤差の蓄積を回避
+ * - 魔法係数・経験補正は一切使用しない
+ * - 単位系: SI単位（m, kg, s）
+ *
+ * 数値シミュレーションが必要な場合は TrajectorySimulator を使用
  */
 
 /**
@@ -14,7 +21,7 @@ export type ShootType = '3pt' | 'midrange' | 'layup' | 'out_of_range';
  * 発射位置と目標位置を結ぶ直線からの最大高さ
  */
 export const SHOOT_ARC_HEIGHT = {
-  THREE_POINT: 2.4,           // 3Pシュート：2.2m（高めのアーチ）
+  THREE_POINT: 2.4,           // 3Pシュート：2.4m（高めのアーチ）
   MIDRANGE: 1.5,              // ミドルレンジ：1.5m
   LAYUP: 0.8,                 // レイアップ：0.8m（低めのアーチ）
   LAYUP_CLOSE: 0.5,           // レイアップ（近距離）：0.5m
@@ -43,6 +50,9 @@ export interface ParabolaPosition {
 
 /**
  * 放物線計算ユーティリティクラス
+ *
+ * すべての計算は解析解（閉形式）を使用
+ * 数値積分は行わないため、浮動小数点誤差の蓄積が発生しない
  */
 export class ParabolaUtils {
   /**
@@ -68,26 +78,30 @@ export class ParabolaUtils {
   }
 
   /**
-   * 空気抵抗を考慮した初速度を計算
+   * 空気抵抗を考慮した初速度を計算（解析解）
    *
-   * 線形ダンピング（空気抵抗）を考慮した運動方程式の解析解を使用
+   * 線形ダンピング（空気抵抗）を考慮した運動方程式の厳密解:
    *
-   * 水平方向: dv/dt = -k*v
-   *   位置: x(t) = x₀ + v₀ * (1 - e^(-k*t)) / k
+   * 運動方程式:
+   *   水平方向: dv/dt = -k*v
+   *   垂直方向: dv/dt = -g - k*v
    *
-   * 垂直方向: dv/dt = -g - k*v
-   *   位置: y(t) = y₀ + (v₀ + g/k) * (1 - e^(-k*t)) / k - g*t/k
+   * 解析解（厳密解）:
+   *   水平方向: x(t) = x₀ + v₀ * (1 - e^(-k*t)) / k
+   *   垂直方向: y(t) = y₀ + (v₀ + g/k) * (1 - e^(-k*t)) / k - g*t/k
    *
-   * @param startX 発射位置X
-   * @param startY 発射位置Y
-   * @param startZ 発射位置Z
-   * @param targetX 目標位置X
-   * @param targetY 目標位置Y
-   * @param targetZ 目標位置Z
-   * @param arcHeight アーチ高さ（飛行時間の計算に使用）
-   * @param gravity 重力加速度
-   * @param damping 線形ダンピング係数（空気抵抗）
-   * @returns 初速度と飛行時間
+   * この関数は解析解を逆算して、目標位置に到達するための初速度を計算
+   *
+   * @param startX 発射位置X (m)
+   * @param startY 発射位置Y (m)
+   * @param startZ 発射位置Z (m)
+   * @param targetX 目標位置X (m)
+   * @param targetY 目標位置Y (m)
+   * @param targetZ 目標位置Z (m)
+   * @param arcHeight アーチ高さ (m) - 飛行時間の計算に使用
+   * @param gravity 重力加速度 (m/s²)
+   * @param damping 線形ダンピング係数 (1/s)
+   * @returns 初速度 (m/s) と飛行時間 (s)
    */
   public static calculateVelocityWithDamping(
     startX: number,
@@ -100,8 +114,8 @@ export class ParabolaUtils {
     gravity: number,
     damping: number
   ): ParabolaVelocity {
-    // ダンピングが0または非常に小さい場合は、通常の計算を使用
-    if (damping < 0.001) {
+    // ダンピングが0または非常に小さい場合は、ダンピングなしの計算を使用
+    if (damping < 1e-6) {
       return this.calculateVelocityFromArcHeight(
         startX, startY, startZ,
         targetX, targetY, targetZ,
@@ -109,7 +123,8 @@ export class ParabolaUtils {
       );
     }
 
-    // 飛行時間: ダンピングなしの場合と同じ値を使用
+    // 飛行時間: T = √(8h/g)
+    // これはダンピングなしの放物線の頂点到達時間×2から導出
     const flightTime = Math.sqrt((8 * arcHeight) / gravity);
     const k = damping;
     const T = flightTime;
@@ -117,18 +132,17 @@ export class ParabolaUtils {
 
     // e^(-k*T) を計算
     const expKT = Math.exp(-k * T);
-    // (1 - e^(-k*T)) / k
+    // (1 - e^(-k*T)) / k: 積分因子
     const factor = (1 - expKT) / k;
 
-    // 水平方向の初速度
-    // x_target = x₀ + v₀_x * (1 - e^(-k*T)) / k
+    // 水平方向の初速度（解析解から逆算）
+    // x_target = x₀ + v₀_x * factor
     // v₀_x = (x_target - x₀) / factor
     const vx = (targetX - startX) / factor;
     const vz = (targetZ - startZ) / factor;
 
-    // 垂直方向の初速度
+    // 垂直方向の初速度（解析解から逆算）
     // y_target = y₀ + (v₀_y + g/k) * factor - g*T/k
-    // (v₀_y + g/k) * factor = y_target - y₀ + g*T/k
     // v₀_y = (y_target - y₀ + g*T/k) / factor - g/k
     const vy = (targetY - startY + g * T / k) / factor - g / k;
 
@@ -136,14 +150,14 @@ export class ParabolaUtils {
   }
 
   /**
-   * 空気抵抗を考慮した軌道上の位置を計算
+   * 空気抵抗を考慮した軌道上の位置を計算（解析解）
    *
-   * @param start 発射位置
-   * @param velocity 初速度
-   * @param gravity 重力加速度
-   * @param damping 線形ダンピング係数
-   * @param time 経過時間
-   * @returns 位置
+   * @param start 発射位置 (m)
+   * @param velocity 初速度 (m/s)
+   * @param gravity 重力加速度 (m/s²)
+   * @param damping 線形ダンピング係数 (1/s)
+   * @param time 経過時間 (s)
+   * @returns 位置 (m)
    */
   public static getPositionWithDamping(
     start: { x: number; y: number; z: number },
@@ -153,7 +167,7 @@ export class ParabolaUtils {
     time: number
   ): ParabolaPosition {
     // ダンピングが0の場合は通常の放物線
-    if (damping < 0.001) {
+    if (damping < 1e-6) {
       return {
         x: start.x + velocity.vx * time,
         y: start.y + velocity.vy * time - 0.5 * gravity * time * time,
@@ -167,6 +181,7 @@ export class ParabolaUtils {
     const expKT = Math.exp(-k * t);
     const factor = (1 - expKT) / k;
 
+    // 解析解
     // 水平方向: x(t) = x₀ + v₀ * (1 - e^(-k*t)) / k
     const x = start.x + velocity.vx * factor;
     const z = start.z + velocity.vz * factor;
@@ -178,8 +193,19 @@ export class ParabolaUtils {
   }
 
   /**
-   * アーチ高さから初速度を計算（ダンピングなし版）
-   * @deprecated calculateVelocityWithDamping を使用してください
+   * アーチ高さから初速度を計算（ダンピングなし、解析解）
+   *
+   * 放物線: y = y₀ + v₀_y*t - 0.5*g*t²
+   * 頂点時刻: t_peak = v₀_y / g
+   * アーチ高さ: h = v₀_y² / (2g) = v₀_y * t_peak / 2
+   *
+   * 飛行時間 T とアーチ高さ h の関係:
+   *   t_peak = T/2 (対称な放物線を仮定)
+   *   h = v₀_y * (T/2) / 2 = v₀_y * T / 4
+   *   v₀_y = 4h / T
+   *
+   * T = √(8h/g) を代入すると:
+   *   v₀_y = 4h / √(8h/g) = 4h * √(g/(8h)) = √(2gh)
    */
   public static calculateVelocityFromArcHeight(
     startX: number,
@@ -203,7 +229,12 @@ export class ParabolaUtils {
   }
 
   /**
-   * 放物線上の位置を計算（ダンピングなし版、進行度ベース）
+   * 放物線上の位置を計算（ダンピングなし、進行度ベース）
+   *
+   * @param start 開始位置
+   * @param target 目標位置
+   * @param arcHeight アーチ高さ
+   * @param t 進行度 (0-1)
    */
   public static getPositionOnParabola(
     start: { x: number; y: number; z: number },
@@ -211,9 +242,13 @@ export class ParabolaUtils {
     arcHeight: number,
     t: number
   ): ParabolaPosition {
+    // 線形補間
     const baseX = start.x + t * (target.x - start.x);
     const baseY = start.y + t * (target.y - start.y);
     const baseZ = start.z + t * (target.z - start.z);
+
+    // 放物線のY成分オフセット: 4h*t*(1-t)
+    // t=0.5 で最大値 h に達する
     const yOffset = 4 * arcHeight * t * (1 - t);
 
     return {
@@ -230,9 +265,8 @@ export class ParabolaUtils {
     start: { x: number; z: number },
     target: { x: number; z: number }
   ): number {
-    return Math.sqrt(
-      Math.pow(target.x - start.x, 2) +
-      Math.pow(target.z - start.z, 2)
-    );
+    const dx = target.x - start.x;
+    const dz = target.z - start.z;
+    return Math.sqrt(dx * dx + dz * dz);
   }
 }

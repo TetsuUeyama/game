@@ -14,6 +14,7 @@ import {
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
 import { ParabolaUtils } from "../utils/parabolaUtils";
+import { DeterministicTrajectory, type Vec3 } from "../utils/DeterministicTrajectory";
 
 /**
  * 3Dバスケットボールエンティティ
@@ -41,23 +42,19 @@ export class Ball {
   private flightTime: number = 0;
   private targetPosition: Vector3 = Vector3.Zero();
 
-  // シューターのクールダウン
+  // シューターのクールダウン（tickベース、秒単位）
   private lastShooter: Character | null = null;
   private shooterCooldown: number = 0;
   private static readonly SHOOTER_COOLDOWN_TIME = 3.0;
-  private lastShootTime: number = 0;
-  private static readonly SHOOTER_COOLDOWN_MS = 3000;
 
   // ブロック後のオフェンスチームクールダウン
   private blockedOffenseTeam: "ally" | "enemy" | null = null;
   private blockCooldown: number = 0;
   private static readonly BLOCK_COOLDOWN_TIME = 0.8;
 
-  // 弾き後のクールダウン
+  // 弾き後のクールダウン（tickベース、秒単位）
   private deflectionCooldown: number = 0;
   private static readonly DEFLECTION_COOLDOWN_TIME = 0.3;
-  private lastDeflectionTime: number = 0;
-  private static readonly DEFLECTION_COOLDOWN_MS = 300;
 
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
@@ -66,6 +63,15 @@ export class Ball {
   private trajectoryLineMesh: LinesMesh | null = null;
   private trajectoryParabolaMesh: LinesMesh | null = null;
   private trajectoryVisible: boolean = true;
+
+  // 決定論的軌道計算
+  private currentTrajectory: DeterministicTrajectory | null = null;
+  private trajectoryStartTick: number = 0;  // フレームカウントベースの開始時刻
+  private currentTick: number = 0;          // 現在のフレームカウント
+  private static readonly FIXED_DT = 1 / 60; // 固定タイムステップ
+
+  // シュートID（決定論的シード生成用）
+  private shootCounter: number = 0;
 
   constructor(scene: Scene, position: Vector3) {
     this.scene = scene;
@@ -341,23 +347,28 @@ export class Ball {
 
   /**
    * 更新処理
-   * @param deltaTime フレーム間の経過時間（秒）
+   * @param _deltaTime フレーム間の経過時間（秒）- 非推奨、tickベースを使用
+   *
+   * 決定論的更新:
+   * - フレームカウント（tick）ベースの時間管理
+   * - 固定タイムステップ（FIXED_DT）を使用
    */
-  update(deltaTime: number): void {
-    // クールダウン更新
+  update(_deltaTime: number): void {
+    // tickをインクリメント
+    this.currentTick++;
+
+    // クールダウン更新（tickベース）
     if (this.shooterCooldown > 0) {
-      this.shooterCooldown -= deltaTime;
+      this.shooterCooldown -= Ball.FIXED_DT;
     }
 
-    if (this.lastShooter !== null) {
-      const elapsedMs = Date.now() - this.lastShootTime;
-      if (elapsedMs >= Ball.SHOOTER_COOLDOWN_MS) {
-        this.lastShooter = null;
-      }
+    // シュータークールダウンの確認（tickベース）
+    if (this.lastShooter !== null && this.shooterCooldown <= 0) {
+      this.lastShooter = null;
     }
 
     if (this.deflectionCooldown > 0) {
-      this.deflectionCooldown -= deltaTime;
+      this.deflectionCooldown -= Ball.FIXED_DT;
     }
 
     if (this.holder) {
@@ -371,8 +382,8 @@ export class Ball {
       }
     } else if (this.inFlight) {
       // 飛行中の物理処理
-      this.flightTime += deltaTime;
-      this.updateFlightPhysics(deltaTime);
+      this.flightTime += Ball.FIXED_DT;
+      this.updateFlightPhysics();
     }
   }
 
@@ -380,9 +391,8 @@ export class Ball {
    * 飛行中の物理処理
    * Havok物理エンジンが衝突・重力・減衰を自動処理
    */
-  private updateFlightPhysics(_deltaTime: number): void {
+  private updateFlightPhysics(): void {
     if (!this.physicsAggregate) {
-      // Havok物理エンジンが必須
       console.error("[Ball] Havok physics engine required but not available");
       this.inFlight = false;
       return;
@@ -489,33 +499,34 @@ export class Ball {
     this.inFlight = true;
     this.flightTime = 0;
 
-    // クールダウン設定
+    // クールダウン設定（tickベース）
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
-    this.lastShootTime = Date.now();
 
     return true;
   }
 
   /**
-   * シュートを開始（アーチ高さベースの新しい放物線計算）
+   * シュートを開始（アーチ高さベースの放物線計算）
    *
-   * 放物線: Y = 4h × t × (1 - t)
-   * 発射位置と目標位置を結ぶ直線を基準軸とし、
-   * その直線からの最大垂直距離がアーチ高さ h となる放物線
+   * 決定論的軌道計算を使用:
+   * - BaseTrajectory: 解析解による完全決定的な基準軌道
+   * - NoiseLayer: seed付き乱数による揺らぎ（オプション）
    *
    * @param targetPosition 目標位置（リング中央上）
    * @param arcHeight アーチ高さ（直線からの最大高さ、メートル）
    * @param overrideStartPosition 開始位置のオーバーライド
    * @param curveValue シューターのcurve値（0-99、バックスピンの強さに影響）
    * @param radiusAdjust ボール半径の調整値（正の値で小さくなる）
+   * @param noiseSeed ノイズのシード（省略時はノイズなし）
    */
   public shootWithArcHeight(
     targetPosition: Vector3,
     arcHeight: number,
     overrideStartPosition?: Vector3,
     curveValue: number = 50,
-    radiusAdjust: number = 0
+    radiusAdjust: number = 0,
+    noiseSeed?: number
   ): boolean {
     if (this.inFlight) return false;
 
@@ -534,27 +545,29 @@ export class Ball {
     this.mesh.position = startPosition.clone();
     this.targetPosition = targetPosition.clone();
 
-    // 新しい放物線計算: 空気抵抗（ダンピング）を考慮した初速度を計算
-    const velocityResult = ParabolaUtils.calculateVelocityWithDamping(
-      startPosition.x,
-      startPosition.y,
-      startPosition.z,
-      targetPosition.x,
-      targetPosition.y,
-      targetPosition.z,
+    // シュートカウンターをインクリメント（決定論的シード生成用）
+    this.shootCounter++;
+
+    // 決定論的軌道を作成
+    const startVec3: Vec3 = { x: startPosition.x, y: startPosition.y, z: startPosition.z };
+    const targetVec3: Vec3 = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
+
+    this.currentTrajectory = new DeterministicTrajectory({
+      start: startVec3,
+      target: targetVec3,
       arcHeight,
-      PhysicsConstants.GRAVITY_MAGNITUDE,
-      PhysicsConstants.BALL.LINEAR_DAMPING
-    );
+      gravity: PhysicsConstants.GRAVITY_MAGNITUDE,
+      damping: PhysicsConstants.BALL.LINEAR_DAMPING,
+      noiseSeed: noiseSeed,
+      noiseAmplitude: noiseSeed !== undefined ? 0.005 : undefined,
+    });
 
-    const velocity = new Vector3(
-      velocityResult.vx,
-      velocityResult.vy,
-      velocityResult.vz
-    );
+    // 決定論的軌道から初速度を取得
+    const initialVel = this.currentTrajectory.getInitialVelocity();
+    const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
 
-    // 軌道を可視化
-    this.visualizeTrajectory(startPosition, targetPosition, arcHeight);
+    // 軌道を可視化（決定論的軌道を使用）
+    this.visualizeTrajectoryDeterministic();
 
     // バックスピンを計算
     // curve値が高いほど強いバックスピン（5〜25 rad/s）
@@ -597,11 +610,11 @@ export class Ball {
       this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
       this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
 
-      // 速度を設定
+      // 速度を設定（Havok物理エンジンが軌道を計算）
       this.physicsAggregate.body.setLinearVelocity(velocity);
       this.physicsAggregate.body.setAngularVelocity(angularVelocity);
 
-      // 重要: disablePreStep = true で物理エンジンがボールの位置を完全に制御
+      // DYNAMICモード: Havok物理エンジンがボールの位置を制御
       this.physicsAggregate.body.disablePreStep = true;
 
       this.isKinematicMode = false;
@@ -613,11 +626,11 @@ export class Ball {
 
     this.inFlight = true;
     this.flightTime = 0;
+    this.trajectoryStartTick = this.currentTick;
 
-    // クールダウン設定
+    // クールダウン設定（tickベース）
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME;
-    this.lastShootTime = Date.now();
 
     return true;
   }
@@ -832,39 +845,27 @@ export class Ball {
 
   /**
    * 指定したキャラクターがボールをキャッチできるかどうか
+   * 決定論的: tickベースのクールダウン判定
    */
   public canBeCaughtBy(character: Character): boolean {
+    // 弾き後のクールダウン（tickベース）
     if (this.deflectionCooldown > 0) {
       return false;
     }
 
-    if (this.lastDeflectionTime > 0) {
-      const elapsedSinceDeflection = Date.now() - this.lastDeflectionTime;
-      if (elapsedSinceDeflection < Ball.DEFLECTION_COOLDOWN_MS) {
-        return false;
-      }
-    }
-
+    // シュータークールダウン（tickベース）
     if (this.lastShooter === character && this.shooterCooldown > 0) {
       return false;
-    }
-
-    if (this.lastShooter === character) {
-      const elapsedMs = Date.now() - this.lastShootTime;
-      if (elapsedMs < Ball.SHOOTER_COOLDOWN_MS) {
-        return false;
-      }
     }
 
     return true;
   }
 
   /**
-   * 弾き後のクールダウンを設定
+   * 弾き後のクールダウンを設定（tickベース）
    */
   public setDeflectionCooldown(): void {
     this.deflectionCooldown = Ball.DEFLECTION_COOLDOWN_TIME;
-    this.lastDeflectionTime = Date.now();
   }
 
   /**
@@ -902,11 +903,48 @@ export class Ball {
   // ==================== 軌道可視化 ====================
 
   /**
-   * 軌道の可視化を作成
-   * 空気抵抗（線形ダンピング）を考慮した軌道を表示
-   * @param start 発射位置
-   * @param target 目標位置
-   * @param arcHeight アーチ高さ
+   * 軌道の可視化を作成（決定論的軌道を使用）
+   * currentTrajectory から軌道点をサンプリングして描画
+   */
+  private visualizeTrajectoryDeterministic(): void {
+    // 既存の可視化を削除
+    this.clearTrajectoryVisualization();
+
+    if (!this.trajectoryVisible || !this.currentTrajectory) return;
+
+    const params = this.currentTrajectory.getBaseTrajectory().getParams();
+    const start = params.start;
+    const target = params.target;
+
+    // 直線（発射位置→目標位置）
+    const linePoints = [
+      new Vector3(start.x, start.y, start.z),
+      new Vector3(target.x, target.y, target.z),
+    ];
+    this.trajectoryLineMesh = MeshBuilder.CreateLines(
+      "trajectory-line",
+      { points: linePoints },
+      this.scene
+    );
+    this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
+
+    // 放物線（決定論的軌道からサンプリング）
+    const trajectoryPoints = this.currentTrajectory.sample(50);
+    const parabolaPoints = trajectoryPoints.map(
+      (p) => new Vector3(p.position.x, p.position.y, p.position.z)
+    );
+
+    this.trajectoryParabolaMesh = MeshBuilder.CreateLines(
+      "trajectory-parabola",
+      { points: parabolaPoints },
+      this.scene
+    );
+    this.trajectoryParabolaMesh.color = new Color3(0, 1, 1); // シアン
+  }
+
+  /**
+   * 軌道の可視化を作成（レガシー: ParabolaUtils使用）
+   * @deprecated visualizeTrajectoryDeterministic を使用してください
    */
   private visualizeTrajectory(start: Vector3, target: Vector3, arcHeight: number): void {
     // 既存の可視化を削除
@@ -924,7 +962,6 @@ export class Ball {
     this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
 
     // 放物線（空気抵抗を考慮した軌道）
-    // まず初速度を計算
     const velocityResult = ParabolaUtils.calculateVelocityWithDamping(
       start.x, start.y, start.z,
       target.x, target.y, target.z,
