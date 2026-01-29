@@ -1,9 +1,9 @@
 import { Vector3 } from "@babylonjs/core";
 import { MotionData } from "../types/MotionTypes";
-import { SHOOT_MOTIONS } from "../data/ShootMotion";
-import { PASS_MOTIONS } from "../data/PassMotion";
-import { DEFENSE_MOTIONS } from "../data/DefenseMotion";
-import { DRIBBLE_MOTIONS } from "../data/DribbleMotion";
+import { SHOOT_MOTIONS } from "../motion/ShootMotion";
+import { PASS_MOTIONS } from "../motion/PassMotion";
+import { DEFENSE_MOTIONS } from "../motion/DefenseMotion";
+import { DRIBBLE_MOTIONS } from "../motion/DribbleMotion";
 
 /**
  * アクションカテゴリ

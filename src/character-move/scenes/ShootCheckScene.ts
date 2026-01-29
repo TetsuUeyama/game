@@ -10,8 +10,8 @@ import {
 import { Character } from "../entities/Character";
 import { Field } from "../entities/Field";
 import { Ball } from "../entities/Ball";
-import { ShootingController } from "../controllers/ShootingController";
-import { ShootCheckController, ShootCheckConfig, ShootCheckProgress, CellShootResult } from "../controllers/ShootCheckController";
+import { ShootingController } from "../controllers/action/ShootingController";
+import { ShootCheckController, ShootCheckConfig, ShootCheckProgress, CellShootResult } from "../controllers/check/ShootCheckController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -31,8 +31,8 @@ export class ShootCheckScene {
   private shootingController: ShootingController;
   private shootCheckController: ShootCheckController | null = null;
 
-  private lastFrameTime: number = Date.now();
   private isRunning: boolean = false;
+  private lastFrameTime: number = Date.now();
 
   // ゴール後のリセット用
   private pendingGoalReset: boolean = false;

@@ -2,7 +2,7 @@ import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMe
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
-import { ActionController } from "../controllers/ActionController";
+import { ActionController } from "../controllers/action/ActionController";
 import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";

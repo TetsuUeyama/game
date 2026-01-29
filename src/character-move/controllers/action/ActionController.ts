@@ -8,8 +8,8 @@ import {
   ActionConfigUtils,
   HitboxConfig,
   ACTION_MOTIONS,
-} from "../config/ActionConfig";
-import { Character } from "../entities/Character";
+} from "../../config/ActionConfig";
+import { Character } from "../../entities/Character";
 
 /**
  * アクション実行結果

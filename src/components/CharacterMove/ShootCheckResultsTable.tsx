@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { CellShootResult } from '@/character-move/controllers/ShootCheckController';
+import { CellShootResult } from '@/character-move/controllers/check/ShootCheckController';
 
 interface ShootCheckResultsTableProps {
   results: CellShootResult[];

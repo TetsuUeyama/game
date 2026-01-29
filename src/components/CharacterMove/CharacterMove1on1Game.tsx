@@ -8,6 +8,7 @@ import { CameraSwitchPanel } from './CameraSwitchPanel';
 import { PositionBoardPanel } from './PositionBoardPanel';
 import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
 import { ShootCheckModePanel } from './ShootCheckModePanel';
+import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -23,6 +24,7 @@ export default function CharacterMove1on1Game() {
   const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ALLY', enemy: 'ENEMY' });
   const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
   const [isShootCheckMode, setIsShootCheckMode] = useState<boolean>(false);
+  const [isDribbleCheckMode, setIsDribbleCheckMode] = useState<boolean>(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -291,7 +293,7 @@ export default function CharacterMove1on1Game() {
 
         {/* モード選択ボタン（画面下部） */}
         {!loading && !winner && (
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex gap-4">
             <button
               onClick={() => {
                 // ゲームを一時停止してシュートチェックモードを開始
@@ -304,6 +306,18 @@ export default function CharacterMove1on1Game() {
             >
               シュートチェックモード
             </button>
+            <button
+              onClick={() => {
+                // ゲームを一時停止してドリブルチェックモードを開始
+                if (gameSceneRef.current) {
+                  gameSceneRef.current.pause();
+                }
+                setIsDribbleCheckMode(true);
+              }}
+              className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold shadow-xl transition-colors border-2 border-orange-400"
+            >
+              ドリブルチェックモード
+            </button>
           </div>
         )}
       </div>
@@ -312,6 +326,17 @@ export default function CharacterMove1on1Game() {
       {isShootCheckMode && (
         <ShootCheckModePanel onClose={() => {
           setIsShootCheckMode(false);
+          // ゲームを再開
+          if (gameSceneRef.current) {
+            gameSceneRef.current.resume();
+          }
+        }} />
+      )}
+
+      {/* ドリブルチェックモードパネル */}
+      {isDribbleCheckMode && (
+        <DribbleCheckModePanel onClose={() => {
+          setIsDribbleCheckMode(false);
           // ゲームを再開
           if (gameSceneRef.current) {
             gameSceneRef.current.resume();

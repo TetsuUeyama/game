@@ -1,10 +1,10 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../entities/Character";
-import { Ball } from "../entities/Ball";
-import { Field } from "../entities/Field";
-import { ShootingController, ShootType } from "./ShootingController";
-import { GRID_CONFIG, FieldGridUtils, CellCoord } from "../config/FieldGridConfig";
-import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
+import { Character } from "../../entities/Character";
+import { Ball } from "../../entities/Ball";
+import { Field } from "../../entities/Field";
+import { ShootingController, ShootType } from "../action/ShootingController";
+import { GRID_CONFIG, FieldGridUtils, CellCoord } from "../../config/FieldGridConfig";
+import { DEFAULT_CHARACTER_CONFIG } from "../../types/CharacterStats";
 
 /**
  * 升目ごとのシュート結果
@@ -33,12 +33,19 @@ export type ShootCheckState =
   | 'completed'      // 完了
   | 'aborted';       // 中断
 
+
+  /**
+ * シュートタイプフィルター
+ */
+export type ShotTypeFilter = 'all' | '3pt' | 'midrange' | 'layup';
+
 /**
  * シュートチェックの設定
  */
 export interface ShootCheckConfig {
   shotsPerCell: number;      // 1升目あたりのシュート数
   targetGoal: 'goal1' | 'goal2';  // 攻めるゴール
+  shotTypeFilter?: ShotTypeFilter;  // シュートタイプフィルター（デフォルト: 'all'）
 }
 
 /**
@@ -101,10 +108,25 @@ export class ShootCheckController {
     this.ball = ball;
     this.field = field;
     this.shootingController = shootingController;
-    this.config = config;
+    // デフォルト値を設定
+    this.config = {
+      ...config,
+      shotTypeFilter: config.shotTypeFilter ?? 'all',
+    };
 
     // 全升目リストを生成
     this.generateAllCells();
+  }
+
+  /**
+   * シュートタイプがフィルターに一致するかチェック
+   */
+  private matchesShotTypeFilter(shootType: ShootType | 'out_of_range'): boolean {
+    const filter = this.config.shotTypeFilter ?? 'all';
+    if (filter === 'all') {
+      return true;
+    }
+    return shootType === filter;
   }
 
   /**
@@ -234,6 +256,36 @@ export class ShootCheckController {
       return;
     }
 
+    // シュートタイプフィルターをチェック
+    if (!this.matchesShotTypeFilter(rangeInfo.shootType)) {
+      // フィルターに一致しない場合、テストせずに終了
+      const cellName = `${this.singleCell.col}${this.singleCell.row}`;
+      const result: CellShootResult = {
+        cellName,
+        col: this.singleCell.col,
+        row: this.singleCell.row,
+        worldX: worldPos.x,
+        worldZ: worldPos.z,
+        shootType: rangeInfo.shootType,
+        totalShots: 0,
+        successCount: 0,
+        failureCount: 0,
+        successRate: 0,
+        completed: false,  // フィルターでスキップ
+      };
+      this.results.set(cellName, result);
+
+      if (this.onCellCompleteCallback) {
+        this.onCellCompleteCallback(result);
+      }
+
+      this.state = 'completed';
+      if (this.onCompleteCallback) {
+        this.onCompleteCallback([result]);
+      }
+      return;
+    }
+
     // シュートを開始
     this.shootNextShot();
   }
@@ -342,6 +394,31 @@ export class ShootCheckController {
       return;
     }
 
+    // シュートタイプフィルターをチェック
+    if (!this.matchesShotTypeFilter(rangeInfo.shootType)) {
+      // フィルターに一致しない場合、スキップして次の升目へ
+      const cellName = `${cell.col}${cell.row}`;
+      const result: CellShootResult = {
+        cellName,
+        col: cell.col,
+        row: cell.row,
+        worldX: worldPos.x,
+        worldZ: worldPos.z,
+        shootType: rangeInfo.shootType,
+        totalShots: 0,
+        successCount: 0,
+        failureCount: 0,
+        successRate: 0,
+        completed: false,  // スキップなので未完了
+      };
+      this.results.set(cellName, result);
+
+      // 次の升目へ
+      this.currentCellIndex++;
+      setTimeout(() => this.moveToCurrentCell(), 10);
+      return;
+    }
+
     // シュートを開始
     this.shootNextShot();
   }
@@ -351,8 +428,6 @@ export class ShootCheckController {
    */
   private shootNextShot(): void {
     if (this.state !== 'running') return;
-
-    const cell = this.allCells[this.currentCellIndex];
 
     if (this.currentShotCount >= this.config.shotsPerCell) {
       // この升目のシュートが完了
@@ -558,6 +633,7 @@ export class ShootCheckController {
         currentCellShots: this.currentShotCount,
         shotsPerCell: this.config.shotsPerCell,
         state: this.state,
+        shotTypeFilter: this.config.shotTypeFilter ?? 'all',
       });
     }
   }
@@ -617,4 +693,5 @@ export interface ShootCheckProgress {
   currentCellShots: number;
   shotsPerCell: number;
   state: ShootCheckState;
+  shotTypeFilter: ShotTypeFilter;
 }
