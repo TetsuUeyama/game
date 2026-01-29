@@ -23,7 +23,7 @@ export const PhysicsConstants = {
     MASS: 0.62, // 質量（kg）= 620g
     RESTITUTION: 0.83, // 反発係数（NBA規定: √(1.3/1.8) ≈ 0.85、コート床で0.80-0.83）
     FRICTION: 0.6, // 摩擦係数（ゴム表面）
-    LINEAR_DAMPING: 0.05, // 線形減衰（空気抵抗）
+    LINEAR_DAMPING: 0.05, // 線形減衰（空気抵抗）- parabolaUtilsで考慮した軌道計算
     ANGULAR_DAMPING: 0.1, // 角度減衰（回転の減衰）
     MIN_BOUNCE_VELOCITY: 0.3, // バウンド停止の最小速度（m/s）
   },

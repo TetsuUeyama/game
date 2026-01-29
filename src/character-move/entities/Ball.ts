@@ -534,8 +534,8 @@ export class Ball {
     this.mesh.position = startPosition.clone();
     this.targetPosition = targetPosition.clone();
 
-    // 新しい放物線計算: アーチ高さから初速度を計算
-    const velocityResult = ParabolaUtils.calculateVelocityFromArcHeight(
+    // 新しい放物線計算: 空気抵抗（ダンピング）を考慮した初速度を計算
+    const velocityResult = ParabolaUtils.calculateVelocityWithDamping(
       startPosition.x,
       startPosition.y,
       startPosition.z,
@@ -543,7 +543,8 @@ export class Ball {
       targetPosition.y,
       targetPosition.z,
       arcHeight,
-      PhysicsConstants.GRAVITY_MAGNITUDE
+      PhysicsConstants.GRAVITY_MAGNITUDE,
+      PhysicsConstants.BALL.LINEAR_DAMPING
     );
 
     const velocity = new Vector3(
@@ -902,6 +903,7 @@ export class Ball {
 
   /**
    * 軌道の可視化を作成
+   * 空気抵抗（線形ダンピング）を考慮した軌道を表示
    * @param start 発射位置
    * @param target 目標位置
    * @param arcHeight アーチ高さ
@@ -921,12 +923,29 @@ export class Ball {
     );
     this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
 
-    // 放物線（ParabolaUtilsを使用）
+    // 放物線（空気抵抗を考慮した軌道）
+    // まず初速度を計算
+    const velocityResult = ParabolaUtils.calculateVelocityWithDamping(
+      start.x, start.y, start.z,
+      target.x, target.y, target.z,
+      arcHeight,
+      PhysicsConstants.GRAVITY_MAGNITUDE,
+      PhysicsConstants.BALL.LINEAR_DAMPING
+    );
+
     const parabolaPoints: Vector3[] = [];
     const segments = 50;
+    const flightTime = velocityResult.flightTime;
+
     for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const pos = ParabolaUtils.getPositionOnParabola(start, target, arcHeight, t);
+      const t = (i / segments) * flightTime;
+      const pos = ParabolaUtils.getPositionWithDamping(
+        start,
+        velocityResult,
+        PhysicsConstants.GRAVITY_MAGNITUDE,
+        PhysicsConstants.BALL.LINEAR_DAMPING,
+        t
+      );
       parabolaPoints.push(new Vector3(pos.x, pos.y, pos.z));
     }
     this.trajectoryParabolaMesh = MeshBuilder.CreateLines(
