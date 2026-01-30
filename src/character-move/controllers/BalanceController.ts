@@ -84,6 +84,9 @@ export class BalanceController {
     this.state.mass = this.physicsParams.mass;
     this.state.radius = this.physicsParams.radius;
     this.state.restPosition = new Vector3(0, this.physicsParams.restHeight, 0);
+    // 位置もリセット（restPositionと同じ位置に）
+    this.state.position = this.state.restPosition.clone();
+    this.state.velocity = Vector3.Zero();
   }
 
   // ==========================================================================
@@ -298,6 +301,9 @@ export class BalanceController {
       this.state.velocity.z *= (1 + landingImpact);
     }
     this.state.velocity.y = 0;
+
+    // 位置のY座標を基準位置にリセット（着地したので地面に戻る）
+    this.state.position.y = this.state.restPosition.y;
   }
 
   /**
@@ -323,7 +329,9 @@ export class BalanceController {
         // 空中では重力のみ適用
         this.state.velocity.y -= BALANCE_PHYSICS.GRAVITY * deltaTime * 0.1;
       }
-      this.state.position = this.state.position.add(this.state.velocity.scale(deltaTime));
+      const newPosition = this.state.position.add(this.state.velocity.scale(deltaTime));
+      // ロック中でも位置は制限する（無限に落下しないように）
+      this.state.position = clampPosition(newPosition, this.state.restPosition);
       return;
     }
 

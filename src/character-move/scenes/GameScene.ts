@@ -32,6 +32,11 @@ import {
 } from "../config/gameConfig";
 
 /**
+ * ゲームモード
+ */
+export type GameMode = 'game' | 'dribble_check' | 'shoot_check';
+
+/**
  * character-moveゲームのメインシーン
  */
 export class GameScene {
@@ -44,9 +49,15 @@ export class GameScene {
   private jointController?: JointController;
   private collisionHandler?: CollisionHandler;
 
-  // キャラクター（6対6）
-  private allyCharacters: Character[] = []; // 味方チーム6人
-  private enemyCharacters: Character[] = []; // 敵チーム6人
+  // ゲームモード
+  private gameMode: GameMode = 'game';
+
+  // キャラクター（5対5）
+  private allyCharacters: Character[] = []; // 味方チーム5人
+  private enemyCharacters: Character[] = []; // 敵チーム5人
+
+  // AIで動くキャラクターのインデックス
+  private aiCharacterIndices: Set<Character> = new Set();
 
   // AIコントローラー
   private characterAIs: CharacterAI[] = [];
@@ -92,6 +103,11 @@ export class GameScene {
   private pendingGoalScoringTeam: 'ally' | 'enemy' | null = null;
   private goalResetTimer: number = 0;
   private readonly goalResetDelay: number = 3.0; // ゴール後のリセットまでの最大待機時間（秒）
+
+  // アウトオブバウンズ後のリセット待機状態
+  private pendingOutOfBoundsReset: boolean = false;
+  private outOfBoundsResetTimer: number = 0;
+  private readonly outOfBoundsResetDelay: number = 1.5; // アウトオブバウンズ後のリセット待機時間（秒）
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -159,12 +175,14 @@ export class GameScene {
       this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
     }
 
-    // AIコントローラーの初期化
+    // AIコントローラーの初期化（hasAI: trueのキャラクターのみ）
     if (showAdditionalCharacters) {
-      // 全キャラクターにAIコントローラーを設定
       for (const character of allCharacters) {
-        const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
-        this.characterAIs.push(ai);
+        // AIで動くキャラクターのみAIコントローラーを設定
+        if (this.aiCharacterIndices.has(character)) {
+          const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
+          this.characterAIs.push(ai);
+        }
       }
     }
 
@@ -305,7 +323,7 @@ export class GameScene {
   }
 
   /**
-   * チーム設定に基づいてキャラクターを作成（6対6）
+   * チーム設定に基づいてキャラクターを作成（5対5）
    */
   private createTeams(teamConfig: GameTeamConfig, playerData: Record<string, PlayerData>): void {
     // 味方チーム作成
@@ -331,6 +349,11 @@ export class GameScene {
       character.setBodyColor(0.0, 0.4, 1.0);
 
       this.allyCharacters.push(character);
+
+      // AIで動くキャラクターを記録（hasAI省略時はtrue扱い）
+      if (playerConfig.hasAI !== false) {
+        this.aiCharacterIndices.add(character);
+      }
     }
 
     // 敵チーム作成
@@ -356,6 +379,11 @@ export class GameScene {
       character.setBodyColor(1.0, 0.0, 0.0);
 
       this.enemyCharacters.push(character);
+
+      // AIで動くキャラクターを記録（hasAI省略時はtrue扱い）
+      if (playerConfig.hasAI !== false) {
+        this.aiCharacterIndices.add(character);
+      }
     }
   }
 
@@ -622,9 +650,22 @@ export class GameScene {
       }
     }
 
-    // アウトオブバウンズ判定（ゴール後のリセット待機中は判定しない）
-    if (!this.pendingGoalReset && this.checkOutOfBounds()) {
-      this.resetAfterOutOfBounds();
+    // アウトオブバウンズ判定（ゴール後・アウトオブバウンズのリセット待機中は判定しない）
+    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && this.checkOutOfBounds()) {
+      // リセットを予約（遅延実行）
+      this.pendingOutOfBoundsReset = true;
+      this.outOfBoundsResetTimer = this.outOfBoundsResetDelay;
+      console.log('[GameScene] アウトオブバウンズ検出、リセット待機中...');
+    }
+
+    // アウトオブバウンズリセット待機処理
+    if (this.pendingOutOfBoundsReset) {
+      this.outOfBoundsResetTimer -= deltaTime;
+      if (this.outOfBoundsResetTimer <= 0) {
+        this.resetAfterOutOfBounds();
+        this.pendingOutOfBoundsReset = false;
+        console.log('[GameScene] アウトオブバウンズリセット実行');
+      }
     }
   }
 
@@ -1044,11 +1085,17 @@ export class GameScene {
    * 最後にボールに触れた選手の相手チームがボールを保持してセンターサークル外側から再開
    */
   private resetAfterOutOfBounds(): void {
+    console.log('[GameScene] resetAfterOutOfBounds 開始');
     const lastToucher = this.ball.getLastToucher();
+    console.log('[GameScene] lastToucher:', lastToucher?.playerData?.basic?.NAME || lastToucher?.team || 'null');
 
-    
     // ボールの飛行を停止
     this.ball.endFlight();
+
+    // 全キャラクターのバランスをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+    }
 
     // 相手チームの選手を特定
     let opponentCharacter: Character | null = null;
@@ -1111,13 +1158,17 @@ export class GameScene {
    * @param scoringTeam ゴールを決めたチーム
    */
   private resetAfterGoal(scoringTeam: 'ally' | 'enemy'): void {
+    console.log('[GameScene] resetAfterGoal 呼び出し:', scoringTeam);
+
     // 既に勝者が決まっている場合は何もしない
     if (this.winner) {
+      console.log('[GameScene] resetAfterGoal: 勝者が既に決まっているためスキップ');
       return;
     }
 
     // 既にリセット待機中の場合は何もしない
     if (this.pendingGoalReset) {
+      console.log('[GameScene] resetAfterGoal: 既にリセット待機中のためスキップ');
       return;
     }
 
@@ -1145,7 +1196,13 @@ export class GameScene {
    * ゴール後のリセットを実行
    */
   private executeGoalReset(): void {
+    console.log('[GameScene] executeGoalReset 開始', {
+      pendingGoalReset: this.pendingGoalReset,
+      pendingGoalScoringTeam: this.pendingGoalScoringTeam,
+    });
+
     if (!this.pendingGoalReset || !this.pendingGoalScoringTeam) {
+      console.log('[GameScene] executeGoalReset: 条件不成立でスキップ');
       return;
     }
 
@@ -1158,6 +1215,12 @@ export class GameScene {
 
     // ボールの飛行を停止
     this.ball.endFlight();
+    console.log('[GameScene] executeGoalReset: ボールの飛行停止、リセット実行中...');
+
+    // 全キャラクターのバランスをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+    }
 
     // ゴールを決められた側（相手チーム）がボールを持って再開
     const receivingTeam = scoringTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
@@ -1241,8 +1304,24 @@ export class GameScene {
     this.enemyScore = 0;
     this.winner = null;
 
+    // 待機状態をリセット
+    this.pendingGoalReset = false;
+    this.pendingGoalScoringTeam = null;
+    this.goalResetTimer = 0;
+    this.pendingOutOfBoundsReset = false;
+    this.outOfBoundsResetTimer = 0;
+
     // ボール保持者をリセットしてセンターサークルから再開
     const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+
+    // ボールの飛行を停止
+    this.ball.endFlight();
+
+    // 全キャラクターのバランスをリセット
+    for (const character of allCharacters) {
+      character.resetBalance();
+    }
+
     if (allCharacters.length > 0) {
       const circleRadius = this.field.getCenterCircleRadius();
       const characterRadius = 0.3;
@@ -1359,6 +1438,189 @@ export class GameScene {
    */
   public getIsPaused(): boolean {
     return this.isPaused;
+  }
+
+  /**
+   * 現在のゲームモードを取得
+   */
+  public getGameMode(): GameMode {
+    return this.gameMode;
+  }
+
+  /**
+   * ゲームモードを設定
+   */
+  public setGameMode(mode: GameMode): void {
+    this.gameMode = mode;
+    console.log(`[GameScene] ゲームモードを ${mode} に変更しました`);
+  }
+
+  /**
+   * 全キャラクターを取得
+   */
+  public getAllCharacters(): Character[] {
+    return [...this.allyCharacters, ...this.enemyCharacters];
+  }
+
+  /**
+   * 味方キャラクターを取得
+   */
+  public getAllyCharacters(): Character[] {
+    return [...this.allyCharacters];
+  }
+
+  /**
+   * 敵キャラクターを取得
+   */
+  public getEnemyCharacters(): Character[] {
+    return [...this.enemyCharacters];
+  }
+
+  /**
+   * ボールを取得
+   */
+  public getBall(): Ball {
+    return this.ball;
+  }
+
+  /**
+   * フィールドを取得
+   */
+  public getField(): Field {
+    return this.field;
+  }
+
+  /**
+   * フェイントコントローラーを取得
+   */
+  public getFeintController(): FeintController | undefined {
+    return this.feintController;
+  }
+
+  /**
+   * シュートコントローラーを取得
+   */
+  public getShootingController(): ShootingController | undefined {
+    return this.shootingController;
+  }
+
+  /**
+   * キャラクターを指定位置に配置
+   */
+  public setCharacterPosition(character: Character, x: number, z: number): void {
+    const height = character.config?.physical?.height ?? DEFAULT_CHARACTER_CONFIG.physical.height;
+    character.setPosition(new Vector3(x, height / 2, z));
+  }
+
+  /**
+   * ドリブルチェックモード用のセットアップ
+   * 指定した2人のキャラクターのみをアクティブにし、他は非表示
+   */
+  public setupDribbleCheckMode(
+    dribblerIndex: number,
+    defenderIndex: number,
+    dribblerPosition: { x: number; z: number },
+    defenderPosition: { x: number; z: number },
+    targetPosition: { x: number; z: number }
+  ): { dribbler: Character; defender: Character } | null {
+    this.setGameMode('dribble_check');
+
+    // 味方と敵から1人ずつ選択
+    const dribbler = this.allyCharacters[dribblerIndex];
+    const defender = this.enemyCharacters[defenderIndex];
+
+    if (!dribbler || !defender) {
+      console.error('[GameScene] ドリブルチェックのキャラクターが見つかりません');
+      return null;
+    }
+
+    // 他のキャラクターを非表示
+    for (const char of this.allyCharacters) {
+      if (char !== dribbler) {
+        char.setVisible(false);
+      }
+    }
+    for (const char of this.enemyCharacters) {
+      if (char !== defender) {
+        char.setVisible(false);
+      }
+    }
+
+    // 配置
+    this.setCharacterPosition(dribbler, dribblerPosition.x, dribblerPosition.z);
+    this.setCharacterPosition(defender, defenderPosition.x, defenderPosition.z);
+
+    // ボールをドリブラーに持たせる
+    this.ball.setHolder(dribbler);
+
+    // ドリブラーは目標方向を向く
+    dribbler.lookAt(new Vector3(targetPosition.x, 0, targetPosition.z));
+
+    // ディフェンダーはドリブラー方向を向く
+    defender.lookAt(dribbler.getPosition());
+
+    return { dribbler, defender };
+  }
+
+  /**
+   * シュートチェックモード用のセットアップ
+   * 指定した1人のキャラクターのみをアクティブにし、他は非表示
+   */
+  public setupShootCheckMode(
+    shooterIndex: number,
+    shooterPosition: { x: number; z: number }
+  ): Character | null {
+    this.setGameMode('shoot_check');
+
+    const shooter = this.allyCharacters[shooterIndex];
+
+    if (!shooter) {
+      console.error('[GameScene] シュートチェックのキャラクターが見つかりません');
+      return null;
+    }
+
+    // 他のキャラクターを非表示
+    for (const char of this.allyCharacters) {
+      if (char !== shooter) {
+        char.setVisible(false);
+      }
+    }
+    for (const char of this.enemyCharacters) {
+      char.setVisible(false);
+    }
+
+    // 配置
+    this.setCharacterPosition(shooter, shooterPosition.x, shooterPosition.z);
+
+    // ボールをシューターに持たせる
+    this.ball.setHolder(shooter);
+
+    return shooter;
+  }
+
+  /**
+   * チェックモードを終了して通常のゲームモードに戻る
+   */
+  public exitCheckMode(): void {
+    this.setGameMode('game');
+
+    // 全キャラクターを表示
+    for (const char of this.allyCharacters) {
+      char.setVisible(true);
+    }
+    for (const char of this.enemyCharacters) {
+      char.setVisible(true);
+    }
+
+    // ゴールコールバックを元に戻す
+    if (this.shootingController) {
+      this.shootingController.setOnGoalCallback((scoringTeam) => {
+        this.resetAfterGoal(scoringTeam);
+      });
+    }
+
+    // ゲームをリセット
+    this.resetGame();
   }
 
   /**

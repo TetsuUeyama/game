@@ -336,13 +336,17 @@ export function canTransition(state: BalanceSphereState): boolean {
 
   const offset = state.position.subtract(state.restPosition);
   const horizontalOffset = Math.sqrt(offset.x * offset.x + offset.z * offset.z);
+  const verticalOffset = Math.abs(offset.y);
   const horizontalSpeed = Math.sqrt(
     state.velocity.x * state.velocity.x +
     state.velocity.z * state.velocity.z
   );
+  const verticalSpeed = Math.abs(state.velocity.y);
 
   return horizontalOffset <= BALANCE_THRESHOLD.TRANSITION &&
-         horizontalSpeed <= BALANCE_THRESHOLD.VELOCITY;
+         verticalOffset <= BALANCE_THRESHOLD.TRANSITION_VERTICAL &&
+         horizontalSpeed <= BALANCE_THRESHOLD.VELOCITY &&
+         verticalSpeed <= BALANCE_THRESHOLD.VELOCITY_VERTICAL;
 }
 
 /**
@@ -367,16 +371,30 @@ export function estimateRecoveryTime(
 
   const offset = state.position.subtract(state.restPosition);
   const horizontalOffset = Math.sqrt(offset.x * offset.x + offset.z * offset.z);
-  const speed = state.velocity.length();
+  const verticalOffset = Math.abs(offset.y);
+  const horizontalSpeed = Math.sqrt(
+    state.velocity.x * state.velocity.x +
+    state.velocity.z * state.velocity.z
+  );
+  const verticalSpeed = Math.abs(state.velocity.y);
 
+  // 水平・垂直両方の条件を満たしていれば即座に遷移可能
   if (horizontalOffset <= BALANCE_THRESHOLD.TRANSITION &&
-      speed <= BALANCE_THRESHOLD.VELOCITY) {
+      verticalOffset <= BALANCE_THRESHOLD.TRANSITION_VERTICAL &&
+      horizontalSpeed <= BALANCE_THRESHOLD.VELOCITY &&
+      verticalSpeed <= BALANCE_THRESHOLD.VELOCITY_VERTICAL) {
     return 0;
   }
 
-  // 減衰振動の時定数から概算
+  // 減衰振動の時定数から概算（水平・垂直それぞれで計算し、長い方を返す）
   const tau = state.mass / damping;
-  return tau * Math.log(Math.max(horizontalOffset, speed * tau) / BALANCE_THRESHOLD.TRANSITION);
+  const horizontalTime = tau * Math.log(
+    Math.max(horizontalOffset, horizontalSpeed * tau) / BALANCE_THRESHOLD.TRANSITION
+  );
+  const verticalTime = tau * Math.log(
+    Math.max(verticalOffset, verticalSpeed * tau) / BALANCE_THRESHOLD.TRANSITION_VERTICAL
+  );
+  return Math.max(horizontalTime, verticalTime);
 }
 
 /**

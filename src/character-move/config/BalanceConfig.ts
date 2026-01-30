@@ -21,9 +21,9 @@ export const BALANCE_PHYSICS = {
  */
 export const BALANCE_SPHERE = {
   /** 重心球の基本半径（m） */
-  BASE_RADIUS: 0.15,
+  BASE_RADIUS: 0.1,
   /** 体重による半径スケール（重い選手ほど大きい） */
-  WEIGHT_RADIUS_SCALE: 0.001,
+  WEIGHT_RADIUS_SCALE: 0.0005,
   /** 股関節の高さ係数（身長に対する比率） */
   HIP_HEIGHT_RATIO: 0.52,
 } as const;
@@ -33,11 +33,11 @@ export const BALANCE_SPHERE = {
  */
 export const BALANCE_SPRING = {
   /** 基本バネ定数（軽い選手ほど強い = 素早く戻れる） */
-  BASE_CONSTANT: 50,
+  BASE_CONSTANT: 800,
   /** 体重によるバネ定数減衰（重い選手ほどバネが弱い） */
-  WEIGHT_REDUCTION: 0.3,
+  WEIGHT_REDUCTION: 0.2,
   /** 身長による不安定性係数（高い選手ほどバネが弱い） */
-  HEIGHT_INSTABILITY: 0.15,
+  HEIGHT_INSTABILITY: 0.1,
 } as const;
 
 /**
@@ -45,7 +45,7 @@ export const BALANCE_SPRING = {
  */
 export const BALANCE_DAMPING = {
   /** 基本減衰係数 */
-  BASE_VALUE: 8,
+  BASE_VALUE: 60,
   /** 体重による減衰減少（重い選手は止まりにくい） */
   WEIGHT_REDUCTION: 0.02,
 } as const;
@@ -54,12 +54,16 @@ export const BALANCE_DAMPING = {
  * 遷移閾値
  */
 export const BALANCE_THRESHOLD = {
-  /** 遷移可能な重心オフセット距離（m） */
-  TRANSITION: 0.05,
+  /** 遷移可能な重心オフセット距離（m）- 水平方向 */
+  TRANSITION: 0.02,
+  /** 遷移可能な重心オフセット距離（m）- 垂直方向 */
+  TRANSITION_VERTICAL: 0.01,
   /** 完全にニュートラルとみなす距離（m） */
-  NEUTRAL: 0.01,
-  /** 遷移可能な重心速度（m/s） */
-  VELOCITY: 0.1,
+  NEUTRAL: 0.005,
+  /** 遷移可能な重心速度（m/s）- 水平方向 */
+  VELOCITY: 0.05,
+  /** 遷移可能な重心速度（m/s）- 垂直方向 */
+  VELOCITY_VERTICAL: 0.02,
 } as const;
 
 /**
@@ -87,9 +91,9 @@ export const BALANCE_COLLISION = {
  */
 export const BALANCE_LIMITS = {
   /** 重心の最大水平オフセット（m） */
-  MAX_HORIZONTAL: 0.4,
+  MAX_HORIZONTAL: 0.1,
   /** 重心の最大垂直オフセット（m） */
-  MAX_VERTICAL: 0.2,
+  MAX_VERTICAL: 0.05,
   /** 体重の最小値（kg） */
   MIN_WEIGHT: 50,
   /** 体重の最大値（kg） */
@@ -161,54 +165,61 @@ export const ACTION_FORCES: Record<string, ActionForceConfig> = {
  * ActionType別の重心力設定
  * recoveryTimeとcooldownTimeを置き換える
  * 力が大きい = 重心が大きくずれる = 回復に時間がかかる
+ *
+ * forceのベクトル（単位: N、80kgの選手基準）:
+ *   X: 左右（正=右、負=左）
+ *   Y: 上下（正=上、負=下）
+ *   Z: 前後（正=前、負=後）
+ *
+ * 目安: 800Nで約0.1m/sの速度変化（80kg選手、0.1秒適用時）
  */
 export const ACTION_TYPE_FORCES: Record<string, ActionForceConfig> = {
   // ==============================
   // オフェンスアクション
   // ==============================
 
-  // 3ポイントシュート（大きなジャンプ、長い回復）
+  // 3ポイントシュート（大きなジャンプ、後ろに少し反る）
   'shoot_3pt': {
-    force: new Vector3(0, 25, 8),
+    force: new Vector3(0, 2000, -400),
     duration: 0.15,
     lock: true,
   },
 
   // ミドルレンジシュート
   'shoot_midrange': {
-    force: new Vector3(0, 20, 6),
+    force: new Vector3(0, 1600, -300),
     duration: 0.12,
     lock: true,
   },
 
-  // レイアップ（前への勢い）
+  // レイアップ（前への勢い、右利き想定で少し右へ）
   'shoot_layup': {
-    force: new Vector3(0, 18, 15),
+    force: new Vector3(400, 1500, 1200),
     duration: 0.1,
     lock: true,
   },
 
-  // チェストパス（軽いアクション）
+  // チェストパス（前に押し出す）
   'pass_chest': {
-    force: new Vector3(0, 0, 8),
+    force: new Vector3(0, -200, 1000),
     duration: 0.08,
   },
 
-  // バウンスパス（少し重い）
+  // バウンスパス（下に押し込む）
   'pass_bounce': {
-    force: new Vector3(0, -3, 10),
+    force: new Vector3(0, -600, 800),
     duration: 0.1,
   },
 
-  // オーバーヘッドパス（上への動き）
+  // オーバーヘッドパス（上に持ち上げて後ろに反る）
   'pass_overhead': {
-    force: new Vector3(0, 8, 5),
+    force: new Vector3(0, 1000, -400),
     duration: 0.1,
   },
 
-  // ドリブル突破（前への強い加速）
+  // ドリブル突破（前への強い加速、少し下に重心を落とす）
   'dribble_breakthrough': {
-    force: new Vector3(0, 0, 35),
+    force: new Vector3(0, -400, 2500),
     duration: 0.2,
   },
 
@@ -216,43 +227,107 @@ export const ACTION_TYPE_FORCES: Record<string, ActionForceConfig> = {
   // フェイントアクション
   // ==============================
 
-  // シュートフェイント（軽い動き、素早く次へ）
+  // シュートフェイント（軽く上に、素早く次へ）
   'shoot_feint': {
-    force: new Vector3(0, 5, 2),
+    force: new Vector3(0, 600, 200),
     duration: 0.08,
+  },
+
+  // ==============================
+  // ドリブルムーブ
+  // ==============================
+
+  // クロスオーバー（左から右へ大きく移動）
+  'dribble_crossover': {
+    force: new Vector3(2000, -300, 400),
+    duration: 0.15,
+  },
+
+  // ビハインドザバック（後ろを通して逆側へ）
+  'dribble_behind_back': {
+    force: new Vector3(-1600, -200, -400),
+    duration: 0.18,
+  },
+
+  // スピンムーブ（回転による遠心力）
+  'dribble_spin': {
+    force: new Vector3(1200, 0, 800),
+    duration: 0.2,
+  },
+
+  // ヘジテーション（急停止で前のめり）
+  'dribble_hesitation': {
+    force: new Vector3(0, 300, -1200),
+    duration: 0.1,
+  },
+
+  // ステップバック（後ろへ大きく下がる）
+  'dribble_stepback': {
+    force: new Vector3(0, 400, -2000),
+    duration: 0.15,
   },
 
   // ==============================
   // ディフェンスアクション
   // ==============================
 
-  // シュートブロック（大きなジャンプ）
+  // シュートブロック（大きなジャンプ、前へ飛び出す）
   'block_shot': {
-    force: new Vector3(0, 28, 12),
+    force: new Vector3(0, 2200, 1200),
     duration: 0.12,
     lock: true,
   },
 
-  // スティール試行（前への突進、リスクあり）
+  // スティール試行（前への突進、リスク大）
   'steal_attempt': {
-    force: new Vector3(0, 0, 25),
+    force: new Vector3(600, -400, 2400),
     duration: 0.15,
   },
 
   // パスカット姿勢（軽い構え）
   'pass_intercept': {
-    force: new Vector3(0, 2, 5),
+    force: new Vector3(0, 200, 400),
     duration: 0.08,
   },
 
+  // ディフェンススライド左
+  'defense_slide_left': {
+    force: new Vector3(-1200, -200, 0),
+    duration: 0.1,
+  },
+
+  // ディフェンススライド右
+  'defense_slide_right': {
+    force: new Vector3(1200, -200, 0),
+    duration: 0.1,
+  },
+
   // ==============================
-  // 移動アクション
+  // 移動・姿勢アクション
   // ==============================
 
-  // ディフェンス構え（低い姿勢、安定）
+  // ディフェンス構え（低く安定）
   'defense_stance': {
-    force: new Vector3(0, -3, 0),
+    force: new Vector3(0, -400, 0),
     duration: 0.05,
+  },
+
+  // 急停止（前のめりになる）
+  'sudden_stop': {
+    force: new Vector3(0, 300, -1600),
+    duration: 0.12,
+  },
+
+  // 方向転換左
+  'cut_left': {
+    force: new Vector3(-2400, 0, 400),
+    duration: 0.12,
+  },
+
+  // 方向転換右
+  'cut_right': {
+    force: new Vector3(2400, 0, 400),
+    duration: 0.12,
   },
 };
 

@@ -152,15 +152,31 @@ export class OnBallOffenseAI extends BaseStateAI {
           return;
         }
 
-        // パスしなかった場合、フェイントを試みる（確率でフェイントまたはシュートを選択）
-        // 目標位置オーバーライド時はフェイント確率を上げる
+        // 目標位置オーバーライド時（1on1テスト）は、ランダムにアクションを選択
+        if (this.targetPositionOverride) {
+          const actionChoice = Math.random();
+          if (actionChoice < 0.3) {
+            // 30%: フェイント
+            if (this.tryFeint()) {
+              return;
+            }
+          } else if (actionChoice < 0.7) {
+            // 40%: ドリブルムーブ
+            if (this.tryDribbleMove()) {
+              return;
+            }
+          }
+          // 30%: 何もしない（プレッシャーをかけられている状態）
+          return;
+        }
+
+        // 通常時: フェイントを試みる（確率でフェイントまたはシュートを選択）
         if (this.tryFeint()) {
           return; // フェイント実行した場合、シュートは打たない
         }
 
         // フェイントを選択しなかった場合、シュートを試みる
-        // 目標位置オーバーライド時はシュートしない
-        if (!this.targetPositionOverride && this.tryShoot()) {
+        if (this.tryShoot()) {
           return;
         }
 
@@ -358,8 +374,8 @@ export class OnBallOffenseAI extends BaseStateAI {
     }
 
     // 条件が揃った場合、確率でフェイントを選択
-    // 目標位置オーバーライド時は確率を上げる（80%）、通常時は50%
-    const feintChance = this.targetPositionOverride ? 0.8 : 0.5;
+    // 目標位置オーバーライド時は30%、通常時は50%
+    const feintChance = this.targetPositionOverride ? 0.3 : 0.5;
     if (Math.random() > feintChance) {
       return false; // フェイントを選択しなかった
     }
@@ -388,6 +404,23 @@ export class OnBallOffenseAI extends BaseStateAI {
     const direction = Math.random() < 0.5 ? 'left' : 'right';
 
     return this.feintController.performBreakthroughAfterFeint(this.character, direction);
+  }
+
+  /**
+   * ドリブルムーブを試みる
+   * @returns ドリブルムーブを実行した場合true
+   */
+  private tryDribbleMove(): boolean {
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    // ドリブル突破アクションを実行
+    const actionController = this.character.getActionController();
+    const result = actionController.startAction('dribble_breakthrough');
+
+    return result.success;
   }
 
   /**

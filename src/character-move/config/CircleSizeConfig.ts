@@ -31,7 +31,7 @@ export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   loose_ball: 0.5,        // ルーズボール時: 0.5m（半分）
   dribbling: 0.5,         // ドリブル中: 0.5m（機動力重視で小さく）
   shooting: 1.0,          // シュート中: 1.0m（変更なし）
-  shoot_recovery: 0,      // シュート後硬直中: 0（サークル非表示）
+  shoot_recovery: 0.5,    // シュート後硬直中: 0.5m（動けない状態を示すため小さめ）
   passing: 1.0,           // パス中: 1.0m（変更なし）
   blocking: 0.3,          // ブロック中: 0.3m（ジャンプ中で動けない、小さく）
 };

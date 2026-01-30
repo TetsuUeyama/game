@@ -173,6 +173,14 @@ export class DirectionCircle {
     if (this.footCircle) {
       this.footCircle.isVisible = visible;
     }
+    // 色分けセグメント（三角形）も表示/非表示にする
+    for (const segment of this.footCircleFaceSegments) {
+      segment.isVisible = visible;
+    }
+    // 頂点ラベルも表示/非表示にする
+    for (const label of this.footCircleVertexLabels) {
+      label.isVisible = visible;
+    }
   }
 
   /**

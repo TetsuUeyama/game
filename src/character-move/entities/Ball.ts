@@ -325,16 +325,25 @@ export class Ball {
       this.lastToucher = character;
       // ボールサイズを元に戻す
       this.mesh.scaling = Vector3.One();
-    }
 
-    if (character !== null && this.inFlight) {
+      // ホルダーが設定された場合は常に物理演算を停止（ANIMATEDモードに切り替え）
+      // inFlightの状態に関係なく、保持されたボールは手動制御になる
       this.inFlight = false;
-      // 物理演算を停止（ANIMATEDモードに切り替え）
       this.setKinematic(true);
       if (this.physicsAggregate) {
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
       }
+
+      // ボールの位置を即座にホルダーの位置に移動（次のフレームを待たない）
+      const ballHoldingPosition = character.getBallHoldingPosition();
+      this.mesh.position = ballHoldingPosition;
+      if (this.physicsAggregate) {
+        this.physicsAggregate.body.disablePreStep = false;
+      }
+      console.log(`[Ball] setHolder: ボールを ${character.playerData?.basic?.NAME || character.team} に渡しました`);
+    } else {
+      console.log('[Ball] setHolder: ボールが解放されました');
     }
   }
 
@@ -384,6 +393,16 @@ export class Ball {
       // 飛行中の物理処理
       this.flightTime += Ball.FIXED_DT;
       this.updateFlightPhysics();
+    } else if (!this.isKinematicMode && this.physicsAggregate) {
+      // ルーズボール時（飛行終了後、地面を転がっている状態）
+      // 速度が十分小さくなったらキネマティックモードに切り替え
+      const velocity = this.physicsAggregate.body.getLinearVelocity();
+      const speed = velocity.length();
+      if (speed < 0.3) {
+        this.setKinematic(true);
+        this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
+        this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+      }
     }
   }
 
@@ -403,12 +422,17 @@ export class Ball {
     const speed = velocity.length();
     const isOnGround = position.y <= PhysicsConstants.BALL.RADIUS + 0.05;
 
-    // 地面で速度が十分小さい場合は飛行終了
-    if (isOnGround && speed < 0.5 && Math.abs(velocity.y) < PhysicsConstants.BALL.MIN_BOUNCE_VELOCITY) {
+    // 地面で垂直方向の速度が十分小さい場合は飛行終了
+    // 水平方向の転がりは飛行とは見なさない（地面にいれば状態更新が行われる）
+    if (isOnGround && Math.abs(velocity.y) < PhysicsConstants.BALL.MIN_BOUNCE_VELOCITY) {
       this.inFlight = false;
-      this.setKinematic(true);
-      this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
-      this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+      // 水平方向の速度は維持（転がり続ける）、垂直方向のみ停止
+      if (speed < 0.5) {
+        // 完全に停止している場合のみキネマティックモードに
+        this.setKinematic(true);
+        this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
+        this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+      }
     }
   }
 
