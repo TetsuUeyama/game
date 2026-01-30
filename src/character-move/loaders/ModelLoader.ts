@@ -2,7 +2,7 @@ import { Scene, SceneLoader, AbstractMesh } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF"; // GLTFローダーをインポート
 
 /**
- * 3Dモデルローダーユーティリティ
+ * 3Dモデルローダー
  */
 export class ModelLoader {
   /**

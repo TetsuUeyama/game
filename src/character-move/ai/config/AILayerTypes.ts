@@ -74,8 +74,9 @@ export type MovementType = 'idle' | 'walk' | 'dash' | 'jump';
 
 /**
  * アクションフェーズ
+ * ※ 'recovery'は削除 - 重心システムで物理的に管理
  */
-export type ActionPhase = 'idle' | 'startup' | 'active' | 'recovery';
+export type ActionPhase = 'idle' | 'startup' | 'active';
 
 /**
  * 選手のスナップショット
