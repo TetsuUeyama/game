@@ -1,15 +1,15 @@
 import { Vector3 } from "@babylonjs/core";
-import { Character } from "../entities/Character";
-import { Ball } from "../entities/Ball";
-import { Field } from "../entities/Field";
+import { Character } from "../../entities/Character";
+import { Ball } from "../../entities/Ball";
+import { Field } from "../../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
-import { ShootingController } from "../controllers/action/ShootingController";
-import { FeintController } from "../controllers/action/FeintController";
-import { SHOOT_COOLDOWN, ShootingUtils } from "../config/action/ShootingConfig";
-import { DEFENSE_DISTANCE, DefenseUtils } from "../config/DefenseConfig";
-import { PASS_COOLDOWN, PassUtils } from "../config/PassConfig";
-import { IDLE_MOTION } from "../motion/IdleMotion";
-import { WALK_FORWARD_MOTION } from "../motion/WalkMotion";
+import { ShootingController } from "../../controllers/action/ShootingController";
+import { FeintController } from "../../controllers/action/FeintController";
+import { SHOOT_COOLDOWN, ShootingUtils } from "../../config/action/ShootingConfig";
+import { DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
+import { PASS_COOLDOWN, PassUtils } from "../../config/PassConfig";
+import { IDLE_MOTION } from "../../motion/IdleMotion";
+import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 
 /**
  * パス実行時のコールバック型
