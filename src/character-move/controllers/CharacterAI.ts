@@ -14,7 +14,7 @@ import {
   OffBallOffenseAI,
   OffBallDefenseAI
 } from "../ai";
-import { PassCallback } from "../ai/OnBallOffenseAI";
+import { PassCallback } from "../ai/state/OnBallOffenseAI";
 
 /**
  * キャラクターAIコントローラー
