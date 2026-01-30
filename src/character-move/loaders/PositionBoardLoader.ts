@@ -1,5 +1,5 @@
 /**
- * ポジション配置ボードのユーティリティ
+ * ポジション配置ボードローダー
  */
 
 import { PositionBoardConfig } from '../types/PositionBoard';

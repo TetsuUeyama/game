@@ -1538,8 +1538,9 @@ export class Character {
     const isBlockJumping = currentAction === 'block_shot' && (phase === 'startup' || phase === 'active');
 
     if (!isBlockJumping) {
-      // アクションが終了または別フェーズになったらターゲットをクリア
-      if (this.blockJumpTarget !== null && phase !== 'recovery') {
+      // アクションが終了したらターゲットをクリア
+      // 重心が安定するまでは着地姿勢を維持
+      if (this.blockJumpTarget !== null && this.actionController.isBalanceStable()) {
         this.blockJumpTarget = null;
         this.blockLateralDirection = null;
         this.blockForwardDirection = null;

@@ -10,6 +10,7 @@ import {
   ACTION_MOTIONS,
 } from "../../config/action/ActionConfig";
 import { Character } from "../../entities/Character";
+import { BalanceController } from "../BalanceController";
 
 /**
  * アクション実行結果
@@ -26,19 +27,25 @@ export interface ActionResult {
 export interface ActionCallbacks {
   onStartup?: (action: ActionType) => void;
   onActive?: (action: ActionType) => void;
-  onRecovery?: (action: ActionType) => void;
   onComplete?: (action: ActionType) => void;
   onInterrupt?: (action: ActionType, interruptedBy: ActionType) => void;
 }
 
 /**
  * アクションコントローラー
+ *
  * キャラクターのアクション状態を管理し、タイミング制御を行う
+ *
+ * ※ 硬直（recovery）とクールタイム（cooldown）は重心システムに置き換え済み
+ *   - アクション終了時に重心に力が加わる
+ *   - 重心が安定位置に戻るまで次のアクションは実行不可
+ *   - 選手の体重・身長により自然な回復時間が決まる
  */
 export class ActionController {
   private character: Character;
   private state: ActionState;
   private callbacks: ActionCallbacks;
+  private balanceController: BalanceController | null = null;
 
   constructor(character: Character) {
     this.character = character;
@@ -46,9 +53,15 @@ export class ActionController {
       currentAction: null,
       phase: 'idle',
       phaseStartTime: 0,
-      cooldowns: new Map(),
     };
     this.callbacks = {};
+  }
+
+  /**
+   * BalanceControllerを設定
+   */
+  public setBalanceController(balanceController: BalanceController): void {
+    this.balanceController = balanceController;
   }
 
   /**
@@ -62,7 +75,7 @@ export class ActionController {
    * 現在のアクション状態を取得
    */
   public getState(): ActionState {
-    return { ...this.state, cooldowns: new Map(this.state.cooldowns) };
+    return { ...this.state };
   }
 
   /**
@@ -81,14 +94,15 @@ export class ActionController {
 
   /**
    * アクションを実行可能か判定
+   *
+   * 重心システムにより、重心が安定していなければ実行不可
    */
   public canPerformAction(type: ActionType): boolean {
-    const now = Date.now();
-
-    // クールダウン中かチェック
-    const cooldownEnd = this.state.cooldowns.get(type) ?? 0;
-    if (now < cooldownEnd) {
-      return false;
+    // 重心システムによるチェック
+    if (this.balanceController) {
+      if (!this.balanceController.canPerformAction(type)) {
+        return false;
+      }
     }
 
     // 現在のアクションがある場合
@@ -117,13 +131,20 @@ export class ActionController {
 
     // 実行可能かチェック
     if (!this.canPerformAction(type)) {
-      // クールダウン中かチェック
-      const cooldownEnd = this.state.cooldowns.get(type) ?? 0;
-      if (now < cooldownEnd) {
-        const remaining = cooldownEnd - now;
+      // 重心が安定していない
+      if (this.balanceController && !this.balanceController.canTransition()) {
+        const recoveryTime = this.balanceController.getEstimatedRecoveryTime();
         return {
           success: false,
-          message: `クールダウン中です（残り${remaining}ms）`,
+          message: `重心が安定していません（回復まで約${Math.round(recoveryTime * 1000)}ms）`,
+        };
+      }
+
+      // ロック中（空中など）
+      if (this.balanceController && this.balanceController.isLocked()) {
+        return {
+          success: false,
+          message: '着地するまでアクションを実行できません',
         };
       }
 
@@ -150,7 +171,6 @@ export class ActionController {
     this.state.phaseStartTime = now;
 
     // 重要: 新しいアクション開始時に古いコールバックをクリア
-    // これにより、前のアクションのコールバックが誤って呼ばれることを防ぐ
     this.callbacks = {};
 
     // モーションを再生
@@ -205,19 +225,10 @@ export class ActionController {
       case 'active':
         // activeTimeが-1（無限）の場合は自動遷移しない
         if (def.activeTime !== -1 && elapsed >= def.activeTime) {
-          this.transitionToRecovery(now);
-        }
-        break;
-
-      case 'recovery':
-        if (elapsed >= def.recoveryTime) {
-          this.completeAction(now, def);
+          this.completeAction();
         }
         break;
     }
-
-    // クールダウンの期限切れをクリーンアップ
-    this.cleanupCooldowns(now);
   }
 
   /**
@@ -227,31 +238,22 @@ export class ActionController {
     const action = this.state.currentAction!;
     this.state.phase = 'active';
     this.state.phaseStartTime = now;
+
+    // 重心に力を適用（アクション開始時）
+    if (this.balanceController) {
+      this.balanceController.applyActionTypeForce(action);
+    }
+
     if (this.callbacks.onActive) {
       this.callbacks.onActive(action);
     }
   }
 
   /**
-   * recoveryフェーズへ遷移
-   */
-  private transitionToRecovery(now: number): void {
-    const action = this.state.currentAction!;
-    this.state.phase = 'recovery';
-    this.state.phaseStartTime = now;
-    this.callbacks.onRecovery?.(action);
-  }
-
-  /**
    * アクション完了
    */
-  private completeAction(now: number, def: ActionDefinition): void {
+  private completeAction(): void {
     const action = this.state.currentAction!;
-
-    // クールダウンを設定
-    if (def.cooldownTime > 0) {
-      this.state.cooldowns.set(action, now + def.cooldownTime);
-    }
 
     this.callbacks.onComplete?.(action);
 
@@ -268,28 +270,32 @@ export class ActionController {
   }
 
   /**
-   * アクションを強制終了（recoveryに移行）
+   * アクションを強制終了
    */
   public forceEndAction(): void {
     if (this.state.currentAction !== null && this.state.phase === 'active') {
-      this.transitionToRecovery(Date.now());
+      this.completeAction();
     }
   }
 
   /**
-   * クールダウンの残り時間を取得（ミリ秒）
+   * 重心が安定するまでの推定時間を取得（ミリ秒）
    */
-  public getCooldownRemaining(type: ActionType): number {
-    const now = Date.now();
-    const cooldownEnd = this.state.cooldowns.get(type) ?? 0;
-    return Math.max(0, cooldownEnd - now);
+  public getRecoveryRemaining(): number {
+    if (!this.balanceController) {
+      return 0;
+    }
+    return this.balanceController.getEstimatedRecoveryTime() * 1000;
   }
 
   /**
-   * クールダウン中かどうか
+   * 重心が安定しているかどうか（次のアクション可能か）
    */
-  public isOnCooldown(type: ActionType): boolean {
-    return this.getCooldownRemaining(type) > 0;
+  public isBalanceStable(): boolean {
+    if (!this.balanceController) {
+      return true; // BalanceControllerがなければ常に安定
+    }
+    return this.balanceController.canTransition();
   }
 
   /**
@@ -319,8 +325,6 @@ export class ActionController {
       case 'active':
         if (def.activeTime === -1) return 0; // 無限の場合は0を返す
         return Math.min(1, elapsed / def.activeTime);
-      case 'recovery':
-        return Math.min(1, elapsed / def.recoveryTime);
       default:
         return 0;
     }
@@ -358,17 +362,6 @@ export class ActionController {
       config: def.hitbox,
       worldPosition,
     };
-  }
-
-  /**
-   * 期限切れのクールダウンをクリーンアップ
-   */
-  private cleanupCooldowns(now: number): void {
-    for (const [action, endTime] of this.state.cooldowns.entries()) {
-      if (now >= endTime) {
-        this.state.cooldowns.delete(action);
-      }
-    }
   }
 
   /**
@@ -422,37 +415,22 @@ export class ActionController {
   }
 
   /**
-   * シュートアクションの硬直中（recovery）かどうか
+   * シュートアクション後に重心が不安定かどうか
+   * （ボールに触れても保持できない状態を判定）
    */
-  public isShootInRecovery(): boolean {
-    if (this.state.currentAction === null || this.state.phase !== 'recovery') {
-      return false;
+  public isInShootRecovery(): boolean {
+    // 現在シュートアクション実行中
+    if (this.state.currentAction !== null &&
+        ActionConfigUtils.isShootAction(this.state.currentAction)) {
+      return true;
     }
-    return ActionConfigUtils.isShootAction(this.state.currentAction);
-  }
 
-  /**
-   * シュートアクションのクールダウン中かどうか
-   */
-  public isShootOnCooldown(): boolean {
-    const now = Date.now();
-    // 全てのシュートアクションのクールダウンをチェック
-    const shootActions: ActionType[] = ['shoot_3pt', 'shoot_midrange', 'shoot_layup'];
-    for (const action of shootActions) {
-      const cooldownEnd = this.state.cooldowns.get(action) ?? 0;
-      if (now < cooldownEnd) {
-        return true;
-      }
+    // シュート後で重心が安定していない
+    if (!this.isBalanceStable()) {
+      return true;
     }
+
     return false;
-  }
-
-  /**
-   * シュートアクションの硬直中またはクールダウン中かどうか
-   * ボールに触れても保持できない状態を判定
-   */
-  public isInShootRecoveryOrCooldown(): boolean {
-    return this.isShootInRecovery() || this.isShootOnCooldown();
   }
 
   /**
@@ -493,5 +471,25 @@ export class ActionController {
       return null;
     }
     return ACTION_DEFINITIONS[this.state.currentAction];
+  }
+
+  /**
+   * 重心の安定度を取得（0-1、1が完全に安定）
+   */
+  public getBalanceStability(): number {
+    if (!this.balanceController) {
+      return 1;
+    }
+    return this.balanceController.getStability();
+  }
+
+  /**
+   * 推定回復時間を取得（秒）
+   */
+  public getEstimatedRecoveryTime(): number {
+    if (!this.balanceController) {
+      return 0;
+    }
+    return this.balanceController.getEstimatedRecoveryTime();
   }
 }

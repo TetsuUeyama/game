@@ -20,10 +20,10 @@ import { ContestController } from "../controllers/ContestController";
 import { CircleSizeController } from "../controllers/CircleSizeController";
 import { FeintController } from "../controllers/action/FeintController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
-import { GameTeamConfig } from "../utils/TeamConfigLoader";
+import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
-// import { ModelLoader } from "../utils/ModelLoader"; // 一旦無効化
+// import { ModelLoader } from "../loaders/ModelLoader"; // 一旦無効化
 import {
   CAMERA_CONFIG,
   LIGHT_CONFIG,

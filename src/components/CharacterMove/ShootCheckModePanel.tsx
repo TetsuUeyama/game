@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ShootCheckScene } from '@/character-move/scenes/ShootCheckScene';
 import { ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter } from '@/character-move/controllers/check/ShootCheckController';
-import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
+import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
 import { PlayerData } from '@/character-move/types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
 import { ShootCheckResultsTable } from './ShootCheckResultsTable';

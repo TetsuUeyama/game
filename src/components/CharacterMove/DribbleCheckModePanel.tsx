@@ -7,7 +7,7 @@ import {
   DribbleCheckResult,
   DribbleCheckConfig,
 } from '@/character-move/controllers/check/DribbleCheckController';
-import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
+import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
 import { PlayerData } from '@/character-move/types/PlayerData';
 
 interface DribbleCheckModePanelProps {

@@ -8,7 +8,7 @@ import {
 import {
   POSITION_BOARD_UI_CONFIG,
 } from '@/character-move/config/PositionBoardConfig';
-import { createDefaultConfig } from '@/character-move/utils/PositionBoardLoader';
+import { createDefaultConfig } from '@/character-move/loaders/PositionBoardLoader';
 import { PositionBoardGrid } from './PositionBoardGrid';
 import { PositionBoardToolbar } from './PositionBoardToolbar';
 

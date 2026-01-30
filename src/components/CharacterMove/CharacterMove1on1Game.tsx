@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
-import { TeamConfigLoader } from '@/character-move/utils/TeamConfigLoader';
-import { PlayerDataLoader } from '@/character-move/utils/PlayerDataLoader';
+import { TeamConfigLoader } from '@/character-move/loaders/TeamConfigLoader';
+import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
 import { CameraSwitchPanel } from './CameraSwitchPanel';
 import { PositionBoardPanel } from './PositionBoardPanel';
 import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';

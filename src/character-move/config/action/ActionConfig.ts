@@ -36,13 +36,14 @@ export type ActionType =
 
 /**
  * アクションフェーズ
+ *
+ * ※ recovery と cooldown は削除 - 重心システムで物理的に管理
+ *   activeが終了したらidleに戻り、重心が安定するまで次のアクション不可
  */
 export type ActionPhase =
-  | 'idle'       // アクション未実行
+  | 'idle'       // アクション未実行（重心が安定していれば次のアクション可能）
   | 'startup'    // 発動前（キャンセル可能区間）
-  | 'active'     // アクティブ（判定が有効な区間）
-  | 'recovery'   // 硬直中
-  | 'cooldown';  // クールダウン中
+  | 'active';    // アクティブ（判定が有効な区間、終了後はidleへ）
 
 /**
  * ヒットボックス設定
@@ -65,8 +66,6 @@ export interface ActionDefinition {
   // タイミング設定（ミリ秒）
   startupTime: number;      // 発動までの時間（この間はキャンセル可能）
   activeTime: number;       // アクティブ時間（判定が有効な時間）
-  recoveryTime: number;     // 硬直時間（次のアクションまで待機）
-  cooldownTime: number;     // クールタイム（同じアクション再使用まで）
 
   // 優先度と中断
   priority: number;         // 優先度（高いほど優先）
@@ -74,20 +73,30 @@ export interface ActionDefinition {
 
   // 物理判定設定（ディフェンス用）
   hitbox?: HitboxConfig;
+
+  // ※ recoveryTime と cooldownTime は削除
+  // 重心システム（BalanceController）により、アクション後の硬直と
+  // 次のアクションへの遷移可否が物理的に決定される
 }
 
 /**
  * アクション状態
+ *
+ * ※ cooldowns は削除済み - 重心システムで管理
  */
 export interface ActionState {
   currentAction: ActionType | null;
   phase: ActionPhase;
   phaseStartTime: number;      // 現在フェーズの開始時刻（ミリ秒）
-  cooldowns: Map<ActionType, number>; // 各アクションのクールダウン終了時刻
 }
 
 /**
  * アクション定義一覧
+ *
+ * ※ recoveryTime と cooldownTime は重心システムに置き換え済み
+ *   - アクション実行時にBalanceControllerに力が加わる
+ *   - 重心が安定位置に戻るまで次のアクションは実行不可
+ *   - 選手の体重・身長により回復時間が変わる
  */
 export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
   // ==============================
@@ -101,10 +110,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'shoot_3pt',
     startupTime: 400,      // 0.4秒（この間にブロック可能）
     activeTime: 300,       // 0.3秒
-    recoveryTime: 2000,    // 2秒（硬直時間）
-    cooldownTime: 2000,    // 2秒（再使用禁止時間）
     priority: 10,
     interruptible: true,   // startup中はブロックでキャンセル
+    // 重心: 大きなジャンプ → 長い回復時間
   },
 
   // ミドルレンジシュート
@@ -114,10 +122,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'shoot_midrange',
     startupTime: 350,      // 0.35秒
     activeTime: 250,       // 0.25秒
-    recoveryTime: 1000,     // 0.2秒
-    cooldownTime: 2000,    // 2秒
     priority: 10,
     interruptible: true,
+    // 重心: 中程度のジャンプ → 中程度の回復時間
   },
 
   // レイアップ
@@ -127,10 +134,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'shoot_layup',
     startupTime: 250,      // 0.25秒（素早い）
     activeTime: 300,       // 0.3秒
-    recoveryTime: 300,     // 0.3秒
-    cooldownTime: 1500,    // 1.5秒
     priority: 10,
     interruptible: true,
+    // 重心: 前への勢い + ジャンプ
   },
 
   // チェストパス
@@ -140,10 +146,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'pass_chest',
     startupTime: 200,      // 0.2秒
     activeTime: 100,       // 0.1秒
-    recoveryTime: 200,     // 0.2秒
-    cooldownTime: 500,     // 0.5秒
     priority: 8,
     interruptible: true,
+    // 重心: 軽いアクション → 素早く次へ
   },
 
   // バウンスパス
@@ -153,10 +158,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'pass_bounce',
     startupTime: 250,      // 0.25秒
     activeTime: 100,       // 0.1秒
-    recoveryTime: 200,     // 0.2秒
-    cooldownTime: 500,     // 0.5秒
     priority: 8,
     interruptible: true,
+    // 重心: 少し下への動き
   },
 
   // オーバーヘッドパス
@@ -166,10 +170,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'pass_overhead',
     startupTime: 300,      // 0.3秒
     activeTime: 150,       // 0.15秒
-    recoveryTime: 250,     // 0.25秒
-    cooldownTime: 600,     // 0.6秒
     priority: 8,
     interruptible: true,
+    // 重心: 上への動き
   },
 
   // ドリブル突破
@@ -179,10 +182,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'dribble_breakthrough',
     startupTime: 100,      // 0.1秒（素早い開始）
     activeTime: 1500,      // 1.5秒（突破時間）
-    recoveryTime: 200,     // 0.2秒
-    cooldownTime: 1000,    // 1秒
     priority: 9,
     interruptible: false,  // 一度始まるとキャンセル不可
+    // 重心: 強い前方加速 → 長い回復
   },
 
   // ==============================
@@ -195,11 +197,10 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     category: 'offense',
     motion: 'shoot_feint',
     startupTime: 100,      // 0.1秒（飛ぶ振りの開始）
-    activeTime: 150,       // 0.15秒（フェイク動作中、ディフェンスが反応する時間）
-    recoveryTime: 200,     // 0.2秒（フェイントなので短い硬直）
-    cooldownTime: 500,     // 0.5秒（素早く次のアクションへ）
+    activeTime: 150,       // 0.15秒（フェイク動作中）
     priority: 8,
     interruptible: true,   // キャンセル可能（ドリブルに移行するため）
+    // 重心: 軽い動き → 素早く次のアクションへ
   },
 
   // ==============================
@@ -213,8 +214,6 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'block_shot',
     startupTime: 100,      // 0.1秒で手を上げる
     activeTime: 500,       // 0.5秒間判定継続
-    recoveryTime: 300,     // 0.3秒硬直
-    cooldownTime: 500,     // 0.5秒後に再使用可
     priority: 15,          // シュートより高優先度
     interruptible: false,
     hitbox: {
@@ -222,6 +221,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
       radius: 0.15,        // 手の判定半径
       offset: new Vector3(0, 2.2, 0.3), // 頭上前方
     },
+    // 重心: 大きなジャンプ → 着地後に大きな隙
   },
 
   // スティール試行
@@ -231,8 +231,6 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'steal_attempt',
     startupTime: 150,      // 0.15秒
     activeTime: 200,       // 0.2秒間判定
-    recoveryTime: 400,     // 0.4秒硬直（失敗リスク）
-    cooldownTime: 800,     // 0.8秒
     priority: 12,
     interruptible: false,
     hitbox: {
@@ -240,6 +238,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
       radius: 0.2,         // 手を伸ばした範囲
       offset: new Vector3(0, 0.8, 0.5), // 胸の高さ、前方
     },
+    // 重心: 前への突進 → 失敗時に大きな隙
   },
 
   // パスカット姿勢
@@ -249,8 +248,6 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'pass_intercept',
     startupTime: 100,      // 0.1秒
     activeTime: 800,       // 0.8秒間カット可能
-    recoveryTime: 200,     // 0.2秒
-    cooldownTime: 300,     // 0.3秒
     priority: 11,
     interruptible: true,   // パス前にキャンセル可
     hitbox: {
@@ -259,6 +256,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
       height: 1.5,         // 上半身の範囲
       offset: new Vector3(0, 1.0, 0.2), // 胴体前方
     },
+    // 重心: 軽い構え → 素早く動ける
   },
 
   // ==============================
@@ -272,10 +270,9 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     motion: 'defense_stance',
     startupTime: 100,      // 0.1秒で構える
     activeTime: -1,        // 継続（-1 = 無限）
-    recoveryTime: 150,     // 0.15秒で解除
-    cooldownTime: 0,       // クールダウンなし
     priority: 5,
     interruptible: true,   // いつでも解除可能
+    // 重心: 低い姿勢 → 安定、すぐ動ける
   },
 };
 
@@ -335,20 +332,21 @@ export class ActionConfigUtils {
   }
 
   /**
-   * アクション全体の所要時間を計算（ミリ秒）
-   * activeTimeが-1（無限）の場合はstartup + recoveryを返す
+   * アニメーション時間を計算（ミリ秒）
+   * startup + active の時間
+   * ※ 実際の次のアクションまでの時間は重心システムが決定する
    */
-  public static getTotalDuration(type: ActionType): number {
+  public static getAnimationDuration(type: ActionType): number {
     const def = ACTION_DEFINITIONS[type];
     const activeTime = def.activeTime === -1 ? 0 : def.activeTime;
-    return def.startupTime + activeTime + def.recoveryTime;
+    return def.startupTime + activeTime;
   }
 
   /**
    * モーションの再生時間を計算（秒）
    */
   public static getMotionDuration(type: ActionType): number {
-    return this.getTotalDuration(type) / 1000;
+    return this.getAnimationDuration(type) / 1000;
   }
 
   /**

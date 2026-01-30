@@ -109,9 +109,9 @@ export class CollisionHandler {
         return;
       }
 
-      // シュートアクションの硬直中またはクールダウン中はボールを弾く
+      // シュートアクション後で重心が不安定な場合はボールを弾く
       const actionController = character.getActionController();
-      if (actionController && actionController.isInShootRecoveryOrCooldown()) {
+      if (actionController && actionController.isInShootRecovery()) {
         this.deflectBallFromCharacter(character, ballPosition);
         return;
       }

@@ -37,15 +37,10 @@ export class CircleSizeController {
     const isHoldingBall = holder === character;
     const actionController = character.getActionController();
     const currentAction = actionController.getCurrentAction();
-    const currentPhase = actionController.getCurrentPhase();
 
     // アクション中の状況を優先
     if (currentAction) {
       if (currentAction.startsWith('shoot_') && currentAction !== 'shoot_feint') {
-        // シュートアクションがrecoveryフェーズの場合は硬直中
-        if (currentPhase === 'recovery') {
-          return 'shoot_recovery';
-        }
         return 'shooting';
       }
       if (currentAction.startsWith('pass_')) {
@@ -57,6 +52,11 @@ export class CircleSizeController {
       if (currentAction === 'block_shot') {
         return 'blocking';
       }
+    }
+
+    // シュート後で重心が不安定な場合は硬直状態（重心システムによる判定）
+    if (!actionController.isBalanceStable()) {
+      return 'shoot_recovery';
     }
 
     // ボール保持状況による判定
