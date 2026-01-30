@@ -47,18 +47,32 @@ export class OnBallDefenseAI extends BaseStateAI {
     const offenseRadius = DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS;
     const targetDistance = DefenseUtils.calculateContactDistance(defenderRadius, offenseRadius);
 
-    // サークルが重なったら1on1状態で停止
+    // サークルが重なったら1on1状態
     if (currentDistance <= targetDistance) {
-      // 停止時は待機モーションを再生
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-
       // ディフェンス側はオフェンス側の0ポジションに自分の0ポジションを合わせる
       // オフェンス側の向きと反対方向（対面する向き）を向く
       const offenseRotation = onBallPlayer.getRotation();
       const defenseRotation = offenseRotation + Math.PI; // 180度反対方向
       this.character.setRotation(defenseRotation);
+
+      // オフェンスの動きに合わせて横移動（ミラーリング）
+      const offenseVelocity = onBallPlayer.velocity;
+      if (offenseVelocity && offenseVelocity.length() > 0.1) {
+        // オフェンスが動いている場合、追従
+        const lateralDir = new Vector3(offenseVelocity.x, 0, offenseVelocity.z).normalize();
+        this.character.move(lateralDir, deltaTime);
+        return;
+      }
+
+      // オフェンスが停止している場合、確率でプレッシャーアクション
+      if (Math.random() < 0.02) {  // 2%の確率（毎フレーム）
+        this.tryDefensiveAction();
+      }
+
+      // 停止時は待機モーションを再生
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
 
       return;
     }
@@ -90,6 +104,27 @@ export class OnBallDefenseAI extends BaseStateAI {
 
     // 常にオンボールプレイヤーの方を向く
     this.faceTowards(onBallPlayer);
+  }
+
+  /**
+   * ディフェンシブアクションを試みる（スティール等）
+   * @returns アクションを実行した場合true
+   */
+  private tryDefensiveAction(): boolean {
+    const actionController = this.character.getActionController();
+
+    // ランダムにアクションを選択
+    const actionChoice = Math.random();
+
+    if (actionChoice < 0.6) {
+      // 60%: スティール試行
+      const result = actionController.startAction('steal_attempt');
+      return result.success;
+    } else {
+      // 40%: ディフェンス構え
+      const result = actionController.startAction('defense_stance');
+      return result.success;
+    }
   }
 
   /**

@@ -235,6 +235,14 @@ export class ShootingController {
   }
 
   /**
+   * シュートレンジ表示を無効化
+   */
+  public hideShootRange(): void {
+    this.shootRangeVisible = false;
+    this.hideShootRangeMeshes();
+  }
+
+  /**
    * シュートタイプから対応するアクションタイプを取得
    */
   private getShootActionType(shootType: ShootType): ActionType | null {
@@ -465,6 +473,9 @@ export class ShootingController {
     this.updateNetCollisions();
 
     if (!this.checkingGoal || !this.ball.isInFlight()) {
+      if (this.checkingGoal) {
+        console.log('[ShootingController] ゴール判定終了: isInFlight=false');
+      }
       this.checkingGoal = false;
       return;
     }
@@ -488,6 +499,11 @@ export class ShootingController {
         );
 
         if (distanceFromCenter <= rimRadius) {
+          console.log('[ShootingController] ゴール検出!', {
+            goal: goal.name,
+            distanceFromCenter,
+            rimRadius,
+          });
           this.onGoalScored();
           this.checkingGoal = false;
           return;
@@ -585,8 +601,13 @@ export class ShootingController {
   }
 
   private onGoalScored(): void {
+    console.log('[ShootingController] onGoalScored 呼び出し:', {
+      hasCallback: !!this.onGoalCallback,
+      currentShooterTeam: this.currentShooterTeam,
+    });
     if (this.onGoalCallback && this.currentShooterTeam) {
       this.onGoalCallback(this.currentShooterTeam);
+      console.log('[ShootingController] ゴールコールバック実行完了');
     }
     this.currentShooterTeam = null;
   }

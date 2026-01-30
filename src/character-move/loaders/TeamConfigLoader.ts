@@ -8,6 +8,8 @@ export interface PlayerConfig {
   position: 'PG' | 'SG' | 'SF' | 'PF' | 'C';
   x: number;
   z: number;
+  /** AIで動くかどうか（省略時はtrue） */
+  hasAI?: boolean;
 }
 
 export interface TeamConfig {

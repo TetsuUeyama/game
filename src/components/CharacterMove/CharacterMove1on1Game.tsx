@@ -36,8 +36,8 @@ export default function CharacterMove1on1Game() {
         setLoading(true);
         console.log('[CharacterMove1on1Game] ゲーム初期化開始...');
 
-        // 1対1用のチーム設定を読み込む
-        const teamConfig = await TeamConfigLoader.loadTeamConfig('/data/teamConfig1on1.json');
+        // 5対5用のチーム設定を読み込む
+        const teamConfig = await TeamConfigLoader.loadTeamConfig('/data/teamConfig5on5.json');
 
         // 選手データを読み込む
         const playerData = await PlayerDataLoader.loadPlayerData();
@@ -324,24 +324,32 @@ export default function CharacterMove1on1Game() {
 
       {/* シュートチェックモードパネル */}
       {isShootCheckMode && (
-        <ShootCheckModePanel onClose={() => {
-          setIsShootCheckMode(false);
-          // ゲームを再開
-          if (gameSceneRef.current) {
-            gameSceneRef.current.resume();
-          }
-        }} />
+        <ShootCheckModePanel
+          gameScene={gameSceneRef.current}
+          onClose={() => {
+            setIsShootCheckMode(false);
+            // チェックモードを終了してゲームモードに戻る
+            if (gameSceneRef.current) {
+              gameSceneRef.current.exitCheckMode();
+              gameSceneRef.current.resume();
+            }
+          }}
+        />
       )}
 
       {/* ドリブルチェックモードパネル */}
       {isDribbleCheckMode && (
-        <DribbleCheckModePanel onClose={() => {
-          setIsDribbleCheckMode(false);
-          // ゲームを再開
-          if (gameSceneRef.current) {
-            gameSceneRef.current.resume();
-          }
-        }} />
+        <DribbleCheckModePanel
+          gameScene={gameSceneRef.current}
+          onClose={() => {
+            setIsDribbleCheckMode(false);
+            // チェックモードを終了してゲームモードに戻る
+            if (gameSceneRef.current) {
+              gameSceneRef.current.exitCheckMode();
+              gameSceneRef.current.resume();
+            }
+          }}
+        />
       )}
     </div>
   );

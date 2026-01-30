@@ -24,6 +24,7 @@ import { FeintController } from "../controllers/action/FeintController";
 import { ContestController } from "../controllers/ContestController";
 import { CircleSizeController } from "../controllers/CircleSizeController";
 import { OneOnOneBattleController } from "../controllers/action/OneOnOneBattleController";
+import { BalanceController } from "../controllers/BalanceController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -436,6 +437,37 @@ export class DribbleCheckScene {
    */
   public getDefender(): Character {
     return this.defender;
+  }
+
+  /**
+   * 重心可視化モードを有効/無効化
+   * キャラクターを半透明にし、重心球を表示する
+   */
+  public setBalanceVisualizationEnabled(enabled: boolean): void {
+    const alpha = enabled ? 0.4 : 1.0; // 半透明度
+
+    // ドリブラーの設定
+    this.dribbler.setBodyTransparency(alpha);
+    this.dribbler.setBalanceSphereVisible(enabled);
+
+    // ディフェンダーの設定
+    this.defender.setBodyTransparency(alpha);
+    this.defender.setBalanceSphereVisible(enabled);
+
+    console.log(`[DribbleCheckScene] Balance visualization: ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * 重心コントローラーを取得（デバッグ用）
+   */
+  public getBalanceControllers(): {
+    dribbler: BalanceController;
+    defender: BalanceController;
+  } {
+    return {
+      dribbler: this.dribbler.getBalanceController(),
+      defender: this.defender.getBalanceController(),
+    };
   }
 
   /**

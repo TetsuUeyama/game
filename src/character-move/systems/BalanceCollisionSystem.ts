@@ -7,24 +7,15 @@
 
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
-import type { BalanceController, CollisionResult } from "../controllers/BalanceController";
+import type { CollisionResult } from "../controllers/BalanceController";
 import { BALANCE_COLLISION, CONTACT_PLAY } from "../config/BalanceConfig";
-
-/**
- * BalanceController を持つ Character の拡張インターフェース
- * Character クラスに統合後は不要になる
- */
-interface CharacterWithBalance extends Character {
-  getBalanceController?(): BalanceController | undefined;
-  getId?(): string;
-}
 
 /**
  * 衝突イベント
  */
 export interface BalanceCollisionEvent {
-  characterA: CharacterWithBalance;
-  characterB: CharacterWithBalance;
+  characterA: Character;
+  characterB: Character;
   result: CollisionResult;
   contactPoint: Vector3;
   impactStrength: number;
@@ -35,16 +26,16 @@ export interface BalanceCollisionEvent {
  */
 export interface BalanceCollisionCallbacks {
   onCollision?: (event: BalanceCollisionEvent) => void;
-  onDestabilized?: (character: CharacterWithBalance, by: CharacterWithBalance) => void;
-  onKnockedBack?: (character: CharacterWithBalance, by: CharacterWithBalance, velocity: Vector3) => void;
-  onPushSuccess?: (pusher: CharacterWithBalance, pushed: CharacterWithBalance, force: number) => void;
+  onDestabilized?: (character: Character, by: Character) => void;
+  onKnockedBack?: (character: Character, by: Character, velocity: Vector3) => void;
+  onPushSuccess?: (pusher: Character, pushed: Character, force: number) => void;
 }
 
 /**
  * 重心衝突システム
  */
 export class BalanceCollisionSystem {
-  private characters: CharacterWithBalance[] = [];
+  private characters: Character[] = [];
   private callbacks: BalanceCollisionCallbacks = {};
   private processedPairs: Set<string> = new Set();
 
@@ -58,14 +49,14 @@ export class BalanceCollisionSystem {
   /**
    * 管理対象のキャラクターを設定
    */
-  setCharacters(characters: CharacterWithBalance[]): void {
+  setCharacters(characters: Character[]): void {
     this.characters = characters;
   }
 
   /**
    * キャラクターを追加
    */
-  addCharacter(character: CharacterWithBalance): void {
+  addCharacter(character: Character): void {
     if (!this.characters.includes(character)) {
       this.characters.push(character);
     }
@@ -74,7 +65,7 @@ export class BalanceCollisionSystem {
   /**
    * キャラクターを削除
    */
-  removeCharacter(character: CharacterWithBalance): void {
+  removeCharacter(character: Character): void {
     const index = this.characters.indexOf(character);
     if (index !== -1) {
       this.characters.splice(index, 1);
@@ -104,7 +95,7 @@ export class BalanceCollisionSystem {
   /**
    * 2キャラクター間の衝突をチェック
    */
-  private checkCollision(charA: CharacterWithBalance, charB: CharacterWithBalance): BalanceCollisionEvent | null {
+  private checkCollision(charA: Character, charB: Character): BalanceCollisionEvent | null {
     const pairId = this.getPairId(charA, charB);
     if (this.processedPairs.has(pairId)) return null;
     this.processedPairs.add(pairId);
@@ -118,8 +109,8 @@ export class BalanceCollisionSystem {
     if (distance > BALANCE_COLLISION.BODY_CONTACT_DISTANCE) return null;
 
     // 重心コントローラー取得
-    const balanceA = charA.getBalanceController?.();
-    const balanceB = charB.getBalanceController?.();
+    const balanceA = charA.getBalanceController();
+    const balanceB = charB.getBalanceController();
     if (!balanceA || !balanceB) return null;
 
     // 衝突法線と衝突点
@@ -180,18 +171,19 @@ export class BalanceCollisionSystem {
   /**
    * ペアID生成
    */
-  private getPairId(a: CharacterWithBalance, b: CharacterWithBalance): string {
-    const idA = a.getId?.() ?? String(a);
-    const idB = b.getId?.() ?? String(b);
+  private getPairId(a: Character, b: Character): string {
+    // キャラクターを識別するためにチームと選手名を使用
+    const idA = `${a.team}_${a.playerData?.basic?.NAME ?? 'unknown'}`;
+    const idB = `${b.team}_${b.playerData?.basic?.NAME ?? 'unknown'}`;
     return idA < idB ? `${idA}-${idB}` : `${idB}-${idA}`;
   }
 
   /**
    * ポストアップ開始
    */
-  initiatePostUp(attacker: CharacterWithBalance, defender: CharacterWithBalance): void {
-    const atkBalance = attacker.getBalanceController?.();
-    const defBalance = defender.getBalanceController?.();
+  initiatePostUp(attacker: Character, defender: Character): void {
+    const atkBalance = attacker.getBalanceController();
+    const defBalance = defender.getBalanceController();
     if (!atkBalance || !defBalance) return;
 
     const direction = defender.getPosition().subtract(attacker.getPosition()).normalize();
@@ -204,9 +196,9 @@ export class BalanceCollisionSystem {
   /**
    * ボックスアウト開始
    */
-  initiateBoxOut(boxer: CharacterWithBalance, opponent: CharacterWithBalance): void {
-    const boxerBalance = boxer.getBalanceController?.();
-    const oppBalance = opponent.getBalanceController?.();
+  initiateBoxOut(boxer: Character, opponent: Character): void {
+    const boxerBalance = boxer.getBalanceController();
+    const oppBalance = opponent.getBalanceController();
     if (!boxerBalance || !oppBalance) return;
 
     // 重心を下げて安定させる

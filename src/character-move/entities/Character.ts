@@ -13,6 +13,7 @@ import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
 import { BASE_CIRCLE_SIZE } from "../config/CircleSizeConfig";
+import { BalanceController } from "../controllers/BalanceController";
 
 /**
  * 3Dキャラクターエンティティ
@@ -130,6 +131,17 @@ export class Character {
   private blockLateralSpeed: number = 3.0; // 横移動速度（m/s）
   private blockForwardDirection: Vector3 | null = null; // 前方移動方向（サークル縮小分）
   private blockForwardSpeed: number = 0; // 前方移動速度（m/s）
+
+  // 重心コントローラー
+  private balanceController: BalanceController;
+
+  // 重心球の可視化
+  private balanceSphereMesh: Mesh | null = null;
+  private balanceSphereVisible: boolean = false;
+
+  // 半透明モード
+  private isBodyTransparent: boolean = false;
+  private originalMaterialAlphas: Map<Mesh, number> = new Map();
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -259,6 +271,16 @@ export class Character {
 
     // アクションコントローラーを初期化
     this.actionController = new ActionController(this);
+
+    // 重心コントローラーを初期化
+    this.balanceController = new BalanceController();
+    this.balanceController.setPlayerData(
+      this.config.physical.weight,
+      this.config.physical.height
+    );
+
+    // アクションコントローラーに重心コントローラーを設定
+    this.actionController.setBalanceController(this.balanceController);
   }
 
   /**
@@ -506,6 +528,14 @@ export class Character {
     // アクションコントローラーを更新
     this.actionController.update(deltaTime);
 
+    // 重心コントローラーを更新
+    this.balanceController.update(deltaTime);
+
+    // 重心球の位置を更新（表示中のみ）
+    if (this.balanceSphereVisible) {
+      this.updateBalanceSpherePosition();
+    }
+
     // ブロックジャンプの横移動を更新
     this.updateBlockJump(deltaTime);
 
@@ -691,6 +721,43 @@ export class Character {
         mesh.material.diffuseColor = color;
       }
     });
+  }
+
+  /**
+   * キャラクターの表示/非表示を切り替え
+   * @param visible 表示する場合true
+   */
+  public setVisible(visible: boolean): void {
+    // ルートメッシュを含む全パーツの表示を切り替え
+    this.mesh.setEnabled(visible);
+
+    // 足元の円（オクタゴン）
+    if (this.footCircle) {
+      this.footCircle.setEnabled(visible);
+    }
+    this.directionCircle.setFootCircleVisible(visible);
+
+    // 名前ラベル
+    if (this.nameLabel) {
+      this.nameLabel.setEnabled(visible);
+    }
+
+    // 重心球
+    if (this.balanceSphereMesh) {
+      this.balanceSphereMesh.setEnabled(visible);
+    }
+  }
+
+  /**
+   * バランス状態をリセット（ゲームリセット時などに使用）
+   * 重心球を基準位置に戻し、速度をゼロにする
+   */
+  public resetBalance(): void {
+    if (this.balanceController) {
+      this.balanceController.reset();
+    }
+    // アクションも中断
+    this.actionController.cancelAction();
   }
 
   /**
@@ -979,6 +1046,21 @@ export class Character {
       // キャラクターの位置を更新（新しいgroundYに合わせる）
       // 現在のXZ座標を保持し、Y座標だけを新しいgroundYに更新
       this.setPosition(new Vector3(this.position.x, this.groundY, this.position.z));
+    }
+
+    // 重心コントローラーを更新（身長変更に伴い重心位置を再計算）
+    this.balanceController.setPlayerData(
+      this.config.physical.weight,
+      heightInMeters
+    );
+
+    // 重心球のメッシュを再作成（サイズが変わるため）
+    if (this.balanceSphereMesh) {
+      this.balanceSphereMesh.dispose();
+      this.balanceSphereMesh = null;
+      if (this.balanceSphereVisible) {
+        this.createBalanceSphereMesh();
+      }
     }
   }
 
@@ -1376,6 +1458,164 @@ export class Character {
     return { selfPush, otherPush };
   }
 
+  // ==========================================================================
+  // 重心システム
+  // ==========================================================================
+
+  /**
+   * 重心コントローラーを取得
+   */
+  public getBalanceController(): BalanceController {
+    return this.balanceController;
+  }
+
+  /**
+   * 重心球の可視化を作成
+   */
+  private createBalanceSphereMesh(): void {
+    if (this.balanceSphereMesh) return;
+
+    const state = this.balanceController.getState();
+
+    // 重心球を作成
+    this.balanceSphereMesh = MeshBuilder.CreateSphere(
+      `${this.team}_balance_sphere`,
+      { diameter: state.radius * 2, segments: 16 },
+      this.scene
+    );
+
+    // マテリアルを設定（チームカラーで半透明）
+    const material = new StandardMaterial(`${this.team}_balance_material`, this.scene);
+    if (this.team === 'ally') {
+      material.diffuseColor = new Color3(0.2, 0.5, 1.0); // 青
+      material.emissiveColor = new Color3(0.1, 0.2, 0.5);
+    } else {
+      material.diffuseColor = new Color3(1.0, 0.3, 0.2); // 赤
+      material.emissiveColor = new Color3(0.5, 0.1, 0.1);
+    }
+    material.alpha = 0.8;
+    this.balanceSphereMesh.material = material;
+
+    // 初期位置（キャラクターの重心位置）
+    this.updateBalanceSpherePosition();
+  }
+
+  /**
+   * 重心球の位置を更新
+   * キャラクターの足元位置 + BalanceControllerの重心位置
+   */
+  private updateBalanceSpherePosition(): void {
+    if (!this.balanceSphereMesh) return;
+
+    const characterPos = this.getPosition();
+    const state = this.balanceController.getState();
+
+    // キャラクターの足元位置（ワールド座標）
+    // characterPos.y はキャラクターの中心（height/2）なので、足元は characterPos.y - height/2
+    const footY = characterPos.y - this.config.physical.height / 2;
+
+    // 重心球の位置 = 足元 + BalanceControllerの重心位置
+    // state.position はキャラクターローカル座標系での重心位置（足元基準）
+    this.balanceSphereMesh.position = new Vector3(
+      characterPos.x + state.position.x,
+      footY + state.position.y,
+      characterPos.z + state.position.z
+    );
+  }
+
+  /**
+   * 重心球の表示/非表示を設定
+   */
+  public setBalanceSphereVisible(visible: boolean): void {
+    this.balanceSphereVisible = visible;
+
+    if (visible) {
+      if (!this.balanceSphereMesh) {
+        this.createBalanceSphereMesh();
+      }
+      this.balanceSphereMesh!.isVisible = true;
+    } else {
+      if (this.balanceSphereMesh) {
+        this.balanceSphereMesh.isVisible = false;
+      }
+    }
+  }
+
+  /**
+   * 身体の透明度を設定
+   * @param alpha 透明度（0.0 = 完全透明, 1.0 = 不透明）
+   */
+  public setBodyTransparency(alpha: number): void {
+    const meshes = this.getAllBodyMeshes();
+
+    if (alpha < 1.0 && !this.isBodyTransparent) {
+      // 半透明モードに入る: 元のアルファ値を保存
+      this.isBodyTransparent = true;
+      for (const mesh of meshes) {
+        const material = mesh.material as StandardMaterial;
+        if (material) {
+          this.originalMaterialAlphas.set(mesh, material.alpha);
+          material.alpha = alpha;
+          // 透明度を正しく描画するための設定
+          material.needDepthPrePass = true;
+        }
+      }
+    } else if (alpha >= 1.0 && this.isBodyTransparent) {
+      // 不透明モードに戻る: 元のアルファ値を復元
+      this.isBodyTransparent = false;
+      for (const mesh of meshes) {
+        const material = mesh.material as StandardMaterial;
+        if (material) {
+          const originalAlpha = this.originalMaterialAlphas.get(mesh) ?? 1.0;
+          material.alpha = originalAlpha;
+          material.needDepthPrePass = false;
+        }
+      }
+      this.originalMaterialAlphas.clear();
+    } else if (this.isBodyTransparent) {
+      // 透明度を更新
+      for (const mesh of meshes) {
+        const material = mesh.material as StandardMaterial;
+        if (material) {
+          material.alpha = alpha;
+        }
+      }
+    }
+  }
+
+  /**
+   * すべての身体メッシュを取得
+   */
+  private getAllBodyMeshes(): Mesh[] {
+    return [
+      this.headMesh,
+      this.upperBodyMesh,
+      this.lowerBodyMesh,
+      this.waistJointMesh,
+      this.lowerBodyConnectionMesh,
+      this.leftShoulderMesh,
+      this.rightShoulderMesh,
+      this.leftUpperArmMesh,
+      this.rightUpperArmMesh,
+      this.leftElbowMesh,
+      this.rightElbowMesh,
+      this.leftForearmMesh,
+      this.rightForearmMesh,
+      this.leftHandMesh,
+      this.rightHandMesh,
+      this.leftHipMesh,
+      this.rightHipMesh,
+      this.leftThighMesh,
+      this.rightThighMesh,
+      this.leftKneeMesh,
+      this.rightKneeMesh,
+      this.leftShinMesh,
+      this.rightShinMesh,
+      this.leftFootMesh,
+      this.rightFootMesh,
+    ];
+  }
+
   /**
    * 破棄
    */
@@ -1417,6 +1657,12 @@ export class Character {
 
     // 方向サークルを破棄
     this.directionCircle.dispose();
+
+    // 重心球を破棄
+    if (this.balanceSphereMesh) {
+      this.balanceSphereMesh.dispose();
+      this.balanceSphereMesh = null;
+    }
 
     // 名前ラベルを破棄
     if (this.nameLabel) {

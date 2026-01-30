@@ -9,8 +9,9 @@ import { Provider } from "./provider";
 // };
 const font = Zen_Maru_Gothic({
   subsets: ["latin"],
-  weight: ["400", "500", "700"], // 必要に応じてウェイトを調整
-  display: "swap", // オプション: フォントの表示方法を制御
+  weight: ["400"], // プリロード警告を減らすため1つに
+  display: "swap",
+  preload: false, // プリロードを無効化
 });
 
 export default function RootLayout({

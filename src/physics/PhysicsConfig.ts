@@ -43,9 +43,12 @@ export const PhysicsConstants = {
   },
 
   // 地面・コート
+  // 注意: ボールの反発係数(0.83)とMULTIPLYモードで計算されるため、
+  // 実効反発係数は BALL.RESTITUTION × GROUND.RESTITUTION となる
+  // 1.0に設定することで、ボール本来の反発特性を維持
   GROUND: {
     FRICTION: 0.8,
-    RESTITUTION: 0.5,
+    RESTITUTION: 1.0,  // 地面自体は完全弾性（ボールの反発係数がそのまま適用される）
   },
 
   // バックボード

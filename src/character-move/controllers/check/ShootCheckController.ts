@@ -583,6 +583,10 @@ export class ShootCheckController {
     // ボールをリセットしてキャラクターに持たせる
     this.ball.endFlight();
 
+    // キャラクターのバランスをリセット（ジャンプ後のロック状態を解除）
+    // resetBalance() は内部で actionController.cancelAction() も呼び出す
+    this.character.resetBalance();
+
     // 少し遅延を入れて次のシュートへ
     setTimeout(() => {
       if (this.state === 'running') {
