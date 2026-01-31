@@ -403,8 +403,25 @@ export class ShootingController {
     );
 
     // シュート精度を計算
+    // 3Pとミドルシュートは非利き腕使用時に精度が低下（レイアップは持ち替えて打つため影響なし）
     const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
-    const accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
+    let accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
+    if (shootType === '3pt' || shootType === 'midrange') {
+      // 非利き腕による精度低下
+      const handMultiplier = shooter.getHandAccuracyMultiplier();
+      accuracy = accuracy * handMultiplier;
+
+      // 1対1有利/不利による精度調整（オフェンス有利→精度UP、不利→精度DOWN）
+      // accuracyは小さいほど精度が高いので、有利時は減少、不利時は増加
+      const advantageStatus = shooter.getAdvantageStatus();
+      if (advantageStatus.state === 'offense') {
+        // オフェンス有利：精度向上（accuracyを減少）
+        accuracy = accuracy * (1 - advantageStatus.multiplier * 0.5);
+      } else if (advantageStatus.state === 'defense') {
+        // ディフェンス有利：精度低下（accuracyを増加）
+        accuracy = accuracy * (1 + advantageStatus.multiplier * 0.5);
+      }
+    }
     const { x: offsetX, z: offsetZ } = ShootingUtils.generateRandomOffset(accuracy);
 
     // リング奥側を狙うためのオフセット
