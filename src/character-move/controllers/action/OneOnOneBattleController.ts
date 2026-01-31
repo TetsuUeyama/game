@@ -7,10 +7,12 @@ import {
   OneOnOneResult,
   ONE_ON_ONE_BATTLE_CONFIG,
   POSITIONING_CONFIG,
+  AdvantageStatus,
+  AdvantageUtils,
 } from "../../config/action/OneOnOneBattleConfig";
 
 // 型をre-export
-export type { OneOnOneResult };
+export type { OneOnOneResult, AdvantageStatus };
 
 /**
  * 1on1バトルを管理するコントローラー
@@ -24,6 +26,13 @@ export class OneOnOneBattleController {
   private oneononeResult: OneOnOneResult | null = null;
   private lastCollisionRedirectTime: number = 0;
   // ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVALを使用（DefenseConfigから）
+
+  // 有利/不利状態（次のサイコロ勝負まで保持）
+  private advantageStatus: AdvantageStatus = {
+    state: 'neutral',
+    difference: 0,
+    multiplier: 0,
+  };
 
   // 外部参照
   private ball: Ball;
@@ -58,6 +67,13 @@ export class OneOnOneBattleController {
       for (const char of allCharacters) {
         char.clearAIMovement();
       }
+
+      // 有利/不利状態をリセット
+      this.advantageStatus = {
+        state: 'neutral',
+        difference: 0,
+        multiplier: 0,
+      };
     }
 
     // 1on1バトル中は一定間隔でサイコロを振る
@@ -108,12 +124,26 @@ export class OneOnOneBattleController {
     // サークルが接触しているかチェック
     let circlesInContact = false;
     if (onBallPlayer && onBallDefender) {
+      const offensePos = onBallPlayer.getPosition();
+      const defenderPos = onBallDefender.getPosition();
       const distance = Vector3.Distance(
-        new Vector3(onBallPlayer.getPosition().x, 0, onBallPlayer.getPosition().z),
-        new Vector3(onBallDefender.getPosition().x, 0, onBallDefender.getPosition().z)
+        new Vector3(offensePos.x, 0, offensePos.z),
+        new Vector3(defenderPos.x, 0, defenderPos.z)
       );
       const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
       circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
+
+      // サークルが接触している場合、Powerによる押し返しを適用
+      if (circlesInContact && distance < contactDistance) {
+        const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);
+
+        // 押し返しを適用
+        const newOffensePos = offensePos.add(selfPush);
+        const newDefenderPos = defenderPos.add(otherPush);
+
+        onBallPlayer.setPosition(newOffensePos);
+        onBallDefender.setPosition(newDefenderPos);
+      }
     }
 
     // オフェンスが衝突した場合、またはサークルが接触している場合、動き直す
@@ -189,8 +219,17 @@ export class OneOnOneBattleController {
     }
 
     // ボールが0番面の時、ランダムでドリブル突破を実行（ActionController経由）
+    // 有利/不利状態を考慮（前回のサイコロ結果を使用）
     const currentFace = onBallPlayer.getCurrentBallFace();
-    if (currentFace === 0 && DribbleUtils.shouldAIAttemptBreakthrough()) {
+    let breakthroughChance = DRIBBLE_CONFIG.BREAKTHROUGH_CHANCE;
+    // オフェンス有利時は突破を試みる確率UP、ディフェンス有利時はDOWN
+    breakthroughChance = AdvantageUtils.adjustSuccessRate(
+      breakthroughChance,
+      this.advantageStatus,
+      'DRIBBLE_BREAKTHROUGH',
+      true // オフェンスアクション
+    );
+    if (currentFace === 0 && Math.random() < breakthroughChance) {
       // 左右ランダムで突破方向を決定
       const direction = Math.random() < ONE_ON_ONE_BATTLE_CONFIG.BREAKTHROUGH_LEFT_CHANCE ? 'left' : 'right';
       const success = this.performDribbleBreakthrough(direction);
@@ -234,12 +273,37 @@ export class OneOnOneBattleController {
       this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
     }
 
+    // サイコロ結果を保存
     if (offenseDice > defenseDice) {
       this.oneononeResult = { winner: 'offense', offenseDice, defenseDice };
     } else if (defenseDice > offenseDice) {
       this.oneononeResult = { winner: 'defense', offenseDice, defenseDice };
     } else {
       this.oneononeResult = null;
+    }
+
+    // 有利/不利状態を更新（次のサイコロ勝負まで保持）
+    const difference = Math.abs(offenseDice - defenseDice);
+    const multiplier = AdvantageUtils.calculateMultiplier(difference);
+
+    if (offenseDice > defenseDice) {
+      this.advantageStatus = {
+        state: 'offense',
+        difference,
+        multiplier,
+      };
+    } else if (defenseDice > offenseDice) {
+      this.advantageStatus = {
+        state: 'defense',
+        difference,
+        multiplier,
+      };
+    } else {
+      this.advantageStatus = {
+        state: 'neutral',
+        difference: 0,
+        multiplier: 0,
+      };
     }
   }
 
@@ -370,7 +434,17 @@ export class OneOnOneBattleController {
   public checkFeint(offensePlayer: Character): boolean {
     const playerData = offensePlayer.playerData;
     // DribbleUtilsを使用してフェイント確率を計算
-    const feintChance = DribbleUtils.calculateFeintChance(playerData?.stats.technique);
+    let feintChance = DribbleUtils.calculateFeintChance(playerData?.stats.technique);
+
+    // 有利/不利状態を考慮
+    // オフェンス有利時はフェイント成功率UP、ディフェンス有利時はDOWN
+    feintChance = AdvantageUtils.adjustSuccessRate(
+      feintChance,
+      this.advantageStatus,
+      'FEINT_SUCCESS',
+      true // オフェンスアクション
+    );
+
     const roll = Math.random();
     return roll < feintChance;
   }
@@ -421,6 +495,27 @@ export class OneOnOneBattleController {
    */
   public clear1on1Result(): void {
     this.oneononeResult = null;
+  }
+
+  /**
+   * 現在の有利/不利状態を取得
+   */
+  public getAdvantageStatus(): AdvantageStatus {
+    return this.advantageStatus;
+  }
+
+  /**
+   * オフェンス側が有利かどうか
+   */
+  public isOffenseAdvantaged(): boolean {
+    return this.advantageStatus.state === 'offense';
+  }
+
+  /**
+   * ディフェンス側が有利かどうか
+   */
+  public isDefenseAdvantaged(): boolean {
+    return this.advantageStatus.state === 'defense';
   }
 
   /**

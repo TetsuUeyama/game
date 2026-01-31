@@ -14,6 +14,9 @@ import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
 import { BASE_CIRCLE_SIZE } from "../config/CircleSizeConfig";
 import { BalanceController } from "../controllers/BalanceController";
+import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
+import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
+import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -107,6 +110,19 @@ export class Character {
   // ボール保持位置設定
   private ballHoldingFaces: number[] = [0, 1, 2, 6, 7]; // 使用する8角形の面番号（前方5箇所）
   private currentBallHoldingIndex: number = 0; // 現在のボール保持位置インデックス（0-4）
+
+  // 利き腕・ボール保持関連
+  private dominantHand: DominantHand = 'right'; // 利き腕（デフォルトは右）
+  private currentHoldingHand: HoldingHand = 'right'; // 現在ボールを持っている手
+  private oppositeFrequency: number = 4; // 非利き腕使用頻度（1〜8）
+  private oppositeAccuracy: number = 4; // 非利き腕精度（1〜8）
+
+  // 1対1有利/不利状態（GameSceneから更新される）
+  private advantageStatus: AdvantageStatus = {
+    state: 'neutral',
+    difference: 0,
+    multiplier: 0,
+  };
 
   // オフェンス戦術
   private offenseStrategy: OffenseStrategy = OffenseStrategy.HIGH_RISK; // デフォルトはハイリスク
@@ -953,7 +969,39 @@ export class Character {
       console.warn(`[Character] ボール保持位置インデックスは0～${this.ballHoldingFaces.length - 1}の範囲で指定してください。`);
       return;
     }
+
+    const previousIndex = this.currentBallHoldingIndex;
     this.currentBallHoldingIndex = index;
+
+    // 方向が変わった場合、ボール保持モーションを再生
+    if (previousIndex !== index) {
+      this.updateBallHoldingMotion();
+    }
+  }
+
+  /**
+   * ボール保持モーションを更新
+   * 現在の保持方向に応じた腕のモーションを再生
+   */
+  private updateBallHoldingMotion(): void {
+    const faceIndex = this.ballHoldingFaces[this.currentBallHoldingIndex];
+    const newHoldingHand = BallHoldingUtils.getHoldingHand(faceIndex, this.dominantHand);
+
+    // 持ち替えが必要な場合のチェック
+    if (newHoldingHand !== this.currentHoldingHand) {
+      // 持ち替えは正面（方向0）でのみ可能
+      if (!BallHoldingUtils.canSwitchHand(faceIndex)) {
+        console.warn(`[Character] 方向${faceIndex}では持ち替えができません（正面でのみ可能）`);
+        // 持ち替えなしで、現在の手でできる方向に制限される
+        // ただし、モーションは再生する（手は変わらない）
+      } else {
+        this.currentHoldingHand = newHoldingHand;
+      }
+    }
+
+    // ボール保持モーションを再生
+    const motion = getBallHoldingMotion(this.dominantHand, faceIndex);
+    this.playMotion(motion, 1.0, BALL_HOLDING_CONFIG.ARM_BLEND_DURATION);
   }
 
   /**
@@ -966,10 +1014,24 @@ export class Character {
 
   /**
    * 現在のボール保持位置（ワールド座標）を取得
-   * 8角形の面の中心位置を返す
+   * 現在ボールを持っている手の位置を返す
    * @returns ボール保持位置のワールド座標
    */
   public getBallHoldingPosition(): Vector3 {
+    // 現在ボールを持っている手の位置を返す
+    if (this.currentHoldingHand === 'right') {
+      return this.getRightHandPosition();
+    } else {
+      return this.getLeftHandPosition();
+    }
+  }
+
+  /**
+   * 現在のボール保持位置（8角形の面中心）を取得
+   * 従来の実装（互換性のため残す）
+   * @returns ボール保持位置のワールド座標
+   */
+  public getBallHoldingPositionLegacy(): Vector3 {
     if (this.ballHoldingFaces.length === 0) {
       console.warn('[Character] ボール保持位置が設定されていません。キャラクター位置を返します。');
       return this.position.clone();
@@ -1006,6 +1068,123 @@ export class Character {
     const ballY = this.waistJointMesh.getAbsolutePosition().y;
 
     return new Vector3(ballX, ballY, ballZ);
+  }
+
+  /**
+   * 利き腕を設定
+   * @param hand 利き腕（'right' または 'left'）
+   */
+  public setDominantHand(hand: DominantHand): void {
+    this.dominantHand = hand;
+    // 初期状態では利き腕でボールを持つ
+    this.currentHoldingHand = hand;
+    // 現在のボール保持位置に応じたモーションを更新
+    this.updateBallHoldingMotion();
+  }
+
+  /**
+   * 利き腕を取得
+   * @returns 利き腕
+   */
+  public getDominantHand(): DominantHand {
+    return this.dominantHand;
+  }
+
+  /**
+   * 現在ボールを持っている手を取得
+   * @returns 現在ボールを持っている手
+   */
+  public getCurrentHoldingHand(): HoldingHand {
+    return this.currentHoldingHand;
+  }
+
+  /**
+   * 非利き腕使用頻度を設定
+   * @param frequency 頻度（1〜8）
+   */
+  public setOppositeFrequency(frequency: number): void {
+    this.oppositeFrequency = Math.max(BALL_HOLDING_CONFIG.STAT_MIN,
+      Math.min(BALL_HOLDING_CONFIG.STAT_MAX, frequency));
+  }
+
+  /**
+   * 非利き腕使用頻度を取得
+   * @returns 頻度（1〜8）
+   */
+  public getOppositeFrequency(): number {
+    return this.oppositeFrequency;
+  }
+
+  /**
+   * 非利き腕精度を設定
+   * @param accuracy 精度（1〜8）
+   */
+  public setOppositeAccuracy(accuracy: number): void {
+    this.oppositeAccuracy = Math.max(BALL_HOLDING_CONFIG.STAT_MIN,
+      Math.min(BALL_HOLDING_CONFIG.STAT_MAX, accuracy));
+  }
+
+  /**
+   * 非利き腕精度を取得
+   * @returns 精度（1〜8）
+   */
+  public getOppositeAccuracy(): number {
+    return this.oppositeAccuracy;
+  }
+
+  /**
+   * 現在非利き腕でボールを持っているかどうかを判定
+   * @returns 非利き腕で持っている場合はtrue
+   */
+  public isUsingOppositeHand(): boolean {
+    return this.currentHoldingHand !== this.dominantHand;
+  }
+
+  /**
+   * 非利き腕使用時のアクション精度係数を取得
+   * @returns 精度係数（0.5〜1.0）、利き腕使用時は1.0
+   */
+  public getHandAccuracyMultiplier(): number {
+    if (!this.isUsingOppositeHand()) {
+      return 1.0;
+    }
+    return BallHoldingUtils.calculateOppositeHandAccuracy(this.oppositeAccuracy);
+  }
+
+  /**
+   * 1対1有利/不利状態を設定（GameSceneから呼び出される）
+   * @param status 有利/不利状態
+   */
+  public setAdvantageStatus(status: AdvantageStatus): void {
+    this.advantageStatus = status;
+  }
+
+  /**
+   * 1対1有利/不利状態を取得
+   * @returns 有利/不利状態
+   */
+  public getAdvantageStatus(): AdvantageStatus {
+    return this.advantageStatus;
+  }
+
+  /**
+   * 有利/不利を考慮したアクション成功率を計算
+   * @param baseRate 基本成功率（0.0〜1.0）
+   * @param actionType アクションの種類
+   * @param isOffenseAction オフェンス側のアクションかどうか
+   * @returns 調整後の成功率
+   */
+  public getAdjustedSuccessRate(
+    baseRate: number,
+    actionType: keyof typeof ADVANTAGE_CONFIG.ACTION_FACTORS,
+    isOffenseAction: boolean
+  ): number {
+    return AdvantageUtils.adjustSuccessRate(
+      baseRate,
+      this.advantageStatus,
+      actionType,
+      isOffenseAction
+    );
   }
 
   /**
@@ -1139,6 +1318,21 @@ export class Character {
   public setPlayerData(playerData: PlayerData, position: 'PG' | 'SG' | 'SF' | 'PF' | 'C'): void {
     this.playerData = playerData;
     this.playerPosition = position;
+
+    // 利き腕を設定（「右」または「左」から変換）
+    if (playerData.basic.dominanthand === '左') {
+      this.setDominantHand('left');
+    } else {
+      this.setDominantHand('right');
+    }
+
+    // 非利き腕パラメータを設定
+    if (playerData.stats.oppositefrequency !== undefined) {
+      this.setOppositeFrequency(playerData.stats.oppositefrequency);
+    }
+    if (playerData.stats.oppositeaccuracy !== undefined) {
+      this.setOppositeAccuracy(playerData.stats.oppositeaccuracy);
+    }
 
     // 名前ラベルを作成
     this.createNameLabel();
@@ -1413,13 +1607,31 @@ export class Character {
    * @returns 押し返しベクトル（自分が押される方向と距離）
    */
   public calculatePushback(other: Character): { selfPush: Vector3; otherPush: Vector3 } {
-    // power値を取得（デフォルトは50）
-    const myPower = this.playerData?.stats.power ?? 50;
-    const otherPower = other.playerData?.stats.power ?? 50;
+    // 自分がオフェンスかディフェンスかを判定
+    const myState = this.getState();
+    const isOffense = myState === 'ON_BALL_PLAYER';
 
-    // power差を計算（-100〜+100の範囲）
-    const powerDiff = myPower - otherPower;
-    const pushRatio = powerDiff / 100; // -1〜+1
+    // オフェンス側はオフェンス能力、ディフェンス側はディフェンス能力を使用
+    let myStrength: number;
+    let otherStrength: number;
+
+    if (isOffense) {
+      // 自分がオフェンス → 自分のオフェンス能力 vs 相手のディフェンス能力
+      myStrength = this.playerData?.stats.offense ?? 50;
+      otherStrength = other.playerData?.stats.defense ?? 50;
+    } else {
+      // 自分がディフェンス → 自分のディフェンス能力 vs 相手のオフェンス能力
+      myStrength = this.playerData?.stats.defense ?? 50;
+      otherStrength = other.playerData?.stats.offense ?? 50;
+    }
+
+    // 1対1有利/不利による押し込み力の調整
+    myStrength = AdvantageUtils.adjustPushPower(myStrength, this.advantageStatus, isOffense);
+    otherStrength = AdvantageUtils.adjustPushPower(otherStrength, other.getAdvantageStatus(), !isOffense);
+
+    // 能力差を計算（-100〜+100の範囲）
+    const strengthDiff = myStrength - otherStrength;
+    const pushRatio = strengthDiff / 100; // -1〜+1
 
     // 現在の距離と最小距離（サークルが重ならない距離）を計算
     const myPos = this.getPosition();
@@ -1446,9 +1658,9 @@ export class Character {
     const overlap = Math.max(0, minDistance - currentDistance);
     const totalPush = overlap + 0.1; // 0.1mの余裕を追加
 
-    // power差に応じて押し返し量を分配
-    // pushRatio > 0: 自分の方がパワーがある → 相手が多く押される
-    // pushRatio < 0: 相手の方がパワーがある → 自分が多く押される
+    // 能力差に応じて押し返し量を分配
+    // pushRatio > 0: 自分の能力が高い → 相手が多く押される
+    // pushRatio < 0: 相手の能力が高い → 自分が多く押される
     const selfPushAmount = totalPush * (0.5 - pushRatio * 0.5); // pushRatio=1なら0、pushRatio=-1なら1
     const otherPushAmount = totalPush * (0.5 + pushRatio * 0.5); // pushRatio=1なら1、pushRatio=-1なら0
 

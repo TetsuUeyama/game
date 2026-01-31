@@ -633,6 +633,17 @@ export class GameScene {
     // 1on1状態の変化をチェック
     if (this.oneOnOneBattleController) {
       this.oneOnOneBattleController.check1on1Battle();
+
+      // 有利/不利状態をオンボールプレイヤーとディフェンダーに反映
+      const advantageStatus = this.oneOnOneBattleController.getAdvantageStatus();
+      const onBallPlayer = this.oneOnOneBattleController.findOnBallPlayer();
+      const onBallDefender = this.oneOnOneBattleController.findOnBallDefender();
+      if (onBallPlayer) {
+        onBallPlayer.setAdvantageStatus(advantageStatus);
+      }
+      if (onBallDefender) {
+        onBallDefender.setAdvantageStatus(advantageStatus);
+      }
     }
 
     // シュートコントローラーの更新（ゴール判定）
