@@ -172,7 +172,8 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
       gameScene.getField(),
       () => gameScene.getAllCharacters(),
       config,
-      feintControllerRef.current
+      feintControllerRef.current,
+      () => gameScene.isCirclesInContact() // 試合モードと同じスキップ処理用
     );
 
     // コールバック設定

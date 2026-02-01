@@ -2,7 +2,14 @@ import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, VertexData
 import { CharacterState } from "../types/CharacterState";
 
 /**
- * キャラクターの方向サークル（8角形の足元の円）を管理するクラス
+ * 円の描画に使用するセグメント数
+ * 数が多いほど滑らかな円になる
+ */
+const CIRCLE_SEGMENTS = 32;
+
+/**
+ * キャラクターの方向サークル（円形の足元のサークル）を管理するクラス
+ * 視覚的には円だが、論理的には8方向（0-7）を維持
  */
 export class DirectionCircle {
   private scene: Scene;
@@ -28,26 +35,23 @@ export class DirectionCircle {
   }
 
   /**
-   * 足元の円を作成（8角形）
+   * 足元の円を作成（円形）
    */
   public createFootCircle(): LinesMesh {
     const lines: Vector3[][] = [];
     const position = this.getPosition();
-    const rotation = this.getRotation();
 
-    for (let i = 0; i < 8; i++) {
-      const angleStep = (Math.PI * 2) / 8;
-      const angleOffset = Math.PI / 8;
+    // 円を描画（CIRCLE_SEGMENTS個のセグメントで構成）
+    for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+      const angleStep = (Math.PI * 2) / CIRCLE_SEGMENTS;
 
-      const angle1 = -i * angleStep + angleOffset;
-      const totalAngle1 = angle1 + rotation;
-      const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
-      const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
+      const angle1 = i * angleStep;
+      const x1 = Math.sin(angle1) * this.footCircleRadius;
+      const z1 = Math.cos(angle1) * this.footCircleRadius;
 
-      const angle2 = -(i + 1) * angleStep + angleOffset;
-      const totalAngle2 = angle2 + rotation;
-      const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
-      const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
+      const angle2 = (i + 1) * angleStep;
+      const x2 = Math.sin(angle2) * this.footCircleRadius;
+      const z2 = Math.cos(angle2) * this.footCircleRadius;
 
       lines.push([
         new Vector3(x1, 0.01, z1),
@@ -55,29 +59,30 @@ export class DirectionCircle {
       ]);
     }
 
-    const octagon = MeshBuilder.CreateLineSystem(
+    const circle = MeshBuilder.CreateLineSystem(
       "foot-circle",
       { lines: lines, updatable: true },
       this.scene
     );
 
-    octagon.color = new Color3(1.0, 1.0, 1.0);
-    octagon.parent = null;
+    circle.color = new Color3(1.0, 1.0, 1.0);
+    circle.parent = null;
 
-    octagon.position = new Vector3(
+    circle.position = new Vector3(
       position.x,
       0,
       position.z
     );
 
-    octagon.isVisible = true;
+    circle.isVisible = true;
 
-    this.footCircle = octagon;
-    return octagon;
+    this.footCircle = circle;
+    return circle;
   }
 
   /**
-   * 足元の円の色分けセグメント（8つの三角形）を作成
+   * 足元の円の色分けセグメント（8つの扇形）を作成
+   * 円を8等分した扇形で、各方向を色分け
    */
   public createFootCircleFaceSegments(): void {
     for (const segment of this.footCircleFaceSegments) {
@@ -97,43 +102,60 @@ export class DirectionCircle {
     ];
 
     const position = this.getPosition();
+    const rotation = this.getRotation();
 
-    for (let i = 0; i < 8; i++) {
-      const center = position.clone();
-      center.y = 0.02;
-      const vertex1 = this.getOctagonVertexPosition(i);
-      vertex1.y = 0.02;
-      const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-      vertex2.y = 0.02;
+    // 各方向（0-7）の扇形を作成
+    // 扇形は複数の三角形で構成（滑らかな円弧のため）
+    const segmentsPerFace = 4; // 各扇形を4つの三角形で構成
 
-      const positions = [
-        center.x, center.y, center.z,
-        vertex1.x, vertex1.y, vertex1.z,
-        vertex2.x, vertex2.y, vertex2.z,
-      ];
-
-      const indices = [0, 1, 2];
+    for (let faceIndex = 0; faceIndex < 8; faceIndex++) {
+      const positions: number[] = [];
+      const indices: number[] = [];
       const normals: number[] = [];
 
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
+      const center = position.clone();
+      center.y = 0.02;
+
+      // この方向の開始角度と終了角度
+      const angleStep = (Math.PI * 2) / 8;
+      const angleOffset = Math.PI / 8; // 0方向を正面に合わせるオフセット
+      const startAngle = -faceIndex * angleStep + angleOffset + rotation;
+      const endAngle = -(faceIndex + 1) * angleStep + angleOffset + rotation;
+
+      // 中心点を追加
+      positions.push(center.x, center.y, center.z);
       normals.push(0, 1, 0);
 
-      const triangle = new Mesh(`face-segment-${i}`, this.scene);
+      // 扇形の外周点を追加
+      for (let j = 0; j <= segmentsPerFace; j++) {
+        const t = j / segmentsPerFace;
+        const angle = startAngle + (endAngle - startAngle) * t;
+        const x = position.x + Math.sin(angle) * this.footCircleRadius;
+        const z = position.z + Math.cos(angle) * this.footCircleRadius;
+        positions.push(x, center.y, z);
+        normals.push(0, 1, 0);
+      }
+
+      // 三角形のインデックスを設定（中心点 + 外周の2点）
+      for (let j = 0; j < segmentsPerFace; j++) {
+        indices.push(0, j + 1, j + 2);
+      }
+
+      const fanMesh = new Mesh(`face-segment-${faceIndex}`, this.scene);
       const vertexData = new VertexData();
       vertexData.positions = positions;
       vertexData.indices = indices;
       vertexData.normals = normals;
-      vertexData.applyToMesh(triangle);
+      vertexData.applyToMesh(fanMesh);
 
-      const material = new StandardMaterial(`face-material-${i}`, this.scene);
-      material.diffuseColor = colors[i];
-      material.emissiveColor = colors[i].scale(0.3);
+      const material = new StandardMaterial(`face-material-${faceIndex}`, this.scene);
+      material.diffuseColor = colors[faceIndex];
+      material.emissiveColor = colors[faceIndex].scale(0.3);
       material.alpha = 0.6;
       material.backFaceCulling = false;
-      triangle.material = material;
+      fanMesh.material = material;
 
-      this.footCircleFaceSegments.push(triangle);
+      this.footCircleFaceSegments.push(fanMesh);
     }
   }
 
@@ -205,9 +227,11 @@ export class DirectionCircle {
   }
 
   /**
-   * 8角形の頂点位置を取得（ワールド座標）
+   * 方向境界の位置を取得（ワールド座標）
+   * 円形サークルで方向iとi+1の境界点を返す
+   * @param vertexIndex 方向インデックス（0-7）
    */
-  public getOctagonVertexPosition(vertexIndex: number): Vector3 {
+  public getDirectionBoundaryPosition(vertexIndex: number): Vector3 {
     const position = this.getPosition();
     const rotation = this.getRotation();
 
@@ -224,67 +248,94 @@ export class DirectionCircle {
   }
 
   /**
-   * 8角形の面（三角形）を色分けして表示（デバッグ用）
+   * 8角形の頂点位置を取得（互換性のため維持）
+   * @deprecated getDirectionBoundaryPositionを使用してください
    */
-  public showOctagonVertexNumbers(): void {
-    this.hideOctagonVertexNumbers();
-
-    const colors = [
-      new Color3(1, 0, 0),
-      new Color3(1, 0.5, 0),
-      new Color3(1, 1, 0),
-      new Color3(0, 1, 0),
-      new Color3(0, 1, 1),
-      new Color3(0, 0, 1),
-      new Color3(0.5, 0, 1),
-      new Color3(1, 0, 1),
-    ];
-
-    const position = this.getPosition();
-
-    for (let i = 0; i < 8; i++) {
-      const center = position.clone();
-      center.y = 0.02;
-      const vertex1 = this.getOctagonVertexPosition(i);
-      vertex1.y = 0.02;
-      const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-      vertex2.y = 0.02;
-
-      const positions = [
-        center.x, center.y, center.z,
-        vertex1.x, vertex1.y, vertex1.z,
-        vertex2.x, vertex2.y, vertex2.z,
-      ];
-
-      const indices = [0, 1, 2];
-      const normals: number[] = [];
-
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-      normals.push(0, 1, 0);
-
-      const triangle = new Mesh(`face-segment-${i}`, this.scene);
-      const vertexData = new VertexData();
-      vertexData.positions = positions;
-      vertexData.indices = indices;
-      vertexData.normals = normals;
-      vertexData.applyToMesh(triangle);
-
-      const material = new StandardMaterial(`face-material-${i}`, this.scene);
-      material.diffuseColor = colors[i];
-      material.emissiveColor = colors[i].scale(0.3);
-      material.alpha = 0.6;
-      material.backFaceCulling = false;
-      triangle.material = material;
-
-      this.footCircleFaceSegments.push(triangle);
-    }
+  public getOctagonVertexPosition(vertexIndex: number): Vector3 {
+    return this.getDirectionBoundaryPosition(vertexIndex);
   }
 
   /**
-   * 8角形の頂点番号を非表示（デバッグ用）
+   * 方向（0-7）の中心位置を取得（ワールド座標）
+   * @param faceIndex 方向インデックス（0-7）
    */
-  public hideOctagonVertexNumbers(): void {
+  public getFaceCenter(faceIndex: number): Vector3 {
+    const position = this.getPosition();
+    const rotation = this.getRotation();
+
+    // 方向の中心角度を計算
+    const angleStep = (Math.PI * 2) / 8;
+    const angle = -faceIndex * angleStep + rotation;
+
+    const x = position.x + Math.sin(angle) * this.footCircleRadius;
+    const z = position.z + Math.cos(angle) * this.footCircleRadius;
+
+    return new Vector3(x, position.y, z);
+  }
+
+  /**
+   * ワールド座標の角度から方向インデックス（0-7）を計算
+   * @param worldAngle ワールド座標での角度（ラジアン）
+   * @returns 方向インデックス（0-7）
+   */
+  public getFaceIndexFromWorldAngle(worldAngle: number): number {
+    const rotation = this.getRotation();
+
+    // ワールド角度からローカル角度に変換
+    let localAngle = worldAngle - rotation;
+
+    // 角度を0〜2πの範囲に正規化
+    while (localAngle < 0) localAngle += Math.PI * 2;
+    while (localAngle >= Math.PI * 2) localAngle -= Math.PI * 2;
+
+    // 方向インデックスを計算
+    // 各方向は45度（π/4）の範囲を持つ
+    // 方向0は正面（0度を中心に±22.5度）
+    const angleStep = (Math.PI * 2) / 8;
+    const offsetAngle = localAngle + angleStep / 2; // 中心からのオフセットを調整
+
+    let faceIndex = Math.floor(offsetAngle / angleStep);
+    faceIndex = ((8 - faceIndex) % 8); // 時計回りに変換
+
+    return faceIndex;
+  }
+
+  /**
+   * 2点間の接触点から方向インデックスを計算
+   * @param contactPoint 接触点のワールド座標
+   * @returns 方向インデックス（0-7）
+   */
+  public getFaceIndexFromContactPoint(contactPoint: Vector3): number {
+    const position = this.getPosition();
+
+    // 中心から接触点への角度を計算
+    const dx = contactPoint.x - position.x;
+    const dz = contactPoint.z - position.z;
+    const worldAngle = Math.atan2(dx, dz);
+
+    return this.getFaceIndexFromWorldAngle(worldAngle);
+  }
+
+  /**
+   * 方向を色分けして表示（デバッグ用）
+   */
+  public showDirectionColors(): void {
+    this.hideDirectionColors();
+    this.createFootCircleFaceSegments();
+  }
+
+  /**
+   * 8角形の面を色分けして表示（互換性のため維持）
+   * @deprecated showDirectionColorsを使用してください
+   */
+  public showOctagonVertexNumbers(): void {
+    this.showDirectionColors();
+  }
+
+  /**
+   * 方向の色分けを非表示（デバッグ用）
+   */
+  public hideDirectionColors(): void {
     for (const label of this.footCircleVertexLabels) {
       label.dispose();
     }
@@ -297,7 +348,15 @@ export class DirectionCircle {
   }
 
   /**
-   * 足元の8角形を相手の方向に向けて、辺が一致するように回転させる
+   * 8角形の頂点番号を非表示（互換性のため維持）
+   * @deprecated hideDirectionColorsを使用してください
+   */
+  public hideOctagonVertexNumbers(): void {
+    this.hideDirectionColors();
+  }
+
+  /**
+   * 足元のサークルを相手の方向に向けて回転させる
    * 注意: サークルの回転はupdate()で頂点を再計算する際に反映されるため、
    *       このメソッドは使用されていません（互換性のために残しています）
    */
@@ -313,25 +372,23 @@ export class DirectionCircle {
     const position = this.getPosition();
     const rotation = this.getRotation();
 
+    // 円の外周を更新
     if (this.footCircle) {
       this.footCircle.position.x = position.x;
       this.footCircle.position.z = position.z;
 
       const lines: Vector3[][] = [];
 
-      for (let i = 0; i < 8; i++) {
-        const angleStep = (Math.PI * 2) / 8;
-        const angleOffset = Math.PI / 8;
+      for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+        const angleStep = (Math.PI * 2) / CIRCLE_SEGMENTS;
 
-        const angle1 = -i * angleStep + angleOffset;
-        const totalAngle1 = angle1 + rotation;
-        const x1 = Math.sin(totalAngle1) * this.footCircleRadius;
-        const z1 = Math.cos(totalAngle1) * this.footCircleRadius;
+        const angle1 = i * angleStep;
+        const x1 = Math.sin(angle1) * this.footCircleRadius;
+        const z1 = Math.cos(angle1) * this.footCircleRadius;
 
-        const angle2 = -(i + 1) * angleStep + angleOffset;
-        const totalAngle2 = angle2 + rotation;
-        const x2 = Math.sin(totalAngle2) * this.footCircleRadius;
-        const z2 = Math.cos(totalAngle2) * this.footCircleRadius;
+        const angle2 = (i + 1) * angleStep;
+        const x2 = Math.sin(angle2) * this.footCircleRadius;
+        const z2 = Math.cos(angle2) * this.footCircleRadius;
 
         lines.push([
           new Vector3(x1, 0.01, z1),
@@ -346,26 +403,48 @@ export class DirectionCircle {
       );
     }
 
+    // 色分けセグメント（扇形）を更新
     if (this.footCircleFaceSegments.length > 0) {
-      for (let i = 0; i < 8; i++) {
+      const segmentsPerFace = 4;
+
+      for (let faceIndex = 0; faceIndex < 8; faceIndex++) {
+        const positions: number[] = [];
+        const normals: number[] = [];
+
         const center = position.clone();
         center.y = 0.02;
-        const vertex1 = this.getOctagonVertexPosition(i);
-        vertex1.y = 0.02;
-        const vertex2 = this.getOctagonVertexPosition((i + 1) % 8);
-        vertex2.y = 0.02;
 
-        const positions = [
-          center.x, center.y, center.z,
-          vertex1.x, vertex1.y, vertex1.z,
-          vertex2.x, vertex2.y, vertex2.z,
-        ];
+        // この方向の開始角度と終了角度
+        const angleStep = (Math.PI * 2) / 8;
+        const angleOffset = Math.PI / 8;
+        const startAngle = -faceIndex * angleStep + angleOffset + rotation;
+        const endAngle = -(faceIndex + 1) * angleStep + angleOffset + rotation;
+
+        // 中心点を追加
+        positions.push(center.x, center.y, center.z);
+        normals.push(0, 1, 0);
+
+        // 扇形の外周点を追加
+        for (let j = 0; j <= segmentsPerFace; j++) {
+          const t = j / segmentsPerFace;
+          const angle = startAngle + (endAngle - startAngle) * t;
+          const x = position.x + Math.sin(angle) * this.footCircleRadius;
+          const z = position.z + Math.cos(angle) * this.footCircleRadius;
+          positions.push(x, center.y, z);
+          normals.push(0, 1, 0);
+        }
+
+        // インデックス配列を作成
+        const indices: number[] = [];
+        for (let j = 0; j < segmentsPerFace; j++) {
+          indices.push(0, j + 1, j + 2);
+        }
 
         const vertexData = new VertexData();
         vertexData.positions = positions;
-        vertexData.indices = [0, 1, 2];
-        vertexData.normals = [0, 1, 0, 0, 1, 0, 0, 1, 0];
-        vertexData.applyToMesh(this.footCircleFaceSegments[i]);
+        vertexData.indices = indices;
+        vertexData.normals = normals;
+        vertexData.applyToMesh(this.footCircleFaceSegments[faceIndex]);
       }
     }
   }

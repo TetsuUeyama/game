@@ -163,6 +163,12 @@ export class Character {
   // 重心コントローラー
   private balanceController: BalanceController;
 
+  // 移動による重心への影響追跡
+  private previousMoveDirection: Vector3 | null = null; // 前回の移動方向
+  private previousMoveSpeed: number = 0; // 前回の移動速度
+  private lastMoveTime: number = 0; // 最後に移動した時刻（ミリ秒）
+  private idleStartTime: number = 0; // 静止開始時刻（ミリ秒）
+
   // 重心球の可視化
   private balanceSphereMesh: Mesh | null = null;
   private balanceSphereVisible: boolean = false;
@@ -506,10 +512,59 @@ export class Character {
    * 指定方向に移動
    * @param direction 移動方向ベクトル（正規化済み）
    * @param deltaTime フレーム時間（秒）
+   * @param isRunning 走行中かどうか（オプション）
+   * @param isDashing ダッシュ中かどうか（オプション）
    */
-  public move(direction: Vector3, deltaTime: number): void {
-    // 速度を計算
+  public move(
+    direction: Vector3,
+    deltaTime: number,
+    isRunning: boolean = false,
+    isDashing: boolean = false
+  ): void {
+    const now = Date.now();
     const speed = CHARACTER_CONFIG.speed;
+
+    // 正規化された方向ベクトルを確保
+    const normalizedDir = direction.length() > 0.01
+      ? direction.normalize()
+      : direction.clone();
+
+    // === 移動による重心への影響 ===
+
+    // 静止時間を確認（300ms以上静止していたら「移動開始」）
+    const idleTime = (now - this.lastMoveTime) / 1000;
+    const isMovementStart = idleTime > 0.3 && this.previousMoveDirection === null;
+
+    if (isMovementStart) {
+      // 移動開始時の重心力
+      this.balanceController.applyMovementStartForce(normalizedDir);
+    } else if (this.previousMoveDirection !== null) {
+      // 方向転換のチェック
+      const dot = this.previousMoveDirection.x * normalizedDir.x +
+                  this.previousMoveDirection.z * normalizedDir.z;
+
+      // 方向が変わった場合（cos(30°) ≈ 0.866 以下で方向転換とみなす）
+      if (dot < 0.866) {
+        this.balanceController.applyDirectionChangeForce(
+          this.previousMoveDirection,
+          normalizedDir,
+          this.previousMoveSpeed
+        );
+      }
+    }
+
+    // 継続的な移動による重心力
+    this.balanceController.applyMovementForce(normalizedDir, speed, isRunning, isDashing);
+
+    // 移動状態を記録
+    this.previousMoveDirection = normalizedDir.clone();
+    this.previousMoveSpeed = speed;
+    this.lastMoveTime = now;
+    this.idleStartTime = 0; // 移動中は静止開始時刻をリセット
+
+    // === 実際の移動処理 ===
+
+    // 速度を計算
     this.velocity = direction.scale(speed);
 
     // 新しい位置を計算（モーションオフセットを除いた基準位置を使用）
@@ -517,6 +572,29 @@ export class Character {
 
     // 位置を更新
     this.setPosition(newPosition);
+  }
+
+  /**
+   * 移動を停止する際に呼び出す
+   * 急停止の重心力を適用
+   */
+  public stopMovement(): void {
+    const now = Date.now();
+
+    // 移動中だった場合のみ処理
+    if (this.previousMoveDirection !== null && this.previousMoveSpeed > 0) {
+      // 急停止の重心力を適用
+      this.balanceController.applySuddenStopForce(
+        this.previousMoveDirection,
+        this.previousMoveSpeed
+      );
+    }
+
+    // 移動状態をリセット
+    this.previousMoveDirection = null;
+    this.previousMoveSpeed = 0;
+    this.idleStartTime = now;
+    this.velocity = Vector3.Zero();
   }
 
   /**
@@ -594,11 +672,16 @@ export class Character {
       return false;
     }
 
-    // 遅延時間が経過していない場合は移動しない
+    // 遅延時間が経過していない場合は移動しない（reflexesベースの反応時間）
     const currentTime = Date.now();
     const elapsedTime = currentTime - this.aiMovementStartTime;
     if (elapsedTime < this.aiMovementDelay) {
-      return false; // まだ遅延時間中
+      return false; // まだ反応時間中
+    }
+
+    // 重心が安定していない場合は移動しない（重心システム）
+    if (!this.balanceController.canTransition()) {
+      return false; // 重心が不安定
     }
 
     // 移動先の位置を計算
@@ -947,10 +1030,44 @@ export class Character {
   }
 
   /**
+   * 方向の中心位置を取得（ワールド座標）
+   * @param faceIndex 方向インデックス（0-7）
+   */
+  public getFaceCenter(faceIndex: number): Vector3 {
+    return this.directionCircle.getFaceCenter(faceIndex);
+  }
+
+  /**
+   * ワールド座標の角度から方向インデックス（0-7）を計算
+   * @param worldAngle ワールド座標での角度（ラジアン）
+   * @returns 方向インデックス（0-7）
+   */
+  public getFaceIndexFromWorldAngle(worldAngle: number): number {
+    return this.directionCircle.getFaceIndexFromWorldAngle(worldAngle);
+  }
+
+  /**
+   * 接触点から方向インデックス（0-7）を計算
+   * @param contactPoint 接触点のワールド座標
+   * @returns 方向インデックス（0-7）
+   */
+  public getFaceIndexFromContactPoint(contactPoint: Vector3): number {
+    return this.directionCircle.getFaceIndexFromContactPoint(contactPoint);
+  }
+
+  /**
    * 8角形の面（三角形）を色分けして表示（デバッグ用）
+   * @deprecated showDirectionColorsを使用してください
    */
   public showOctagonVertexNumbers(): void {
     this.directionCircle.showOctagonVertexNumbers();
+  }
+
+  /**
+   * 方向を色分けして表示（デバッグ用）
+   */
+  public showDirectionColors(): void {
+    this.directionCircle.showDirectionColors();
   }
 
   /**
@@ -1051,7 +1168,7 @@ export class Character {
   }
 
   /**
-   * 現在のボール保持位置（8角形の面中心）を取得
+   * 現在のボール保持位置（サークルの方向中心）を取得
    * 従来の実装（互換性のため残す）
    * @returns ボール保持位置のワールド座標
    */
@@ -1064,29 +1181,30 @@ export class Character {
     // 現在選択されている面の番号を取得
     const faceIndex = this.ballHoldingFaces[this.currentBallHoldingIndex];
 
-    // その面の頂点2つを取得
-    const vertex1 = this.getOctagonVertexPosition(faceIndex);
-    const vertex2 = this.getOctagonVertexPosition((faceIndex + 1) % 8);
+    // その方向の中心位置を取得（円周上の点）
+    const faceCenter = this.getFaceCenter(faceIndex);
 
-    // 辺の中点を計算
-    const edgeMidX = (vertex1.x + vertex2.x) / 2;
-    const edgeMidZ = (vertex1.z + vertex2.z) / 2;
-
-    // 辺の中点からキャラクター中心方向へのベクトル
-    const towardsCenterX = this.position.x - edgeMidX;
-    const towardsCenterZ = this.position.z - edgeMidZ;
+    // 円周上の点からキャラクター中心方向へのベクトル
+    const towardsCenterX = this.position.x - faceCenter.x;
+    const towardsCenterZ = this.position.z - faceCenter.z;
 
     // ベクトルの長さを計算
     const vectorLength = Math.sqrt(towardsCenterX * towardsCenterX + towardsCenterZ * towardsCenterZ);
+
+    // 長さが0の場合は中心位置を返す
+    if (vectorLength < 0.001) {
+      const ballY = this.waistJointMesh.getAbsolutePosition().y;
+      return new Vector3(this.position.x, ballY, this.position.z);
+    }
 
     // 単位ベクトル化
     const unitX = towardsCenterX / vectorLength;
     const unitZ = towardsCenterZ / vectorLength;
 
-    // 辺から内側に0.3m入った位置（面の中心付近）
+    // 円周から内側に0.3m入った位置
     const insetDistance = 0.3;
-    const ballX = edgeMidX + unitX * insetDistance;
-    const ballZ = edgeMidZ + unitZ * insetDistance;
+    const ballX = faceCenter.x + unitX * insetDistance;
+    const ballZ = faceCenter.z + unitZ * insetDistance;
 
     // ボールは腰関節の高さに配置（上半身と下半身の境界）
     const ballY = this.waistJointMesh.getAbsolutePosition().y;

@@ -103,8 +103,102 @@ export const DRIBBLE_BREAKTHROUGH_MOTION_CONFIG: MotionConfig = {
 /**
  * ドリブルモーションマップ
  */
+/**
+ * ドリブル構えモーション（1on1時のオフェンス用）
+ *
+ * 軽く膝を曲げ、重心を低くした状態でドリブルを続ける
+ * ループモーションで継続的に再生
+ */
+const STANCE_T0 = 0.0;
+const STANCE_T1 = 0.3;  // ドリブル下
+const STANCE_T2 = 0.6;  // ドリブル上
+const STANCE_T3 = 0.9;  // ドリブル下（ループ）
+
+const DRIBBLE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身：軽く前傾
+  upperBodyX: {[STANCE_T0]: 15, [STANCE_T1]: 18, [STANCE_T2]: 15, [STANCE_T3]: 18},
+  upperBodyY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  upperBodyZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  lowerBodyX: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  lowerBodyY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  lowerBodyZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  headX: {[STANCE_T0]: -5, [STANCE_T1]: -5, [STANCE_T2]: -5, [STANCE_T3]: -5},
+  headY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  headZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  // 右腕：ドリブルする腕（上下動）
+  rightShoulderX: {[STANCE_T0]: -30, [STANCE_T1]: -50, [STANCE_T2]: -30, [STANCE_T3]: -50},
+  rightShoulderY: {[STANCE_T0]: -30, [STANCE_T1]: -30, [STANCE_T2]: -30, [STANCE_T3]: -30},
+  rightShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  rightElbowX: {[STANCE_T0]: -60, [STANCE_T1]: -80, [STANCE_T2]: -60, [STANCE_T3]: -80},
+  rightElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  rightElbowZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  // 左腕：ガード（ディフェンダーをブロック）
+  leftShoulderX: {[STANCE_T0]: -40, [STANCE_T1]: -40, [STANCE_T2]: -40, [STANCE_T3]: -40},
+  leftShoulderY: {[STANCE_T0]: 40, [STANCE_T1]: 40, [STANCE_T2]: 40, [STANCE_T3]: 40},
+  leftShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  leftElbowX: {[STANCE_T0]: -70, [STANCE_T1]: -70, [STANCE_T2]: -70, [STANCE_T3]: -70},
+  leftElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  leftElbowZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  // 脚：膝を曲げた構え
+  leftHipX: {[STANCE_T0]: -25, [STANCE_T1]: -25, [STANCE_T2]: -25, [STANCE_T3]: -25},
+  leftHipY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  leftHipZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  rightHipX: {[STANCE_T0]: -25, [STANCE_T1]: -25, [STANCE_T2]: -25, [STANCE_T3]: -25},
+  rightHipY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  rightHipZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  leftKneeX: {[STANCE_T0]: 45, [STANCE_T1]: 45, [STANCE_T2]: 45, [STANCE_T3]: 45},
+  leftKneeY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  leftKneeZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+
+  rightKneeX: {[STANCE_T0]: 45, [STANCE_T1]: 45, [STANCE_T2]: 45, [STANCE_T3]: 45},
+  rightKneeY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  rightKneeZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+};
+
+const DRIBBLE_STANCE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+  y: {[STANCE_T0]: -0.08, [STANCE_T1]: -0.1, [STANCE_T2]: -0.08, [STANCE_T3]: -0.1},
+  z: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
+};
+
+export const DRIBBLE_STANCE_MOTION: MotionData = {
+  name: "dribble_stance",
+  duration: STANCE_T3,
+  loop: true,
+  keyframes: buildKeyframes(DRIBBLE_STANCE_JOINT_ANIMATIONS, DRIBBLE_STANCE_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "upperBody", priority: 10 },
+    { jointName: "leftHip", priority: 9 },
+    { jointName: "rightHip", priority: 9 },
+    { jointName: "leftKnee", priority: 8 },
+    { jointName: "rightKnee", priority: 8 },
+    { jointName: "rightShoulder", priority: 8 },
+    { jointName: "rightElbow", priority: 8 },
+    { jointName: "leftShoulder", priority: 7 },
+    { jointName: "leftElbow", priority: 7 },
+  ],
+};
+
+export const DRIBBLE_STANCE_MOTION_CONFIG: MotionConfig = {
+  motionData: DRIBBLE_STANCE_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 40,
+  interruptible: true,
+};
+
 export const DRIBBLE_MOTIONS = {
   dribble_breakthrough: DRIBBLE_BREAKTHROUGH_MOTION,
+  dribble_stance: DRIBBLE_STANCE_MOTION,
 };
 
 /**
@@ -112,4 +206,5 @@ export const DRIBBLE_MOTIONS = {
  */
 export const DRIBBLE_MOTION_CONFIGS = {
   dribble_breakthrough: DRIBBLE_BREAKTHROUGH_MOTION_CONFIG,
+  dribble_stance: DRIBBLE_STANCE_MOTION_CONFIG,
 };

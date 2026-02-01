@@ -33,19 +33,25 @@ export const ONE_ON_ONE_BATTLE = {
 
   // AI移動
   RANDOM_DIRECTION_COUNT: 8,         // ランダム移動の方向数（8方向）
+
+  // オフェンス1on1行動設定
+  OFFENSE_MOVE_DURING_CONTACT: true, // 接触中もオフェンスが動く
+  OFFENSE_ACTION_CHANCE: 0.3,        // アクション実行確率（30%）
+  OFFENSE_FEINT_CHANCE: 0.4,         // フェイント確率（アクション時の40%）
+  OFFENSE_BREAKTHROUGH_CHANCE: 0.6,  // ドリブル突破確率（アクション時の60%）
 } as const;
 
 /**
  * ディフェンス反応時間設定（ミリ秒）
  */
 export const DEFENSE_REACTION = {
-  DEFAULT_DELAY: 1000,               // デフォルトの反応遅延
+  DEFAULT_DELAY: 2000,               // デフォルトの反応遅延
 
   // reflexesベースの計算用（初回反応）
-  REFLEXES_BASE: 1000,               // 基準値（1000 - reflexes で計算）
+  REFLEXES_BASE: 2000,               // 基準値（1000 - reflexes で計算）
 
   // quicknessベースの計算用（動き直し）
-  QUICKNESS_MULTIPLIER: 10,          // 係数（(100 - quickness) * 10 で計算）
+  QUICKNESS_MULTIPLIER: 1000,          // 係数（(100 - quickness) * 10 で計算）
 } as const;
 
 /**
@@ -104,6 +110,18 @@ export const DEFENSE_FORMATION = {
 
   // 衝突回避角度（度）
   AVOIDANCE_ANGLES: [30, -30, 60, -60, 90, -90],
+} as const;
+
+/**
+ * 視野設定（1on1判定用）
+ */
+export const FIELD_OF_VIEW = {
+  // 1on1判定用の視野角（度）- 正面からの片側角度
+  // 例: 90度 → 正面180度の扇形が視野
+  ONE_ON_ONE_FOV_HALF_ANGLE: 90,
+
+  // 視野内かつこの距離以内の場合に1on1とみなす（メートル）
+  ONE_ON_ONE_MAX_DISTANCE: 5.0,
 } as const;
 
 /**
@@ -270,5 +288,72 @@ export class DefenseUtils {
     // スティール試行するかどうかの判定後に呼ばれる
     // ここではスティールとディフェンス構えの比率を決定
     return Math.random() < (1 - DEFENSE_PRESSURE.DEFENSE_STANCE_CHANCE) ? 'steal' : 'stance';
+  }
+
+  /**
+   * ターゲットがオブザーバーの視野内にいるかを判定
+   * @param observerPos オブザーバー（見る側）の位置
+   * @param observerRotation オブザーバーの回転（Y軸、ラジアン）
+   * @param targetPos ターゲット（見られる側）の位置
+   * @param fovHalfAngleDeg 視野角の半分（度）、デフォルトはFIELD_OF_VIEW.ONE_ON_ONE_FOV_HALF_ANGLE
+   * @param maxDistance 最大距離（メートル）、デフォルトはFIELD_OF_VIEW.ONE_ON_ONE_MAX_DISTANCE
+   * @returns 視野内かつ距離内の場合true
+   */
+  public static isInFieldOfView(
+    observerPos: { x: number; z: number },
+    observerRotation: number,
+    targetPos: { x: number; z: number },
+    fovHalfAngleDeg: number = FIELD_OF_VIEW.ONE_ON_ONE_FOV_HALF_ANGLE,
+    maxDistance: number = FIELD_OF_VIEW.ONE_ON_ONE_MAX_DISTANCE
+  ): boolean {
+    // ターゲットへの方向ベクトルを計算
+    const dx = targetPos.x - observerPos.x;
+    const dz = targetPos.z - observerPos.z;
+
+    // 距離チェック
+    const distance = Math.sqrt(dx * dx + dz * dz);
+    if (distance > maxDistance) {
+      return false;
+    }
+
+    // 距離がほぼ0の場合は視野内とみなす
+    if (distance < 0.01) {
+      return true;
+    }
+
+    // オブザーバーの正面方向（回転から計算）
+    const forwardX = Math.sin(observerRotation);
+    const forwardZ = Math.cos(observerRotation);
+
+    // ターゲットへの正規化方向
+    const toTargetX = dx / distance;
+    const toTargetZ = dz / distance;
+
+    // 内積で角度を計算
+    const dot = forwardX * toTargetX + forwardZ * toTargetZ;
+
+    // acos の範囲を制限（-1 から 1）
+    const clampedDot = Math.max(-1, Math.min(1, dot));
+    const angleRad = Math.acos(clampedDot);
+    const angleDeg = angleRad * (180 / Math.PI);
+
+    // 視野角の半分以内かどうか
+    return angleDeg <= fovHalfAngleDeg;
+  }
+
+  /**
+   * 1on1状態かどうかを視野ベースで判定
+   * オンボールオフェンスプレイヤーの視野内にディフェンダーがいるかどうか
+   * @param offensePos オフェンスの位置
+   * @param offenseRotation オフェンスの回転（Y軸、ラジアン）
+   * @param defenderPos ディフェンダーの位置
+   * @returns 1on1状態（視野内）の場合true
+   */
+  public static is1on1StateByFieldOfView(
+    offensePos: { x: number; z: number },
+    offenseRotation: number,
+    defenderPos: { x: number; z: number }
+  ): boolean {
+    return this.isInFieldOfView(offensePos, offenseRotation, defenderPos);
   }
 }

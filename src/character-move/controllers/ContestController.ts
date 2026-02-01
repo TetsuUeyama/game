@@ -13,6 +13,8 @@ interface ContestPair {
   character1: Character;
   character2: Character;
   startTime: number;              // 競り合い開始時刻
+  knockbackRemaining: number;     // 残りノックバック距離（メートル）
+  isKnockbackPhase: boolean;      // ノックバックフェーズ中かどうか
 }
 
 /**
@@ -110,6 +112,7 @@ export class ContestController {
 
   /**
    * パラメーターに基づいた押し出し比率を計算
+   * ステータス差が大きいほど、弱い側が一方的に押される
    * @returns { push1: char1が押される比率, push2: char2が押される比率 }
    */
   private calculatePushRatios(char1: Character, char2: Character): { push1: number; push2: number } {
@@ -128,64 +131,60 @@ export class ContestController {
       };
     }
 
-    // ステータス差に基づいて比率を計算
-    // statDiff > 0: char1が弱い → char1が多く押される
-    // statDiff < 0: char2が弱い → char2が多く押される
-    const diffRatio = Math.min(1, Math.abs(statDiff) / 100); // 0-1の範囲にクランプ
+    // ステータス差に基づいて比率を計算（感度を考慮）
+    // sensitivity = 2.0 の場合、statDiff = 50 で最大/最小比率に到達
+    const sensitivity = CONTEST_CONFIG.STAT_RATIO_SENSITIVITY;
+    const normalizedDiff = Math.abs(statDiff) / (100 / sensitivity);
+    const diffRatio = Math.min(1, normalizedDiff); // 0-1の範囲にクランプ
 
     const minRatio = CONTEST_CONFIG.MIN_PUSH_RATIO;
     const maxRatio = CONTEST_CONFIG.MAX_PUSH_RATIO;
-    const range = maxRatio - minRatio;
 
     if (statDiff > 0) {
-      // char1が弱い
+      // char1が弱い → char1が多く押される
       return {
-        push1: minRatio + range * (0.5 + diffRatio * 0.5), // 弱い側: より多く押される
-        push2: minRatio + range * (0.5 - diffRatio * 0.5), // 強い側: あまり押されない
+        push1: minRatio + (maxRatio - minRatio) * diffRatio, // 弱い側: 最大95%押される
+        push2: maxRatio - (maxRatio - minRatio) * diffRatio, // 強い側: 最小5%押される
       };
     } else {
-      // char2が弱い
+      // char2が弱い → char2が多く押される
       return {
-        push1: minRatio + range * (0.5 - diffRatio * 0.5),
-        push2: minRatio + range * (0.5 + diffRatio * 0.5),
+        push1: maxRatio - (maxRatio - minRatio) * diffRatio,
+        push2: minRatio + (maxRatio - minRatio) * diffRatio,
       };
     }
   }
 
   /**
-   * 押し出し速度を計算
-   * 重なり量とステータス差に基づいて速度を決定
+   * ステータス差に基づいた押し返し距離を計算（フレームあたり）
    */
-  private calculatePushSpeed(char1: Character, char2: Character, overlap: number): number {
+  private calculatePushDistance(char1: Character, char2: Character): number {
     const stat1 = this.getContestStat(char1);
     const stat2 = this.getContestStat(char2);
 
     // ステータス差が大きいほど速く押し出す
     const statDiff = Math.abs(stat1 - stat2);
-    const statBonus = statDiff * CONTEST_CONFIG.STAT_DIFF_MULTIPLIER;
+    const statBonus = statDiff * CONTEST_CONFIG.STAT_DIFF_DISTANCE_MULTIPLIER;
 
-    // 重なり量が大きいほど速く押し出す（許容範囲を超えた分のみ）
-    const effectiveOverlap = Math.max(0, overlap - CONTEST_CONFIG.OVERLAP_TOLERANCE);
-    const overlapBonus = effectiveOverlap * CONTEST_CONFIG.OVERLAP_SPEED_MULTIPLIER;
-
-    const speed = CONTEST_CONFIG.PUSH_SPEED_BASE + statBonus + overlapBonus;
-    return Math.min(speed, CONTEST_CONFIG.PUSH_SPEED_MAX);
+    const distance = CONTEST_CONFIG.PUSH_DISTANCE_BASE + statBonus;
+    return Math.min(distance, CONTEST_CONFIG.PUSH_DISTANCE_MAX);
   }
 
   /**
    * 競り合いの押し出し処理を実行
+   * @returns 押し返しが完了したかどうか（ノックバックフェーズに移行すべきか）
    */
-  private processPush(char1: Character, char2: Character, deltaTime: number): void {
+  private processPush(char1: Character, char2: Character): boolean {
     const overlap = this.getOverlapAmount(char1, char2);
 
     // 許容範囲内の重なりは押し返さない
     if (overlap <= CONTEST_CONFIG.OVERLAP_TOLERANCE) {
-      return;
+      return false;
     }
 
-    // 解消マージン判定
+    // 解消マージン以下なら押し返し完了
     if (overlap <= CONTEST_CONFIG.OVERLAP_MARGIN) {
-      return;
+      return true; // ノックバックフェーズへ
     }
 
     const pos1 = char1.getPosition();
@@ -209,15 +208,12 @@ export class ContestController {
     // パラメーターに基づいた押し出し比率を取得
     const ratios = this.calculatePushRatios(char1, char2);
 
-    // 押し出し速度を計算（重なり量も考慮）
-    const pushSpeed = this.calculatePushSpeed(char1, char2, overlap);
-
-    // 押し出し量を計算（速度 × 時間 × 比率）
-    const pushAmount = pushSpeed * deltaTime;
+    // ステータス差に基づいた押し返し距離を計算
+    const pushDistance = this.calculatePushDistance(char1, char2);
 
     // char1を押し出す（pushDirectionの方向 = char2から離れる方向）
     if (ratios.push1 > 0) {
-      const push1Amount = pushAmount * ratios.push1;
+      const push1Amount = pushDistance * ratios.push1;
       const newPos1 = new Vector3(
         pos1.x + pushDirection.x * push1Amount,
         pos1.y,
@@ -228,7 +224,7 @@ export class ContestController {
 
     // char2を押し出す（pushDirectionの逆方向 = char1から離れる方向）
     if (ratios.push2 > 0) {
-      const push2Amount = pushAmount * ratios.push2;
+      const push2Amount = pushDistance * ratios.push2;
       const newPos2 = new Vector3(
         pos2.x - pushDirection.x * push2Amount,
         pos2.y,
@@ -236,14 +232,69 @@ export class ContestController {
       );
       char2.setPosition(newPos2);
     }
+
+    return false; // まだ押し返し中
+  }
+
+  /**
+   * ノックバック処理を実行
+   * @returns ノックバックが完了したかどうか
+   */
+  private processKnockback(char1: Character, char2: Character, contest: ContestPair): boolean {
+    if (contest.knockbackRemaining <= 0) {
+      return true; // ノックバック完了
+    }
+
+    const pos1 = char1.getPosition();
+    const pos2 = char2.getPosition();
+
+    // ノックバック方向を計算（お互いを離す方向）
+    let knockbackDirection = new Vector3(
+      pos1.x - pos2.x,
+      0,
+      pos1.z - pos2.z
+    );
+
+    if (knockbackDirection.length() < 0.01) {
+      const randomAngle = Math.random() * Math.PI * 2;
+      knockbackDirection = new Vector3(Math.sin(randomAngle), 0, Math.cos(randomAngle));
+    } else {
+      knockbackDirection.normalize();
+    }
+
+    // このフレームでのノックバック量
+    const knockbackAmount = Math.min(contest.knockbackRemaining, CONTEST_CONFIG.KNOCKBACK_SPEED);
+
+    // 両者を等しく離す
+    const halfKnockback = knockbackAmount / 2;
+
+    const newPos1 = new Vector3(
+      pos1.x + knockbackDirection.x * halfKnockback,
+      pos1.y,
+      pos1.z + knockbackDirection.z * halfKnockback
+    );
+    char1.setPosition(newPos1);
+
+    const newPos2 = new Vector3(
+      pos2.x - knockbackDirection.x * halfKnockback,
+      pos2.y,
+      pos2.z - knockbackDirection.z * halfKnockback
+    );
+    char2.setPosition(newPos2);
+
+    // 残りノックバック距離を更新
+    contest.knockbackRemaining -= knockbackAmount;
+
+    return contest.knockbackRemaining <= 0;
   }
 
   /**
    * 更新処理（毎フレーム呼び出し）
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     const characters = this.allCharacters();
     const currentContests = new Set<string>();
+    const completedContests: string[] = [];
 
     // 全キャラクターペアをチェック
     for (let i = 0; i < characters.length; i++) {
@@ -252,27 +303,56 @@ export class ContestController {
         const char2 = characters[j];
         const pairKey = this.getPairKey(char1, char2);
 
+        // 既存のコンテストを取得
+        const existingContest = this.activeContests.get(pairKey);
+
+        // ノックバックフェーズ中の処理
+        if (existingContest && existingContest.isKnockbackPhase) {
+          currentContests.add(pairKey);
+          const knockbackComplete = this.processKnockback(char1, char2, existingContest);
+          if (knockbackComplete) {
+            completedContests.push(pairKey);
+          }
+          continue;
+        }
+
         if (this.isOverlapping(char1, char2)) {
           currentContests.add(pairKey);
 
           // 新しい競り合いを開始
-          if (!this.activeContests.has(pairKey)) {
+          if (!existingContest) {
             this.activeContests.set(pairKey, {
               character1: char1,
               character2: char2,
               startTime: Date.now(),
+              knockbackRemaining: 0,
+              isKnockbackPhase: false,
             });
           }
 
-          // 押し出し処理を実行（許容範囲外の場合のみ実際に押し返す）
-          this.processPush(char1, char2, deltaTime);
+          // 押し出し処理を実行
+          const pushComplete = this.processPush(char1, char2);
+
+          // 押し返しが完了したらノックバックフェーズへ
+          if (pushComplete) {
+            const contest = this.activeContests.get(pairKey);
+            if (contest) {
+              contest.isKnockbackPhase = true;
+              contest.knockbackRemaining = CONTEST_CONFIG.KNOCKBACK_DISTANCE;
+            }
+          }
         }
       }
     }
 
-    // 終了した競り合いを削除
-    for (const [pairKey, _contest] of this.activeContests) {
-      if (!currentContests.has(pairKey)) {
+    // 完了したノックバックを削除
+    for (const pairKey of completedContests) {
+      this.activeContests.delete(pairKey);
+    }
+
+    // 重なりが解消された競り合いを削除（ノックバック中でないもの）
+    for (const [pairKey, contest] of this.activeContests) {
+      if (!currentContests.has(pairKey) && !contest.isKnockbackPhase) {
         this.activeContests.delete(pairKey);
       }
     }
