@@ -42,6 +42,17 @@ export const PhysicsConstants = {
     MOVE_FORCE: 2400, // 基準移動力（N）（元PlayerMovementのbaseMoveForce）
   },
 
+  // キャラクター物理ボディ（Havok用）
+  // 胴体はカプセル、手は球体として物理衝突を処理
+  CHARACTER: {
+    BODY_CAPSULE_RADIUS: 0.25,      // 胴体の半径（m）
+    BODY_CAPSULE_HEIGHT_RATIO: 0.6, // 身長に対する高さ比率
+    HAND_SPHERE_RADIUS: 0.08,       // 手の半径（m）
+    BODY_RESTITUTION: 0.5,          // 胴体の反発係数
+    HAND_RESTITUTION: 0.6,          // 手の反発係数
+    FRICTION: 0.3,                  // 摩擦係数
+  },
+
   // 地面・コート
   // 注意: ボールの反発係数(0.83)とMULTIPLYモードで計算されるため、
   // 実効反発係数は BALL.RESTITUTION × GROUND.RESTITUTION となる

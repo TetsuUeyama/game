@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
-import { CONTEST_CONFIG } from "../config/ContestConfig";
+import { CONTEST_CONFIG, ContestStatType } from "../config/ContestConfig";
 
 // 設定をre-export（既存のインポートを壊さないため）
 export { CONTEST_CONFIG };
@@ -17,8 +17,15 @@ interface ContestPair {
 
 /**
  * 競り合いコントローラー
- * キャラクター同士のサークルが重なった時に、offense/defense値で押し合いを処理する
- * オフェンス側（ボール保持者）はoffense値、ディフェンス側はdefense値を使用
+ * キャラクター同士のサークルが重なった時に、設定されたパラメーターで押し合いを処理する
+ *
+ * 重なり許容設定:
+ * - OVERLAP_TOLERANCE以内の重なりは押し返さない（移動中の軽い接触を許容）
+ * - それ以上の重なりはパラメーターに従って押し返す
+ *
+ * 使用パラメーター:
+ * - オフェンス側（ボール保持者）: CONTEST_CONFIG.OFFENSE_STAT
+ * - ディフェンス側（ボール非保持者）: CONTEST_CONFIG.DEFENSE_STAT
  */
 export class ContestController {
   private allCharacters: () => Character[];
@@ -44,24 +51,13 @@ export class ContestController {
    * 2つのキャラクターのサークルが重なっているかチェック
    */
   private isOverlapping(char1: Character, char2: Character): boolean {
-    const pos1 = char1.getPosition();
-    const pos2 = char2.getPosition();
-
-    // XZ平面上の距離を計算
-    const dx = pos1.x - pos2.x;
-    const dz = pos1.z - pos2.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    // サークル半径の合計
-    const radius1 = char1.getFootCircleRadius();
-    const radius2 = char2.getFootCircleRadius();
-    const minDistance = radius1 + radius2;
-
-    return distance < minDistance;
+    const overlap = this.getOverlapAmount(char1, char2);
+    return overlap > 0;
   }
 
   /**
-   * 重なり量を計算
+   * 重なり量を計算（メートル）
+   * 正の値 = 重なっている、0以下 = 重なっていない
    */
   private getOverlapAmount(char1: Character, char2: Character): number {
     const pos1 = char1.getPosition();
@@ -80,33 +76,52 @@ export class ContestController {
 
   /**
    * キャラクターの競り合いステータスを取得
-   * ボール保持者はoffense値、非保持者はdefense値を使用
+   * ボール保持者はOFFENSE_STAT、非保持者はDEFENSE_STATを使用
    */
   private getContestStat(character: Character): number {
     const holder = this.ball.getHolder();
-    if (holder === character) {
-      // ボール保持者はoffense値を使用
-      return character.playerData?.stats?.offense ?? 50;
-    } else {
-      // 非保持者はdefense値を使用
-      return character.playerData?.stats?.defense ?? 50;
+    const statType: ContestStatType = holder === character
+      ? CONTEST_CONFIG.OFFENSE_STAT
+      : CONTEST_CONFIG.DEFENSE_STAT;
+
+    return this.getStatValue(character, statType);
+  }
+
+  /**
+   * 指定したステータスタイプの値を取得
+   */
+  private getStatValue(character: Character, statType: ContestStatType): number {
+    const stats = character.playerData?.stats;
+    if (!stats) return 50; // デフォルト値
+
+    switch (statType) {
+      case 'offense':
+        return stats.offense ?? 50;
+      case 'defense':
+        return stats.defense ?? 50;
+      case 'power':
+        return stats.power ?? 50;
+      case 'speed':
+        return stats.speed ?? 50;
+      default:
+        return 50;
     }
   }
 
   /**
-   * offense/defense値に基づいた押し出し比率を計算
-   * @returns { push1: 押し出し比率（char1が押される量）, push2: 押し出し比率（char2が押される量） }
+   * パラメーターに基づいた押し出し比率を計算
+   * @returns { push1: char1が押される比率, push2: char2が押される比率 }
    */
   private calculatePushRatios(char1: Character, char2: Character): { push1: number; push2: number } {
-    // ステータス値を取得（ボール保持者はoffense、非保持者はdefense）
+    // ステータス値を取得
     const stat1 = this.getContestStat(char1);
     const stat2 = this.getContestStat(char2);
 
     // ステータス差を計算
     const statDiff = stat2 - stat1; // 正の値ならchar1が弱い
 
-    if (statDiff === 0) {
-      // 同等ステータスの場合、お互い同じ比率で押される
+    if (Math.abs(statDiff) < 1) {
+      // ほぼ同等ステータスの場合、お互い同じ比率で押される
       return {
         push1: CONTEST_CONFIG.EQUAL_STAT_PUSH_RATIO,
         push2: CONTEST_CONFIG.EQUAL_STAT_PUSH_RATIO,
@@ -116,35 +131,44 @@ export class ContestController {
     // ステータス差に基づいて比率を計算
     // statDiff > 0: char1が弱い → char1が多く押される
     // statDiff < 0: char2が弱い → char2が多く押される
-    const diffRatio = Math.abs(statDiff) / 100; // 0-1の範囲
+    const diffRatio = Math.min(1, Math.abs(statDiff) / 100); // 0-1の範囲にクランプ
+
+    const minRatio = CONTEST_CONFIG.MIN_PUSH_RATIO;
+    const maxRatio = CONTEST_CONFIG.MAX_PUSH_RATIO;
+    const range = maxRatio - minRatio;
 
     if (statDiff > 0) {
       // char1が弱い
       return {
-        push1: 0.5 + diffRatio * 0.5, // 0.5〜1.0
-        push2: 0.5 - diffRatio * 0.5, // 0.5〜0.0
+        push1: minRatio + range * (0.5 + diffRatio * 0.5), // 弱い側: より多く押される
+        push2: minRatio + range * (0.5 - diffRatio * 0.5), // 強い側: あまり押されない
       };
     } else {
       // char2が弱い
       return {
-        push1: 0.5 - diffRatio * 0.5, // 0.5〜0.0
-        push2: 0.5 + diffRatio * 0.5, // 0.5〜1.0
+        push1: minRatio + range * (0.5 - diffRatio * 0.5),
+        push2: minRatio + range * (0.5 + diffRatio * 0.5),
       };
     }
   }
 
   /**
    * 押し出し速度を計算
+   * 重なり量とステータス差に基づいて速度を決定
    */
-  private calculatePushSpeed(char1: Character, char2: Character): number {
+  private calculatePushSpeed(char1: Character, char2: Character, overlap: number): number {
     const stat1 = this.getContestStat(char1);
     const stat2 = this.getContestStat(char2);
 
     // ステータス差が大きいほど速く押し出す
     const statDiff = Math.abs(stat1 - stat2);
-    const speedBonus = statDiff * CONTEST_CONFIG.STAT_DIFF_MULTIPLIER;
+    const statBonus = statDiff * CONTEST_CONFIG.STAT_DIFF_MULTIPLIER;
 
-    const speed = CONTEST_CONFIG.PUSH_SPEED_BASE + speedBonus;
+    // 重なり量が大きいほど速く押し出す（許容範囲を超えた分のみ）
+    const effectiveOverlap = Math.max(0, overlap - CONTEST_CONFIG.OVERLAP_TOLERANCE);
+    const overlapBonus = effectiveOverlap * CONTEST_CONFIG.OVERLAP_SPEED_MULTIPLIER;
+
+    const speed = CONTEST_CONFIG.PUSH_SPEED_BASE + statBonus + overlapBonus;
     return Math.min(speed, CONTEST_CONFIG.PUSH_SPEED_MAX);
   }
 
@@ -154,7 +178,12 @@ export class ContestController {
   private processPush(char1: Character, char2: Character, deltaTime: number): void {
     const overlap = this.getOverlapAmount(char1, char2);
 
-    // 重なりがなければ何もしない
+    // 許容範囲内の重なりは押し返さない
+    if (overlap <= CONTEST_CONFIG.OVERLAP_TOLERANCE) {
+      return;
+    }
+
+    // 解消マージン判定
     if (overlap <= CONTEST_CONFIG.OVERLAP_MARGIN) {
       return;
     }
@@ -177,11 +206,11 @@ export class ContestController {
       pushDirection.normalize();
     }
 
-    // パワーに基づいた押し出し比率を取得
+    // パラメーターに基づいた押し出し比率を取得
     const ratios = this.calculatePushRatios(char1, char2);
 
-    // 押し出し速度を計算
-    const pushSpeed = this.calculatePushSpeed(char1, char2);
+    // 押し出し速度を計算（重なり量も考慮）
+    const pushSpeed = this.calculatePushSpeed(char1, char2, overlap);
 
     // 押し出し量を計算（速度 × 時間 × 比率）
     const pushAmount = pushSpeed * deltaTime;
@@ -233,16 +262,9 @@ export class ContestController {
               character2: char2,
               startTime: Date.now(),
             });
-
-            // const stat1 = this.getContestStat(char1);
-            // const stat2 = this.getContestStat(char2);
-            // const holder = this.ball.getHolder();
-            // const char1Role = holder === char1 ? 'offense' : 'defense';
-            // const char2Role = holder === char2 ? 'offense' : 'defense';
-            // console.log(`[ContestController] 競り合い開始: ${char1.playerData?.basic?.NAME ?? 'char1'}(${char1Role}:${stat1}) vs ${char2.playerData?.basic?.NAME ?? 'char2'}(${char2Role}:${stat2})`);
           }
 
-          // 押し出し処理を実行
+          // 押し出し処理を実行（許容範囲外の場合のみ実際に押し返す）
           this.processPush(char1, char2, deltaTime);
         }
       }
@@ -251,8 +273,6 @@ export class ContestController {
     // 終了した競り合いを削除
     for (const [pairKey, _contest] of this.activeContests) {
       if (!currentContests.has(pairKey)) {
-        // const duration = (Date.now() - _contest.startTime) / 1000;
-        // console.log(`[ContestController] 競り合い終了: ${_contest.character1.playerData?.basic?.NAME ?? 'char1'} vs ${_contest.character2.playerData?.basic?.NAME ?? 'char2'} (${duration.toFixed(2)}秒)`);
         this.activeContests.delete(pairKey);
       }
     }
@@ -286,6 +306,21 @@ export class ContestController {
   }
 
   /**
+   * 特定の2キャラクター間の重なり量を取得（デバッグ用）
+   */
+  public getOverlapBetween(char1: Character, char2: Character): number {
+    return this.getOverlapAmount(char1, char2);
+  }
+
+  /**
+   * 許容範囲を超えた重なりがあるかチェック
+   */
+  public hasExcessiveOverlap(char1: Character, char2: Character): boolean {
+    const overlap = this.getOverlapAmount(char1, char2);
+    return overlap > CONTEST_CONFIG.OVERLAP_TOLERANCE;
+  }
+
+  /**
    * アクティブな競り合いの数を取得
    */
   public getActiveContestCount(): number {
@@ -302,6 +337,8 @@ export class ContestController {
     char2Stat: number;
     char1Role: 'offense' | 'defense';
     char2Role: 'offense' | 'defense';
+    overlap: number;
+    isBeingPushed: boolean;
     duration: number;
   }> {
     const result: Array<{
@@ -311,6 +348,8 @@ export class ContestController {
       char2Stat: number;
       char1Role: 'offense' | 'defense';
       char2Role: 'offense' | 'defense';
+      overlap: number;
+      isBeingPushed: boolean;
       duration: number;
     }> = [];
 
@@ -319,6 +358,8 @@ export class ContestController {
     for (const contest of this.activeContests.values()) {
       const char1Role = holder === contest.character1 ? 'offense' : 'defense';
       const char2Role = holder === contest.character2 ? 'offense' : 'defense';
+      const overlap = this.getOverlapAmount(contest.character1, contest.character2);
+
       result.push({
         char1Name: contest.character1.playerData?.basic?.NAME ?? 'unknown',
         char2Name: contest.character2.playerData?.basic?.NAME ?? 'unknown',
@@ -326,11 +367,20 @@ export class ContestController {
         char2Stat: this.getContestStat(contest.character2),
         char1Role: char1Role as 'offense' | 'defense',
         char2Role: char2Role as 'offense' | 'defense',
+        overlap: overlap,
+        isBeingPushed: overlap > CONTEST_CONFIG.OVERLAP_TOLERANCE,
         duration: (Date.now() - contest.startTime) / 1000,
       });
     }
 
     return result;
+  }
+
+  /**
+   * 現在の設定値を取得（デバッグ用）
+   */
+  public getConfig(): typeof CONTEST_CONFIG {
+    return CONTEST_CONFIG;
   }
 
   /**

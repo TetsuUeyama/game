@@ -34,6 +34,9 @@ export class OneOnOneBattleController {
     multiplier: 0,
   };
 
+  // サークル接触状態
+  private circlesInContact: boolean = false;
+
   // 外部参照
   private ball: Ball;
   private getAllCharacters: () => Character[];
@@ -110,19 +113,19 @@ export class OneOnOneBattleController {
       }
     }
 
-    // オフェンス側の移動を試行
+    // オフェンス側の移動を試行（通常の衝突判定）
     let offenseCollided = false;
     if (onBallPlayer) {
       offenseCollided = onBallPlayer.applyAIMovementWithCollision(deltaTime, allCharacters);
     }
 
-    // ディフェンス側の移動を試行
+    // ディフェンス側の移動を試行（通常の衝突判定）
     if (onBallDefender) {
       onBallDefender.applyAIMovementWithCollision(deltaTime, allCharacters);
     }
 
     // サークルが接触しているかチェック
-    let circlesInContact = false;
+    this.circlesInContact = false;
     if (onBallPlayer && onBallDefender) {
       const offensePos = onBallPlayer.getPosition();
       const defenderPos = onBallDefender.getPosition();
@@ -131,23 +134,19 @@ export class OneOnOneBattleController {
         new Vector3(defenderPos.x, 0, defenderPos.z)
       );
       const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
-      circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
+      this.circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
 
-      // サークルが接触している場合、Powerによる押し返しを適用
-      if (circlesInContact && distance < contactDistance) {
-        const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);
-
-        // 押し返しを適用
-        const newOffensePos = offensePos.add(selfPush);
-        const newDefenderPos = defenderPos.add(otherPush);
-
-        onBallPlayer.setPosition(newOffensePos);
-        onBallDefender.setPosition(newDefenderPos);
+      // 接触時は移動を停止して、新しい移動は設定しない
+      if (this.circlesInContact) {
+        onBallPlayer.clearAIMovement();
+        onBallDefender.clearAIMovement();
+        // 接触中は動き直しをスキップ
+        return;
       }
     }
 
-    // オフェンスが衝突した場合、またはサークルが接触している場合、動き直す
-    if ((offenseCollided || circlesInContact) && onBallPlayer && onBallDefender) {
+    // オフェンスが衝突した場合（接触ではない）、動き直す
+    if (offenseCollided && onBallPlayer && onBallDefender) {
       const currentTime = Date.now();
       if (currentTime - this.lastCollisionRedirectTime >= ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVAL) {
         // 新しいランダム方向を設定
@@ -221,7 +220,7 @@ export class OneOnOneBattleController {
     // ボールが0番面の時、ランダムでドリブル突破を実行（ActionController経由）
     // 有利/不利状態を考慮（前回のサイコロ結果を使用）
     const currentFace = onBallPlayer.getCurrentBallFace();
-    let breakthroughChance = DRIBBLE_CONFIG.BREAKTHROUGH_CHANCE;
+    let breakthroughChance: number = DRIBBLE_CONFIG.BREAKTHROUGH_CHANCE;
     // オフェンス有利時は突破を試みる確率UP、ディフェンス有利時はDOWN
     breakthroughChance = AdvantageUtils.adjustSuccessRate(
       breakthroughChance,
@@ -258,7 +257,10 @@ export class OneOnOneBattleController {
     // フェイント判定
     const isFeint = this.checkFeint(onBallPlayer);
 
-    if (shouldTurnToGoal) {
+    // 接触中は移動設定をスキップ
+    if (this.circlesInContact) {
+      // 接触中でもサイコロは振る（有利/不利の更新のため）
+    } else if (shouldTurnToGoal) {
       // ゴール方向を向く
       this.turnTowardsGoal(onBallPlayer);
       onBallPlayer.clearAIMovement();
@@ -320,36 +322,20 @@ export class OneOnOneBattleController {
     const offensePos = offense.getPosition();
     const defenderPos = defender.getPosition();
 
-    // 守るゴールの位置を決定
-    const goalZ = defender.team === "ally" ? ONE_ON_ONE_BATTLE_CONFIG.ALLY_DEFEND_GOAL_Z : ONE_ON_ONE_BATTLE_CONFIG.ENEMY_DEFEND_GOAL_Z;
-    const goalPosition = new Vector3(0, 0, goalZ);
+    // オフェンスの0方向（正面）を取得
+    const offenseForward = offense.getForwardDirection();
 
-    // オフェンス→ゴールの方向ベクトルを計算
-    const offenseToGoal = goalPosition.subtract(offensePos);
-    offenseToGoal.y = 0;
-    const distanceToGoal = offenseToGoal.length();
-
-    if (distanceToGoal < 0.1) {
-      return;
-    }
-
-    const directionToGoal = offenseToGoal.normalize();
-
-    // 目標位置を計算：オフェンスからゴール方向に、サークルが接触する距離
+    // 目標位置を計算：オフェンスの正面方向にディフェンダーを配置
     const offenseRadius = offense.getFootCircleRadius();
     const defenderRadius = defender.getFootCircleRadius();
     const contactDistance = offenseRadius + defenderRadius;
 
-    const targetPosition = offensePos.add(directionToGoal.scale(contactDistance));
+    // オフェンスの正面方向に目標位置を設定（接触距離で配置）
+    const targetPosition = offensePos.add(offenseForward.scale(contactDistance));
 
-    // ディフェンダーの向きを設定
-    const directionToOffense = offensePos.subtract(targetPosition);
-    directionToOffense.y = 0;
-
-    if (directionToOffense.length() > 0.01) {
-      const targetRotation = Math.atan2(directionToOffense.x, directionToOffense.z);
-      defender.setRotation(targetRotation);
-    }
+    // ディフェンダーの向き：オフェンスの正面と向き合う（反対方向を向く）
+    const targetRotation = Math.atan2(-offenseForward.x, -offenseForward.z);
+    defender.setRotation(targetRotation);
 
     // 現在位置から目標位置への移動方向を計算
     const moveDirection = targetPosition.subtract(defenderPos);
@@ -534,6 +520,13 @@ export class OneOnOneBattleController {
    */
   public isIn1on1Battle(): boolean {
     return this.in1on1Battle;
+  }
+
+  /**
+   * サークルが接触中かどうかを取得
+   */
+  public isCirclesInContact(): boolean {
+    return this.circlesInContact;
   }
 
   /**

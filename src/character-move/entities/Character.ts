@@ -1,4 +1,17 @@
-import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, AbstractMesh, LinesMesh } from "@babylonjs/core";
+import {
+  Scene,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  Vector3,
+  Mesh,
+  AbstractMesh,
+  LinesMesh,
+  PhysicsAggregate,
+  PhysicsShapeType,
+  PhysicsMotionType,
+} from "@babylonjs/core";
+import { PhysicsConstants } from "../../physics/PhysicsConfig";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CHARACTER_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
@@ -73,8 +86,7 @@ export class Character {
   private groundY: number; // 地面のY座標
   private motionOffsetY: number = 0; // モーションによるY軸オフセット
 
-  // 衝突判定
-  public collisionRadius: number = 0.3; // 衝突半径（m）
+  // 衝突判定（footCircleRadiusで統一）
 
   // キャラクターの状態
   private state: CharacterState = CharacterState.BALL_LOST;
@@ -158,6 +170,15 @@ export class Character {
   // 半透明モード
   private isBodyTransparent: boolean = false;
   private originalMaterialAlphas: Map<Mesh, number> = new Map();
+
+  // Havok物理ボディ（ボールとの衝突用）
+  private bodyPhysicsMesh: Mesh | null = null;         // 胴体カプセル（不可視）
+  private leftHandPhysicsMesh: Mesh | null = null;     // 左手球体（不可視）
+  private rightHandPhysicsMesh: Mesh | null = null;    // 右手球体（不可視）
+  private bodyPhysicsAggregate: PhysicsAggregate | null = null;
+  private leftHandPhysicsAggregate: PhysicsAggregate | null = null;
+  private rightHandPhysicsAggregate: PhysicsAggregate | null = null;
+  private physicsInitialized: boolean = false;
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -557,6 +578,9 @@ export class Character {
 
     // 方向サークルを更新
     this.directionCircle.update();
+
+    // Havok物理ボディの位置を更新（手のアニメーションに追従）
+    this.updatePhysicsBodyPositions();
   }
 
   /**
@@ -1654,15 +1678,25 @@ export class Character {
       pushDirection.z = Math.cos(randomAngle);
     }
 
-    // 押し返し量を計算（サークルが重ならない距離まで離す + 少し余裕）
+    // 1. 重なり解消のための分離（サークルが重ならない距離まで離す）
     const overlap = Math.max(0, minDistance - currentDistance);
-    const totalPush = overlap + 0.1; // 0.1mの余裕を追加
+    const separationPush = overlap + 0.02; // 0.02mの余裕を追加
 
-    // 能力差に応じて押し返し量を分配
-    // pushRatio > 0: 自分の能力が高い → 相手が多く押される
-    // pushRatio < 0: 相手の能力が高い → 自分が多く押される
-    const selfPushAmount = totalPush * (0.5 - pushRatio * 0.5); // pushRatio=1なら0、pushRatio=-1なら1
-    const otherPushAmount = totalPush * (0.5 + pushRatio * 0.5); // pushRatio=1なら1、pushRatio=-1なら0
+    // 2. 能力差による追加の押し込み力（接触中は常に発生）
+    // pushRatio > 0: 自分の能力が高い → 相手を押し込む
+    // pushRatio < 0: 相手の能力が高い → 自分が押し込まれる
+    // 毎フレーム最大0.03m（60fpsで約1.8m/秒）の押し込み
+    const pushForce = 0.03 * pushRatio;
+
+    // 分離は能力差に応じて分配
+    const selfSeparation = separationPush * (0.5 - pushRatio * 0.5);
+    const otherSeparation = separationPush * (0.5 + pushRatio * 0.5);
+
+    // 押し込み力を追加（能力が高い側が相手を押し込む）
+    // pushForce > 0: 自分が強い → 相手を押す（otherに+）、自分は動かない
+    // pushForce < 0: 相手が強い → 自分が押される（selfに+）
+    const selfPushAmount = selfSeparation + Math.max(0, -pushForce);
+    const otherPushAmount = otherSeparation + Math.max(0, pushForce);
 
     const selfPush = pushDirection.scale(-selfPushAmount); // 自分は相手の反対方向に押される
     const otherPush = pushDirection.scale(otherPushAmount); // 相手は押し返される
@@ -1828,10 +1862,176 @@ export class Character {
     ];
   }
 
+  // ==========================================================================
+  // Havok物理システム（ボールとの衝突用）
+  // ==========================================================================
+
+  /**
+   * Havok物理ボディを初期化
+   * GameSceneで物理エンジン初期化後に呼び出す
+   */
+  public initializePhysics(): void {
+    if (this.physicsInitialized) {
+      return;
+    }
+
+    const height = this.config.physical.height;
+    const bodyConfig = PhysicsConstants.CHARACTER;
+
+    // 胴体用カプセルメッシュを作成（不可視）
+    const capsuleHeight = height * bodyConfig.BODY_CAPSULE_HEIGHT_RATIO;
+    this.bodyPhysicsMesh = MeshBuilder.CreateCapsule(
+      `${this.team}_body_physics`,
+      {
+        radius: bodyConfig.BODY_CAPSULE_RADIUS,
+        height: capsuleHeight,
+        tessellation: 8,
+        subdivisions: 1,
+      },
+      this.scene
+    );
+    this.bodyPhysicsMesh.isVisible = false;
+    this.bodyPhysicsMesh.isPickable = false;
+
+    // 左手用球体メッシュを作成（不可視）
+    this.leftHandPhysicsMesh = MeshBuilder.CreateSphere(
+      `${this.team}_leftHand_physics`,
+      { diameter: bodyConfig.HAND_SPHERE_RADIUS * 2, segments: 8 },
+      this.scene
+    );
+    this.leftHandPhysicsMesh.isVisible = false;
+    this.leftHandPhysicsMesh.isPickable = false;
+
+    // 右手用球体メッシュを作成（不可視）
+    this.rightHandPhysicsMesh = MeshBuilder.CreateSphere(
+      `${this.team}_rightHand_physics`,
+      { diameter: bodyConfig.HAND_SPHERE_RADIUS * 2, segments: 8 },
+      this.scene
+    );
+    this.rightHandPhysicsMesh.isVisible = false;
+    this.rightHandPhysicsMesh.isPickable = false;
+
+    // 胴体のPhysicsAggregateを作成（ANIMATED = キネマティック）
+    this.bodyPhysicsAggregate = new PhysicsAggregate(
+      this.bodyPhysicsMesh,
+      PhysicsShapeType.CAPSULE,
+      {
+        mass: 0,  // 静的オブジェクト（ボールに押されない）
+        restitution: bodyConfig.BODY_RESTITUTION,
+        friction: bodyConfig.FRICTION,
+      },
+      this.scene
+    );
+    // キネマティックモードに設定（アニメーションで位置制御）
+    this.bodyPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
+    this.bodyPhysicsAggregate.body.disablePreStep = false;
+
+    // 左手のPhysicsAggregateを作成
+    this.leftHandPhysicsAggregate = new PhysicsAggregate(
+      this.leftHandPhysicsMesh,
+      PhysicsShapeType.SPHERE,
+      {
+        mass: 0,
+        restitution: bodyConfig.HAND_RESTITUTION,
+        friction: bodyConfig.FRICTION,
+      },
+      this.scene
+    );
+    this.leftHandPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
+    this.leftHandPhysicsAggregate.body.disablePreStep = false;
+
+    // 右手のPhysicsAggregateを作成
+    this.rightHandPhysicsAggregate = new PhysicsAggregate(
+      this.rightHandPhysicsMesh,
+      PhysicsShapeType.SPHERE,
+      {
+        mass: 0,
+        restitution: bodyConfig.HAND_RESTITUTION,
+        friction: bodyConfig.FRICTION,
+      },
+      this.scene
+    );
+    this.rightHandPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
+    this.rightHandPhysicsAggregate.body.disablePreStep = false;
+
+    this.physicsInitialized = true;
+
+    // 初期位置を同期
+    this.updatePhysicsBodyPositions();
+  }
+
+  /**
+   * 物理ボディの位置を更新
+   * キャラクターの位置・手の位置に物理メッシュを追従させる
+   */
+  public updatePhysicsBodyPositions(): void {
+    if (!this.physicsInitialized) {
+      return;
+    }
+
+    const characterPos = this.getPosition();
+
+    // 胴体の位置（キャラクター中心）
+    if (this.bodyPhysicsMesh) {
+      this.bodyPhysicsMesh.position = new Vector3(
+        characterPos.x,
+        characterPos.y,  // キャラクターの中心位置
+        characterPos.z
+      );
+      this.bodyPhysicsMesh.rotation.y = this.rotation;
+    }
+
+    // 左手の位置（ワールド座標）
+    if (this.leftHandPhysicsMesh) {
+      const leftHandPos = this.getLeftHandPosition();
+      this.leftHandPhysicsMesh.position = leftHandPos;
+    }
+
+    // 右手の位置（ワールド座標）
+    if (this.rightHandPhysicsMesh) {
+      const rightHandPos = this.getRightHandPosition();
+      this.rightHandPhysicsMesh.position = rightHandPos;
+    }
+  }
+
+  /**
+   * 物理ボディを破棄
+   */
+  private disposePhysics(): void {
+    if (this.bodyPhysicsAggregate) {
+      this.bodyPhysicsAggregate.dispose();
+      this.bodyPhysicsAggregate = null;
+    }
+    if (this.leftHandPhysicsAggregate) {
+      this.leftHandPhysicsAggregate.dispose();
+      this.leftHandPhysicsAggregate = null;
+    }
+    if (this.rightHandPhysicsAggregate) {
+      this.rightHandPhysicsAggregate.dispose();
+      this.rightHandPhysicsAggregate = null;
+    }
+    if (this.bodyPhysicsMesh) {
+      this.bodyPhysicsMesh.dispose();
+      this.bodyPhysicsMesh = null;
+    }
+    if (this.leftHandPhysicsMesh) {
+      this.leftHandPhysicsMesh.dispose();
+      this.leftHandPhysicsMesh = null;
+    }
+    if (this.rightHandPhysicsMesh) {
+      this.rightHandPhysicsMesh.dispose();
+      this.rightHandPhysicsMesh = null;
+    }
+    this.physicsInitialized = false;
+  }
+
   /**
    * 破棄
    */
   public dispose(): void {
+    // 物理ボディを破棄
+    this.disposePhysics();
+
     // 身体パーツを破棄
     this.headMesh.dispose();
     this.leftEyeMesh.dispose();

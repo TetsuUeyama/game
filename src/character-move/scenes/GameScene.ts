@@ -435,6 +435,12 @@ export class GameScene {
       if (this.ball) {
         this.ball.reinitializePhysics();
       }
+
+      // 全キャラクターの物理ボディを初期化（ボールとの衝突用）
+      const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+      for (const character of allCharacters) {
+        character.initializePhysics();
+      }
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");
@@ -606,7 +612,15 @@ export class GameScene {
       }
 
       // 全AIコントローラーを更新
+      // 1on1接触中はオンボールプレイヤー/ディフェンダーのAIをスキップ
+      const circlesInContact = this.oneOnOneBattleController?.isCirclesInContact() ?? false;
       for (const ai of this.characterAIs) {
+        if (circlesInContact) {
+          const state = ai.getCharacter().getState();
+          if (state === 'ON_BALL_PLAYER' || state === 'ON_BALL_DEFENDER') {
+            continue; // 接触中は1on1ペアのAI更新をスキップ
+          }
+        }
         ai.update(deltaTime);
       }
 
@@ -1632,6 +1646,29 @@ export class GameScene {
 
     // ゲームをリセット
     this.resetGame();
+  }
+
+  /**
+   * 衝突システムを更新（外部から呼び出し用）
+   * ドリブルチェックモードなど、独自の更新ループを持つモードで使用
+   * @param deltaTime デルタタイム
+   */
+  public updateCollisionSystems(deltaTime: number): void {
+    // 衝突判定を更新
+    if (this.collisionHandler) {
+      this.collisionHandler.update(deltaTime);
+    }
+
+    // 競り合いコントローラーの更新
+    if (this.contestController) {
+      this.contestController.update(deltaTime);
+    }
+
+    // 1on1バトルコントローラーの更新
+    if (this.oneOnOneBattleController) {
+      this.oneOnOneBattleController.check1on1Battle();
+      this.oneOnOneBattleController.update1on1Movement(deltaTime);
+    }
   }
 
   /**
