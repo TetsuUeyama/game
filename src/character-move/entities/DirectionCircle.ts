@@ -10,11 +10,13 @@ const CIRCLE_SEGMENTS = 32;
 /**
  * キャラクターの方向サークル（円形の足元のサークル）を管理するクラス
  * 視覚的には円だが、論理的には8方向（0-7）を維持
+ * 各方向ごとに異なる半径を設定可能
  */
 export class DirectionCircle {
   private scene: Scene;
   private footCircle: LinesMesh | null = null;
-  private footCircleRadius: number = 1.0;
+  private footCircleRadii: number[] = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]; // 8方向の半径（比率）
+  private footCircleScale: number = 1.0; // 全体のスケール
   private footCircleFaceSegments: Mesh[] = [];
   private footCircleVertexLabels: Mesh[] = [];
 
@@ -26,32 +28,75 @@ export class DirectionCircle {
     scene: Scene,
     getPosition: () => Vector3,
     getRotation: () => number,
-    initialRadius: number = 1.0
+    initialRadius: number | number[] = 1.0
   ) {
     this.scene = scene;
     this.getPosition = getPosition;
     this.getRotation = getRotation;
-    this.footCircleRadius = initialRadius;
+
+    if (Array.isArray(initialRadius)) {
+      // 8方向の半径が配列で指定された場合
+      this.footCircleRadii = initialRadius.length === 8
+        ? [...initialRadius]
+        : [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+    } else {
+      // 単一の半径が指定された場合、全方向に適用
+      this.footCircleRadii = Array(8).fill(initialRadius);
+    }
   }
 
   /**
-   * 足元の円を作成（円形）
+   * 特定の角度での半径を取得（方向間を補間）
+   * @param angle ローカル角度（ラジアン、0=正面）
+   */
+  public getRadiusAtAngle(angle: number): number {
+    // 角度を0〜2πの範囲に正規化
+    while (angle < 0) angle += Math.PI * 2;
+    while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+
+    // 描画は反時計回り（角度増加）だが、方向インデックスは時計回り
+    // 角度を反転して時計回りに変換
+    const clockwiseAngle = (Math.PI * 2 - angle) % (Math.PI * 2);
+
+    // 方向インデックスを計算
+    const angleStep = (Math.PI * 2) / 8;
+    const normalizedAngle = clockwiseAngle / angleStep;
+
+    // 前後の方向インデックス
+    const faceIndex1 = Math.floor(normalizedAngle) % 8;
+    const faceIndex2 = (faceIndex1 + 1) % 8;
+
+    // 補間係数（0〜1）
+    const t = normalizedAngle - Math.floor(normalizedAngle);
+
+    // 線形補間で半径を計算（スケールを適用）
+    const radius1 = this.footCircleRadii[faceIndex1] * this.footCircleScale;
+    const radius2 = this.footCircleRadii[faceIndex2] * this.footCircleScale;
+
+    return radius1 + (radius2 - radius1) * t;
+  }
+
+  /**
+   * 足元の円を作成（8方向ごとに異なる半径をサポート）
    */
   public createFootCircle(): LinesMesh {
     const lines: Vector3[][] = [];
     const position = this.getPosition();
 
     // 円を描画（CIRCLE_SEGMENTS個のセグメントで構成）
+    // 各セグメントの半径は方向間を補間
     for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
       const angleStep = (Math.PI * 2) / CIRCLE_SEGMENTS;
 
       const angle1 = i * angleStep;
-      const x1 = Math.sin(angle1) * this.footCircleRadius;
-      const z1 = Math.cos(angle1) * this.footCircleRadius;
+      const radius1 = this.getRadiusAtAngle(angle1);
+      const x1 = Math.sin(angle1) * radius1;
+      const z1 = Math.cos(angle1) * radius1;
 
       const angle2 = (i + 1) * angleStep;
-      const x2 = Math.sin(angle2) * this.footCircleRadius;
-      const z2 = Math.cos(angle2) * this.footCircleRadius;
+      const radius2 = this.getRadiusAtAngle(angle2);
+      const x2 = Math.sin(angle2) * radius2;
+      const z2 = Math.cos(angle2) * radius2;
 
       lines.push([
         new Vector3(x1, 0.01, z1),
@@ -126,12 +171,13 @@ export class DirectionCircle {
       positions.push(center.x, center.y, center.z);
       normals.push(0, 1, 0);
 
-      // 扇形の外周点を追加
+      // 扇形の外周点を追加（その方向の半径にスケールを適用）
+      const radius = this.footCircleRadii[faceIndex] * this.footCircleScale;
       for (let j = 0; j <= segmentsPerFace; j++) {
         const t = j / segmentsPerFace;
         const angle = startAngle + (endAngle - startAngle) * t;
-        const x = position.x + Math.sin(angle) * this.footCircleRadius;
-        const z = position.z + Math.cos(angle) * this.footCircleRadius;
+        const x = position.x + Math.sin(angle) * radius;
+        const z = position.z + Math.cos(angle) * radius;
         positions.push(x, center.y, z);
         normals.push(0, 1, 0);
       }
@@ -206,10 +252,10 @@ export class DirectionCircle {
   }
 
   /**
-   * 足元の円のサイズを設定
+   * 足元の円のスケールを設定（8方向の比率を保持したまま全体サイズを変更）
    */
   public setFootCircleRadius(radius: number): void {
-    this.footCircleRadius = Math.max(0, radius);
+    this.footCircleScale = Math.max(0, radius);
 
     if (this.footCircle) {
       const wasVisible = this.footCircle.isVisible;
@@ -220,10 +266,78 @@ export class DirectionCircle {
   }
 
   /**
-   * 足元の円の半径を取得
+   * 特定の方向の半径を設定
+   * @param directionIndex 方向インデックス（0-7）
+   * @param radius 半径
+   */
+  public setDirectionRadius(directionIndex: number, radius: number): void {
+    if (directionIndex >= 0 && directionIndex < 8) {
+      this.footCircleRadii[directionIndex] = Math.max(0, radius);
+
+      if (this.footCircle) {
+        const wasVisible = this.footCircle.isVisible;
+        this.footCircle.dispose();
+        this.footCircle = this.createFootCircle();
+        this.footCircle.isVisible = wasVisible;
+      }
+    }
+  }
+
+  /**
+   * 8方向すべての半径を設定
+   * @param radii 8方向の半径配列
+   */
+  public setAllDirectionRadii(radii: number[]): void {
+    if (radii.length === 8) {
+      this.footCircleRadii = radii.map(r => Math.max(0, r));
+
+      if (this.footCircle) {
+        const wasVisible = this.footCircle.isVisible;
+        this.footCircle.dispose();
+        this.footCircle = this.createFootCircle();
+        this.footCircle.isVisible = wasVisible;
+      }
+    }
+  }
+
+  /**
+   * 足元の円のスケールを取得（互換性のため）
    */
   public getFootCircleRadius(): number {
-    return this.footCircleRadius;
+    return this.footCircleScale;
+  }
+
+  /**
+   * 特定の方向の半径を取得（スケール適用済み）
+   * @param directionIndex 方向インデックス（0-7）
+   */
+  public getDirectionRadius(directionIndex: number): number {
+    if (directionIndex >= 0 && directionIndex < 8) {
+      return this.footCircleRadii[directionIndex] * this.footCircleScale;
+    }
+    return this.footCircleRadii[0] * this.footCircleScale;
+  }
+
+  /**
+   * 8方向すべての半径を取得（スケール適用済み）
+   */
+  public getAllDirectionRadii(): number[] {
+    return this.footCircleRadii.map(r => r * this.footCircleScale);
+  }
+
+  /**
+   * ワールド座標での方向から半径を取得（接触判定用）
+   * @param worldDirection ワールド座標での方向ベクトル（正規化不要）
+   * @returns その方向での半径（スケール適用済み）
+   */
+  public getRadiusInWorldDirection(worldDirection: { x: number; z: number }): number {
+    const rotation = this.getRotation();
+
+    // ワールド方向をローカル方向に変換
+    const worldAngle = Math.atan2(worldDirection.x, worldDirection.z);
+    const localAngle = worldAngle - rotation;
+
+    return this.getRadiusAtAngle(localAngle);
   }
 
   /**
@@ -237,12 +351,15 @@ export class DirectionCircle {
 
     const angleStep = (Math.PI * 2) / 8;
     const angleOffset = Math.PI / 8;
-    const angle = -vertexIndex * angleStep + angleOffset;
+    const localAngle = -vertexIndex * angleStep + angleOffset;
 
-    const totalAngle = angle + rotation;
+    const totalAngle = localAngle + rotation;
 
-    const x = position.x + Math.sin(totalAngle) * this.footCircleRadius;
-    const z = position.z + Math.cos(totalAngle) * this.footCircleRadius;
+    // ローカル角度で半径を取得
+    const radius = this.getRadiusAtAngle(localAngle);
+
+    const x = position.x + Math.sin(totalAngle) * radius;
+    const z = position.z + Math.cos(totalAngle) * radius;
 
     return new Vector3(x, position.y, z);
   }
@@ -265,10 +382,14 @@ export class DirectionCircle {
 
     // 方向の中心角度を計算
     const angleStep = (Math.PI * 2) / 8;
-    const angle = -faceIndex * angleStep + rotation;
+    const localAngle = -faceIndex * angleStep;
+    const worldAngle = localAngle + rotation;
 
-    const x = position.x + Math.sin(angle) * this.footCircleRadius;
-    const z = position.z + Math.cos(angle) * this.footCircleRadius;
+    // その方向の半径を取得（スケール適用）
+    const radius = this.footCircleRadii[faceIndex] * this.footCircleScale;
+
+    const x = position.x + Math.sin(worldAngle) * radius;
+    const z = position.z + Math.cos(worldAngle) * radius;
 
     return new Vector3(x, position.y, z);
   }
@@ -372,7 +493,7 @@ export class DirectionCircle {
     const position = this.getPosition();
     const rotation = this.getRotation();
 
-    // 円の外周を更新
+    // 円の外周を更新（8方向ごとの半径を使用）
     if (this.footCircle) {
       this.footCircle.position.x = position.x;
       this.footCircle.position.z = position.z;
@@ -383,12 +504,14 @@ export class DirectionCircle {
         const angleStep = (Math.PI * 2) / CIRCLE_SEGMENTS;
 
         const angle1 = i * angleStep;
-        const x1 = Math.sin(angle1) * this.footCircleRadius;
-        const z1 = Math.cos(angle1) * this.footCircleRadius;
+        const radius1 = this.getRadiusAtAngle(angle1);
+        const x1 = Math.sin(angle1) * radius1;
+        const z1 = Math.cos(angle1) * radius1;
 
         const angle2 = (i + 1) * angleStep;
-        const x2 = Math.sin(angle2) * this.footCircleRadius;
-        const z2 = Math.cos(angle2) * this.footCircleRadius;
+        const radius2 = this.getRadiusAtAngle(angle2);
+        const x2 = Math.sin(angle2) * radius2;
+        const z2 = Math.cos(angle2) * radius2;
 
         lines.push([
           new Vector3(x1, 0.01, z1),
@@ -403,7 +526,7 @@ export class DirectionCircle {
       );
     }
 
-    // 色分けセグメント（扇形）を更新
+    // 色分けセグメント（扇形）を更新（8方向ごとの半径を使用）
     if (this.footCircleFaceSegments.length > 0) {
       const segmentsPerFace = 4;
 
@@ -424,12 +547,13 @@ export class DirectionCircle {
         positions.push(center.x, center.y, center.z);
         normals.push(0, 1, 0);
 
-        // 扇形の外周点を追加
+        // 扇形の外周点を追加（その方向の半径にスケールを適用）
+        const radius = this.footCircleRadii[faceIndex] * this.footCircleScale;
         for (let j = 0; j <= segmentsPerFace; j++) {
           const t = j / segmentsPerFace;
           const angle = startAngle + (endAngle - startAngle) * t;
-          const x = position.x + Math.sin(angle) * this.footCircleRadius;
-          const z = position.z + Math.cos(angle) * this.footCircleRadius;
+          const x = position.x + Math.sin(angle) * radius;
+          const z = position.z + Math.cos(angle) * radius;
           positions.push(x, center.y, z);
           normals.push(0, 1, 0);
         }

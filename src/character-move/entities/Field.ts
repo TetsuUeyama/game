@@ -279,8 +279,16 @@ export class Field {
       `backboard-material-${goalNumber}`,
       this.scene
     );
-    backboardMaterial.diffuseColor = new Color3(1, 1, 1);
-    backboardMaterial.alpha = 0.5;
+    // goal1（+Z側）は青チームが攻める → 青色
+    // goal2（-Z側）は赤チームが攻める → 赤色
+    if (goalNumber === 1) {
+      backboardMaterial.diffuseColor = new Color3(0.3, 0.5, 1); // 青
+      backboardMaterial.emissiveColor = new Color3(0.05, 0.1, 0.3);
+    } else {
+      backboardMaterial.diffuseColor = new Color3(1, 0.3, 0.3); // 赤
+      backboardMaterial.emissiveColor = new Color3(0.3, 0.05, 0.05);
+    }
+    backboardMaterial.alpha = 0.6;
     backboard.material = backboardMaterial;
 
     // リム（輪）

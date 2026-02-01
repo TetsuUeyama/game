@@ -113,10 +113,21 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 目標位置を決定（オーバーライドがあればそれを使用、なければゴール）
     const targetPosition = this.getTargetPosition();
+    const myPosition = this.character.getPosition();
+
+    // 【最優先】常にゴール方向を向く
+    const toGoal = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    );
+    if (toGoal.length() > 0.01) {
+      const goalAngle = Math.atan2(toGoal.x, toGoal.z);
+      this.character.setRotation(goalAngle);
+    }
 
     // 目の前にディフェンダーがいるかチェック
     const onBallDefender = this.findOnBallDefender();
-    const myPosition = this.character.getPosition();
 
     if (onBallDefender) {
       const defenderPosition = onBallDefender.getPosition();
@@ -178,16 +189,12 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.character.playMotion(DRIBBLE_STANCE_MOTION);
     }
 
-    // オフェンス側は常に目標方向を向く（最優先）
+    // 目標への方向ベクトル（update()で既に向きは設定済み）
     const toTarget = new Vector3(
       targetPosition.x - myPosition.x,
       0,
       targetPosition.z - myPosition.z
     );
-    if (toTarget.length() > 0.01) {
-      const angle = Math.atan2(toTarget.x, toTarget.z);
-      this.character.setRotation(angle);
-    }
 
     // 1on1状態: まずパスを試みる（ポジションに応じた判定）
     // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
@@ -216,17 +223,20 @@ export class OnBallOffenseAI extends BaseStateAI {
     // 30%: 動きながら様子を見る（ドリブルモーションを維持）
 
     // 1on1中も少し動く（目標方向に向かいながら）
-    if (toTarget.length() > 0.5) {
-      // 境界チェック
+    const distanceToTarget = toTarget.length();
+    if (distanceToTarget > 0.5) {
       const direction = toTarget.normalize();
+      // 境界チェック・衝突チェックを試みるが、失敗しても移動する
+      let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
         if (adjustedDirection) {
-          // ゆっくり移動（通常速度の50%）
-          this.character.move(adjustedDirection.scale(0.5), deltaTime);
+          moveDirection = adjustedDirection;
         }
       }
+      // ゆっくり移動（通常速度の50%）
+      this.character.move(moveDirection.scale(0.5), deltaTime);
     }
   }
 
@@ -242,33 +252,32 @@ export class OnBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // ダッシュで目標に向かう
+    // ダッシュで目標に向かう（向きはupdate()で既に設定済み）
     const toTarget = new Vector3(
       targetPosition.x - myPosition.x,
       0,
       targetPosition.z - myPosition.z
     );
 
-    if (toTarget.length() > 0.5) {
+    const distanceToTarget = toTarget.length();
+    if (distanceToTarget > 0.5) {
       // ダッシュモーションに切り替え
       if (this.character.getCurrentMotionName() !== 'dash_forward') {
         this.character.playMotion(DASH_FORWARD_MOTION);
       }
 
-      // 目標方向を向く
-      const angle = Math.atan2(toTarget.x, toTarget.z);
-      this.character.setRotation(angle);
-
-      // 境界チェック
+      // 移動方向を決定（境界チェック・衝突チェックを試みるが、失敗しても移動する）
       const direction = toTarget.normalize();
+      let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
         if (adjustedDirection) {
-          // 全速力でダッシュ
-          this.character.move(adjustedDirection, deltaTime);
+          moveDirection = adjustedDirection;
         }
       }
+      // 全速力でダッシュ
+      this.character.move(moveDirection, deltaTime);
     } else {
       // 目標に近い場合はアイドル
       if (this.character.getCurrentMotionName() !== 'idle') {

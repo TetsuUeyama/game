@@ -6,12 +6,16 @@ import { BaseStateAI } from "./BaseStateAI";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
+import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
 
 /**
  * オフボールディフェンダー時のAI
- * ボールを持っていない相手をマークする
+ * フォーメーションに従って指定位置に移動する
+ * シュート時はリバウンドポジションへ移動
  */
 export class OffBallDefenseAI extends BaseStateAI {
+  private currentFormation: Formation;
+
   constructor(
     character: Character,
     ball: Ball,
@@ -19,11 +23,31 @@ export class OffBallDefenseAI extends BaseStateAI {
     field: Field
   ) {
     super(character, ball, allCharacters, field);
+    this.currentFormation = FormationUtils.getDefaultDefenseFormation();
+  }
+
+  /**
+   * フォーメーションを設定
+   */
+  public setFormation(formation: Formation): void {
+    this.currentFormation = formation;
+  }
+
+  /**
+   * フォーメーション名でフォーメーションを設定
+   */
+  public setFormationByName(name: string): boolean {
+    const formation = FormationUtils.getDefenseFormation(name);
+    if (formation) {
+      this.currentFormation = formation;
+      return true;
+    }
+    return false;
   }
 
   /**
    * AIの更新処理
-   * 相手チームのセンター（またはオフボールプレイヤー）をマークする
+   * フォーメーションに従って指定位置に移動
    * シュート時はリバウンドポジションへ移動
    */
   public update(deltaTime: number): void {
@@ -44,96 +68,118 @@ export class OffBallDefenseAI extends BaseStateAI {
       }
     }
 
-    // マークする相手を探す（センター優先、なければオフボールプレイヤー）
-    const markTarget = this.findMarkTarget();
-    if (!markTarget) {
+    // フォーメーションに従って移動
+    this.handleFormationPosition(deltaTime);
+  }
+
+  /**
+   * フォーメーション位置への移動処理
+   */
+  private handleFormationPosition(deltaTime: number): void {
+    const playerPosition = this.character.playerPosition as PlayerPosition;
+    if (!playerPosition) {
+      // ポジションが設定されていない場合は待機
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
       return;
     }
 
-    const targetPosition = markTarget.getPosition();
-    const myPosition = this.character.getPosition();
-    const distanceToTarget = Vector3.Distance(myPosition, targetPosition);
-
-    // マーク距離（相手との距離）
-    const markDistance = 1.0;
-
-    // 相手に十分近い場合は待機してマーク
-    if (distanceToTarget <= markDistance) {
-      this.faceTowards(markTarget);
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
-    }
-
-    // 相手に近づく（自チームのゴール方向からマーク）
-    const defendingGoal = this.character.team === "ally" ? this.field.getGoal2Rim() : this.field.getGoal1Rim();
-    const goalPosition = defendingGoal.position;
-
-    // 相手からゴール方向へのベクトル
-    const toGoal = new Vector3(
-      goalPosition.x - targetPosition.x,
-      0,
-      goalPosition.z - targetPosition.z
+    // フォーメーションから目標位置を取得
+    const isAllyTeam = this.character.team === 'ally';
+    const targetPos = FormationUtils.getTargetPosition(
+      this.currentFormation,
+      playerPosition,
+      isAllyTeam
     );
 
-    if (toGoal.length() > 0.01) {
-      toGoal.normalize();
+    if (!targetPos) {
+      // 目標位置がない場合は待機
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
 
-      // 相手とゴールの間に位置取り
-      const markPosition = new Vector3(
-        targetPosition.x + toGoal.x * markDistance,
-        myPosition.y,
-        targetPosition.z + toGoal.z * markDistance
-      );
+    const targetPosition = new Vector3(
+      targetPos.x,
+      this.character.getPosition().y,
+      targetPos.z
+    );
 
-      // マーク位置に向かって移動
-      const direction = new Vector3(
-        markPosition.x - myPosition.x,
+    // 目標位置に向かって移動
+    this.moveTowardsFormationPosition(targetPosition, deltaTime);
+  }
+
+  /**
+   * フォーメーション位置に向かって移動
+   */
+  private moveTowardsFormationPosition(targetPosition: Vector3, deltaTime: number): void {
+    const currentPosition = this.character.getPosition();
+    const direction = new Vector3(
+      targetPosition.x - currentPosition.x,
+      0,
+      targetPosition.z - currentPosition.z
+    );
+    const distanceToTarget = direction.length();
+
+    // 目標に近い場合は待機（ボールの方を向く）
+    if (distanceToTarget < 0.5) {
+      const ballPosition = this.ball.getPosition();
+      const toBall = new Vector3(
+        ballPosition.x - currentPosition.x,
         0,
-        markPosition.z - myPosition.z
+        ballPosition.z - currentPosition.z
       );
+      if (toBall.length() > 0.01) {
+        const angle = Math.atan2(toBall.x, toBall.z);
+        this.character.setRotation(angle);
+      }
 
-      const distanceToMark = direction.length();
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
 
-      if (distanceToMark > 0.3) {
-        direction.normalize();
+    direction.normalize();
 
-        const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
+    const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+    if (!boundaryAdjusted) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
 
-        if (adjustedDirection) {
-          this.faceTowards(markTarget);
-          this.character.move(adjustedDirection, deltaTime);
+    const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
 
-          if (distanceToMark > 3.0) {
-            if (this.character.getCurrentMotionName() !== 'dash_forward') {
-              this.character.playMotion(DASH_FORWARD_MOTION);
-            }
-          } else {
-            if (this.character.getCurrentMotionName() !== 'walk_forward') {
-              this.character.playMotion(WALK_FORWARD_MOTION);
-            }
-          }
-        } else {
-          if (this.character.getCurrentMotionName() !== 'idle') {
-            this.character.playMotion(IDLE_MOTION);
-          }
+    if (adjustedDirection) {
+      // 移動方向を向く
+      const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
+      this.character.setRotation(angle);
+
+      this.character.move(adjustedDirection, deltaTime);
+
+      if (distanceToTarget > 3.0) {
+        if (this.character.getCurrentMotionName() !== 'dash_forward') {
+          this.character.playMotion(DASH_FORWARD_MOTION);
         }
       } else {
-        this.faceTowards(markTarget);
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getCurrentMotionName() !== 'walk_forward') {
+          this.character.playMotion(WALK_FORWARD_MOTION);
         }
+      }
+    } else {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
       }
     }
   }
 
   /**
    * マークする相手を探す（同ポジションマッチアップ）
-   * ディフェンスは相手チームの同ポジションをマークする
+   * マンツーマン時に使用
    */
   private findMarkTarget(): Character | null {
     const opponentTeam = this.character.team === 'ally' ? 'enemy' : 'ally';

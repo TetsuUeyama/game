@@ -81,8 +81,20 @@ export class CollisionHandler {
       return;
     }
 
-    // XZ平面上の衝突判定（footCircleRadiusを使用）
-    const ballCharacterDistance = BALL_COLLISION_CONFIG.BALL_RADIUS + character.getFootCircleRadius();
+    // ボールからキャラクターへの方向を計算
+    const ballToCharacter = {
+      x: characterPosition.x - ballPosition.x,
+      z: characterPosition.z - ballPosition.z
+    };
+
+    // その方向でのキャラクターの半径を取得（8方向を考慮）
+    const characterRadius = character.getFootCircleRadiusInDirection({
+      x: -ballToCharacter.x,  // キャラクターからボールへの方向
+      z: -ballToCharacter.z
+    });
+
+    // XZ平面上の衝突判定（方向ベースの半径を使用）
+    const ballCharacterDistance = BALL_COLLISION_CONFIG.BALL_RADIUS + characterRadius;
     if (distanceXZ < ballCharacterDistance && distanceXZ > 0.001) {
       // シュート直後のシューター自身はキャッチできない（クールダウン中）
       // ボールの弾き処理はHavok物理エンジンが自動で行う
@@ -105,15 +117,21 @@ export class CollisionHandler {
   /**
    * キャラクター同士の衝突を解決
    * power値が高い方が低い方を押し出す
-   * footCircleRadiusを使用（選手間衝突統一）
+   * 8方向ごとの半径を考慮した衝突判定
    */
   private resolveCharacterCharacterCollision(character1: Character, character2: Character): void {
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
-    // 衝突情報を取得（footCircleRadiusを使用）
-    const radius1 = character1.getFootCircleRadius();
-    const radius2 = character2.getFootCircleRadius();
+    // 各キャラクターから見た相手への方向を計算
+    const dir1to2 = { x: pos2.x - pos1.x, z: pos2.z - pos1.z };
+    const dir2to1 = { x: pos1.x - pos2.x, z: pos1.z - pos2.z };
+
+    // 各キャラクターの相手方向での半径を取得（8方向を考慮）
+    const radius1 = character1.getFootCircleRadiusInDirection(dir1to2);
+    const radius2 = character2.getFootCircleRadiusInDirection(dir2to1);
+
+    // 衝突情報を取得
     const collisionInfo = getCircleCollisionInfo(pos1, radius1, pos2, radius2);
 
     // 衝突していない場合はスキップ
@@ -125,7 +143,7 @@ export class CollisionHandler {
     const power1 = character1.playerData?.stats.power ?? 50;
     const power2 = character2.playerData?.stats.power ?? 50;
 
-    // パワー値に基づいて衝突を解決（footCircleRadiusを使用）
+    // パワー値に基づいて衝突を解決（方向ベースの半径を使用）
     const resolution = resolveCircleCollisionWithPower(
       pos1, radius1, power1,
       pos2, radius2, power2,
@@ -189,23 +207,36 @@ export class CollisionHandler {
       teammate.setState(CharacterState.OFF_BALL_PLAYER);
     });
 
-    // 敵の状態を設定（一番近い敵がON_BALL_DEFENDER、遠い敵がOFF_BALL_DEFENDER）
+    // 敵の状態を設定（同じポジションの敵がON_BALL_DEFENDER、それ以外がOFF_BALL_DEFENDER）
     if (opponents.length > 0) {
-      const holderPosition = holder.getPosition();
+      const holderPosition = holder.playerPosition;
 
-      // 敵を距離順にソート
-      const sortedOpponents = opponents.sort((a, b) => {
-        const distA = getDistance3D(holderPosition, a.getPosition());
-        const distB = getDistance3D(holderPosition, b.getPosition());
-        return distA - distB;
-      });
+      // ボール保持者と同じポジションの敵を探す
+      let onBallDefender: Character | null = null;
 
-      // 一番近い敵をON_BALL_DEFENDER
-      sortedOpponents[0].setState(CharacterState.ON_BALL_DEFENDER);
+      if (holderPosition) {
+        onBallDefender = opponents.find(opp => opp.playerPosition === holderPosition) || null;
+      }
+
+      // 同じポジションの敵がいない場合は、最も近い敵をON_BALL_DEFENDERにする（フォールバック）
+      if (!onBallDefender) {
+        const holderPos = holder.getPosition();
+        const sortedOpponents = [...opponents].sort((a, b) => {
+          const distA = getDistance3D(holderPos, a.getPosition());
+          const distB = getDistance3D(holderPos, b.getPosition());
+          return distA - distB;
+        });
+        onBallDefender = sortedOpponents[0];
+      }
+
+      // ON_BALL_DEFENDERを設定
+      onBallDefender.setState(CharacterState.ON_BALL_DEFENDER);
 
       // 残りの敵をOFF_BALL_DEFENDER
-      for (let i = 1; i < sortedOpponents.length; i++) {
-        sortedOpponents[i].setState(CharacterState.OFF_BALL_DEFENDER);
+      for (const opponent of opponents) {
+        if (opponent !== onBallDefender) {
+          opponent.setState(CharacterState.OFF_BALL_DEFENDER);
+        }
       }
     }
   }
