@@ -22,6 +22,8 @@ export default function CharacterMove1on1Game() {
   const [winner, setWinner] = useState<'ally' | 'enemy' | null>(null);
   const [winningScore, setWinningScore] = useState<number>(5);
   const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ALLY', enemy: 'ENEMY' });
+  const [shotClock, setShotClock] = useState<number>(24.0);
+  const [shotClockOffenseTeam, setShotClockOffenseTeam] = useState<'ally' | 'enemy' | null>(null);
   const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
   const [isShootCheckMode, setIsShootCheckMode] = useState<boolean>(false);
   const [isDribbleCheckMode, setIsDribbleCheckMode] = useState<boolean>(false);
@@ -127,9 +129,13 @@ export default function CharacterMove1on1Game() {
       if (gameSceneRef.current) {
         const currentScore = gameSceneRef.current.getScore();
         const currentWinner = gameSceneRef.current.getWinner();
+        const currentShotClock = gameSceneRef.current.getShotClockRemainingTime();
+        const currentOffenseTeam = gameSceneRef.current.getShotClockOffenseTeam();
 
         setScore(currentScore);
         setWinner(currentWinner);
+        setShotClock(currentShotClock);
+        setShotClockOffenseTeam(currentOffenseTeam);
       }
     }, 100); // 100msごとにチェック
 
@@ -207,10 +213,25 @@ export default function CharacterMove1on1Game() {
             <p className="text-5xl font-black text-red-400">{score.enemy}</p>
           </div>
 
-          {/* 中央（先取表示） */}
+          {/* 中央（先取表示とショットクロック） */}
           <div className="text-center">
             <p className="text-lg font-bold text-yellow-400">{winningScore}点先取</p>
             <p className="text-2xl font-black text-white">VS</p>
+            {/* ショットクロック */}
+            <div className={`mt-2 px-4 py-1 rounded-lg font-mono ${
+              shotClock <= 5
+                ? 'bg-red-600 text-white animate-pulse'
+                : shotClock <= 10
+                  ? 'bg-yellow-500 text-black'
+                  : 'bg-gray-700 text-white'
+            }`}>
+              <span className="text-xs">SHOT CLOCK</span>
+              <p className={`text-3xl font-black ${
+                shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
+              }`}>
+                {Math.ceil(shotClock)}
+              </p>
+            </div>
           </div>
 
           {/* 味方スコア（右側） */}

@@ -19,6 +19,7 @@ import { ShootingController } from "../controllers/action/ShootingController";
 import { ContestController } from "../controllers/ContestController";
 import { CircleSizeController } from "../controllers/CircleSizeController";
 import { FeintController } from "../controllers/action/FeintController";
+import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -82,6 +83,18 @@ export class GameScene {
 
   // フェイントコントローラー
   private feintController?: FeintController;
+
+  // シュートクロックコントローラー
+  private shotClockController?: ShotClockController;
+
+  // シュートクロック違反後のリセット待機状態
+  private pendingShotClockViolationReset: boolean = false;
+  private shotClockViolationResetTimer: number = 0;
+  private shotClockViolatingTeam: 'ally' | 'enemy' | null = null;
+  private readonly shotClockViolationResetDelay: number = 1.5;
+
+  // シュートクロック用：前フレームのボール保持者
+  private previousBallHolder: Character | null = null;
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -218,6 +231,12 @@ export class GameScene {
       );
     }
 
+    // シュートクロックコントローラーの初期化
+    this.shotClockController = new ShotClockController(this.ball);
+    this.shotClockController.setViolationCallback((offendingTeam) => {
+      this.handleShotClockViolation(offendingTeam);
+    });
+
     // シュートコントローラーの初期化
     if (allCharacters.length > 0) {
       this.shootingController = new ShootingController(
@@ -230,6 +249,13 @@ export class GameScene {
       // ゴール時のコールバックを設定
       this.shootingController.setOnGoalCallback((scoringTeam) => {
         this.resetAfterGoal(scoringTeam);
+      });
+
+      // シュート試行時のコールバックを設定（ショットクロック用）
+      this.shootingController.setOnShotAttemptCallback(() => {
+        if (this.shotClockController) {
+          this.shotClockController.onShotAttempted();
+        }
       });
 
       // 全AIコントローラーにShootingControllerを設定
@@ -690,6 +716,30 @@ export class GameScene {
         this.resetAfterOutOfBounds();
         this.pendingOutOfBoundsReset = false;
         console.log('[GameScene] アウトオブバウンズリセット実行');
+      }
+    }
+
+    // ボール保持者の変更を検出してシュートクロックに通知
+    const currentBallHolder = this.ball.getHolder();
+    if (currentBallHolder !== this.previousBallHolder) {
+      if (this.shotClockController) {
+        this.shotClockController.onPossessionChange(currentBallHolder);
+      }
+      this.previousBallHolder = currentBallHolder;
+    }
+
+    // シュートクロック更新
+    if (this.shotClockController) {
+      this.shotClockController.update(deltaTime);
+    }
+
+    // シュートクロック違反リセット待機処理
+    if (this.pendingShotClockViolationReset) {
+      this.shotClockViolationResetTimer -= deltaTime;
+      if (this.shotClockViolationResetTimer <= 0) {
+        this.executeShotClockViolationReset();
+        this.pendingShotClockViolationReset = false;
+        console.log('[GameScene] シュートクロック違反リセット実行');
       }
     }
   }
@@ -1172,6 +1222,11 @@ export class GameScene {
     // ボールをその選手に渡す
     this.ball.setHolder(opponentCharacter);
 
+    // シュートクロックをリセット（新しいボール保持者チームでカウント開始）
+    if (this.shotClockController) {
+      this.shotClockController.reset(opponentCharacter.team);
+    }
+
     // 相手選手（最後に触れた選手）をセンターサークル外側（反対側）に配置
     if (lastToucher && lastToucher !== opponentCharacter) {
       const defenderPosition = new Vector3(
@@ -1181,8 +1236,7 @@ export class GameScene {
       );
       lastToucher.setPosition(defenderPosition);
     }
-
-      }
+  }
 
   /**
    * ゴール後のリセット処理を開始
@@ -1221,6 +1275,78 @@ export class GameScene {
       this.winner = 'ally';
     } else if (this.enemyScore >= this.winningScore) {
       this.winner = 'enemy';
+    }
+  }
+
+  /**
+   * シュートクロック違反時の処理
+   * @param offendingTeam 違反したチーム
+   */
+  private handleShotClockViolation(offendingTeam: 'ally' | 'enemy'): void {
+    console.log('[GameScene] シュートクロック違反:', offendingTeam);
+
+    // 既にリセット待機中の場合は何もしない
+    if (this.pendingShotClockViolationReset || this.pendingGoalReset || this.pendingOutOfBoundsReset) {
+      return;
+    }
+
+    // リセット待機状態を設定
+    this.pendingShotClockViolationReset = true;
+    this.shotClockViolationResetTimer = this.shotClockViolationResetDelay;
+    this.shotClockViolatingTeam = offendingTeam;
+  }
+
+  /**
+   * シュートクロック違反後のリセットを実行
+   */
+  private executeShotClockViolationReset(): void {
+    if (!this.shotClockViolatingTeam) {
+      return;
+    }
+
+    const offendingTeam = this.shotClockViolatingTeam;
+    this.shotClockViolatingTeam = null;
+
+    // ボールの飛行を停止
+    this.ball.endFlight();
+
+    // 全キャラクターのバランスをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+    }
+
+    // 相手チームがボールを持って再開
+    const receivingTeam = offendingTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
+
+    if (receivingTeam.length === 0) {
+      console.warn('[GameScene] 再開する選手が見つかりません');
+      return;
+    }
+
+    const ballHolder = receivingTeam[0];
+
+    // センターサークル半径を取得し、キャラクターの半径と余裕を加えた距離を計算
+    const circleRadius = this.field.getCenterCircleRadius();
+    const characterRadius = 0.3;
+    const positionOffset = circleRadius + characterRadius + 0.3;
+
+    // ボール保持者のチームに応じて配置位置を決定
+    const holderZSign = ballHolder.team === 'ally' ? -1 : 1;
+
+    // ボール保持者をセンターサークル外側（自陣側）に配置
+    const holderPosition = new Vector3(
+      0,
+      ballHolder.config.physical.height / 2,
+      holderZSign * positionOffset
+    );
+    ballHolder.setPosition(holderPosition);
+
+    // ボールを渡す
+    this.ball.setHolder(ballHolder);
+
+    // シュートクロックをリセット（新しいボール保持者チームでカウント開始）
+    if (this.shotClockController) {
+      this.shotClockController.reset(ballHolder.team);
     }
   }
 
@@ -1287,6 +1413,11 @@ export class GameScene {
     // ボールを渡す
     this.ball.setHolder(ballHolder);
 
+    // シュートクロックをリセット（新しいボール保持者チームでカウント開始）
+    if (this.shotClockController) {
+      this.shotClockController.reset(ballHolder.team);
+    }
+
     // 相手選手をセンターサークル外側（反対側）に配置
     if (opponent) {
       const opponentPosition = new Vector3(
@@ -1342,6 +1473,9 @@ export class GameScene {
     this.goalResetTimer = 0;
     this.pendingOutOfBoundsReset = false;
     this.outOfBoundsResetTimer = 0;
+    this.pendingShotClockViolationReset = false;
+    this.shotClockViolationResetTimer = 0;
+    this.shotClockViolatingTeam = null;
 
     // ボール保持者をリセットしてセンターサークルから再開
     const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
@@ -1369,6 +1503,11 @@ export class GameScene {
         );
         ballHolder.setPosition(holderPosition);
         this.ball.setHolder(ballHolder);
+
+        // シュートクロックをリセット（味方チームでカウント開始）
+        if (this.shotClockController) {
+          this.shotClockController.reset('ally');
+        }
       }
 
       // 敵チームを反対側に配置
@@ -1534,6 +1673,27 @@ export class GameScene {
    */
   public getShootingController(): ShootingController | undefined {
     return this.shootingController;
+  }
+
+  /**
+   * ショットクロックの残り時間を取得
+   */
+  public getShotClockRemainingTime(): number {
+    return this.shotClockController?.getRemainingTime() ?? 24.0;
+  }
+
+  /**
+   * ショットクロックが動作中かどうかを取得
+   */
+  public isShotClockRunning(): boolean {
+    return this.shotClockController?.isClockRunning() ?? false;
+  }
+
+  /**
+   * 現在のオフェンスチームを取得
+   */
+  public getShotClockOffenseTeam(): 'ally' | 'enemy' | null {
+    return this.shotClockController?.getCurrentOffenseTeam() ?? null;
   }
 
   /**

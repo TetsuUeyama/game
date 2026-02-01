@@ -79,6 +79,9 @@ export class ShootingController {
   private onGoalCallback: ((scoringTeam: 'ally' | 'enemy') => void) | null = null;
   private currentShooterTeam: 'ally' | 'enemy' | null = null;
 
+  // シュート試行時のコールバック（ショットクロック用）
+  private onShotAttemptCallback: (() => void) | null = null;
+
   constructor(scene: Scene, ball: Ball, field: Field, getAllCharacters: () => Character[]) {
     this.scene = scene;
     this.ball = ball;
@@ -474,6 +477,11 @@ export class ShootingController {
     this.lastBallY = this.ball.getPosition().y;
     this.currentShooterTeam = shooter.team;
 
+    // シュート試行をショットクロックに通知
+    if (this.onShotAttemptCallback) {
+      this.onShotAttemptCallback();
+    }
+
     return {
       success: true,
       shootType,
@@ -634,6 +642,13 @@ export class ShootingController {
    */
   public setOnGoalCallback(callback: (scoringTeam: 'ally' | 'enemy') => void): void {
     this.onGoalCallback = callback;
+  }
+
+  /**
+   * シュート試行時のコールバックを設定（ショットクロック用）
+   */
+  public setOnShotAttemptCallback(callback: () => void): void {
+    this.onShotAttemptCallback = callback;
   }
 
   /**

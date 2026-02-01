@@ -10,7 +10,7 @@ import { Formation, FormationUtils, PlayerPosition } from "../../config/Formatio
 
 /**
  * オフボールディフェンダー時のAI
- * フォーメーションに従って指定位置に移動する
+ * 同じポジションのオフェンスプレイヤーをマンマークする
  * シュート時はリバウンドポジションへ移動
  */
 export class OffBallDefenseAI extends BaseStateAI {
@@ -47,7 +47,7 @@ export class OffBallDefenseAI extends BaseStateAI {
 
   /**
    * AIの更新処理
-   * フォーメーションに従って指定位置に移動
+   * 同じポジションのオフェンスプレイヤーをマンマークする
    * シュート時はリバウンドポジションへ移動
    */
   public update(deltaTime: number): void {
@@ -68,12 +68,70 @@ export class OffBallDefenseAI extends BaseStateAI {
       }
     }
 
-    // フォーメーションに従って移動
-    this.handleFormationPosition(deltaTime);
+    // 同じポジションのオフェンスプレイヤーをマンマーク
+    this.handleManToManDefense(deltaTime);
   }
 
   /**
-   * フォーメーション位置への移動処理
+   * マンツーマンディフェンス処理
+   * 同じポジションのオフェンスプレイヤーをマークする
+   */
+  private handleManToManDefense(deltaTime: number): void {
+    // マークする相手を探す
+    const markTarget = this.findMarkTarget();
+
+    if (!markTarget) {
+      // マーク対象がいない場合はフォーメーション位置へ
+      this.handleFormationPosition(deltaTime);
+      return;
+    }
+
+    // マーク対象の位置を取得
+    const targetPosition = markTarget.getPosition();
+    const myPosition = this.character.getPosition();
+
+    // 守るべきゴールの位置を取得
+    const defendingGoal = this.getDefendingGoalPosition();
+
+    // マーク対象とゴールの間に位置取り（マーク対象から少し離れた位置）
+    const targetToGoal = new Vector3(
+      defendingGoal.x - targetPosition.x,
+      0,
+      defendingGoal.z - targetPosition.z
+    );
+
+    if (targetToGoal.length() > 0.01) {
+      targetToGoal.normalize();
+    }
+
+    // マーク対象から1.5m程度ゴール側に位置取り
+    const markDistance = 1.5;
+    const idealPosition = new Vector3(
+      targetPosition.x + targetToGoal.x * markDistance,
+      myPosition.y,
+      targetPosition.z + targetToGoal.z * markDistance
+    );
+
+    // 理想位置に向かって移動
+    this.moveTowardsMarkPosition(idealPosition, markTarget, deltaTime);
+  }
+
+  /**
+   * 守るべきゴールの位置を取得
+   */
+  private getDefendingGoalPosition(): Vector3 {
+    const team = this.character.team;
+    // allyチームはgoal1を攻める → goal2を守る
+    // enemyチームはgoal2を攻める → goal1を守る
+    if (team === 'ally') {
+      return this.field.getGoal2Rim().position.clone();
+    } else {
+      return this.field.getGoal1Rim().position.clone();
+    }
+  }
+
+  /**
+   * フォーメーション位置への移動処理（フォールバック用）
    */
   private handleFormationPosition(deltaTime: number): void {
     const playerPosition = this.character.playerPosition as PlayerPosition;
@@ -109,6 +167,63 @@ export class OffBallDefenseAI extends BaseStateAI {
 
     // 目標位置に向かって移動
     this.moveTowardsFormationPosition(targetPosition, deltaTime);
+  }
+
+  /**
+   * マーク位置に向かって移動（マーク対象を見ながら）
+   */
+  private moveTowardsMarkPosition(targetPosition: Vector3, markTarget: Character, deltaTime: number): void {
+    const currentPosition = this.character.getPosition();
+    const direction = new Vector3(
+      targetPosition.x - currentPosition.x,
+      0,
+      targetPosition.z - currentPosition.z
+    );
+    const distanceToTarget = direction.length();
+
+    // マーク対象の方を向く
+    const targetPos = markTarget.getPosition();
+    const toTarget = new Vector3(
+      targetPos.x - currentPosition.x,
+      0,
+      targetPos.z - currentPosition.z
+    );
+    if (toTarget.length() > 0.01) {
+      const angle = Math.atan2(toTarget.x, toTarget.z);
+      this.character.setRotation(angle);
+    }
+
+    // 目標に近い場合は待機
+    if (distanceToTarget < 0.5) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    direction.normalize();
+
+    // 移動方向を決定（境界チェック・衝突チェック）
+    let moveDirection = direction;
+    const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+    if (boundaryAdjusted) {
+      const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+      if (adjustedDirection) {
+        moveDirection = adjustedDirection;
+      }
+    }
+
+    this.character.move(moveDirection, deltaTime);
+
+    if (distanceToTarget > 3.0) {
+      if (this.character.getCurrentMotionName() !== 'dash_forward') {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+    } else {
+      if (this.character.getCurrentMotionName() !== 'walk_forward') {
+        this.character.playMotion(WALK_FORWARD_MOTION);
+      }
+    }
   }
 
   /**
