@@ -51,6 +51,13 @@ export class CharacterAI {
   }
 
   /**
+   * 対象キャラクターを取得
+   */
+  public getCharacter(): Character {
+    return this.character;
+  }
+
+  /**
    * ShootingControllerを設定
    */
   public setShootingController(controller: ShootingController): void {

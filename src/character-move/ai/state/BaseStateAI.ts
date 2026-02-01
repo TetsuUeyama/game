@@ -185,18 +185,19 @@ export abstract class BaseStateAI {
 
   /**
    * 衝突チェック - 他のキャラクターと衝突するかチェック
+   * footCircleRadiusを使用（選手間衝突統一）
    * @param newPosition 移動先の位置
    * @returns 衝突する場合true
    */
   protected checkCollision(newPosition: Vector3): boolean {
-    const myRadius = this.character.collisionRadius;
+    const myRadius = this.character.getFootCircleRadius();
 
     for (const other of this.allCharacters) {
       // 自分自身はスキップ
       if (other === this.character) continue;
 
       const otherPosition = other.getPosition();
-      const otherRadius = other.collisionRadius;
+      const otherRadius = other.getFootCircleRadius();
 
       // XZ平面上での距離を計算
       const dx = newPosition.x - otherPosition.x;

@@ -65,6 +65,37 @@ export const DEFENSE_MOVEMENT = {
 } as const;
 
 /**
+ * ディフェンスプレッシャー設定（1on1時の押し返し）
+ * オフェンスをゴールから遠ざけるための設定
+ */
+export const DEFENSE_PRESSURE = {
+  // 押し返しの基本強度（0.0〜1.0）
+  // この値が高いほど、ディフェンダーがオフェンスを押し返す力が強くなる
+  BASE_PUSH_STRENGTH: 0.6,
+
+  // defense値による強度ボーナス係数
+  // (defense - 50) * この値 が基本強度に加算される
+  // 例: defense=80 → (80-50) * 0.01 = +0.3 のボーナス
+  STAT_MULTIPLIER: 0.01,
+
+  // 最大押し返し強度（これ以上にはならない）
+  MAX_PUSH_STRENGTH: 1.0,
+
+  // 最小押し返し強度（これ以下にはならない）
+  MIN_PUSH_STRENGTH: 0.2,
+
+  // 横移動ミラーリングの強度（0.0〜1.0）
+  // オフェンスの横移動に対してどれだけ追従するか
+  LATERAL_MIRROR_STRENGTH: 0.8,
+
+  // スティール試行確率（毎フレーム）
+  STEAL_ATTEMPT_CHANCE: 0.02,        // 2%
+
+  // ディフェンス構え確率（スティールを選ばなかった場合のアクション）
+  DEFENSE_STANCE_CHANCE: 0.4,        // 40%
+} as const;
+
+/**
  * ディフェンスフォーメーション設定
  */
 export const DEFENSE_FORMATION = {
@@ -204,5 +235,40 @@ export class DefenseUtils {
    */
   public static getFormationAngleOffsetsInRadians(): number[] {
     return DEFENSE_FORMATION.ANGLE_OFFSETS.map(deg => (deg * Math.PI) / 180);
+  }
+
+  /**
+   * ディフェンダーの押し返し強度を計算
+   * defense値が高いほど強く押し返せる
+   * @param defenseValue 選手のdefenseステータス値
+   * @returns 押し返し強度（0.0〜1.0）
+   */
+  public static calculatePushStrength(defenseValue: number | undefined): number {
+    const defense = defenseValue ?? 50;
+    const baseStrength = DEFENSE_PRESSURE.BASE_PUSH_STRENGTH;
+    const bonus = (defense - 50) * DEFENSE_PRESSURE.STAT_MULTIPLIER;
+    const strength = baseStrength + bonus;
+    return Math.max(
+      DEFENSE_PRESSURE.MIN_PUSH_STRENGTH,
+      Math.min(DEFENSE_PRESSURE.MAX_PUSH_STRENGTH, strength)
+    );
+  }
+
+  /**
+   * スティールを試みるかどうかを判定
+   * @returns スティールを試みる場合true
+   */
+  public static shouldAttemptSteal(): boolean {
+    return Math.random() < DEFENSE_PRESSURE.STEAL_ATTEMPT_CHANCE;
+  }
+
+  /**
+   * ディフェンスアクション（スティールorディフェンス構え）を選択
+   * @returns 'steal' または 'stance'
+   */
+  public static selectDefensiveAction(): 'steal' | 'stance' {
+    // スティール試行するかどうかの判定後に呼ばれる
+    // ここではスティールとディフェンス構えの比率を決定
+    return Math.random() < (1 - DEFENSE_PRESSURE.DEFENSE_STANCE_CHANCE) ? 'steal' : 'stance';
   }
 }

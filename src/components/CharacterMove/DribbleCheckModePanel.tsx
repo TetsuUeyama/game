@@ -103,6 +103,9 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
       return;
     }
 
+    // GameScene の通常更新ループを一時停止（二重更新を防ぐ）
+    gameScene.pause();
+
     // GameScene のドリブルチェックモードをセットアップ
     // 味方チームの最初のキャラクターをドリブラー、敵チームの最初のキャラクターをディフェンダーとして使用
     const setupResult = gameScene.setupDribbleCheckMode(
@@ -115,6 +118,7 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
 
     if (!setupResult) {
       console.error('[DribbleCheckModePanel] ドリブルチェックモードのセットアップに失敗しました');
+      gameScene.resume(); // 失敗時は再開
       return;
     }
 
@@ -227,8 +231,12 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
       if (feintControllerRef.current) {
         feintControllerRef.current = null;
       }
+      // GameScene の通常更新ループを再開
+      if (gameScene) {
+        gameScene.resume();
+      }
     };
-  }, [phase, startDribbleCheck]);
+  }, [phase, startDribbleCheck, gameScene]);
 
   // 更新ループ（ドリブルチェックコントローラーとゲームシーンの更新）
   useEffect(() => {
@@ -252,6 +260,9 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
 
       // フィールドの更新
       gameScene.getField().update(deltaTime);
+
+      // 衝突システムの更新（キャラクター同士の衝突判定・押し合い）
+      gameScene.updateCollisionSystems(deltaTime);
 
       // ドリブルチェックコントローラーの更新
       if (dribbleCheckControllerRef.current) {
