@@ -51,10 +51,11 @@ export abstract class BaseStateAI {
     // 距離が十分近い場合は移動しない
     const distance = direction.length();
     if (distance < stopDistance) {
-      // 停止時は待機モーションを再生
+      // 停止時は待機モーションを再生し、重心に停止力を適用
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+      this.character.stopMovement();
       return;
     }
 
@@ -66,10 +67,11 @@ export abstract class BaseStateAI {
 
     // 移動できない場合は停止
     if (!adjustedDirection) {
-      // 停止時は待機モーションを再生
+      // 停止時は待機モーションを再生し、重心に停止力を適用
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+      this.character.stopMovement();
       return;
     }
 
@@ -77,11 +79,15 @@ export abstract class BaseStateAI {
     const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
     this.character.setRotation(angle);
 
-    // 移動
-    this.character.move(adjustedDirection, deltaTime);
+    // 距離に応じた移動速度とモーション
+    const isDashing = distance > 5.0;
+    const isRunning = distance > 2.0;
+
+    // 移動（重心力も適用）
+    this.character.move(adjustedDirection, deltaTime, isRunning, isDashing);
 
     // 距離に応じたモーション再生
-    if (distance > 5.0) {
+    if (isDashing) {
       // 遠い場合は走る
       if (this.character.getCurrentMotionName() !== 'dash_forward') {
         this.character.playMotion(DASH_FORWARD_MOTION);
@@ -114,6 +120,7 @@ export abstract class BaseStateAI {
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+      this.character.stopMovement();
       return;
     }
 
@@ -127,6 +134,7 @@ export abstract class BaseStateAI {
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+      this.character.stopMovement();
       return;
     }
 
@@ -137,6 +145,7 @@ export abstract class BaseStateAI {
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+      this.character.stopMovement();
       return;
     }
 
@@ -144,11 +153,15 @@ export abstract class BaseStateAI {
     const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
     this.character.setRotation(angle);
 
-    // 移動
-    this.character.move(adjustedDirection, deltaTime);
+    // 距離に応じた移動速度とモーション
+    const isDashing = distance > 5.0;
+    const isRunning = distance > 2.0;
+
+    // 移動（重心力も適用）
+    this.character.move(adjustedDirection, deltaTime, isRunning, isDashing);
 
     // 距離に応じたモーション再生
-    if (distance > 5.0) {
+    if (isDashing) {
       if (this.character.getCurrentMotionName() !== 'dash_forward') {
         this.character.playMotion(DASH_FORWARD_MOTION);
       }

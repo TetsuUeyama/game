@@ -2,7 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../../config/DribbleConfig";
-import { ONE_ON_ONE_BATTLE, DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
+import { ONE_ON_ONE_BATTLE, DefenseUtils } from "../../config/DefenseConfig";
 import {
   OneOnOneResult,
   ONE_ON_ONE_BATTLE_CONFIG,
@@ -136,12 +136,18 @@ export class OneOnOneBattleController {
       const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
       this.circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
 
-      // 接触時は移動を停止して、新しい移動は設定しない
+      // 接触中の処理
       if (this.circlesInContact) {
-        onBallPlayer.clearAIMovement();
-        onBallDefender.clearAIMovement();
-        // 接触中は動き直しをスキップ
-        return;
+        if (ONE_ON_ONE_BATTLE.OFFENSE_MOVE_DURING_CONTACT) {
+          // オフェンスが動く設定の場合は移動を許可（perform1on1Battleで設定された移動を使用）
+          // ディフェンダーのみ移動をクリア（オフェンスに追従するため）
+          onBallDefender.clearAIMovement();
+        } else {
+          // 従来動作：両者の移動を停止
+          onBallPlayer.clearAIMovement();
+          onBallDefender.clearAIMovement();
+          return;
+        }
       }
     }
 
@@ -166,9 +172,9 @@ export class OneOnOneBattleController {
           // ディフェンスはフェイント方向に釣られて動く（動き直しなのでquicknessを使用）
           this.setDefenderFeintReaction(onBallDefender, newDirection, moveSpeed, true);
         } else {
-          // DribbleUtilsを使用してオフェンス側の動き直し遅延時間を計算
+          // DribbleUtilsを使用してオフェンス側の反応遅延時間を計算（reflexesベース）
           const offensePlayerData = onBallPlayer.playerData;
-          const offenseDelayMs = DribbleUtils.calculateQuicknessDelay(offensePlayerData?.stats.quickness);
+          const offenseDelayMs = DribbleUtils.calculateReflexesDelay(offensePlayerData?.stats.reflexes);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
 
@@ -257,14 +263,66 @@ export class OneOnOneBattleController {
     // フェイント判定
     const isFeint = this.checkFeint(onBallPlayer);
 
-    // 接触中は移動設定をスキップ
-    if (this.circlesInContact) {
-      // 接触中でもサイコロは振る（有利/不利の更新のため）
+    // 接触中でもオフェンスが動くかどうか
+    if (this.circlesInContact && ONE_ON_ONE_BATTLE.OFFENSE_MOVE_DURING_CONTACT) {
+      // 接触中のオフェンス行動
+      // アクション（フェイント or ドリブル突破）を試みるか判定
+      if (Math.random() < ONE_ON_ONE_BATTLE.OFFENSE_ACTION_CHANCE) {
+        // アクション実行
+        if (Math.random() < ONE_ON_ONE_BATTLE.OFFENSE_FEINT_CHANCE) {
+          // フェイント
+          onBallPlayer.clearAIMovement();
+          this.setDefenderFeintReaction(onBallDefender, randomDirection, moveSpeed);
+        } else {
+          // ドリブル突破を試みる（ボールが0番面の場合）
+          if (currentFace === 0) {
+            const direction = Math.random() < ONE_ON_ONE_BATTLE_CONFIG.BREAKTHROUGH_LEFT_CHANCE ? 'left' : 'right';
+            this.performDribbleBreakthrough(direction);
+          }
+        }
+      } else {
+        // 通常移動（接触中でも動く）
+        // ゴール方向か、ランダム方向か選択
+        let moveDirection: Vector3;
+        if (shouldTurnToGoal) {
+          // ゴール方向に移動
+          const goalPosition = this.getTargetGoalPosition(onBallPlayer);
+          const playerPos = onBallPlayer.getPosition();
+          moveDirection = new Vector3(
+            goalPosition.x - playerPos.x,
+            0,
+            goalPosition.z - playerPos.z
+          );
+          if (moveDirection.length() > 0.01) {
+            moveDirection.normalize();
+          }
+          // ゴール方向を向く
+          this.turnTowardsGoal(onBallPlayer);
+        } else {
+          // ランダム方向に移動
+          moveDirection = randomDirection;
+        }
+        onBallPlayer.setAIMovement(moveDirection, moveSpeed * 0.7, 0); // 接触中は速度70%
+        this.setDefenderReaction(onBallPlayer, onBallDefender, moveDirection, moveSpeed);
+      }
+    } else if (this.circlesInContact) {
+      // 接触中で動かない設定の場合（従来動作）
+      // サイコロは振る（有利/不利の更新のため）
     } else if (shouldTurnToGoal) {
-      // ゴール方向を向く
+      // ゴール方向に移動
+      const goalPosition = this.getTargetGoalPosition(onBallPlayer);
+      const playerPos = onBallPlayer.getPosition();
+      const goalDirection = new Vector3(
+        goalPosition.x - playerPos.x,
+        0,
+        goalPosition.z - playerPos.z
+      );
+      if (goalDirection.length() > 0.01) {
+        goalDirection.normalize();
+      }
       this.turnTowardsGoal(onBallPlayer);
-      onBallPlayer.clearAIMovement();
-      this.setDefenderReaction(onBallPlayer, onBallDefender, randomDirection, moveSpeed);
+      onBallPlayer.setAIMovement(goalDirection, moveSpeed, 0);
+      this.setDefenderReaction(onBallPlayer, onBallDefender, goalDirection, moveSpeed);
     } else if (isFeint) {
       // フェイント発動
       onBallPlayer.clearAIMovement();
@@ -317,7 +375,7 @@ export class OneOnOneBattleController {
     defender: Character,
     _offenseDirection: Vector3,
     speed: number,
-    isRedirect: boolean = false
+    _isRedirect: boolean = false
   ): void {
     const offensePos = offense.getPosition();
     const defenderPos = defender.getPosition();
@@ -350,15 +408,10 @@ export class OneOnOneBattleController {
 
     const normalizedDirection = moveDirection.normalize();
 
-    // DribbleUtilsを使用してディフェンダーの遅延時間を計算
+    // DribbleUtilsを使用してディフェンダーの反応遅延時間を計算（reflexesベース）
+    // 重心が安定してから実行されるため、ここでは純粋な反応時間のみ
     const defenderPlayerData = defender.playerData;
-    let reactionDelayMs: number;
-
-    if (isRedirect) {
-      reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
-    } else {
-      reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
-    }
+    const reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
 
     defender.setAIMovement(normalizedDirection, speed, reactionDelayMs);
   }
@@ -370,17 +423,12 @@ export class OneOnOneBattleController {
     defender: Character,
     feintDirection: Vector3,
     speed: number,
-    isRedirect: boolean = false
+    _isRedirect: boolean = false
   ): void {
-    // DribbleUtilsを使用して遅延時間を計算
+    // DribbleUtilsを使用して反応遅延時間を計算（reflexesベース）
+    // 重心が安定してから実行されるため、ここでは純粋な反応時間のみ
     const defenderPlayerData = defender.playerData;
-    let reactionDelayMs: number;
-
-    if (isRedirect) {
-      reactionDelayMs = DribbleUtils.calculateQuicknessDelay(defenderPlayerData?.stats.quickness);
-    } else {
-      reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
-    }
+    const reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
 
     const moveDirection = feintDirection.clone().normalize();
     const feintSpeed = speed * DRIBBLE_CONFIG.FEINT_SPEED_MULTIPLIER;
@@ -437,6 +485,7 @@ export class OneOnOneBattleController {
 
   /**
    * 1on1状態かどうかを判定
+   * オンボールオフェンスプレイヤーの視野内にディフェンダーがいるかどうか
    */
   public is1on1State(): boolean {
     const allCharacters = this.getAllCharacters();
@@ -454,16 +503,16 @@ export class OneOnOneBattleController {
     }
 
     if (onBallPlayer && onBallDefender) {
-      const distance = Vector3.Distance(
-        onBallPlayer.getPosition(),
-        onBallDefender.getPosition()
+      const offensePos = onBallPlayer.getPosition();
+      const defenderPos = onBallDefender.getPosition();
+
+      // 視野ベースで1on1状態を判定
+      // オフェンスプレイヤーの視野内にディフェンダーがいるかどうか
+      return DefenseUtils.is1on1StateByFieldOfView(
+        { x: offensePos.x, z: offensePos.z },
+        onBallPlayer.getRotation(),
+        { x: defenderPos.x, z: defenderPos.z }
       );
-
-      // DefenseUtilsを使用して1on1状態を判定
-      const defenderRadius = onBallDefender.getFootCircleRadius();
-      const is1on1 = DefenseUtils.is1on1State(distance, DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS, defenderRadius);
-
-      return is1on1;
     }
 
     return false;
@@ -651,10 +700,10 @@ export class OneOnOneBattleController {
         if (this.in1on1Battle && onBallPlayer && onBallDefender) {
           const newDirection = this.getRandomDirection8();
 
-          // DribbleUtilsを使用して速度と遅延を計算
+          // DribbleUtilsを使用して速度と遅延を計算（reflexesベース）
           const offenseData = onBallPlayer.playerData;
           const moveSpeed = DribbleUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
-          const offenseDelayMs = DribbleUtils.calculateQuicknessDelay(offenseData?.stats.quickness);
+          const offenseDelayMs = DribbleUtils.calculateReflexesDelay(offenseData?.stats.reflexes);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
           this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);
@@ -674,6 +723,28 @@ export class OneOnOneBattleController {
       }
     }
     return false;
+  }
+
+  /**
+   * オンボールオフェンスプレイヤーの視野内にディフェンダーがいるかどうか
+   * @returns 視野内にいる場合true
+   */
+  public isDefenderInOffenseFieldOfView(): boolean {
+    const onBallPlayer = this.findOnBallPlayer();
+    const onBallDefender = this.findOnBallDefender();
+
+    if (!onBallPlayer || !onBallDefender) {
+      return false;
+    }
+
+    const offensePos = onBallPlayer.getPosition();
+    const defenderPos = onBallDefender.getPosition();
+
+    return DefenseUtils.is1on1StateByFieldOfView(
+      { x: offensePos.x, z: offensePos.z },
+      onBallPlayer.getRotation(),
+      { x: defenderPos.x, z: defenderPos.z }
+    );
   }
 
   /**

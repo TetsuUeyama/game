@@ -16,6 +16,9 @@ import {
   DribbleCheckProgress,
 } from "../../config/check/DribbleCheckConfig";
 
+// サークル接触判定のコールバック型
+type CirclesInContactCallback = () => boolean;
+
 // 型をre-export
 export type { DribbleCheckResult, DribbleCheckConfig, DribbleCheckState, DribbleCheckProgress };
 
@@ -56,6 +59,9 @@ export class DribbleCheckController {
   // getAllCharacters関数（AI用）
   private getAllCharacters: () => Character[];
 
+  // サークル接触判定コールバック（試合モードと同じスキップ処理用）
+  private isCirclesInContact: CirclesInContactCallback;
+
   constructor(
     dribbler: Character,
     defender: Character,
@@ -63,7 +69,8 @@ export class DribbleCheckController {
     field: Field,
     getAllCharacters: () => Character[],
     config: DribbleCheckConfig,
-    feintController: FeintController
+    feintController: FeintController,
+    isCirclesInContact?: CirclesInContactCallback
   ) {
     this.dribbler = dribbler;
     this.defender = defender;
@@ -71,6 +78,7 @@ export class DribbleCheckController {
     this.field = field;
     this.getAllCharacters = getAllCharacters;
     this.feintController = feintController;
+    this.isCirclesInContact = isCirclesInContact ?? (() => false);
     this.config = {
       ...config,
       trialsPerConfig: config.trialsPerConfig ?? DRIBBLE_CHECK_TIMING.DEFAULT_TRIALS_PER_CONFIG,
@@ -257,6 +265,7 @@ export class DribbleCheckController {
 
   /**
    * 更新処理（毎フレーム呼び出し）
+   * 試合モードと同じロジックを使用（サークル接触時はAI更新をスキップ）
    */
   public update(deltaTime: number): void {
     if (this.state !== 'running') return;
@@ -264,12 +273,32 @@ export class DribbleCheckController {
     // 経過時間を更新
     this.trialElapsedTime = (Date.now() - this.trialStartTime) / 1000;
 
-    // AIを更新
+    // AIを更新（試合モードと同じスキップ処理）
+    // 1on1接触中はオンボールプレイヤー/ディフェンダーのAI更新をスキップ
+    const circlesInContact = this.isCirclesInContact();
+
     if (this.dribblerAI) {
-      this.dribblerAI.update(deltaTime);
+      if (circlesInContact) {
+        const state = this.dribbler.getState();
+        if (state !== CharacterState.ON_BALL_PLAYER) {
+          this.dribblerAI.update(deltaTime);
+        }
+        // ON_BALL_PLAYERの場合はスキップ（OneOnOneBattleControllerが制御）
+      } else {
+        this.dribblerAI.update(deltaTime);
+      }
     }
+
     if (this.defenderAI) {
-      this.defenderAI.update(deltaTime);
+      if (circlesInContact) {
+        const state = this.defender.getState();
+        if (state !== CharacterState.ON_BALL_DEFENDER) {
+          this.defenderAI.update(deltaTime);
+        }
+        // ON_BALL_DEFENDERの場合はスキップ（OneOnOneBattleControllerが制御）
+      } else {
+        this.defenderAI.update(deltaTime);
+      }
     }
 
     // 試行結果をチェック

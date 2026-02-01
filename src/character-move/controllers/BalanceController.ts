@@ -11,6 +11,7 @@ import {
   BALANCE_THRESHOLD,
   ACTION_FORCES,
   ACTION_TYPE_FORCES,
+  MOVEMENT_BALANCE,
 } from "../config/BalanceConfig";
 import type { ActionType } from "../config/action/ActionConfig";
 import {
@@ -248,6 +249,171 @@ export class BalanceController {
   applyImpulse(impulse: Vector3): void {
     const velocityChange = impulse.scale(1 / this.state.mass);
     this.state.velocity = this.state.velocity.add(velocityChange);
+  }
+
+  // ==========================================================================
+  // 移動による重心力
+  // ==========================================================================
+
+  /**
+   * 移動による重心力を適用
+   * @param movementDirection 移動方向（正規化済み）
+   * @param speed 移動速度（m/s）
+   * @param isRunning 走行中かどうか
+   * @param isDashing ダッシュ中かどうか
+   */
+  applyMovementForce(
+    movementDirection: Vector3,
+    speed: number,
+    isRunning: boolean = false,
+    isDashing: boolean = false
+  ): void {
+    // ロック中は適用しない
+    if (this.state.isLocked) return;
+
+    // 基本の力を決定
+    let baseForce: number;
+    if (isDashing) {
+      baseForce = MOVEMENT_BALANCE.DASH_FORCE;
+    } else if (isRunning) {
+      baseForce = MOVEMENT_BALANCE.RUN_FORCE;
+    } else {
+      baseForce = MOVEMENT_BALANCE.WALK_FORCE;
+    }
+
+    // 速度に応じた追加の力
+    const speedBonus = speed * MOVEMENT_BALANCE.SPEED_FORCE_SCALE;
+    const totalForce = baseForce + speedBonus;
+
+    // 進行方向に力を適用（重心が進行方向に傾く）
+    const force = new Vector3(
+      movementDirection.x * totalForce,
+      -totalForce * 0.1, // 少し下向きの力（重心を低く）
+      movementDirection.z * totalForce
+    );
+
+    // 体重による調整
+    const weightFactor = getWeightForceFactor(this.weight);
+    this.externalForce = force.scale(weightFactor);
+    this.forceEndTime = Date.now() + 50; // 継続的な力（短い間隔で更新）
+  }
+
+  /**
+   * 方向転換による重心力を適用
+   * @param previousDirection 前の移動方向（正規化済み）
+   * @param newDirection 新しい移動方向（正規化済み）
+   * @param speed 現在の移動速度（m/s）
+   */
+  applyDirectionChangeForce(
+    previousDirection: Vector3,
+    newDirection: Vector3,
+    speed: number
+  ): void {
+    // ロック中は適用しない
+    if (this.state.isLocked) return;
+
+    // 方向変化の角度を計算
+    const dot = previousDirection.x * newDirection.x + previousDirection.z * newDirection.z;
+    const angle = Math.acos(Math.max(-1, Math.min(1, dot))); // 0 ～ π
+
+    // 角度に応じた力を決定
+    let force: number;
+    if (angle >= Math.PI * 0.9) {
+      // ほぼ180度転換
+      force = MOVEMENT_BALANCE.REVERSE_TURN_FORCE;
+    } else if (angle >= MOVEMENT_BALANCE.SHARP_TURN_THRESHOLD) {
+      // 急な方向転換（90度以上）
+      force = MOVEMENT_BALANCE.SHARP_TURN_FORCE;
+    } else if (angle >= MOVEMENT_BALANCE.LIGHT_TURN_THRESHOLD) {
+      // 軽い方向転換（30～90度）
+      const t = (angle - MOVEMENT_BALANCE.LIGHT_TURN_THRESHOLD) /
+                (MOVEMENT_BALANCE.SHARP_TURN_THRESHOLD - MOVEMENT_BALANCE.LIGHT_TURN_THRESHOLD);
+      force = MOVEMENT_BALANCE.LIGHT_TURN_FORCE +
+              (MOVEMENT_BALANCE.SHARP_TURN_FORCE - MOVEMENT_BALANCE.LIGHT_TURN_FORCE) * t;
+    } else {
+      // 微小な方向変化は無視
+      return;
+    }
+
+    // 速度が速いほど力が大きい
+    const speedMultiplier = Math.max(1.0, speed / 3.0);
+    force *= speedMultiplier;
+
+    // 力の方向を計算（前の慣性方向に引っ張られる）
+    // 新しい方向に対して前の方向の成分を力として加える
+    const forceDirection = new Vector3(
+      previousDirection.x - newDirection.x,
+      0,
+      previousDirection.z - newDirection.z
+    );
+
+    if (forceDirection.length() > 0.01) {
+      forceDirection.normalize();
+      const forceVector = new Vector3(
+        forceDirection.x * force,
+        -force * 0.05, // 少し下向き
+        forceDirection.z * force
+      );
+
+      // 体重による調整
+      const weightFactor = getWeightForceFactor(this.weight);
+      this.externalForce = forceVector.scale(weightFactor);
+      this.forceEndTime = Date.now() + MOVEMENT_BALANCE.TURN_FORCE_DURATION * 1000;
+    }
+  }
+
+  /**
+   * 急停止による重心力を適用
+   * @param previousDirection 停止前の移動方向（正規化済み）
+   * @param speed 停止前の速度（m/s）
+   */
+  applySuddenStopForce(previousDirection: Vector3, speed: number): void {
+    // ロック中は適用しない
+    if (this.state.isLocked) return;
+
+    // 速度が閾値未満なら適用しない
+    if (speed < MOVEMENT_BALANCE.SUDDEN_STOP_VELOCITY_THRESHOLD) {
+      return;
+    }
+
+    // 速度に応じた力（速いほど前のめり）
+    const speedMultiplier = speed / MOVEMENT_BALANCE.SUDDEN_STOP_VELOCITY_THRESHOLD;
+    const force = MOVEMENT_BALANCE.SUDDEN_STOP_FORCE * speedMultiplier;
+
+    // 進行方向に前のめりになる力
+    const forceVector = new Vector3(
+      previousDirection.x * force,
+      force * 0.1, // 少し上向き（つんのめる感じ）
+      previousDirection.z * force
+    );
+
+    // 体重による調整
+    const weightFactor = getWeightForceFactor(this.weight);
+    this.externalForce = forceVector.scale(weightFactor);
+    this.forceEndTime = Date.now() + MOVEMENT_BALANCE.STOP_FORCE_DURATION * 1000;
+  }
+
+  /**
+   * 移動開始による重心力を適用
+   * @param startDirection 移動開始方向（正規化済み）
+   */
+  applyMovementStartForce(startDirection: Vector3): void {
+    // ロック中は適用しない
+    if (this.state.isLocked) return;
+
+    const force = MOVEMENT_BALANCE.START_FORCE;
+
+    // 移動方向の逆向きの力（慣性で後ろに引っ張られる）
+    const forceVector = new Vector3(
+      -startDirection.x * force,
+      -force * 0.05,
+      -startDirection.z * force
+    );
+
+    // 体重による調整
+    const weightFactor = getWeightForceFactor(this.weight);
+    this.externalForce = forceVector.scale(weightFactor);
+    this.forceEndTime = Date.now() + MOVEMENT_BALANCE.START_FORCE_DURATION * 1000;
   }
 
   // ==========================================================================

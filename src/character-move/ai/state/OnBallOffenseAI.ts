@@ -6,10 +6,11 @@ import { BaseStateAI } from "./BaseStateAI";
 import { ShootingController } from "../../controllers/action/ShootingController";
 import { FeintController } from "../../controllers/action/FeintController";
 import { SHOOT_COOLDOWN, ShootingUtils } from "../../config/action/ShootingConfig";
-import { DEFENSE_DISTANCE, DefenseUtils } from "../../config/DefenseConfig";
+import { DefenseUtils } from "../../config/DefenseConfig";
 import { PASS_COOLDOWN, PassUtils } from "../../config/PassConfig";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
-import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
+import { DRIBBLE_STANCE_MOTION } from "../../motion/DribbleMotion";
+import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 
 /**
  * パス実行時のコールバック型
@@ -115,129 +116,36 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 目の前にディフェンダーがいるかチェック
     const onBallDefender = this.findOnBallDefender();
+    const myPosition = this.character.getPosition();
 
     if (onBallDefender) {
-      const myPosition = this.character.getPosition();
       const defenderPosition = onBallDefender.getPosition();
 
-      // ディフェンダーとの距離をチェック
-      const distance = Vector3.Distance(myPosition, defenderPosition);
+      // 視野ベースで1on1状態を判定
+      // オフェンスプレイヤーの視野内にディフェンダーがいるかどうか
+      const isDefenderInFOV = DefenseUtils.is1on1StateByFieldOfView(
+        { x: myPosition.x, z: myPosition.z },
+        this.character.getRotation(),
+        { x: defenderPosition.x, z: defenderPosition.z }
+      );
 
-      // DefenseUtilsを使用してサークルが重なる距離を計算
-      const offenseRadius = DEFENSE_DISTANCE.OFFENSE_CIRCLE_RADIUS;
-      const defenderRadius = onBallDefender.getFootCircleRadius();
-      const minDistance = DefenseUtils.calculateContactDistance(offenseRadius, defenderRadius);
-
-      // サークルが重なったら1on1状態で停止
-      if (distance <= minDistance) {
-        // 停止時は待機モーションを再生
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
-        }
-
-        // オフェンス側は常に目標方向を向く（最優先）
-        const toTarget = new Vector3(
-          targetPosition.x - myPosition.x,
-          0,
-          targetPosition.z - myPosition.z
-        );
-        if (toTarget.length() > 0.01) {
-          const angle = Math.atan2(toTarget.x, toTarget.z);
-          this.character.setRotation(angle);
-        }
-
-        // 1on1状態: まずパスを試みる（ポジションに応じた判定）
-        // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
-        if (!this.targetPositionOverride && this.tryPass()) {
-          return;
-        }
-
-        // 目標位置オーバーライド時（1on1テスト）は、ランダムにアクションを選択
-        if (this.targetPositionOverride) {
-          const actionChoice = Math.random();
-          if (actionChoice < 0.3) {
-            // 30%: フェイント
-            if (this.tryFeint()) {
-              return;
-            }
-          } else if (actionChoice < 0.7) {
-            // 40%: ドリブルムーブ
-            if (this.tryDribbleMove()) {
-              return;
-            }
-          }
-          // 30%: 何もしない（プレッシャーをかけられている状態）
-          return;
-        }
-
-        // 通常時: フェイントを試みる（確率でフェイントまたはシュートを選択）
-        if (this.tryFeint()) {
-          return; // フェイント実行した場合、シュートは打たない
-        }
-
-        // フェイントを選択しなかった場合、シュートを試みる
-        if (this.tryShoot()) {
-          return;
-        }
-
+      if (isDefenderInFOV) {
+        // ========================================
+        // 1on1状態（ディフェンダーが視野内）
+        // ========================================
+        this.handle1on1State(targetPosition, deltaTime);
         return;
-      }
-
-      // ディフェンダーのサークルに入らないように、ディフェンダーから離れる方向に移動
-      // DefenseUtilsを使用して近づきすぎをチェック
-      if (DefenseUtils.isTooCloseToOffense(distance, offenseRadius, defenderRadius)) {
-        // ディフェンダーから離れる方向を計算
-        const awayDirection = new Vector3(
-          myPosition.x - defenderPosition.x,
-          0,
-          myPosition.z - defenderPosition.z
-        );
-
-        if (awayDirection.length() > 0.01) {
-          awayDirection.normalize();
-
-          // 目標方向とディフェンダーから離れる方向を組み合わせる
-          const toTarget = new Vector3(
-            targetPosition.x - myPosition.x,
-            0,
-            targetPosition.z - myPosition.z
-          );
-          toTarget.normalize();
-
-          // 60%目標方向、40%ディフェンダーから離れる方向
-          const combinedDirection = toTarget.scale(0.6).add(awayDirection.scale(0.4));
-          combinedDirection.normalize();
-
-          // 境界チェック（オフェンスはフィールド外に出ない）
-          const boundaryAdjusted = this.adjustDirectionForBoundary(combinedDirection, deltaTime);
-          if (!boundaryAdjusted) {
-            // 境界に達したら停止
-            if (this.character.getCurrentMotionName() !== 'idle') {
-              this.character.playMotion(IDLE_MOTION);
-            }
-            return;
-          }
-
-          // 衝突を考慮して移動
-          const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
-
-          if (adjustedDirection) {
-            this.character.move(adjustedDirection, deltaTime);
-
-            if (this.character.getCurrentMotionName() !== 'walk_forward') {
-              this.character.playMotion(WALK_FORWARD_MOTION);
-            }
-          } else {
-            if (this.character.getCurrentMotionName() !== 'idle') {
-              this.character.playMotion(IDLE_MOTION);
-            }
-          }
-        }
+      } else {
+        // ========================================
+        // ディフェンダーが視野外に外れた瞬間
+        // → ダッシュでゴールへ向かう OR シュートを狙う
+        // ========================================
+        this.handleDefenderOutOfFOV(targetPosition, deltaTime);
         return;
       }
     }
 
-    // ディフェンダーがいないか遠い場合
+    // ディフェンダーがいない場合
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     // 目標位置オーバーライド時はシュートしない
     if (!this.targetPositionOverride && this.tryShoot()) {
@@ -253,6 +161,120 @@ export class OnBallOffenseAI extends BaseStateAI {
     // 目標位置に向かって移動（境界チェック付き）
     const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
     this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance);
+  }
+
+  /**
+   * 1on1状態（ディフェンダーが視野内）の処理
+   * ドリブルモーションを使用し、アクションを実行
+   */
+  private handle1on1State(
+    targetPosition: Vector3,
+    deltaTime: number
+  ): void {
+    const myPosition = this.character.getPosition();
+
+    // 1on1時は常にドリブル構えモーションを再生（歩行・アイドル共通）
+    if (this.character.getCurrentMotionName() !== 'dribble_stance') {
+      this.character.playMotion(DRIBBLE_STANCE_MOTION);
+    }
+
+    // オフェンス側は常に目標方向を向く（最優先）
+    const toTarget = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    );
+    if (toTarget.length() > 0.01) {
+      const angle = Math.atan2(toTarget.x, toTarget.z);
+      this.character.setRotation(angle);
+    }
+
+    // 1on1状態: まずパスを試みる（ポジションに応じた判定）
+    // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
+    if (!this.targetPositionOverride && this.tryPass()) {
+      return;
+    }
+
+    // アクションをランダムに選択
+    const actionChoice = Math.random();
+    if (actionChoice < 0.25) {
+      // 25%: フェイント
+      if (this.tryFeint()) {
+        return;
+      }
+    } else if (actionChoice < 0.5) {
+      // 25%: ドリブル突破
+      if (this.tryDribbleMove()) {
+        return;
+      }
+    } else if (actionChoice < 0.7) {
+      // 20%: シュート
+      if (!this.targetPositionOverride && this.tryShoot()) {
+        return;
+      }
+    }
+    // 30%: 動きながら様子を見る（ドリブルモーションを維持）
+
+    // 1on1中も少し動く（目標方向に向かいながら）
+    if (toTarget.length() > 0.5) {
+      // 境界チェック
+      const direction = toTarget.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+      if (boundaryAdjusted) {
+        const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+        if (adjustedDirection) {
+          // ゆっくり移動（通常速度の50%）
+          this.character.move(adjustedDirection.scale(0.5), deltaTime);
+        }
+      }
+    }
+  }
+
+  /**
+   * ディフェンダーが視野外に外れた時の処理
+   * ダッシュでゴールへ向かうか、シュートレンジならシュート
+   */
+  private handleDefenderOutOfFOV(targetPosition: Vector3, deltaTime: number): void {
+    const myPosition = this.character.getPosition();
+
+    // 目標位置オーバーライド時以外は、まずシュートを試みる
+    if (!this.targetPositionOverride && this.tryShoot()) {
+      return;
+    }
+
+    // ダッシュで目標に向かう
+    const toTarget = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    );
+
+    if (toTarget.length() > 0.5) {
+      // ダッシュモーションに切り替え
+      if (this.character.getCurrentMotionName() !== 'dash_forward') {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      // 目標方向を向く
+      const angle = Math.atan2(toTarget.x, toTarget.z);
+      this.character.setRotation(angle);
+
+      // 境界チェック
+      const direction = toTarget.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+      if (boundaryAdjusted) {
+        const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+        if (adjustedDirection) {
+          // 全速力でダッシュ
+          this.character.move(adjustedDirection, deltaTime);
+        }
+      }
+    } else {
+      // 目標に近い場合はアイドル
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+    }
   }
 
   /**

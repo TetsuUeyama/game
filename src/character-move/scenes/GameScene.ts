@@ -796,6 +796,13 @@ export class GameScene {
   }
 
   /**
+   * サークルが接触中かどうかを取得
+   */
+  public isCirclesInContact(): boolean {
+    return this.oneOnOneBattleController?.isCirclesInContact() ?? false;
+  }
+
+  /**
    * 無力化されたディフェンダーかチェック
    */
   public isDefeatedDefender(character: Character): boolean {
@@ -1651,12 +1658,15 @@ export class GameScene {
   /**
    * 衝突システムを更新（外部から呼び出し用）
    * ドリブルチェックモードなど、独自の更新ループを持つモードで使用
+   * 試合モード（GameScene.update()）と同じ順序で更新する
    * @param deltaTime デルタタイム
    */
   public updateCollisionSystems(deltaTime: number): void {
-    // 衝突判定を更新
-    if (this.collisionHandler) {
-      this.collisionHandler.update(deltaTime);
+    // 1on1バトルコントローラーの更新（ドリブル突破とAI移動）
+    // ※試合モードと同じ順序: update1on1Movement() → check1on1Battle()
+    if (this.oneOnOneBattleController) {
+      this.oneOnOneBattleController.updateDribbleBreakthrough(deltaTime);
+      this.oneOnOneBattleController.update1on1Movement(deltaTime);
     }
 
     // 競り合いコントローラーの更新
@@ -1664,10 +1674,35 @@ export class GameScene {
       this.contestController.update(deltaTime);
     }
 
-    // 1on1バトルコントローラーの更新
+    // サークルサイズコントローラーの更新
+    if (this.circleSizeController) {
+      this.circleSizeController.update(deltaTime);
+    }
+
+    // フェイントコントローラーの更新
+    if (this.feintController) {
+      this.feintController.update(deltaTime);
+    }
+
+    // 衝突判定を更新
+    if (this.collisionHandler) {
+      this.collisionHandler.update(deltaTime);
+    }
+
+    // 1on1状態の変化をチェック（移動適用後に行う）
     if (this.oneOnOneBattleController) {
       this.oneOnOneBattleController.check1on1Battle();
-      this.oneOnOneBattleController.update1on1Movement(deltaTime);
+
+      // 有利/不利状態をオンボールプレイヤーとディフェンダーに反映
+      const advantageStatus = this.oneOnOneBattleController.getAdvantageStatus();
+      const onBallPlayer = this.oneOnOneBattleController.findOnBallPlayer();
+      const onBallDefender = this.oneOnOneBattleController.findOnBallDefender();
+      if (onBallPlayer) {
+        onBallPlayer.setAdvantageStatus(advantageStatus);
+      }
+      if (onBallDefender) {
+        onBallDefender.setAdvantageStatus(advantageStatus);
+      }
     }
   }
 
