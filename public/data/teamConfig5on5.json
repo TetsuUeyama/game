@@ -14,28 +14,28 @@
         "position": "C",
         "x": 0,
         "z": 10,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "3",
         "position": "SG",
         "x": -5,
         "z": -3,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "4",
         "position": "SF",
         "x": 5,
         "z": -3,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "5",
         "position": "PF",
         "x": -3,
         "z": 5,
-        "hasAI": false
+        "hasAI": true
       }
     ]
   },
@@ -54,28 +54,28 @@
         "position": "C",
         "x": 0,
         "z": -10,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "7",
         "position": "SG",
         "x": -5,
         "z": 3,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "8",
         "position": "SF",
         "x": 5,
         "z": 3,
-        "hasAI": false
+        "hasAI": true
       },
       {
         "playerId": "9",
         "position": "PF",
         "x": 3,
         "z": -5,
-        "hasAI": false
+        "hasAI": true
       }
     ]
   }

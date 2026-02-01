@@ -295,12 +295,12 @@ export class Character {
     this.visionConeMesh = this.bodyPartsFactory.createVisionCone();
     this.visionConeMesh.parent = this.headMesh;
 
-    // 方向サークルを初期化
+    // 方向サークルを初期化（8方向ごとに異なる半径を設定）
     this.directionCircle = new DirectionCircle(
       scene,
       () => this.getPosition(),
       () => this.getRotation(),
-      this.footCircleRadius
+      [1.0, 0.9, 0.8, 0.6, 0.3, 0.6, 0.8, 0.9]
     );
 
     // 足元の円を作成（DirectionCircleを使用）
@@ -1008,6 +1008,16 @@ export class Character {
    */
   public getFootCircleRadius(): number {
     return this.directionCircle.getFootCircleRadius();
+  }
+
+  /**
+   * ワールド座標での方向から足元の円の半径を取得（接触判定用）
+   * 8方向ごとに異なる半径を考慮
+   * @param worldDirection ワールド座標での方向ベクトル
+   * @returns その方向での半径
+   */
+  public getFootCircleRadiusInDirection(worldDirection: { x: number; z: number }): number {
+    return this.directionCircle.getRadiusInWorldDirection(worldDirection);
   }
 
   /**

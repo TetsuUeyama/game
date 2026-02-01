@@ -12,11 +12,10 @@ import { DEFENSE_STANCE_MOTION } from "../../motion/DefenseMotion";
  * オンボールディフェンダー時のAI
  *
  * 【行動原理】
- * 1. 最優先: シュートブロック判定
- * 2. 基本方針: オフェンスをゴールから遠ざける
- *    - 1on1接触時: ゴール方向に立ちはだかり、オフェンスを押し返す
- *    - 非接触時: オフェンスとゴールの間に位置取り
- * 3. 機会的: スティール試行
+ * 1. 最優先: オフェンスと自チームゴールの直線上に位置取り（ゴールを守る）
+ * 2. シュートブロック判定
+ * 3. 1on1状態での対面プレッシャー
+ * 4. 機会的: スティール試行
  */
 export class OnBallDefenseAI extends BaseStateAI {
   constructor(
@@ -29,6 +28,56 @@ export class OnBallDefenseAI extends BaseStateAI {
   }
 
   /**
+   * 守るべきゴールの位置を取得
+   * ディフェンダーのチームに応じて自チームのゴール位置を返す
+   * （攻めるゴールの逆が守るゴール）
+   */
+  private getDefendingGoalPosition(): Vector3 {
+    const team = this.character.team;
+    // allyチームはgoal1を攻める → goal2を守る
+    // enemyチームはgoal2を攻める → goal1を守る
+    if (team === 'ally') {
+      const rim = this.field.getGoal2Rim();
+      return rim.position.clone();
+    } else {
+      const rim = this.field.getGoal1Rim();
+      return rim.position.clone();
+    }
+  }
+
+  /**
+   * オフェンスとゴールを結ぶ直線上の理想的な守備位置を計算
+   * @param offensePosition オフェンスの位置
+   * @param goalPosition ゴールの位置
+   * @param distanceFromOffense オフェンスからの距離
+   */
+  private calculateGoalLinePosition(
+    offensePosition: Vector3,
+    goalPosition: Vector3,
+    distanceFromOffense: number
+  ): Vector3 {
+    // オフェンスからゴールへの方向ベクトル
+    const toGoal = new Vector3(
+      goalPosition.x - offensePosition.x,
+      0,
+      goalPosition.z - offensePosition.z
+    );
+
+    if (toGoal.length() < 0.01) {
+      return offensePosition.clone();
+    }
+
+    toGoal.normalize();
+
+    // オフェンスからゴール方向に指定距離だけ離れた位置
+    return new Vector3(
+      offensePosition.x + toGoal.x * distanceFromOffense,
+      offensePosition.y,
+      offensePosition.z + toGoal.z * distanceFromOffense
+    );
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
@@ -38,28 +87,91 @@ export class OnBallDefenseAI extends BaseStateAI {
       return;
     }
 
-    // 【最優先】シュートブロック判定
+    // シュートブロック判定
     if (this.tryBlockShot(onBallPlayer)) {
       return;
     }
 
     const myPosition = this.character.getPosition();
     const offensePosition = onBallPlayer.getPosition();
+    const goalPosition = this.getDefendingGoalPosition();
+
+    // サークル半径を取得
+    const defenderRadius = this.character.getFootCircleRadius();
+    const offenseRadius = onBallPlayer.getFootCircleRadius();
+    const contactDistance = defenderRadius + offenseRadius;
+
+    // 【最優先】オフェンスとゴールの直線上に位置取り
+    const idealPosition = this.calculateGoalLinePosition(
+      offensePosition,
+      goalPosition,
+      contactDistance
+    );
+
+    // 現在位置から理想位置へのベクトル
+    const toIdealPosition = new Vector3(
+      idealPosition.x - myPosition.x,
+      0,
+      idealPosition.z - myPosition.z
+    );
+    const distanceToIdeal = toIdealPosition.length();
+
+    // ゴール方向を向く（オフェンスの方を向く）
+    const toOffense = new Vector3(
+      offensePosition.x - myPosition.x,
+      0,
+      offensePosition.z - myPosition.z
+    );
+    if (toOffense.length() > 0.01) {
+      const faceAngle = Math.atan2(toOffense.x, toOffense.z);
+      this.character.setRotation(faceAngle);
+    }
 
     // 視野ベースで1on1状態を判定
-    // オフェンスプレイヤーの視野内にディフェンダー（自分）がいるかどうか
     const isIn1on1 = DefenseUtils.is1on1StateByFieldOfView(
       { x: offensePosition.x, z: offensePosition.z },
       onBallPlayer.getRotation(),
       { x: myPosition.x, z: myPosition.z }
     );
 
-    if (isIn1on1) {
-      // 1on1状態（オフェンスの視野内にいる）
+    // 理想位置からの距離閾値
+    const positionThreshold = 0.5;
+
+    if (distanceToIdeal > positionThreshold) {
+      // ゴールライン上に位置していない場合、急いで移動
+      this.moveToGoalLine(toIdealPosition, distanceToIdeal, deltaTime);
+    } else if (isIn1on1) {
+      // ゴールライン上にいて、1on1状態
       this.handle1on1State(onBallPlayer, deltaTime);
     } else {
-      // オフェンスの視野外 → 急いでオフェンスの正面に回り込む
+      // ゴールライン上にいるが、オフェンスの視野外
       this.handleApproachState(onBallPlayer, deltaTime);
+    }
+  }
+
+  /**
+   * ゴールライン上の位置へ移動
+   */
+  private moveToGoalLine(
+    toIdealPosition: Vector3,
+    distanceToIdeal: number,
+    deltaTime: number
+  ): void {
+    const moveDirection = toIdealPosition.normalize();
+
+    // 距離が遠い場合はダッシュ
+    if (distanceToIdeal > 2.0) {
+      if (this.character.getCurrentMotionName() !== 'dash_forward') {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+      this.character.move(moveDirection, deltaTime);
+    } else {
+      // 近い場合はディフェンスモーションで微調整
+      if (this.character.getCurrentMotionName() !== 'defense_stance') {
+        this.character.playMotion(DEFENSE_STANCE_MOTION);
+      }
+      const speedMultiplier = Math.min(1.0, distanceToIdeal / 1.0);
+      this.character.move(moveDirection.scale(speedMultiplier), deltaTime);
     }
   }
 
@@ -205,6 +317,7 @@ export class OnBallDefenseAI extends BaseStateAI {
    * 接近状態（オフェンスの視野外にいる時）の処理
    * 抜かれた状態なので、急いでオフェンスの正面に回り込む
    * 0番面中心が一致する位置を目指す
+   * オフェンスのサークルに衝突する場合は横に回り込む
    */
   private handleApproachState(
     onBallPlayer: Character,
@@ -251,8 +364,58 @@ export class OnBallDefenseAI extends BaseStateAI {
       return;
     }
 
-    // 方向を正規化
-    const moveDirection = toIdealPosition.normalize();
+    // ディフェンダーからオフェンスへの方向
+    const toOffense = new Vector3(
+      offensePosition.x - myPosition.x,
+      0,
+      offensePosition.z - myPosition.z
+    );
+    const distanceToOffense = toOffense.length();
+
+    // オフェンスのサークルに衝突する距離かチェック
+    const collisionDistance = offenseRadius + defenderRadius + 0.3; // 少し余裕を持たせる
+
+    let moveDirection: Vector3;
+
+    if (distanceToOffense < collisionDistance) {
+      // オフェンスに近すぎる場合、横に回り込む
+      // オフェンスの正面方向に対して垂直な方向（左右）を計算
+      const leftDirection = new Vector3(
+        -offenseFacingDirection.z,
+        0,
+        offenseFacingDirection.x
+      );
+      const rightDirection = new Vector3(
+        offenseFacingDirection.z,
+        0,
+        -offenseFacingDirection.x
+      );
+
+      // 理想位置に近い方向を選択
+      const leftTarget = offensePosition.add(leftDirection.scale(collisionDistance));
+      const rightTarget = offensePosition.add(rightDirection.scale(collisionDistance));
+
+      const distToLeft = Vector3.Distance(myPosition, leftTarget) + Vector3.Distance(leftTarget, idealPosition);
+      const distToRight = Vector3.Distance(myPosition, rightTarget) + Vector3.Distance(rightTarget, idealPosition);
+
+      // 短い経路を選択
+      if (distToLeft < distToRight) {
+        moveDirection = new Vector3(
+          leftTarget.x - myPosition.x,
+          0,
+          leftTarget.z - myPosition.z
+        ).normalize();
+      } else {
+        moveDirection = new Vector3(
+          rightTarget.x - myPosition.x,
+          0,
+          rightTarget.z - myPosition.z
+        ).normalize();
+      }
+    } else {
+      // 衝突しない距離なら直接理想位置へ
+      moveDirection = toIdealPosition.normalize();
+    }
 
     // 移動方向を向く（正面に回り込むために全力で走る）
     const moveAngle = Math.atan2(moveDirection.x, moveDirection.z);

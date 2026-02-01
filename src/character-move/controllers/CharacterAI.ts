@@ -15,6 +15,7 @@ import {
   OffBallDefenseAI
 } from "../ai";
 import { PassCallback } from "../ai/state/OnBallOffenseAI";
+import { Formation } from "../config/FormationConfig";
 
 /**
  * キャラクターAIコントローラー
@@ -84,6 +85,34 @@ export class CharacterAI {
    */
   public setTargetPositionOverride(position: Vector3 | null): void {
     this.onBallOffenseAI.setTargetPositionOverride(position);
+  }
+
+  /**
+   * オフェンスフォーメーションを設定
+   */
+  public setOffenseFormation(formation: Formation): void {
+    this.offBallOffenseAI.setFormation(formation);
+  }
+
+  /**
+   * オフェンスフォーメーションを名前で設定
+   */
+  public setOffenseFormationByName(name: string): boolean {
+    return this.offBallOffenseAI.setFormationByName(name);
+  }
+
+  /**
+   * ディフェンスフォーメーションを設定
+   */
+  public setDefenseFormation(formation: Formation): void {
+    this.offBallDefenseAI.setFormation(formation);
+  }
+
+  /**
+   * ディフェンスフォーメーションを名前で設定
+   */
+  public setDefenseFormationByName(name: string): boolean {
+    return this.offBallDefenseAI.setFormationByName(name);
   }
 
   /**
