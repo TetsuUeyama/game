@@ -111,6 +111,9 @@ export class Character {
   private nameLabel: Mesh | null = null;
   private nameLabelTexture: AdvancedDynamicTexture | null = null;
 
+  // 表示状態
+  private isVisible: boolean = true;
+
   // 足元の円（方向サークル）
   private directionCircle: DirectionCircle;
   private footCircle: LinesMesh | null = null;
@@ -851,6 +854,8 @@ export class Character {
    * @param visible 表示する場合true
    */
   public setVisible(visible: boolean): void {
+    this.isVisible = visible;
+
     // ルートメッシュを含む全パーツの表示を切り替え
     this.mesh.setEnabled(visible);
 
@@ -869,6 +874,13 @@ export class Character {
     if (this.balanceSphereMesh) {
       this.balanceSphereMesh.setEnabled(visible);
     }
+  }
+
+  /**
+   * キャラクターが表示されているかどうかを取得
+   */
+  public getIsVisible(): boolean {
+    return this.isVisible;
   }
 
   /**

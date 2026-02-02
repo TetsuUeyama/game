@@ -93,22 +93,16 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
       return;
     }
 
-    // GameScene のシュートチェックモードをセットアップ
+    // GameScene のシュートチェックモードをセットアップ（選手IDと選手データを渡す）
     const shooter = gameScene.setupShootCheckMode(
-      0, // shooterIndex
-      { x: startWorldPos.x, z: startWorldPos.z }
+      selectedPlayerId,
+      { x: startWorldPos.x, z: startWorldPos.z },
+      players
     );
 
     if (!shooter) {
       console.error('[ShootCheckModePanel] シュートチェックモードのセットアップに失敗しました');
       return;
-    }
-
-    // 選手データを適用
-    if (players[selectedPlayerId]) {
-      shooter.setPlayerData(players[selectedPlayerId], 'PG');
-      const heightInMeters = players[selectedPlayerId].basic.height / 100;
-      shooter.setHeight(heightInMeters);
     }
 
     // シューターのバランスをリセット（クリーンな状態から開始）
@@ -218,10 +212,10 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
       // ボールの更新
       gameScene.getBall().update(deltaTime);
 
-      // シューターの更新
-      const allChars = gameScene.getAllCharacters();
-      for (const char of allChars) {
-        char.update(deltaTime);
+      // シューターのみを更新（他のキャラクターは非表示なので更新不要）
+      const shooter = gameScene.getAllyCharacters()[0];
+      if (shooter) {
+        shooter.update(deltaTime);
       }
 
       // フィールドの更新

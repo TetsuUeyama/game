@@ -106,14 +106,14 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
     // GameScene の通常更新ループを一時停止（二重更新を防ぐ）
     gameScene.pause();
 
-    // GameScene のドリブルチェックモードをセットアップ
-    // 味方チームの最初のキャラクターをドリブラー、敵チームの最初のキャラクターをディフェンダーとして使用
+    // GameScene のドリブルチェックモードをセットアップ（選手IDと選手データを渡す）
     const setupResult = gameScene.setupDribbleCheckMode(
-      0, // dribblerIndex
-      0, // defenderIndex
+      dribblerPlayerId,
+      defenderPlayerId,
       { x: dribblerWorldPos.x, z: dribblerWorldPos.z },
       { x: defenderWorldPos.x, z: defenderWorldPos.z },
-      { x: targetWorldPos.x, z: targetWorldPos.z }
+      { x: targetWorldPos.x, z: targetWorldPos.z },
+      players
     );
 
     if (!setupResult) {
@@ -135,19 +135,7 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
     if (ball.isInFlight()) {
       ball.endFlight();
     }
-    ball.setTrajectoryVisible(false);
-
-    // 選手データを適用
-    if (players[dribblerPlayerId]) {
-      dribbler.setPlayerData(players[dribblerPlayerId], 'PG');
-      const heightInMeters = players[dribblerPlayerId].basic.height / 100;
-      dribbler.setHeight(heightInMeters);
-    }
-    if (players[defenderPlayerId]) {
-      defender.setPlayerData(players[defenderPlayerId], 'PG');
-      const heightInMeters = players[defenderPlayerId].basic.height / 100;
-      defender.setHeight(heightInMeters);
-    }
+    ball.setTrajectoryVisible(false)
 
     // フェイントコントローラーを作成
     feintControllerRef.current = new FeintController(
@@ -253,11 +241,11 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
       // ボールの更新
       gameScene.getBall().update(deltaTime);
 
-      // キャラクターの更新
-      const allChars = gameScene.getAllCharacters();
-      for (const char of allChars) {
-        char.update(deltaTime);
-      }
+      // ドリブラーとディフェンダーのみ更新（他のキャラクターは非表示なので更新不要）
+      const dribbler = gameScene.getAllyCharacters()[0];
+      const defender = gameScene.getEnemyCharacters()[0];
+      if (dribbler) dribbler.update(deltaTime);
+      if (defender) defender.update(deltaTime);
 
       // フィールドの更新
       gameScene.getField().update(deltaTime);

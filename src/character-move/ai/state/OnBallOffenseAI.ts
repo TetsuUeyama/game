@@ -104,6 +104,11 @@ export class OnBallOffenseAI extends BaseStateAI {
    * AIの更新処理
    */
   public update(deltaTime: number): void {
+    // デバッグログ: 現在の状態を出力
+    const currentRotation = this.character.getRotation();
+    const myPos = this.character.getPosition();
+    console.log(`[OnBallOffenseAI] update開始: pos=(${myPos.x.toFixed(2)}, ${myPos.z.toFixed(2)}), rotation=${(currentRotation * 180 / Math.PI).toFixed(1)}°`);
+
     // フェイント成功後のドリブル突破ウィンドウ内ならドリブル突破を試みる
     if (this.feintController && this.feintController.isInBreakthroughWindow(this.character)) {
       if (this.tryBreakthroughAfterFeint()) {
@@ -115,6 +120,8 @@ export class OnBallOffenseAI extends BaseStateAI {
     const targetPosition = this.getTargetPosition();
     const myPosition = this.character.getPosition();
 
+    console.log(`[OnBallOffenseAI] 目標位置: (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
+
     // 【最優先】常にゴール方向を向く
     const toGoal = new Vector3(
       targetPosition.x - myPosition.x,
@@ -123,7 +130,10 @@ export class OnBallOffenseAI extends BaseStateAI {
     );
     if (toGoal.length() > 0.01) {
       const goalAngle = Math.atan2(toGoal.x, toGoal.z);
+      console.log(`[OnBallOffenseAI] ゴール方向に回転: ${(goalAngle * 180 / Math.PI).toFixed(1)}°`);
       this.character.setRotation(goalAngle);
+    } else {
+      console.log(`[OnBallOffenseAI] 目標が近すぎて回転不要: toGoal.length()=${toGoal.length()}`);
     }
 
     // 目の前にディフェンダーがいるかチェック
@@ -131,6 +141,8 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     if (onBallDefender) {
       const defenderPosition = onBallDefender.getPosition();
+      const distToDefender = Vector3.Distance(myPosition, defenderPosition);
+      console.log(`[OnBallOffenseAI] ディフェンダー検出: ${onBallDefender.playerPosition}, 距離=${distToDefender.toFixed(2)}m`);
 
       // 視野ベースで1on1状態を判定
       // オフェンスプレイヤーの視野内にディフェンダーがいるかどうか
@@ -140,10 +152,13 @@ export class OnBallOffenseAI extends BaseStateAI {
         { x: defenderPosition.x, z: defenderPosition.z }
       );
 
+      console.log(`[OnBallOffenseAI] ディフェンダー視野内判定: ${isDefenderInFOV}`);
+
       if (isDefenderInFOV) {
         // ========================================
         // 1on1状態（ディフェンダーが視野内）
         // ========================================
+        console.log(`[OnBallOffenseAI] handle1on1State呼び出し`);
         this.handle1on1State(targetPosition, deltaTime);
         return;
       } else {
@@ -151,12 +166,15 @@ export class OnBallOffenseAI extends BaseStateAI {
         // ディフェンダーが視野外に外れた瞬間
         // → ダッシュでゴールへ向かう OR シュートを狙う
         // ========================================
+        console.log(`[OnBallOffenseAI] handleDefenderOutOfFOV呼び出し`);
         this.handleDefenderOutOfFOV(targetPosition, deltaTime);
         return;
       }
     }
 
     // ディフェンダーがいない場合
+    console.log(`[OnBallOffenseAI] ディフェンダーなし、シュート/パス/移動を試行`);
+
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     // 目標位置オーバーライド時はシュートしない
     if (!this.targetPositionOverride && this.tryShoot()) {
@@ -171,6 +189,7 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 目標位置に向かって移動（境界チェック付き）
     const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
+    console.log(`[OnBallOffenseAI] moveTowardsWithBoundary呼び出し: stopDistance=${stopDistance}`);
     this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance);
   }
 
@@ -183,6 +202,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     deltaTime: number
   ): void {
     const myPosition = this.character.getPosition();
+    console.log(`[OnBallOffenseAI] handle1on1State: myPos=(${myPosition.x.toFixed(2)}, ${myPosition.z.toFixed(2)})`);
 
     // 1on1時は常にドリブル構えモーションを再生（歩行・アイドル共通）
     if (this.character.getCurrentMotionName() !== 'dribble_stance') {
@@ -199,6 +219,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     // 1on1状態: まずパスを試みる（ポジションに応じた判定）
     // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
     if (!this.targetPositionOverride && this.tryPass()) {
+      console.log(`[OnBallOffenseAI] handle1on1State: パス実行`);
       return;
     }
 
@@ -207,16 +228,19 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (actionChoice < 0.25) {
       // 25%: フェイント
       if (this.tryFeint()) {
+        console.log(`[OnBallOffenseAI] handle1on1State: フェイント実行`);
         return;
       }
     } else if (actionChoice < 0.5) {
       // 25%: ドリブル突破
       if (this.tryDribbleMove()) {
+        console.log(`[OnBallOffenseAI] handle1on1State: ドリブル突破実行`);
         return;
       }
     } else if (actionChoice < 0.7) {
       // 20%: シュート
       if (!this.targetPositionOverride && this.tryShoot()) {
+        console.log(`[OnBallOffenseAI] handle1on1State: シュート実行`);
         return;
       }
     }
@@ -224,19 +248,27 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 1on1中も少し動く（目標方向に向かいながら）
     const distanceToTarget = toTarget.length();
+    console.log(`[OnBallOffenseAI] handle1on1State: 目標距離=${distanceToTarget.toFixed(2)}m`);
+
     if (distanceToTarget > 0.5) {
       const direction = toTarget.normalize();
       // 境界チェック・衝突チェックを試みるが、失敗しても移動する
       let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+      console.log(`[OnBallOffenseAI] handle1on1State: boundaryAdjusted=${boundaryAdjusted ? `(${boundaryAdjusted.x.toFixed(2)}, ${boundaryAdjusted.z.toFixed(2)})` : 'null'}`);
+
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+        console.log(`[OnBallOffenseAI] handle1on1State: collisionAdjusted=${adjustedDirection ? `(${adjustedDirection.x.toFixed(2)}, ${adjustedDirection.z.toFixed(2)})` : 'null'}`);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
         }
       }
       // ゆっくり移動（通常速度の50%）
+      console.log(`[OnBallOffenseAI] handle1on1State: move(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}) * 0.5`);
       this.character.move(moveDirection.scale(0.5), deltaTime);
+    } else {
+      console.log(`[OnBallOffenseAI] handle1on1State: 目標に近いので移動スキップ`);
     }
   }
 
@@ -246,6 +278,7 @@ export class OnBallOffenseAI extends BaseStateAI {
    */
   private handleDefenderOutOfFOV(targetPosition: Vector3, deltaTime: number): void {
     const myPosition = this.character.getPosition();
+    console.log(`[OnBallOffenseAI] handleDefenderOutOfFOV: myPos=(${myPosition.x.toFixed(2)}, ${myPosition.z.toFixed(2)})`);
 
     // 目標位置オーバーライド時以外は、まずシュートを試みる
     if (!this.targetPositionOverride && this.tryShoot()) {
@@ -260,6 +293,8 @@ export class OnBallOffenseAI extends BaseStateAI {
     );
 
     const distanceToTarget = toTarget.length();
+    console.log(`[OnBallOffenseAI] 目標への距離: ${distanceToTarget.toFixed(2)}m`);
+
     if (distanceToTarget > 0.5) {
       // ダッシュモーションに切り替え
       if (this.character.getCurrentMotionName() !== 'dash_forward') {
@@ -270,16 +305,21 @@ export class OnBallOffenseAI extends BaseStateAI {
       const direction = toTarget.normalize();
       let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+      console.log(`[OnBallOffenseAI] boundaryAdjusted: ${boundaryAdjusted ? `(${boundaryAdjusted.x.toFixed(2)}, ${boundaryAdjusted.z.toFixed(2)})` : 'null'}`);
+
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+        console.log(`[OnBallOffenseAI] collisionAdjusted: ${adjustedDirection ? `(${adjustedDirection.x.toFixed(2)}, ${adjustedDirection.z.toFixed(2)})` : 'null'}`);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
         }
       }
       // 全速力でダッシュ
+      console.log(`[OnBallOffenseAI] move呼び出し: direction=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)})`);
       this.character.move(moveDirection, deltaTime);
     } else {
       // 目標に近い場合はアイドル
+      console.log(`[OnBallOffenseAI] 目標に近いのでアイドル`);
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }

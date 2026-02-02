@@ -13,6 +13,7 @@ import {
   BALL_COLLISION_CONFIG,
   CHARACTER_COLLISION_CONFIG,
   BODY_PART_CONFIG,
+  BALL_PICKUP_CONFIG,
 } from "../config/CollisionConfig";
 
 /**
@@ -52,10 +53,14 @@ export class CollisionHandler {
   }
 
   /**
-   * ボールとキャラクターの衝突を解決（キャッチ判定）
+   * ボールとキャラクターの衝突を解決（物理ベースのキャッチ判定）
    *
-   * 注意: ボールの物理的な反射はHavok物理エンジンが自動処理する
-   * ここではキャッチ可能かどうかの判定のみを行う
+   * 物理ベースのピックアップシステム:
+   * 1. リーチ範囲内でボールを検出
+   * 2. 相対速度をチェック（制御可能か判定）
+   * 3. 制御可能なら手の方向に引き寄せるインパルスを適用
+   * 4. 手元まで来たら完全にキャプチャ
+   * 5. 速すぎる場合はファンブル（弾く）
    */
   private resolveBallCharacterCollision(character: Character): void {
     // すでにボールが保持されている場合は衝突判定をスキップ
@@ -63,55 +68,166 @@ export class CollisionHandler {
       return;
     }
 
-    const ballPosition = this.ball.getPosition();
-    const characterPosition = character.getPosition();
-
-    // 2D平面上の距離を計算（XZ平面）
-    const distanceXZ = getDistance2D(ballPosition, characterPosition);
-
-    // 高さの判定：ボールがキャラクターの手の届く範囲にあるかチェック
-    const characterHeight = character.config.physical.height;
-    const maxReachHeight = characterHeight + BODY_PART_CONFIG.HAND_REACH_HEIGHT;
-
-    // ボールの高さ（地面からの高さ）
-    const ballHeight = ballPosition.y;
-
-    // 高さが手の届く範囲外ならキャッチできない
-    if (!isInRange(ballHeight, 0, maxReachHeight)) {
+    // シュート直後のシューター自身はキャッチできない（クールダウン中）
+    if (!this.ball.canBeCaughtBy(character)) {
       return;
     }
 
-    // ボールからキャラクターへの方向を計算
-    const ballToCharacter = {
-      x: characterPosition.x - ballPosition.x,
-      z: characterPosition.z - ballPosition.z
-    };
-
-    // その方向でのキャラクターの半径を取得（8方向を考慮）
-    const characterRadius = character.getFootCircleRadiusInDirection({
-      x: -ballToCharacter.x,  // キャラクターからボールへの方向
-      z: -ballToCharacter.z
-    });
-
-    // XZ平面上の衝突判定（方向ベースの半径を使用）
-    const ballCharacterDistance = BALL_COLLISION_CONFIG.BALL_RADIUS + characterRadius;
-    if (distanceXZ < ballCharacterDistance && distanceXZ > 0.001) {
-      // シュート直後のシューター自身はキャッチできない（クールダウン中）
-      // ボールの弾き処理はHavok物理エンジンが自動で行う
-      if (!this.ball.canBeCaughtBy(character)) {
-        return;
-      }
-
-      // シュートアクション後で重心が不安定な場合はキャッチできない
-      // ボールの弾き処理はHavok物理エンジンが自動で行う
-      const actionController = character.getActionController();
-      if (actionController && actionController.isInShootRecovery()) {
-        return;
-      }
-
-      // ボールを保持させる
-      this.ball.setHolder(character);
+    // シュートアクション後で重心が不安定な場合はキャッチできない
+    const actionController = character.getActionController();
+    if (actionController && actionController.isInShootRecovery()) {
+      return;
     }
+
+    const ballPosition = this.ball.getPosition();
+    const handPosition = character.getBallHoldingPosition();
+
+    // 高さの判定：ボールがキャラクターの手の届く範囲にあるかチェック
+    const characterHeight = character.config.physical.height;
+    const minCatchHeight = characterHeight * BALL_PICKUP_CONFIG.MIN_CATCH_HEIGHT_RATIO;
+    const maxCatchHeight = characterHeight * BALL_PICKUP_CONFIG.MAX_CATCH_HEIGHT_RATIO;
+    const ballHeight = ballPosition.y;
+
+    // 高さが手の届く範囲外ならキャッチできない
+    if (!isInRange(ballHeight, minCatchHeight, maxCatchHeight)) {
+      return;
+    }
+
+    // ボールと手の距離を計算（3D）
+    const distance = getDistance3D(handPosition, ballPosition);
+
+    // リーチ範囲外ならスキップ
+    if (distance > BALL_PICKUP_CONFIG.REACH_RANGE) {
+      return;
+    }
+
+    // 相対速度を計算（ボール速度 - キャラクター速度）
+    const ballVelocity = this.ball.getVelocity();
+    const characterVelocity = character.velocity || Vector3.Zero();
+    const relativeVelocity = ballVelocity.subtract(characterVelocity);
+    const relativeSpeed = relativeVelocity.length();
+
+    // リーチ範囲内の処理
+    if (distance < BALL_PICKUP_CONFIG.REACH_RANGE) {
+      // ボールが静止状態（キネマティックモード）の場合は直接キャプチャ判定
+      if (!this.ball.isPhysicsEnabled()) {
+        // 静止ボールは近づくだけでキャプチャ可能（XZ平面での距離も考慮）
+        const characterPos = character.getPosition();
+        const distanceXZ = getDistance2D(ballPosition, characterPos);
+        const characterRadius = character.getFootCircleRadiusInDirection({
+          x: ballPosition.x - characterPos.x,
+          z: ballPosition.z - characterPos.z
+        });
+
+        // キャラクターの体が十分近い、または手が十分近い場合はキャプチャ
+        if (distanceXZ < characterRadius + BALL_COLLISION_CONFIG.BALL_RADIUS ||
+            distance < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 2) {
+          this.captureBall(character);
+        }
+        return;
+      }
+
+      // 物理モード（動いているボール）の場合
+      if (relativeSpeed < BALL_PICKUP_CONFIG.MAX_CONTROLLABLE_VELOCITY) {
+        // 制御可能な速度 - 手の方向に引き寄せる
+
+        if (distance < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
+          // 手元まで来た - 完全にキャプチャ
+          this.captureBall(character);
+        } else {
+          // 手の方向に少しずつ引き寄せる（物理的な挙動を残す）
+          this.pullBallTowardHand(character, handPosition, ballPosition);
+        }
+      } else {
+        // 速すぎて捕れない - ファンブル（弾く）
+        this.applyFumble(character, handPosition, ballPosition);
+      }
+    }
+  }
+
+  /**
+   * ボールを完全にキャプチャ（保持状態にする）
+   */
+  private captureBall(character: Character): void {
+    this.ball.setHolder(character);
+    console.log(`[CollisionHandler] ${character.playerData?.basic?.NAME || character.team} がボールをキャッチ`);
+  }
+
+  /**
+   * ボールを手の方向に引き寄せるインパルスを適用
+   */
+  private pullBallTowardHand(
+    character: Character,
+    handPosition: Vector3,
+    ballPosition: Vector3
+  ): void {
+    // ボールが物理モードでない場合はスキップ
+    if (!this.ball.isPhysicsEnabled()) {
+      return;
+    }
+
+    // 手の方向への単位ベクトルを計算
+    const direction = handPosition.subtract(ballPosition);
+    const distance = direction.length();
+
+    if (distance < 0.01) return;
+
+    direction.normalize();
+
+    // 距離に応じたインパルス強度（近いほど弱く）
+    const distanceFactor = Math.min(1.0, distance / BALL_PICKUP_CONFIG.REACH_RANGE);
+    const impulseStrength = BALL_PICKUP_CONFIG.PULL_IMPULSE_STRENGTH * distanceFactor;
+
+    // インパルスを適用
+    const impulse = direction.scale(impulseStrength);
+    this.ball.applyImpulse(impulse, ballPosition);
+  }
+
+  /**
+   * ファンブル（弾き）処理を適用
+   * 速すぎるボールを弾いてランダムな方向に飛ばす
+   */
+  private applyFumble(
+    character: Character,
+    handPosition: Vector3,
+    ballPosition: Vector3
+  ): void {
+    // ボールが物理モードでない場合はスキップ
+    if (!this.ball.isPhysicsEnabled()) {
+      return;
+    }
+
+    // 手からボールへの方向（弾く方向の基準）
+    const deflectDirection = ballPosition.subtract(handPosition);
+    if (deflectDirection.length() < 0.01) return;
+
+    deflectDirection.normalize();
+
+    // ランダムな横方向の偏りを追加（-30〜+30度）
+    const randomAngle = (Math.random() - 0.5) * Math.PI / 3;
+    const cosAngle = Math.cos(randomAngle);
+    const sinAngle = Math.sin(randomAngle);
+
+    // Y軸周りの回転を適用
+    const rotatedX = deflectDirection.x * cosAngle - deflectDirection.z * sinAngle;
+    const rotatedZ = deflectDirection.x * sinAngle + deflectDirection.z * cosAngle;
+
+    // 少し上向きにも弾く
+    const fumbleDirection = new Vector3(
+      rotatedX,
+      Math.abs(deflectDirection.y) + 0.3,  // 上向き成分を追加
+      rotatedZ
+    );
+    fumbleDirection.normalize();
+
+    // ファンブルインパルスを適用
+    const fumbleImpulse = fumbleDirection.scale(BALL_PICKUP_CONFIG.FUMBLE_IMPULSE_STRENGTH);
+    this.ball.applyImpulse(fumbleImpulse, ballPosition);
+
+    // ファンブル後のクールダウンを設定
+    this.ball.setDeflectionCooldown();
+
+    console.log(`[CollisionHandler] ${character.playerData?.basic?.NAME || character.team} がボールをファンブル`);
   }
 
   /**

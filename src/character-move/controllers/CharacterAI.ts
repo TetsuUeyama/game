@@ -16,6 +16,7 @@ import {
 } from "../ai";
 import { PassCallback } from "../ai/state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
+import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 
 /**
  * キャラクターAIコントローラー
@@ -33,6 +34,9 @@ export class CharacterAI {
   private onBallDefenseAI: OnBallDefenseAI;
   private offBallOffenseAI: OffBallOffenseAI;
   private offBallDefenseAI: OffBallDefenseAI;
+
+  // パス軌道可視化（外部から設定可能）
+  private passTrajectoryVisualizer: PassTrajectoryVisualizer | null = null;
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     this.character = character;
@@ -116,6 +120,20 @@ export class CharacterAI {
   }
 
   /**
+   * パス軌道可視化を設定
+   */
+  public setPassTrajectoryVisualizer(visualizer: PassTrajectoryVisualizer): void {
+    this.passTrajectoryVisualizer = visualizer;
+  }
+
+  /**
+   * オフボールオフェンスAIを取得（パス軌道可視化用）
+   */
+  public getOffBallOffenseAI(): OffBallOffenseAI {
+    return this.offBallOffenseAI;
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
@@ -128,6 +146,7 @@ export class CharacterAI {
     const currentPhase = actionController.getCurrentPhase();
     if (currentAction !== null || currentPhase !== 'idle') {
       // アクション中は待機モーションも再生しない（アクションモーションが再生中）
+      console.log(`[CharacterAI] ${this.character.playerPosition}: アクション中スキップ action=${currentAction}, phase=${currentPhase}`);
       return;
     }
 
@@ -140,6 +159,7 @@ export class CharacterAI {
         break;
       case CharacterState.ON_BALL_PLAYER:
         // ボール保持者は動く
+        console.log(`[CharacterAI] ${this.character.playerPosition}: ON_BALL_PLAYER → onBallOffenseAI.update()`);
         this.onBallOffenseAI.update(deltaTime);
         break;
       case CharacterState.ON_BALL_DEFENDER:

@@ -4,11 +4,14 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
 import { TeamConfigLoader } from '@/character-move/loaders/TeamConfigLoader';
 import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { CameraSwitchPanel } from './CameraSwitchPanel';
+import { HamburgerMenu } from './HamburgerMenu';
 import { PositionBoardPanel } from './PositionBoardPanel';
 import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
 import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
+import { PassCheckModePanel } from './PassCheckModePanel';
+
+type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -21,12 +24,11 @@ export default function CharacterMove1on1Game() {
   const [score, setScore] = useState<{ ally: number; enemy: number }>({ ally: 0, enemy: 0 });
   const [winner, setWinner] = useState<'ally' | 'enemy' | null>(null);
   const [winningScore, setWinningScore] = useState<number>(5);
-  const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ALLY', enemy: 'ENEMY' });
+  const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ATM', enemy: 'BTM' });
   const [shotClock, setShotClock] = useState<number>(24.0);
   const [shotClockOffenseTeam, setShotClockOffenseTeam] = useState<'ally' | 'enemy' | null>(null);
   const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
-  const [isShootCheckMode, setIsShootCheckMode] = useState<boolean>(false);
-  const [isDribbleCheckMode, setIsDribbleCheckMode] = useState<boolean>(false);
+  const [currentMode, setCurrentMode] = useState<GameModeType>('game');
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -87,16 +89,19 @@ export default function CharacterMove1on1Game() {
 
       switch (e.key.toLowerCase()) {
         case 'z':
-          // 前のキャラクター
+          // 前のキャラクター（手動モードに切り替え）
+          gameSceneRef.current.setCameraMode('manual');
           gameSceneRef.current.switchToPreviousCharacter();
           break;
         case 'c':
-          // 次のキャラクター
+          // 次のキャラクター（手動モードに切り替え）
+          gameSceneRef.current.setCameraMode('manual');
           gameSceneRef.current.switchToNextCharacter();
           break;
         case 'tab':
-          // チーム切り替え
+          // チーム切り替え（手動モードに切り替え）
           e.preventDefault();
+          gameSceneRef.current.setCameraMode('manual');
           gameSceneRef.current.switchTeam();
           break;
         case 'v':
@@ -173,6 +178,32 @@ export default function CharacterMove1on1Game() {
     gameSceneRef.current.applyTeamPositions(allyPosArray, enemyPosArray);
   }, []);
 
+  // モード変更ハンドラー
+  const handleModeChange = useCallback((mode: GameModeType) => {
+    if (!gameSceneRef.current) return;
+
+    // 現在のチェックモードを終了
+    if (currentMode !== 'game') {
+      gameSceneRef.current.exitCheckMode();
+      gameSceneRef.current.resume();
+    }
+
+    // 新しいモードを設定
+    if (mode !== 'game') {
+      gameSceneRef.current.pause();
+    }
+    setCurrentMode(mode);
+  }, [currentMode]);
+
+  // チェックモードを閉じる
+  const handleCloseCheckMode = useCallback(() => {
+    if (gameSceneRef.current) {
+      gameSceneRef.current.exitCheckMode();
+      gameSceneRef.current.resume();
+    }
+    setCurrentMode('game');
+  }, []);
+
   // エラー表示
   if (error) {
     return (
@@ -203,173 +234,130 @@ export default function CharacterMove1on1Game() {
   }
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gradient-to-br from-purple-600 to-indigo-700">
-      {/* ヘッダー（スコア表示） */}
-      <div className="p-4 bg-black/80 backdrop-blur-sm text-white">
-        <div className="flex items-center justify-center gap-8">
-          {/* 敵スコア（左側） */}
-          <div className="text-center">
-            <p className="text-sm text-red-300 font-bold">{playerNames.enemy}</p>
-            <p className="text-5xl font-black text-red-400">{score.enemy}</p>
-          </div>
+    <div className="w-full h-screen relative bg-gradient-to-br from-purple-600 to-indigo-700">
+      {/* キャンバス（フルスクリーン） */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full outline-none"
+        style={{ touchAction: 'none' }}
+      />
 
-          {/* 中央（先取表示とショットクロック） */}
-          <div className="text-center">
-            <p className="text-lg font-bold text-yellow-400">{winningScore}点先取</p>
-            <p className="text-2xl font-black text-white">VS</p>
-            {/* ショットクロック */}
-            <div className={`mt-2 px-4 py-1 rounded-lg font-mono ${
+      {/* 画面下部オーバーレイ（スコア・ショットクロック） */}
+      {!loading && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+          <div className="flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl px-6 py-3">
+            {/* 敵スコア（左側） */}
+            <div className="text-center min-w-[80px]">
+              <p className="text-xs text-red-300 font-bold">{playerNames.enemy}</p>
+              <p className="text-3xl font-black text-red-400">{score.enemy}</p>
+            </div>
+
+            {/* ショットクロック（中央） */}
+            <div className={`px-4 py-2 rounded-lg font-mono ${
               shotClock <= 5
                 ? 'bg-red-600 text-white animate-pulse'
                 : shotClock <= 10
                   ? 'bg-yellow-500 text-black'
-                  : 'bg-gray-700 text-white'
+                  : 'bg-gray-700/80 text-white'
             }`}>
-              <span className="text-xs">SHOT CLOCK</span>
-              <p className={`text-3xl font-black ${
+              <p className="text-xs text-center opacity-80">SHOT</p>
+              <p className={`text-2xl font-black text-center ${
                 shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
               }`}>
                 {Math.ceil(shotClock)}
               </p>
             </div>
-          </div>
 
-          {/* 味方スコア（右側） */}
+            {/* 味方スコア（右側） */}
+            <div className="text-center min-w-[80px]">
+              <p className="text-xs text-blue-300 font-bold">{playerNames.ally}</p>
+              <p className="text-3xl font-black text-blue-400">{score.ally}</p>
+            </div>
+          </div>
+          {/* 先取表示 */}
+          <p className="text-center text-xs text-yellow-400 font-bold mt-1 drop-shadow-lg">
+            {winningScore}点先取
+          </p>
+        </div>
+      )}
+
+      {/* ローディング画面 */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 z-50">
           <div className="text-center">
-            <p className="text-sm text-blue-300 font-bold">{playerNames.ally}</p>
-            <p className="text-5xl font-black text-blue-400">{score.ally}</p>
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
+            <p className="text-white text-xl font-bold">ゲームデータを読み込み中...</p>
+            <p className="text-white/70 text-sm mt-2">1対1の設定を準備しています...</p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* キャンバス */}
-      <div className="flex-1 relative">
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full outline-none"
-          style={{ touchAction: 'none' }}
+      {/* ハンバーガーメニュー */}
+      {!loading && (
+        <HamburgerMenu
+          gameScene={gameSceneRef.current}
+          currentMode={currentMode}
+          onModeChange={handleModeChange}
+          isPositionBoardVisible={isPositionBoardVisible}
+          onTogglePositionBoard={() => setIsPositionBoardVisible(!isPositionBoardVisible)}
         />
+      )}
 
-        {/* ローディング画面 */}
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 z-50">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
-              <p className="text-white text-xl font-bold">ゲームデータを読み込み中...</p>
-              <p className="text-white/70 text-sm mt-2">1対1の設定を準備しています...</p>
+      {/* ポジション配置ボードパネル */}
+      {!loading && (
+        <PositionBoardPanel
+          isVisible={isPositionBoardVisible}
+          onClose={() => setIsPositionBoardVisible(false)}
+          onApplyPositions={handleApplyPositions}
+        />
+      )}
+
+      {/* 勝利オーバーレイ */}
+      {winner && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+          <div className="text-center">
+            <div className={`text-6xl font-black mb-4 ${
+              winner === 'ally' ? 'text-blue-400' : 'text-red-400'
+            }`}>
+              {winner === 'ally' ? playerNames.ally : playerNames.enemy}
             </div>
-          </div>
-        )}
-
-        {/* カメラ切り替えパネル */}
-        {!loading && <CameraSwitchPanel gameScene={gameSceneRef.current} />}
-
-        {/* ポジション配置ボードトグルボタン */}
-        {!loading && (
-          <button
-            onClick={() => setIsPositionBoardVisible(!isPositionBoardVisible)}
-            className={`absolute top-4 right-4 z-40 px-4 py-2 rounded-lg font-semibold transition-colors shadow-lg ${
-              isPositionBoardVisible
-                ? 'bg-yellow-500 hover:bg-yellow-600 text-black'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            }`}
-          >
-            {isPositionBoardVisible ? '配置ボード閉' : '配置ボード'}
-          </button>
-        )}
-
-        {/* ポジション配置ボードパネル */}
-        {!loading && (
-          <PositionBoardPanel
-            isVisible={isPositionBoardVisible}
-            onClose={() => setIsPositionBoardVisible(false)}
-            onApplyPositions={handleApplyPositions}
-          />
-        )}
-
-        {/* 勝利オーバーレイ */}
-        {winner && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
-            <div className="text-center">
-              <div className={`text-6xl font-black mb-4 ${
-                winner === 'ally' ? 'text-blue-400' : 'text-red-400'
-              }`}>
-                {winner === 'ally' ? playerNames.ally : playerNames.enemy}
-              </div>
-              <div className="text-4xl font-bold text-yellow-400 mb-6">
-                WIN!
-              </div>
-              <div className="text-2xl text-white mb-8">
-                {score.enemy} - {score.ally}
-              </div>
-              <button
-                onClick={handleResetGame}
-                className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-xl font-bold rounded-xl shadow-lg transition-all"
-              >
-                もう一度プレイ
-              </button>
+            <div className="text-4xl font-bold text-yellow-400 mb-6">
+              WIN!
             </div>
-          </div>
-        )}
-
-        {/* モード選択ボタン（画面下部） */}
-        {!loading && !winner && (
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex gap-4">
+            <div className="text-2xl text-white mb-8">
+              {score.enemy} - {score.ally}
+            </div>
             <button
-              onClick={() => {
-                // ゲームを一時停止してシュートチェックモードを開始
-                if (gameSceneRef.current) {
-                  gameSceneRef.current.pause();
-                }
-                setIsShootCheckMode(true);
-              }}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold shadow-xl transition-colors border-2 border-purple-400"
+              onClick={handleResetGame}
+              className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-xl font-bold rounded-xl shadow-lg transition-all"
             >
-              シュートチェックモード
-            </button>
-            <button
-              onClick={() => {
-                // ゲームを一時停止してドリブルチェックモードを開始
-                if (gameSceneRef.current) {
-                  gameSceneRef.current.pause();
-                }
-                setIsDribbleCheckMode(true);
-              }}
-              className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold shadow-xl transition-colors border-2 border-orange-400"
-            >
-              ドリブルチェックモード
+              もう一度プレイ
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* シュートチェックモードパネル */}
-      {isShootCheckMode && (
+      {currentMode === 'shoot_check' && (
         <ShootCheckModePanel
           gameScene={gameSceneRef.current}
-          onClose={() => {
-            setIsShootCheckMode(false);
-            // チェックモードを終了してゲームモードに戻る
-            if (gameSceneRef.current) {
-              gameSceneRef.current.exitCheckMode();
-              gameSceneRef.current.resume();
-            }
-          }}
+          onClose={handleCloseCheckMode}
         />
       )}
 
       {/* ドリブルチェックモードパネル */}
-      {isDribbleCheckMode && (
+      {currentMode === 'dribble_check' && (
         <DribbleCheckModePanel
           gameScene={gameSceneRef.current}
-          onClose={() => {
-            setIsDribbleCheckMode(false);
-            // チェックモードを終了してゲームモードに戻る
-            if (gameSceneRef.current) {
-              gameSceneRef.current.exitCheckMode();
-              gameSceneRef.current.resume();
-            }
-          }}
+          onClose={handleCloseCheckMode}
+        />
+      )}
+
+      {/* パスチェックモードパネル */}
+      {currentMode === 'pass_check' && (
+        <PassCheckModePanel
+          gameScene={gameSceneRef.current}
+          onClose={handleCloseCheckMode}
         />
       )}
     </div>
