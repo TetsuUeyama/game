@@ -1,0 +1,245 @@
+/**
+ * インターセプト分析クラス
+ * ディフェンダーのパスインターセプト確率を計算する
+ */
+
+import { Character } from "../../entities/Character";
+import {
+  InterceptionRiskLevel,
+  INTERCEPTION_CONFIG,
+  INTERCEPTION_RISK_COLORS,
+  getInterceptionRiskLevel,
+} from "../../config/PassTrajectoryConfig";
+import {
+  TrajectoryResult,
+  Vec3,
+  PassTrajectoryCalculator,
+} from "../../physics/PassTrajectoryCalculator";
+
+/**
+ * インターセプトリスク情報
+ */
+export interface InterceptionRisk {
+  /** インターセプト確率（0-1） */
+  probability: number;
+  /** 最も近いディフェンダー */
+  closestDefender: Character;
+  /** 軌道上の最も近い点 */
+  closestPointOnTrajectory: Vec3;
+  /** インターセプトまでの時間（秒） */
+  timeToIntercept: number;
+  /** 危険度レベル */
+  riskLevel: InterceptionRiskLevel;
+  /** 危険度の色 */
+  riskColor: { r: number; g: number; b: number };
+}
+
+/**
+ * 全ディフェンダーのリスク計算結果
+ */
+export interface TrajectoryRiskAnalysis {
+  /** 最大リスク */
+  maxRisk: InterceptionRisk | null;
+  /** 各ディフェンダーのリスク */
+  defenderRisks: InterceptionRisk[];
+  /** 総合危険度レベル */
+  overallRiskLevel: InterceptionRiskLevel;
+  /** 総合危険度の色 */
+  overallRiskColor: { r: number; g: number; b: number };
+}
+
+/**
+ * インターセプト分析クラス
+ */
+export class InterceptionAnalyzer {
+  private trajectoryCalculator: PassTrajectoryCalculator;
+
+  constructor() {
+    this.trajectoryCalculator = new PassTrajectoryCalculator();
+  }
+
+  /**
+   * 単一ディフェンダーのインターセプトリスクを計算
+   *
+   * アルゴリズム:
+   * 1. ディフェンダーの反応時間 = BASE_REACTION_TIME * (100 / quickness)
+   * 2. 到達時間 = 反応時間 + (距離 - インターセプト半径) / 速度
+   * 3. タイミングマージン = ボール到達時間 - ディフェンダー到達時間
+   * 4. マージンに基づき確率を算出
+   */
+  public calculateSingleDefenderRisk(
+    trajectory: TrajectoryResult,
+    defender: Character,
+    passerTeam: 'ally' | 'enemy'
+  ): InterceptionRisk | null {
+    // 同チームはスキップ
+    if (defender.team === passerTeam) {
+      return null;
+    }
+
+    const defenderPos = defender.getPosition();
+    const defenderVec: Vec3 = { x: defenderPos.x, y: defenderPos.y, z: defenderPos.z };
+
+    // ディフェンダーのステータスを取得
+    const playerData = defender.playerData;
+    const quickness = playerData?.stats?.quickness ?? 50;
+    const speed = playerData?.stats?.speed ?? 50;
+
+    // 反応時間を計算
+    const reactionTime = INTERCEPTION_CONFIG.BASE_REACTION_TIME * (100 / quickness);
+
+    // ディフェンダーの移動速度を計算
+    const defenderSpeed = INTERCEPTION_CONFIG.BASE_DEFENDER_SPEED * (speed / 50);
+
+    // 軌道上の各点に対してインターセプト可能性をチェック
+    let closestPointOnTrajectory: Vec3 | null = null;
+    let minTimeDiff = Infinity;
+    let closestPointTime = 0;
+    let closestDistance = Infinity;
+
+    for (const point of trajectory.points) {
+      // ディフェンダーからこの点までの距離
+      const dx = point.position.x - defenderVec.x;
+      const dy = point.position.y - defenderVec.y;
+      const dz = point.position.z - defenderVec.z;
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      // ディフェンダーがこの点に到達するまでの時間
+      const effectiveDistance = Math.max(0, distance - INTERCEPTION_CONFIG.INTERCEPT_RADIUS);
+      const timeToReachPoint = reactionTime + (effectiveDistance / defenderSpeed);
+
+      // ボールがこの点に到達する時間
+      const ballArrivalTime = point.time;
+
+      // タイミング差
+      const timeDiff = ballArrivalTime - timeToReachPoint;
+
+      // ディフェンダーがボールより先に到達できる（またはほぼ同時）点を探す
+      if (Math.abs(timeDiff) < Math.abs(minTimeDiff) || distance < closestDistance) {
+        minTimeDiff = timeDiff;
+        closestPointOnTrajectory = point.position;
+        closestPointTime = point.time;
+        closestDistance = distance;
+      }
+    }
+
+    if (!closestPointOnTrajectory) {
+      return null;
+    }
+
+    // インターセプト確率を計算
+    // タイミングマージンが負（ディフェンダーが先に到達）なら高確率
+    // タイミングマージンが正（ボールが先に到達）なら低確率
+    let probability: number;
+
+    if (minTimeDiff <= -0.3) {
+      // ディフェンダーが0.3秒以上早く到達 → 90-100%
+      probability = 0.9 + Math.min(0.1, Math.abs(minTimeDiff) * 0.1);
+    } else if (minTimeDiff <= 0) {
+      // ディフェンダーが0-0.3秒早く到達 → 60-90%
+      probability = 0.6 + Math.abs(minTimeDiff) * 1.0;
+    } else if (minTimeDiff <= 0.2) {
+      // ボールが0-0.2秒早く到達 → 30-60%
+      probability = 0.3 + (0.2 - minTimeDiff) * 1.5;
+    } else if (minTimeDiff <= 0.5) {
+      // ボールが0.2-0.5秒早く到達 → 10-30%
+      probability = 0.1 + (0.5 - minTimeDiff) * 0.67;
+    } else {
+      // ボールが0.5秒以上早く到達 → 0-10%
+      probability = Math.max(0, 0.1 - (minTimeDiff - 0.5) * 0.1);
+    }
+
+    // 距離による補正（近いほど確率上昇）
+    if (closestDistance < 2.0) {
+      probability = Math.min(1.0, probability * 1.2);
+    } else if (closestDistance > 5.0) {
+      probability *= 0.8;
+    }
+
+    probability = Math.max(0, Math.min(1, probability));
+
+    const riskLevel = getInterceptionRiskLevel(probability);
+    const riskColor = INTERCEPTION_RISK_COLORS[riskLevel];
+
+    return {
+      probability,
+      closestDefender: defender,
+      closestPointOnTrajectory,
+      timeToIntercept: closestPointTime,
+      riskLevel,
+      riskColor,
+    };
+  }
+
+  /**
+   * 全ディフェンダーのインターセプトリスクを分析
+   */
+  public analyzeTrajectoryRisk(
+    trajectory: TrajectoryResult,
+    allCharacters: Character[],
+    passerTeam: 'ally' | 'enemy'
+  ): TrajectoryRiskAnalysis {
+    const defenderRisks: InterceptionRisk[] = [];
+    let maxRisk: InterceptionRisk | null = null;
+
+    // 全キャラクターをチェック
+    for (const character of allCharacters) {
+      // 同チームはスキップ
+      if (character.team === passerTeam) {
+        continue;
+      }
+
+      const risk = this.calculateSingleDefenderRisk(trajectory, character, passerTeam);
+      if (risk) {
+        defenderRisks.push(risk);
+
+        // 最大リスクを更新
+        if (!maxRisk || risk.probability > maxRisk.probability) {
+          maxRisk = risk;
+        }
+      }
+    }
+
+    // 総合危険度を決定
+    const maxProbability = maxRisk?.probability ?? 0;
+    const overallRiskLevel = getInterceptionRiskLevel(maxProbability);
+    const overallRiskColor = INTERCEPTION_RISK_COLORS[overallRiskLevel];
+
+    return {
+      maxRisk,
+      defenderRisks,
+      overallRiskLevel,
+      overallRiskColor,
+    };
+  }
+
+  /**
+   * 複数の軌道オプションの中から最も安全なものを選択
+   */
+  public selectSafestOption(
+    trajectories: TrajectoryResult[],
+    allCharacters: Character[],
+    passerTeam: 'ally' | 'enemy'
+  ): { trajectory: TrajectoryResult; analysis: TrajectoryRiskAnalysis } | null {
+    let safestTrajectory: TrajectoryResult | null = null;
+    let safestAnalysis: TrajectoryRiskAnalysis | null = null;
+    let lowestRisk = Infinity;
+
+    for (const trajectory of trajectories) {
+      const analysis = this.analyzeTrajectoryRisk(trajectory, allCharacters, passerTeam);
+      const maxProbability = analysis.maxRisk?.probability ?? 0;
+
+      if (maxProbability < lowestRisk) {
+        lowestRisk = maxProbability;
+        safestTrajectory = trajectory;
+        safestAnalysis = analysis;
+      }
+    }
+
+    if (safestTrajectory && safestAnalysis) {
+      return { trajectory: safestTrajectory, analysis: safestAnalysis };
+    }
+
+    return null;
+  }
+}

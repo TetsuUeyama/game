@@ -1,10 +1,13 @@
+import { Vector3 } from "@babylonjs/core";
 import { Ball } from "../entities/Ball";
 import { Character } from "../entities/Character";
 
 /**
  * シュートクロック違反時のコールバック型
+ * @param offendingTeam 違反したチーム
+ * @param ballPosition 違反時のボール位置
  */
-export type ShotClockViolationCallback = (offendingTeam: 'ally' | 'enemy') => void;
+export type ShotClockViolationCallback = (offendingTeam: 'ally' | 'enemy', ballPosition: Vector3) => void;
 
 /**
  * シュートクロックコントローラー
@@ -115,7 +118,9 @@ export class ShotClockController {
       this.isRunning = false;
 
       if (this.violationCallback && this.currentOffenseTeam) {
-        this.violationCallback(this.currentOffenseTeam);
+        // 違反時のボール位置を記録
+        const ballPosition = this.ball.getPosition().clone();
+        this.violationCallback(this.currentOffenseTeam, ballPosition);
       }
     }
   }

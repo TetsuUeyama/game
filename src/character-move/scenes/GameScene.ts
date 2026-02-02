@@ -21,6 +21,7 @@ import { CircleSizeController } from "../controllers/CircleSizeController";
 import { FeintController } from "../controllers/action/FeintController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
+import { CharacterState } from "../types/CharacterState";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -29,13 +30,16 @@ import {
   CAMERA_CONFIG,
   LIGHT_CONFIG,
   FIELD_CONFIG,
+  GOAL_CONFIG,
   // MODEL_CONFIG, // 一旦無効化
 } from "../config/gameConfig";
+import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
+import { PassCheckController, DefenderPlacement } from "../controllers/check/PassCheckController";
 
 /**
  * ゲームモード
  */
-export type GameMode = 'game' | 'dribble_check' | 'shoot_check';
+export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check';
 
 /**
  * character-moveゲームのメインシーン
@@ -67,6 +71,9 @@ export class GameScene {
   private currentTargetTeam: 'ally' | 'enemy' = 'ally';
   private currentTargetIndex: number = 0;
 
+  // カメラモード（on_ball: オンボールプレイヤー自動追従, manual: 手動選択）
+  private cameraMode: 'on_ball' | 'manual' = 'on_ball';
+
   private lastFrameTime: number = Date.now();
 
   // 1on1バトルコントローラー
@@ -87,14 +94,28 @@ export class GameScene {
   // シュートクロックコントローラー
   private shotClockController?: ShotClockController;
 
+  // パス軌道可視化
+  private passTrajectoryVisualizer?: PassTrajectoryVisualizer;
+
   // シュートクロック違反後のリセット待機状態
   private pendingShotClockViolationReset: boolean = false;
   private shotClockViolationResetTimer: number = 0;
   private shotClockViolatingTeam: 'ally' | 'enemy' | null = null;
+  private shotClockViolationBallPosition: Vector3 | null = null;
   private readonly shotClockViolationResetDelay: number = 1.5;
+
+  // アウトオブバウンズ時のボール位置
+  private outOfBoundsBallPosition: Vector3 | null = null;
 
   // シュートクロック用：前フレームのボール保持者
   private previousBallHolder: Character | null = null;
+
+  // スローイン実行中フラグと関連情報
+  private isThrowInPending: boolean = false;
+  private throwInTimer: number = 0;
+  private throwInThrower: Character | null = null;
+  private throwInReceiver: Character | null = null;
+  private readonly throwInDelay: number = 3.0; // スローインまでの遅延（秒）- 他の選手がポジション移動する時間
 
   // 3Dモデルロード状態
   private modelLoaded: boolean = false;
@@ -104,6 +125,10 @@ export class GameScene {
 
   // 一時停止状態（シュートチェックモードなど他のモードが動作中）
   private isPaused: boolean = false;
+
+  // チーム設定とプレイヤーデータ（キャラクター再作成用）
+  private savedTeamConfig: GameTeamConfig | null = null;
+  private savedPlayerData: Record<string, PlayerData> | null = null;
 
   // スコア管理
   private allyScore: number = 0;
@@ -171,6 +196,12 @@ export class GameScene {
     // ボールの作成
     this.ball = this.createBall();
 
+    // チーム設定とプレイヤーデータを保存（キャラクター再作成用）
+    if (teamConfig && playerData) {
+      this.savedTeamConfig = teamConfig;
+      this.savedPlayerData = playerData;
+    }
+
     // キャラクターの作成（6対6）
     if (showAdditionalCharacters && teamConfig && playerData) {
       this.createTeams(teamConfig, playerData);
@@ -233,8 +264,8 @@ export class GameScene {
 
     // シュートクロックコントローラーの初期化
     this.shotClockController = new ShotClockController(this.ball);
-    this.shotClockController.setViolationCallback((offendingTeam) => {
-      this.handleShotClockViolation(offendingTeam);
+    this.shotClockController.setViolationCallback((offendingTeam, ballPosition) => {
+      this.handleShotClockViolation(offendingTeam, ballPosition);
     });
 
     // シュートコントローラーの初期化
@@ -275,6 +306,18 @@ export class GameScene {
         ai.setPassCallback((passer, target, passType) => {
           return this.performPass(passer, passType, target);
         });
+      }
+
+      // パス軌道可視化の初期化
+      this.passTrajectoryVisualizer = new PassTrajectoryVisualizer(
+        this.scene,
+        this.ball,
+        allCharacters
+      );
+
+      // 全AIコントローラーにパス軌道可視化を設定
+      for (const ai of this.characterAIs) {
+        ai.setPassTrajectoryVisualizer(this.passTrajectoryVisualizer);
       }
     }
 
@@ -639,10 +682,25 @@ export class GameScene {
 
       // 全AIコントローラーを更新
       // 1on1接触中はオンボールプレイヤー/ディフェンダーのAIをスキップ
+      // スローイン中はスローイン担当者とレシーバーのAIをスキップ
       const circlesInContact = this.oneOnOneBattleController?.isCirclesInContact() ?? false;
       for (const ai of this.characterAIs) {
+        const character = ai.getCharacter();
+
+        // スローイン中はスローイン担当者とレシーバーのAI更新をスキップ
+        if (this.isThrowInPending) {
+          if (character === this.throwInThrower || character === this.throwInReceiver) {
+            continue;
+          }
+        }
+
+        // ボールが飛行中でレシーバーがまだ受け取っていない場合もスキップ
+        if (this.throwInReceiver && this.ball.isInFlight() && character === this.throwInReceiver) {
+          continue;
+        }
+
         if (circlesInContact) {
-          const state = ai.getCharacter().getState();
+          const state = character.getState();
           if (state === 'ON_BALL_PLAYER' || state === 'ON_BALL_DEFENDER') {
             continue; // 接触中は1on1ペアのAI更新をスキップ
           }
@@ -652,6 +710,18 @@ export class GameScene {
 
       // カメラをプレイヤーキャラクターに追従させる
       this.updateCamera(deltaTime);
+
+      // パス軌道可視化を更新
+      if (this.passTrajectoryVisualizer) {
+        this.passTrajectoryVisualizer.update((character) => {
+          // キャラクターのAIコントローラーを取得して目標位置を取得
+          const ai = this.characterAIs.find(a => a.getCharacter() === character);
+          if (ai) {
+            return ai.getOffBallOffenseAI().getCurrentTargetPosition();
+          }
+          return null;
+        });
+      }
     }
 
     // ボールを更新（保持中はキャラクターに追従）
@@ -706,7 +776,9 @@ export class GameScene {
       // リセットを予約（遅延実行）
       this.pendingOutOfBoundsReset = true;
       this.outOfBoundsResetTimer = this.outOfBoundsResetDelay;
-      console.log('[GameScene] アウトオブバウンズ検出、リセット待機中...');
+      // アウトオブバウンズ時のボール位置を記録
+      this.outOfBoundsBallPosition = this.ball.getPosition().clone();
+      console.log('[GameScene] アウトオブバウンズ検出、リセット待機中...', this.outOfBoundsBallPosition);
     }
 
     // アウトオブバウンズリセット待機処理
@@ -726,6 +798,18 @@ export class GameScene {
         this.shotClockController.onPossessionChange(currentBallHolder);
       }
       this.previousBallHolder = currentBallHolder;
+
+      // スローインのレシーバーがボールを受け取ったらクリア
+      if (this.throwInReceiver && currentBallHolder === this.throwInReceiver) {
+        console.log('[GameScene] スローインレシーバーがボールを受け取りました');
+        this.throwInReceiver = null;
+      }
+    }
+
+    // ボールが飛行を終了したらスローインレシーバーをクリア（タイムアウト）
+    if (this.throwInReceiver && !this.ball.isInFlight() && !this.ball.isHeld()) {
+      console.log('[GameScene] スローインタイムアウト：レシーバーをクリア');
+      this.throwInReceiver = null;
     }
 
     // シュートクロック更新
@@ -742,6 +826,71 @@ export class GameScene {
         console.log('[GameScene] シュートクロック違反リセット実行');
       }
     }
+
+    // スローイン待機処理
+    if (this.isThrowInPending) {
+      this.throwInTimer -= deltaTime;
+      if (this.throwInTimer <= 0) {
+        this.executeThrowIn();
+      }
+    }
+  }
+
+  /**
+   * スローインを実行
+   */
+  private executeThrowIn(): void {
+    if (!this.throwInThrower || !this.throwInReceiver) {
+      console.warn('[GameScene] スローイン情報が不足しています');
+      this.clearThrowInState();
+      return;
+    }
+
+    // ボールがスローイン担当者に保持されているか確認
+    if (this.ball.getHolder() !== this.throwInThrower) {
+      console.warn('[GameScene] スローイン担当者がボールを持っていません');
+      this.clearThrowInState();
+      return;
+    }
+
+    console.log('[GameScene] スローイン実行:', this.throwInThrower.playerPosition, '->', this.throwInReceiver.playerPosition);
+
+    // パスでボールを投げ入れる（チェストパスを使用）
+    this.ball.passWithArc(
+      this.throwInReceiver.getPosition(),
+      this.throwInReceiver,
+      'chest'
+    );
+
+    // シュートクロックをリセット（レシーバーのチームでカウント開始）
+    if (this.shotClockController) {
+      this.shotClockController.reset(this.throwInReceiver.team);
+    }
+
+    // スローイン待機状態はクリアするが、レシーバー情報は保持（ボールを受け取るまでAIを停止するため）
+    this.isThrowInPending = false;
+    this.throwInTimer = 0;
+    this.throwInThrower = null;
+    // throwInReceiver はボール受け取りまで保持
+  }
+
+  /**
+   * スローイン状態を完全にクリア
+   */
+  private clearThrowInState(): void {
+    this.isThrowInPending = false;
+    this.throwInTimer = 0;
+    this.throwInThrower = null;
+    this.throwInReceiver = null;
+  }
+
+  /**
+   * スローイン待機状態のみクリア（レシーバーは保持）
+   */
+  private clearThrowInPendingState(): void {
+    this.isThrowInPending = false;
+    this.throwInTimer = 0;
+    this.throwInThrower = null;
   }
 
   /**
@@ -770,6 +919,27 @@ export class GameScene {
    * 現在のターゲットキャラクターを取得
    */
   private getCurrentTargetCharacter(): Character | null {
+    // オンボールモードの場合、ボール保持者を返す
+    if (this.cameraMode === 'on_ball') {
+      const holder = this.ball.getHolder();
+      if (holder) {
+        return holder;
+      }
+      // ボール保持者がいない場合はボールに最も近いキャラクターを返す
+      const ballPos = this.ball.getPosition();
+      let closestChar: Character | null = null;
+      let closestDist = Infinity;
+      for (const char of [...this.allyCharacters, ...this.enemyCharacters]) {
+        const dist = Vector3.Distance(char.getPosition(), ballPos);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestChar = char;
+        }
+      }
+      return closestChar;
+    }
+
+    // マニュアルモードの場合、選択されたキャラクターを返す
     const characters = this.currentTargetTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
     if (characters.length === 0) return null;
     if (this.currentTargetIndex >= characters.length) {
@@ -809,12 +979,32 @@ export class GameScene {
   /**
    * 現在のターゲット情報を取得
    */
-  public getCurrentTargetInfo(): { team: 'ally' | 'enemy'; index: number; character: Character | null } {
+  public getCurrentTargetInfo(): {
+    team: 'ally' | 'enemy';
+    index: number;
+    character: Character | null;
+    cameraMode: 'on_ball' | 'manual';
+  } {
     return {
       team: this.currentTargetTeam,
       index: this.currentTargetIndex,
       character: this.getCurrentTargetCharacter(),
+      cameraMode: this.cameraMode,
     };
+  }
+
+  /**
+   * カメラモードを設定
+   */
+  public setCameraMode(mode: 'on_ball' | 'manual'): void {
+    this.cameraMode = mode;
+  }
+
+  /**
+   * カメラモードを取得
+   */
+  public getCameraMode(): 'on_ball' | 'manual' {
+    return this.cameraMode;
   }
 
   /**
@@ -1164,78 +1354,25 @@ export class GameScene {
 
   /**
    * アウトオブバウンズ後のリセット処理
-   * 最後にボールに触れた選手の相手チームがボールを保持してセンターサークル外側から再開
+   * 最後にボールに触れた選手の相手チームがサイドラインからスローイン
    */
   private resetAfterOutOfBounds(): void {
     console.log('[GameScene] resetAfterOutOfBounds 開始');
     const lastToucher = this.ball.getLastToucher();
     console.log('[GameScene] lastToucher:', lastToucher?.playerData?.basic?.NAME || lastToucher?.team || 'null');
 
-    // ボールの飛行を停止
-    this.ball.endFlight();
-
-    // 全キャラクターのバランスをリセット
-    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
-      character.resetBalance();
-    }
-
-    // 相手チームの選手を特定
-    let opponentCharacter: Character | null = null;
-
+    // 違反チームを特定
+    let offendingTeam: 'ally' | 'enemy' = 'ally';
     if (lastToucher) {
-      // 最後に触れた選手の相手チームから選ぶ
-      const opponentTeam = lastToucher.team === 'ally' ? this.enemyCharacters : this.allyCharacters;
-      if (opponentTeam.length > 0) {
-        // 最初の選手をボール保持者とする（1対1なので1人しかいない想定）
-        opponentCharacter = opponentTeam[0];
-      }
-    } else {
-      // 最後に触れた選手がいない場合、味方チームの選手をボール保持者とする
-      if (this.allyCharacters.length > 0) {
-        opponentCharacter = this.allyCharacters[0];
-      }
+      offendingTeam = lastToucher.team;
     }
 
-    if (!opponentCharacter) {
-      console.warn('[GameScene] 再開する選手が見つかりません');
-      return;
-    }
+    // アウトオブバウンズ時のボール位置を取得（記録されていなければ現在位置）
+    const ballPosition = this.outOfBoundsBallPosition || this.ball.getPosition();
+    this.outOfBoundsBallPosition = null;
 
-    // センターサークル半径を取得し、キャラクターの半径と余裕を加えた距離を計算
-    const circleRadius = this.field.getCenterCircleRadius();
-    const characterRadius = 0.3; // キャラクターの半径
-    const positionOffset = circleRadius + characterRadius + 0.3; // サークル半径 + キャラ半径 + 余裕
-
-    // ボール保持者のチームに応じて配置位置を決定
-    // ally（味方）は+Zゴールを攻める → -Z側（自陣側）に配置
-    // enemy（敵）は-Zゴールを攻める → +Z側（自陣側）に配置
-    const holderZSign = opponentCharacter.team === 'ally' ? -1 : 1;
-
-    // ボール保持者をセンターサークル外側（自陣側）に配置
-    const holderPosition = new Vector3(
-      0,
-      opponentCharacter.config.physical.height / 2,
-      holderZSign * positionOffset
-    );
-    opponentCharacter.setPosition(holderPosition);
-
-    // ボールをその選手に渡す
-    this.ball.setHolder(opponentCharacter);
-
-    // シュートクロックをリセット（新しいボール保持者チームでカウント開始）
-    if (this.shotClockController) {
-      this.shotClockController.reset(opponentCharacter.team);
-    }
-
-    // 相手選手（最後に触れた選手）をセンターサークル外側（反対側）に配置
-    if (lastToucher && lastToucher !== opponentCharacter) {
-      const defenderPosition = new Vector3(
-        0,
-        lastToucher.config.physical.height / 2,
-        -holderZSign * positionOffset // ボール保持者の反対側
-      );
-      lastToucher.setPosition(defenderPosition);
-    }
+    // サイドラインスローインで再開
+    this.executeThrowInReset(offendingTeam, ballPosition);
   }
 
   /**
@@ -1281,9 +1418,10 @@ export class GameScene {
   /**
    * シュートクロック違反時の処理
    * @param offendingTeam 違反したチーム
+   * @param ballPosition 違反時のボール位置
    */
-  private handleShotClockViolation(offendingTeam: 'ally' | 'enemy'): void {
-    console.log('[GameScene] シュートクロック違反:', offendingTeam);
+  private handleShotClockViolation(offendingTeam: 'ally' | 'enemy', ballPosition: Vector3): void {
+    console.log('[GameScene] シュートクロック違反:', offendingTeam, 'ボール位置:', ballPosition);
 
     // 既にリセット待機中の場合は何もしない
     if (this.pendingShotClockViolationReset || this.pendingGoalReset || this.pendingOutOfBoundsReset) {
@@ -1294,10 +1432,67 @@ export class GameScene {
     this.pendingShotClockViolationReset = true;
     this.shotClockViolationResetTimer = this.shotClockViolationResetDelay;
     this.shotClockViolatingTeam = offendingTeam;
+    this.shotClockViolationBallPosition = ballPosition.clone();
+  }
+
+  /**
+   * ボール位置から最も近いサイドラインのスローイン位置を計算
+   * バックボード裏側は除外
+   * @param ballPosition ボールの位置
+   * @returns スローイン位置 { throwInPosition, receiverPosition }
+   */
+  private calculateThrowInPosition(ballPosition: Vector3): {
+    throwInPosition: Vector3;
+    receiverPosition: Vector3;
+  } {
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const backboardDistance = GOAL_CONFIG.backboardDistance; // 1.2m
+
+    // バックボード裏側のZ範囲
+    const goal1BackboardZ = halfLength - backboardDistance; // 13.8m
+    const goal2BackboardZ = -halfLength + backboardDistance; // -13.8m
+
+    let throwInX: number;
+    let throwInZ: number;
+
+    // ボールのZ位置がバックボード裏側の場合、サイドラインに調整
+    let adjustedZ = ballPosition.z;
+    if (adjustedZ > goal1BackboardZ) {
+      adjustedZ = goal1BackboardZ;
+    } else if (adjustedZ < goal2BackboardZ) {
+      adjustedZ = goal2BackboardZ;
+    }
+
+    // 最も近いサイドラインを選択（X軸方向）
+    // スローイン担当者はコート外（サイドラインから0.5m外側）に配置
+    const outsideOffset = 0.5;
+    if (ballPosition.x >= 0) {
+      // 右サイドライン（X = +7.5 の外側 = +8.0）
+      throwInX = halfWidth + outsideOffset;
+    } else {
+      // 左サイドライン（X = -7.5 の外側 = -8.0）
+      throwInX = -halfWidth - outsideOffset;
+    }
+    throwInZ = adjustedZ;
+
+    // スローイン位置（コート外）
+    const throwInPosition = new Vector3(throwInX, 0, throwInZ);
+
+    // レシーバー位置（サイドラインから2m内側）
+    const receiverOffsetX = throwInX > 0 ? -(outsideOffset + 2) : (outsideOffset + 2);
+    const receiverPosition = new Vector3(
+      throwInX + receiverOffsetX,
+      0,
+      throwInZ
+    );
+
+    return { throwInPosition, receiverPosition };
   }
 
   /**
    * シュートクロック違反後のリセットを実行
+   * サイドラインからのスローインで再開
    */
   private executeShotClockViolationReset(): void {
     if (!this.shotClockViolatingTeam) {
@@ -1305,8 +1500,20 @@ export class GameScene {
     }
 
     const offendingTeam = this.shotClockViolatingTeam;
+    const ballPosition = this.shotClockViolationBallPosition || this.ball.getPosition();
     this.shotClockViolatingTeam = null;
+    this.shotClockViolationBallPosition = null;
 
+    // サイドラインスローインで再開
+    this.executeThrowInReset(offendingTeam, ballPosition);
+  }
+
+  /**
+   * サイドラインからのスローインでリセット
+   * @param offendingTeam 違反したチーム（相手チームがスローイン）
+   * @param ballPosition 違反/アウトオブバウンズ時のボール位置
+   */
+  private executeThrowInReset(offendingTeam: 'ally' | 'enemy', ballPosition: Vector3): void {
     // ボールの飛行を停止
     this.ball.endFlight();
 
@@ -1315,7 +1522,86 @@ export class GameScene {
       character.resetBalance();
     }
 
-    // 相手チームがボールを持って再開
+    // 相手チームがスローイン
+    const throwingTeam = offendingTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
+    const defendingTeam = offendingTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+
+    if (throwingTeam.length < 2) {
+      console.warn('[GameScene] スローインに必要な選手が不足しています');
+      // フォールバック：従来のセンター配置
+      this.fallbackCenterReset(offendingTeam);
+      return;
+    }
+
+    // スローイン位置を計算
+    const { throwInPosition, receiverPosition } = this.calculateThrowInPosition(ballPosition);
+
+    // スローイン担当者（PGを優先）
+    const thrower = throwingTeam.find(c => c.playerPosition === 'PG') || throwingTeam[0];
+    // レシーバー（スローイン担当以外）
+    const receiver = throwingTeam.find(c => c !== thrower) || throwingTeam[1];
+
+    // スローイン担当者をサイドラインに配置
+    const throwerPos = new Vector3(
+      throwInPosition.x,
+      thrower.config.physical.height / 2,
+      throwInPosition.z
+    );
+    thrower.setPosition(throwerPos);
+
+    // レシーバーをコート内に配置
+    const receiverPos = new Vector3(
+      receiverPosition.x,
+      receiver.config.physical.height / 2,
+      receiverPosition.z
+    );
+    receiver.setPosition(receiverPos);
+
+    // スローイン担当者がレシーバーの方を向く
+    thrower.lookAt(receiverPos);
+
+    // レシーバーがスローイン担当者の方を向く
+    receiver.lookAt(throwerPos);
+
+    // ディフェンス側を適当な位置に配置（レシーバー近く）
+    for (let i = 0; i < defendingTeam.length; i++) {
+      const defender = defendingTeam[i];
+      const defenderPos = new Vector3(
+        receiverPosition.x + (i % 2 === 0 ? 1 : -1) * 1.5,
+        defender.config.physical.height / 2,
+        receiverPosition.z + (i < 2 ? 1 : -1) * 1.5
+      );
+      defender.setPosition(defenderPos);
+      defender.lookAt(receiverPos);
+    }
+
+    // ボールをスローイン担当者に渡す
+    this.ball.setHolder(thrower);
+
+    // スローイン実行を予約（タイマーベース）
+    this.isThrowInPending = true;
+    this.throwInTimer = this.throwInDelay;
+    this.throwInThrower = thrower;
+    this.throwInReceiver = receiver;
+
+    // シュートクロックはスローイン完了後に開始するため、ここでは停止
+    if (this.shotClockController) {
+      this.shotClockController.stop();
+    }
+
+    console.log('[GameScene] スローイン準備完了:', {
+      thrower: thrower.playerPosition,
+      receiver: receiver.playerPosition,
+      throwInPosition,
+      receiverPosition
+    });
+  }
+
+  /**
+   * フォールバック：センターサークルからのリセット
+   * スローインができない場合に使用
+   */
+  private fallbackCenterReset(offendingTeam: 'ally' | 'enemy'): void {
     const receivingTeam = offendingTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
 
     if (receivingTeam.length === 0) {
@@ -1325,15 +1611,12 @@ export class GameScene {
 
     const ballHolder = receivingTeam[0];
 
-    // センターサークル半径を取得し、キャラクターの半径と余裕を加えた距離を計算
     const circleRadius = this.field.getCenterCircleRadius();
     const characterRadius = 0.3;
     const positionOffset = circleRadius + characterRadius + 0.3;
 
-    // ボール保持者のチームに応じて配置位置を決定
     const holderZSign = ballHolder.team === 'ally' ? -1 : 1;
 
-    // ボール保持者をセンターサークル外側（自陣側）に配置
     const holderPosition = new Vector3(
       0,
       ballHolder.config.physical.height / 2,
@@ -1341,10 +1624,8 @@ export class GameScene {
     );
     ballHolder.setPosition(holderPosition);
 
-    // ボールを渡す
     this.ball.setHolder(ballHolder);
 
-    // シュートクロックをリセット（新しいボール保持者チームでカウント開始）
     if (this.shotClockController) {
       this.shotClockController.reset(ballHolder.team);
     }
@@ -1437,12 +1718,10 @@ export class GameScene {
   }
 
   /**
-   * 選手名を取得
+   * チーム名を取得（3文字固定）
    */
   public getPlayerNames(): { ally: string; enemy: string } {
-    const allyName = this.allyCharacters[0]?.playerData?.basic?.NAME || 'ALLY';
-    const enemyName = this.enemyCharacters[0]?.playerData?.basic?.NAME || 'ENEMY';
-    return { ally: allyName, enemy: enemyName };
+    return { ally: 'ATM', enemy: 'BTM' };
   }
 
   /**
@@ -1473,9 +1752,12 @@ export class GameScene {
     this.goalResetTimer = 0;
     this.pendingOutOfBoundsReset = false;
     this.outOfBoundsResetTimer = 0;
+    this.outOfBoundsBallPosition = null;
     this.pendingShotClockViolationReset = false;
     this.shotClockViolationResetTimer = 0;
     this.shotClockViolatingTeam = null;
+    this.shotClockViolationBallPosition = null;
+    this.clearThrowInState();
 
     // ボール保持者をリセットしてセンターサークルから再開
     const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
@@ -1697,6 +1979,40 @@ export class GameScene {
   }
 
   /**
+   * パス軌道可視化の表示/非表示を設定
+   */
+  public setPassTrajectoryVisible(visible: boolean): void {
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.setEnabled(visible);
+    }
+  }
+
+  /**
+   * パス軌道可視化の表示状態を取得
+   */
+  public isPassTrajectoryVisible(): boolean {
+    return this.passTrajectoryVisualizer?.getEnabled() ?? false;
+  }
+
+  /**
+   * パス軌道可視化の表示/非表示を切り替え
+   */
+  public togglePassTrajectoryVisible(): void {
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.setEnabled(!this.passTrajectoryVisualizer.getEnabled());
+    }
+  }
+
+  /**
+   * パス軌道可視化の移動先予測を設定
+   */
+  public setPassTrajectoryDestinationPrediction(use: boolean): void {
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.setUseDestinationPrediction(use);
+    }
+  }
+
+  /**
    * キャラクターを指定位置に配置
    */
   public setCharacterPosition(character: Character, x: number, z: number): void {
@@ -1705,42 +2021,246 @@ export class GameScene {
   }
 
   /**
+   * チェックモード用の完全リセット
+   * 全キャラクターを破棄し、ゲーム状態をクリアする
+   */
+  private resetForCheckMode(): void {
+    console.log('[GameScene] チェックモード用リセット開始');
+
+    // ゲームループを一時停止
+    this.isPaused = true;
+
+    // スコアと勝者をリセット
+    this.allyScore = 0;
+    this.enemyScore = 0;
+    this.winner = null;
+
+    // 全ての待機状態をリセット
+    this.pendingGoalReset = false;
+    this.pendingGoalScoringTeam = null;
+    this.goalResetTimer = 0;
+    this.pendingOutOfBoundsReset = false;
+    this.outOfBoundsResetTimer = 0;
+    this.outOfBoundsBallPosition = null;
+    this.pendingShotClockViolationReset = false;
+    this.shotClockViolationResetTimer = 0;
+    this.shotClockViolatingTeam = null;
+    this.shotClockViolationBallPosition = null;
+    this.clearThrowInState();
+
+    // ボールをリセット
+    this.ball.endFlight();
+    this.ball.setHolder(null);
+    this.ball.setPosition(new Vector3(0, 1, 0), true);
+
+    // ショットクロックを停止・リセット
+    if (this.shotClockController) {
+      this.shotClockController.stop();
+      this.shotClockController.reset('ally');
+    }
+
+    // パス軌道可視化を無効化・クリア
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.setEnabled(false);
+      this.passTrajectoryVisualizer.clearVisualizations();
+    }
+
+    // シュートレンジ表示をクリア
+    if (this.shootingController) {
+      this.shootingController.hideShootRange();
+    }
+
+    // 全キャラクターを破棄
+    this.disposeAllCharacters();
+
+    console.log('[GameScene] チェックモード用リセット完了');
+  }
+
+  /**
+   * 全キャラクターを破棄
+   */
+  private disposeAllCharacters(): void {
+    // AIコントローラーをクリア
+    this.characterAIs = [];
+    this.aiCharacterIndices.clear();
+
+    // 味方キャラクターを破棄
+    for (const character of this.allyCharacters) {
+      character.dispose();
+    }
+    this.allyCharacters = [];
+
+    // 敵キャラクターを破棄
+    for (const character of this.enemyCharacters) {
+      character.dispose();
+    }
+    this.enemyCharacters = [];
+
+    // 衝突判定コントローラーを再初期化（空の配列で）
+    if (this.collisionHandler) {
+      this.collisionHandler.dispose();
+      this.collisionHandler = new CollisionHandler(this.ball, []);
+    }
+
+    console.log('[GameScene] 全キャラクターを破棄しました');
+  }
+
+  /**
+   * チェックモード用のキャラクターを作成
+   * @param team チーム
+   * @param position 初期位置
+   * @param playerData 選手データ（オプション）
+   * @param playerPosition ポジション（オプション）
+   */
+  private createCheckModeCharacter(
+    team: 'ally' | 'enemy',
+    position: { x: number; z: number },
+    playerData?: PlayerData,
+    playerPosition?: 'PG' | 'SG' | 'SF' | 'PF' | 'C'
+  ): Character {
+    const config = DEFAULT_CHARACTER_CONFIG;
+    const height = playerData ? playerData.basic.height / 100 : config.physical.height;
+    const worldPosition = new Vector3(position.x, height / 2, position.z);
+
+    const character = new Character(this.scene, worldPosition, config);
+    character.team = team;
+
+    if (playerData && playerPosition) {
+      character.setPlayerData(playerData, playerPosition);
+      character.setHeight(height);
+    }
+
+    // チームカラーを設定
+    if (team === 'ally') {
+      character.setBodyColor(0.0, 0.4, 1.0); // 青
+    } else {
+      character.setBodyColor(1.0, 0.0, 0.0); // 赤
+    }
+
+    return character;
+  }
+
+  /**
+   * 全チームキャラクターを再作成（試合モード用）
+   */
+  private recreateAllCharacters(): void {
+    if (!this.savedTeamConfig || !this.savedPlayerData) {
+      console.warn('[GameScene] チーム設定またはプレイヤーデータが保存されていません');
+      return;
+    }
+
+    console.log('[GameScene] 全キャラクターを再作成開始');
+
+    // まず全て破棄
+    this.disposeAllCharacters();
+
+    // チームを再作成
+    this.createTeams(this.savedTeamConfig, this.savedPlayerData);
+
+    // 全キャラクターのリスト
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+
+    // 衝突判定コントローラーを再初期化
+    if (this.collisionHandler) {
+      this.collisionHandler.dispose();
+    }
+    this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
+
+    // AIコントローラーを再初期化
+    for (const character of allCharacters) {
+      if (this.aiCharacterIndices.has(character)) {
+        const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
+
+        // ShootingControllerを設定
+        if (this.shootingController) {
+          ai.setShootingController(this.shootingController);
+        }
+
+        // FeintControllerを設定
+        if (this.feintController) {
+          ai.setFeintController(this.feintController);
+        }
+
+        // パスコールバックを設定
+        ai.setPassCallback((passer, target, passType) => {
+          return this.performPass(passer, passType, target);
+        });
+
+        this.characterAIs.push(ai);
+      }
+    }
+
+    // パス軌道可視化を再作成
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.dispose();
+    }
+    this.passTrajectoryVisualizer = new PassTrajectoryVisualizer(
+      this.scene,
+      this.ball,
+      allCharacters
+    );
+
+    console.log('[GameScene] 全キャラクターを再作成完了');
+  }
+
+  /**
+   * チェックモード用の衝突判定を更新
+   * @param characters チェックモードで使用するキャラクター
+   */
+  private updateCollisionHandlerForCheckMode(characters: Character[]): void {
+    if (this.collisionHandler) {
+      this.collisionHandler.dispose();
+    }
+    this.collisionHandler = new CollisionHandler(this.ball, characters);
+  }
+
+  /**
    * ドリブルチェックモード用のセットアップ
-   * 指定した2人のキャラクターのみをアクティブにし、他は非表示
+   * ドリブラーとディフェンダーの2人のみを作成
+   * @param dribblerPlayerId ドリブラーの選手ID
+   * @param defenderPlayerId ディフェンダーの選手ID
+   * @param dribblerPosition ドリブラーの位置
+   * @param defenderPosition ディフェンダーの位置
+   * @param targetPosition 目標位置（ドリブラーの向き）
+   * @param playerData 選手データ（外部から渡す場合）
    */
   public setupDribbleCheckMode(
-    dribblerIndex: number,
-    defenderIndex: number,
+    dribblerPlayerId: string,
+    defenderPlayerId: string,
     dribblerPosition: { x: number; z: number },
     defenderPosition: { x: number; z: number },
-    targetPosition: { x: number; z: number }
+    targetPosition: { x: number; z: number },
+    playerData?: Record<string, PlayerData>
   ): { dribbler: Character; defender: Character } | null {
+    // 全状態をリセット（全キャラクター破棄）
+    this.resetForCheckMode();
     this.setGameMode('dribble_check');
 
-    // 味方と敵から1人ずつ選択
-    const dribbler = this.allyCharacters[dribblerIndex];
-    const defender = this.enemyCharacters[defenderIndex];
-
-    if (!dribbler || !defender) {
-      console.error('[GameScene] ドリブルチェックのキャラクターが見つかりません');
+    // 使用する選手データを取得
+    const data = playerData || this.savedPlayerData;
+    if (!data) {
+      console.error('[GameScene] 選手データがありません');
       return null;
     }
 
-    // 他のキャラクターを非表示
-    for (const char of this.allyCharacters) {
-      if (char !== dribbler) {
-        char.setVisible(false);
-      }
-    }
-    for (const char of this.enemyCharacters) {
-      if (char !== defender) {
-        char.setVisible(false);
-      }
+    const dribblerData = data[dribblerPlayerId];
+    const defenderData = data[defenderPlayerId];
+
+    if (!dribblerData || !defenderData) {
+      console.error('[GameScene] 指定された選手IDのデータが見つかりません');
+      return null;
     }
 
-    // 配置
-    this.setCharacterPosition(dribbler, dribblerPosition.x, dribblerPosition.z);
-    this.setCharacterPosition(defender, defenderPosition.x, defenderPosition.z);
+    // ドリブラーを作成
+    const dribbler = this.createCheckModeCharacter('ally', dribblerPosition, dribblerData, 'PG');
+    this.allyCharacters.push(dribbler);
+
+    // ディフェンダーを作成
+    const defender = this.createCheckModeCharacter('enemy', defenderPosition, defenderData, 'PG');
+    this.enemyCharacters.push(defender);
+
+    // 衝突判定を更新
+    this.updateCollisionHandlerForCheckMode([dribbler, defender]);
 
     // ボールをドリブラーに持たせる
     this.ball.setHolder(dribbler);
@@ -1751,43 +2271,204 @@ export class GameScene {
     // ディフェンダーはドリブラー方向を向く
     defender.lookAt(dribbler.getPosition());
 
+    // 状態を設定
+    dribbler.setState(CharacterState.ON_BALL_PLAYER);
+    defender.setState(CharacterState.ON_BALL_DEFENDER);
+
+    console.log(`[GameScene] ドリブルチェックモード開始: ${dribblerData.basic.NAME} vs ${defenderData.basic.NAME}`);
+
     return { dribbler, defender };
   }
 
   /**
    * シュートチェックモード用のセットアップ
-   * 指定した1人のキャラクターのみをアクティブにし、他は非表示
+   * シューター1人のみを作成
+   * @param shooterPlayerId シューターの選手ID
+   * @param shooterPosition シューターの位置
+   * @param playerData 選手データ（外部から渡す場合）
    */
   public setupShootCheckMode(
-    shooterIndex: number,
-    shooterPosition: { x: number; z: number }
+    shooterPlayerId: string,
+    shooterPosition: { x: number; z: number },
+    playerData?: Record<string, PlayerData>
   ): Character | null {
+    // 全状態をリセット（全キャラクター破棄）
+    this.resetForCheckMode();
     this.setGameMode('shoot_check');
 
-    const shooter = this.allyCharacters[shooterIndex];
-
-    if (!shooter) {
-      console.error('[GameScene] シュートチェックのキャラクターが見つかりません');
+    // 使用する選手データを取得
+    const data = playerData || this.savedPlayerData;
+    if (!data) {
+      console.error('[GameScene] 選手データがありません');
       return null;
     }
 
-    // 他のキャラクターを非表示
-    for (const char of this.allyCharacters) {
-      if (char !== shooter) {
-        char.setVisible(false);
-      }
-    }
-    for (const char of this.enemyCharacters) {
-      char.setVisible(false);
+    const shooterData = data[shooterPlayerId];
+    if (!shooterData) {
+      console.error('[GameScene] 指定された選手IDのデータが見つかりません:', shooterPlayerId);
+      return null;
     }
 
-    // 配置
-    this.setCharacterPosition(shooter, shooterPosition.x, shooterPosition.z);
+    // シューターを作成
+    const shooter = this.createCheckModeCharacter('ally', shooterPosition, shooterData, 'PG');
+    this.allyCharacters.push(shooter);
+
+    // 衝突判定を更新
+    this.updateCollisionHandlerForCheckMode([shooter]);
+
+    // シューターの状態を設定
+    shooter.setState(CharacterState.ON_BALL_PLAYER);
 
     // ボールをシューターに持たせる
     this.ball.setHolder(shooter);
 
+    console.log(`[GameScene] シュートチェックモード開始: ${shooterData.basic.NAME}`);
+
     return shooter;
+  }
+
+  /**
+   * パスチェックモード用のセットアップ
+   * パサーとレシーバーを作成し、任意でディフェンダーも作成
+   * @param passerPlayerId パサーの選手ID
+   * @param receiverPlayerId レシーバーの選手ID
+   * @param passerPosition パサーの配置位置
+   * @param receiverPosition レシーバーの配置位置
+   * @param defenderPlacements ディフェンダーの配置（任意）
+   * @param playerData 選手データ（外部から渡す場合）
+   * @returns パスチェック用のキャラクター情報
+   */
+  public setupPassCheckMode(
+    passerPlayerId: string,
+    receiverPlayerId: string,
+    passerPosition: { x: number; z: number },
+    receiverPosition: { x: number; z: number },
+    defenderPlacements?: Array<{
+      defenderPlayerId: string;
+      position: { x: number; z: number };
+      type: 'on_ball' | 'off_ball';
+    }>,
+    playerData?: Record<string, PlayerData>
+  ): {
+    passer: Character;
+    receiver: Character;
+    defenders: Character[];
+  } | null {
+    // 全状態をリセット（全キャラクター破棄）
+    this.resetForCheckMode();
+    this.setGameMode('pass_check');
+
+    // 使用する選手データを取得
+    const data = playerData || this.savedPlayerData;
+    if (!data) {
+      console.error('[GameScene] 選手データがありません');
+      return null;
+    }
+
+    const passerData = data[passerPlayerId];
+    const receiverData = data[receiverPlayerId];
+
+    if (!passerData) {
+      console.error('[GameScene] パサーの選手IDのデータが見つかりません:', passerPlayerId);
+      return null;
+    }
+
+    if (!receiverData) {
+      console.error('[GameScene] レシーバーの選手IDのデータが見つかりません:', receiverPlayerId);
+      return null;
+    }
+
+    if (passerPlayerId === receiverPlayerId) {
+      console.error('[GameScene] パサーとレシーバーは異なる選手を指定してください');
+      return null;
+    }
+
+    // パサーを作成
+    const passer = this.createCheckModeCharacter('ally', passerPosition, passerData, 'PG');
+    this.allyCharacters.push(passer);
+
+    // レシーバーを作成
+    const receiver = this.createCheckModeCharacter('ally', receiverPosition, receiverData, 'SG');
+    this.allyCharacters.push(receiver);
+
+    const defenders: Character[] = [];
+    const checkModeCharacters: Character[] = [passer, receiver];
+
+    // ディフェンダーを作成
+    if (defenderPlacements && defenderPlacements.length > 0) {
+      for (const placement of defenderPlacements) {
+        const defenderData = data[placement.defenderPlayerId];
+        if (defenderData) {
+          const defender = this.createCheckModeCharacter('enemy', placement.position, defenderData, 'PG');
+          this.enemyCharacters.push(defender);
+          defenders.push(defender);
+          checkModeCharacters.push(defender);
+
+          // ディフェンダーのタイプに応じて向きを設定
+          if (placement.type === 'on_ball') {
+            defender.lookAt(passer.getPosition());
+            defender.setState(CharacterState.ON_BALL_DEFENDER);
+          } else {
+            // パスレーンの中間点を向く
+            const midPoint = passer.getPosition().add(receiver.getPosition()).scale(0.5);
+            defender.lookAt(midPoint);
+            defender.setState(CharacterState.OFF_BALL_DEFENDER);
+          }
+        }
+      }
+    }
+
+    // 衝突判定を更新
+    this.updateCollisionHandlerForCheckMode(checkModeCharacters);
+
+    // パサーをレシーバー方向に向ける
+    passer.lookAt(receiver.getPosition());
+
+    // レシーバーをパサー方向に向ける
+    receiver.lookAt(passer.getPosition());
+
+    // ボールをパサーに持たせる
+    this.ball.setHolder(passer);
+
+    // 状態を設定
+    passer.setState(CharacterState.ON_BALL_PLAYER);
+    receiver.setState(CharacterState.OFF_BALL_PLAYER);
+
+    console.log(`[GameScene] パスチェックモード開始: ${passerData.basic.NAME} -> ${receiverData.basic.NAME}`);
+
+    return { passer, receiver, defenders };
+  }
+
+  /**
+   * パスチェックコントローラーを作成
+   * @param passer パサー
+   * @param receiver レシーバー
+   * @param config パスチェック設定
+   * @returns PassCheckController
+   */
+  public createPassCheckController(
+    passer: Character,
+    receiver: Character,
+    config: {
+      passerCell: { col: string; row: number };
+      receiverCell: { col: string; row: number };
+      defenders?: DefenderPlacement[];
+      trialsPerConfig?: number;
+      timeoutSeconds?: number;
+      targetGoal: 'goal1' | 'goal2';
+    }
+  ): PassCheckController {
+    return new PassCheckController(
+      passer,
+      receiver,
+      this.ball,
+      this.field,
+      {
+        ...config,
+        trialsPerConfig: config.trialsPerConfig ?? 10,
+        timeoutSeconds: config.timeoutSeconds ?? 10,
+      }
+    );
   }
 
   /**
@@ -1796,13 +2477,8 @@ export class GameScene {
   public exitCheckMode(): void {
     this.setGameMode('game');
 
-    // 全キャラクターを表示
-    for (const char of this.allyCharacters) {
-      char.setVisible(true);
-    }
-    for (const char of this.enemyCharacters) {
-      char.setVisible(true);
-    }
+    // 全キャラクターを再作成
+    this.recreateAllCharacters();
 
     // ゴールコールバックを元に戻す
     if (this.shootingController) {
@@ -1893,6 +2569,9 @@ export class GameScene {
     }
     if (this.feintController) {
       this.feintController.dispose();
+    }
+    if (this.passTrajectoryVisualizer) {
+      this.passTrajectoryVisualizer.dispose();
     }
     this.ball.dispose();
 

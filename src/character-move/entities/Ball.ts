@@ -784,35 +784,151 @@ export class Ball {
   }
 
   /**
-   * パスを実行
+   * パスを実行（レガシー、低角度計算）
    * @param targetPosition 目標位置
    * @param targetCharacter パス先のキャラクター（ログ用）
+   * @deprecated passWithArc を使用してください
    */
   public pass(targetPosition: Vector3, _targetCharacter?: Character): boolean {
+    // 新しいpassWithArcにリダイレクト
+    return this.passWithArc(targetPosition, _targetCharacter);
+  }
+
+  /**
+   * パスを実行（アーチ高さベースの弾道計算）
+   * シュートと同様の弾道計算を使用するが、パスに適した低いアーチで飛ぶ
+   *
+   * @param targetPosition 目標位置（レシーバーの胸の高さ）
+   * @param targetCharacter パス先のキャラクター
+   * @param passType パスの種類（chest: チェストパス、bounce: バウンドパス、overhead: オーバーヘッド）
+   */
+  public passWithArc(
+    targetPosition: Vector3,
+    targetCharacter?: Character,
+    passType: 'chest' | 'bounce' | 'overhead' = 'chest'
+  ): boolean {
     if (!this.holder) return false;
     if (this.inFlight) return false;
 
     const previousHolder = this.holder;
-    const startPosition = this.mesh.position.clone();
     this.holder = null;
 
-    const passAngle = Math.PI / 12; // 15度
-    const velocity = this.calculateInitialVelocity(startPosition, targetPosition, passAngle);
+    if (previousHolder) {
+      this.lastToucher = previousHolder;
+    }
 
-    // Havok物理エンジンで速度を設定
-    this.setKinematic(false);
+    // パサーの胸の高さからスタート
+    const passerHeight = previousHolder.config.physical.height;
+    const startPosition = new Vector3(
+      previousHolder.getPosition().x,
+      previousHolder.getPosition().y + passerHeight * 0.3, // 胸の高さ
+      previousHolder.getPosition().z
+    );
+
+    // レシーバーの胸の高さを目標に（指定されていなければ引数の位置をそのまま使用）
+    let adjustedTargetPosition = targetPosition.clone();
+    if (targetCharacter) {
+      const receiverHeight = targetCharacter.config.physical.height;
+      adjustedTargetPosition = new Vector3(
+        targetCharacter.getPosition().x,
+        targetCharacter.getPosition().y + receiverHeight * 0.3, // 胸の高さ
+        targetCharacter.getPosition().z
+      );
+    }
+
+    // 水平距離を計算
+    const horizontalDistance = ParabolaUtils.getHorizontalDistance(
+      { x: startPosition.x, z: startPosition.z },
+      { x: adjustedTargetPosition.x, z: adjustedTargetPosition.z }
+    );
+
+    // パスタイプに応じたアーチ高さを決定
+    let arcHeight: number;
+    switch (passType) {
+      case 'chest':
+        // チェストパス: 距離に応じて0.3〜1.0m
+        arcHeight = Math.max(0.3, Math.min(1.0, horizontalDistance * 0.1));
+        break;
+      case 'bounce':
+        // バウンドパス: 床にバウンドさせるため低めのアーチ
+        arcHeight = 0.2;
+        // バウンドパスは床に向けて投げる
+        adjustedTargetPosition.y = 0.3; // 床近く
+        break;
+      case 'overhead':
+        // オーバーヘッドパス: 高めのアーチ
+        arcHeight = Math.max(0.8, Math.min(1.5, horizontalDistance * 0.15));
+        break;
+      default:
+        arcHeight = 0.5;
+    }
+
+    // メッシュの位置を設定
+    this.mesh.position = startPosition.clone();
+    this.targetPosition = adjustedTargetPosition.clone();
+
+    // 決定論的軌道を作成
+    const startVec3: Vec3 = { x: startPosition.x, y: startPosition.y, z: startPosition.z };
+    const targetVec3: Vec3 = { x: adjustedTargetPosition.x, y: adjustedTargetPosition.y, z: adjustedTargetPosition.z };
+
+    this.currentTrajectory = new DeterministicTrajectory({
+      start: startVec3,
+      target: targetVec3,
+      arcHeight,
+      gravity: PhysicsConstants.GRAVITY_MAGNITUDE,
+      damping: PhysicsConstants.BALL.LINEAR_DAMPING,
+    });
+
+    // 軌道から初速度を取得
+    const initialVel = this.currentTrajectory.getInitialVelocity();
+    const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
+
+    console.log(`[Ball] passWithArc: ${passType}, 距離=${horizontalDistance.toFixed(2)}m, アーチ=${arcHeight.toFixed(2)}m, 速度=${velocity.length().toFixed(2)}m/s`);
+
+    // Havok物理エンジンを設定
     if (this.physicsAggregate) {
+      // 物理ボディを再作成
+      this.physicsAggregate.dispose();
+      this.mesh.position = startPosition.clone();
+
+      this.physicsAggregate = new PhysicsAggregate(
+        this.mesh,
+        PhysicsShapeType.SPHERE,
+        {
+          mass: PhysicsConstants.BALL.MASS,
+          restitution: PhysicsConstants.BALL.RESTITUTION,
+          friction: PhysicsConstants.BALL.FRICTION,
+        },
+        this.scene
+      );
+
+      this.physicsAggregate.shape.material = {
+        restitution: PhysicsConstants.BALL.RESTITUTION,
+        restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+        friction: PhysicsConstants.BALL.FRICTION,
+        frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      };
+
+      this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
+      this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
+
+      // 速度を設定
       this.physicsAggregate.body.setLinearVelocity(velocity);
-      this.finalizeDynamicMode();
+      this.physicsAggregate.body.disablePreStep = true;
+
+      this.isKinematicMode = false;
     } else {
-      console.warn("[Ball] Havok physics required for pass");
+      console.error("[Ball] Havok physics engine required for pass");
       return false;
     }
 
     this.inFlight = true;
     this.flightTime = 0;
+    this.trajectoryStartTick = this.currentTick;
+
+    // パサーのクールダウン（シュートより短め）
     this.lastShooter = previousHolder;
-    this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME * 0.5;
+    this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME * 0.3;
 
     return true;
   }

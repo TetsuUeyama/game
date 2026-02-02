@@ -11,10 +11,17 @@ import { Formation, FormationUtils, PlayerPosition } from "../../config/Formatio
 /**
  * オフボールオフェンス時のAI
  * ボールを持っていないオフェンスプレイヤーの動きを制御
- * フォーメーションに従って指定位置に移動する
+ * フォーメーションに従って指定位置に移動する（ヒートマップ方式）
  */
 export class OffBallOffenseAI extends BaseStateAI {
   private currentFormation: Formation;
+
+  // ヒートマップ式ポジショニング用
+  private currentTargetPosition: { x: number; z: number } | null = null;
+  private currentTargetCell: string | null = null;
+  private positionReevaluateTimer: number = 0;
+  private readonly positionReevaluateInterval: number = 1.0; // 1秒ごとに再評価
+  private readonly centerWeight: number = 0.55; // 中心セルに55%の確率
 
   constructor(
     character: Character,
@@ -31,6 +38,8 @@ export class OffBallOffenseAI extends BaseStateAI {
    */
   public setFormation(formation: Formation): void {
     this.currentFormation = formation;
+    // フォーメーション変更時は目標位置をリセット
+    this.resetTargetPosition();
   }
 
   /**
@@ -40,9 +49,28 @@ export class OffBallOffenseAI extends BaseStateAI {
     const formation = FormationUtils.getOffenseFormation(name);
     if (formation) {
       this.currentFormation = formation;
+      // フォーメーション変更時は目標位置をリセット
+      this.resetTargetPosition();
       return true;
     }
     return false;
+  }
+
+  /**
+   * 目標位置をリセット（次のupdateで再選択される）
+   */
+  public resetTargetPosition(): void {
+    this.currentTargetPosition = null;
+    this.currentTargetCell = null;
+    this.positionReevaluateTimer = this.positionReevaluateInterval; // 即座に再評価
+  }
+
+  /**
+   * 現在の目標位置を取得（パス軌道可視化用）
+   * @returns 現在の目標位置（設定されていない場合はnull）
+   */
+  public getCurrentTargetPosition(): { x: number; z: number } | null {
+    return this.currentTargetPosition;
   }
 
   /**
@@ -73,7 +101,7 @@ export class OffBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * フォーメーション位置への移動処理
+   * フォーメーション位置への移動処理（ヒートマップ方式）
    */
   private handleFormationPosition(deltaTime: number, onBallPlayer: Character | null): void {
     const playerPosition = this.character.playerPosition as PlayerPosition;
@@ -85,15 +113,17 @@ export class OffBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // フォーメーションから目標位置を取得
-    const isAllyTeam = this.character.team === 'ally';
-    const targetPos = FormationUtils.getTargetPosition(
-      this.currentFormation,
-      playerPosition,
-      isAllyTeam
-    );
+    // 位置の再評価タイマーを更新
+    this.positionReevaluateTimer += deltaTime;
 
-    if (!targetPos) {
+    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
+    const isAllyTeam = this.character.team === 'ally';
+    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
+      this.selectNewTargetPosition(playerPosition, isAllyTeam);
+      this.positionReevaluateTimer = 0;
+    }
+
+    if (!this.currentTargetPosition) {
       // 目標位置がない場合は待機
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
@@ -102,9 +132,9 @@ export class OffBallOffenseAI extends BaseStateAI {
     }
 
     const targetPosition = new Vector3(
-      targetPos.x,
+      this.currentTargetPosition.x,
       this.character.getPosition().y,
-      targetPos.z
+      this.currentTargetPosition.z
     );
 
     // 目標位置に向かって移動
@@ -112,6 +142,34 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
     } else {
       this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
+    }
+  }
+
+  /**
+   * ヒートマップ方式で新しい目標位置を選択
+   */
+  private selectNewTargetPosition(playerPosition: PlayerPosition, isAllyTeam: boolean): void {
+    const heatmapResult = FormationUtils.getHeatmapTargetPosition(
+      this.currentFormation,
+      playerPosition,
+      isAllyTeam,
+      this.centerWeight
+    );
+
+    if (heatmapResult) {
+      this.currentTargetPosition = { x: heatmapResult.x, z: heatmapResult.z };
+      this.currentTargetCell = heatmapResult.cell;
+    } else {
+      // フォールバック: 通常の目標位置を使用
+      const targetPos = FormationUtils.getTargetPosition(
+        this.currentFormation,
+        playerPosition,
+        isAllyTeam
+      );
+      if (targetPos) {
+        this.currentTargetPosition = targetPos;
+        this.currentTargetCell = null;
+      }
     }
   }
 
