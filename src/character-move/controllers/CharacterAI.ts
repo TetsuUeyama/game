@@ -7,12 +7,16 @@ import { ShootingController } from "./action/ShootingController";
 import { FeintController } from "./action/FeintController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
+import { IDLE_MOTION } from "../motion/IdleMotion";
 import {
   LooseBallAI,
   OnBallOffenseAI,
   OnBallDefenseAI,
   OffBallOffenseAI,
-  OffBallDefenseAI
+  OffBallDefenseAI,
+  ThrowInThrowerAI,
+  ThrowInReceiverAI,
+  ThrowInOtherAI
 } from "../ai";
 import { PassCallback } from "../ai/state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
@@ -34,9 +38,15 @@ export class CharacterAI {
   private onBallDefenseAI: OnBallDefenseAI;
   private offBallOffenseAI: OffBallOffenseAI;
   private offBallDefenseAI: OffBallDefenseAI;
+  private throwInThrowerAI: ThrowInThrowerAI;
+  private throwInReceiverAI: ThrowInReceiverAI;
+  private throwInOtherAI: ThrowInOtherAI;
 
   // パス軌道可視化（外部から設定可能）
   private passTrajectoryVisualizer: PassTrajectoryVisualizer | null = null;
+
+  // 前回の状態（状態遷移検出用）
+  private previousState: CharacterState | null = null;
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     this.character = character;
@@ -50,6 +60,9 @@ export class CharacterAI {
     this.onBallDefenseAI = new OnBallDefenseAI(character, ball, allCharacters, field);
     this.offBallOffenseAI = new OffBallOffenseAI(character, ball, allCharacters, field);
     this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field);
+    this.throwInThrowerAI = new ThrowInThrowerAI(character, ball, allCharacters, field);
+    this.throwInReceiverAI = new ThrowInReceiverAI(character, ball, allCharacters, field);
+    this.throwInOtherAI = new ThrowInOtherAI(character, ball, allCharacters, field);
 
     // オフェンス側のボール保持位置を設定
     this.character.setBallHoldingFaces([...BALL_HOLDING_CONFIG.OFFENSE_HOLDING_FACES]);
@@ -134,11 +147,40 @@ export class CharacterAI {
   }
 
   /**
+   * スローインスローワーAIを取得
+   */
+  public getThrowInThrowerAI(): ThrowInThrowerAI {
+    return this.throwInThrowerAI;
+  }
+
+  /**
+   * スローインレシーバーAIを取得
+   */
+  public getThrowInReceiverAI(): ThrowInReceiverAI {
+    return this.throwInReceiverAI;
+  }
+
+  /**
+   * スローイン中の他プレイヤーAIを取得
+   */
+  public getThrowInOtherAI(): ThrowInOtherAI {
+    return this.throwInOtherAI;
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
     // オンボールオフェンスAIのクールダウンを更新
     this.onBallOffenseAI.updateCooldowns(deltaTime);
+
+    const state = this.character.getState();
+
+    // 状態遷移を検出してリセット処理を実行（アクション実行中でも行う）
+    if (this.previousState !== null && this.previousState !== state) {
+      this.handleStateTransition(this.previousState, state);
+    }
+    this.previousState = state;
 
     // アクション実行中（シュート等）は移動処理をスキップ
     const actionController = this.character.getActionController();
@@ -146,11 +188,8 @@ export class CharacterAI {
     const currentPhase = actionController.getCurrentPhase();
     if (currentAction !== null || currentPhase !== 'idle') {
       // アクション中は待機モーションも再生しない（アクションモーションが再生中）
-      console.log(`[CharacterAI] ${this.character.playerPosition}: アクション中スキップ action=${currentAction}, phase=${currentPhase}`);
       return;
     }
-
-    const state = this.character.getState();
 
     switch (state) {
       case CharacterState.BALL_LOST:
@@ -159,7 +198,6 @@ export class CharacterAI {
         break;
       case CharacterState.ON_BALL_PLAYER:
         // ボール保持者は動く
-        console.log(`[CharacterAI] ${this.character.playerPosition}: ON_BALL_PLAYER → onBallOffenseAI.update()`);
         this.onBallOffenseAI.update(deltaTime);
         break;
       case CharacterState.ON_BALL_DEFENDER:
@@ -173,6 +211,74 @@ export class CharacterAI {
       case CharacterState.OFF_BALL_DEFENDER:
         // オフボールディフェンス（同ポジションマッチアップ）
         this.offBallDefenseAI.update(deltaTime);
+        break;
+      case CharacterState.THROW_IN_THROWER:
+        // スローインを投げる人
+        this.throwInThrowerAI.update(deltaTime);
+        break;
+      case CharacterState.THROW_IN_RECEIVER:
+        // スローインを受ける人
+        this.throwInReceiverAI.update(deltaTime);
+        break;
+      case CharacterState.THROW_IN_OTHER:
+        // スローイン中の他のプレイヤー
+        this.throwInOtherAI.update(deltaTime);
+        break;
+    }
+  }
+
+  /**
+   * 状態遷移時のリセット処理
+   * @param fromState 遷移前の状態
+   * @param toState 遷移後の状態
+   */
+  private handleStateTransition(fromState: CharacterState, toState: CharacterState): void {
+    console.log(`[CharacterAI] 状態遷移: ${this.character.playerPosition} ${fromState} → ${toState}`);
+
+    // アクションを強制リセット（defense_stance等の無限アクションを終了させる）
+    const actionController = this.character.getActionController();
+    actionController.forceResetAction();
+
+    // キャラクターのモーションと移動状態をリセット
+    // 前の状態のアクションが引き継がれないようにする
+    this.character.stopMovement();
+    this.character.playMotion(IDLE_MOTION);
+
+    // 前の状態からのExit処理
+    switch (fromState) {
+      case CharacterState.ON_BALL_PLAYER:
+        this.onBallOffenseAI.onExitState();
+        break;
+      case CharacterState.OFF_BALL_PLAYER:
+        this.offBallOffenseAI.onExitState();
+        break;
+      case CharacterState.THROW_IN_THROWER:
+        this.throwInThrowerAI.onExitState();
+        break;
+      case CharacterState.THROW_IN_RECEIVER:
+        this.throwInReceiverAI.onExitState();
+        break;
+      case CharacterState.THROW_IN_OTHER:
+        this.throwInOtherAI.onExitState();
+        break;
+    }
+
+    // 新しい状態へのEnter処理
+    switch (toState) {
+      case CharacterState.ON_BALL_PLAYER:
+        this.onBallOffenseAI.onEnterState();
+        break;
+      case CharacterState.OFF_BALL_PLAYER:
+        this.offBallOffenseAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_THROWER:
+        this.throwInThrowerAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_RECEIVER:
+        this.throwInReceiverAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_OTHER:
+        this.throwInOtherAI.onEnterState();
         break;
     }
   }

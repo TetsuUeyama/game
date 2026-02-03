@@ -422,8 +422,10 @@ export class Character {
 
   /**
    * 位置を設定
+   * @param position 設定する位置
+   * @param skipBoundaryClamp trueの場合、フィールド境界へのクランプをスキップ（スローイン時など）
    */
-  public setPosition(position: Vector3): void {
+  public setPosition(position: Vector3, skipBoundaryClamp: boolean = false): void {
     // Y座標が地面より下にならないように制限
     let clampedPosition = new Vector3(
       position.x,
@@ -431,8 +433,10 @@ export class Character {
       position.z
     );
 
-    // フィールド境界内にクランプ（A列〜O列、1行目〜30行目）
-    clampedPosition = this.clampToFieldBoundary(clampedPosition);
+    // フィールド境界内にクランプ（スキップオプションがない場合のみ）
+    if (!skipBoundaryClamp) {
+      clampedPosition = this.clampToFieldBoundary(clampedPosition);
+    }
 
     // モーションオフセットを加算してメッシュ位置を設定
     this.mesh.position = new Vector3(
@@ -2163,6 +2167,34 @@ export class Character {
       this.rightHandPhysicsMesh = null;
     }
     this.physicsInitialized = false;
+  }
+
+  /**
+   * パスレシーバーモードを設定
+   * 反発係数を0にしてボールが弾かれないようにする
+   * @param enabled true=レシーバーモード有効（反発なし）、false=通常モード
+   */
+  public setPassReceiverMode(enabled: boolean): void {
+    if (!this.physicsInitialized) {
+      return;
+    }
+
+    const restitution = enabled ? 0 : undefined;  // 0=反発なし、undefined=デフォルト値使用
+
+    // 胴体の反発係数を設定
+    if (this.bodyPhysicsAggregate?.shape?.material) {
+      this.bodyPhysicsAggregate.shape.material.restitution = restitution ?? 0.5;
+    }
+
+    // 左手の反発係数を設定
+    if (this.leftHandPhysicsAggregate?.shape?.material) {
+      this.leftHandPhysicsAggregate.shape.material.restitution = restitution ?? 0.6;
+    }
+
+    // 右手の反発係数を設定
+    if (this.rightHandPhysicsAggregate?.shape?.material) {
+      this.rightHandPhysicsAggregate.shape.material.restitution = restitution ?? 0.6;
+    }
   }
 
   /**

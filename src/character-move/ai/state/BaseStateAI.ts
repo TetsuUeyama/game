@@ -103,8 +103,12 @@ export abstract class BaseStateAI {
   /**
    * 目標位置に向かって移動（境界チェック付き）
    * オフェンス時に使用 - フィールド外に出ないように移動
+   * @param targetPosition 目標位置
+   * @param deltaTime デルタタイム
+   * @param stopDistance 停止距離（デフォルト0.3m）
+   * @param keepRotation trueの場合、向きを変更しない（OnBallOffenseAI用）
    */
-  protected moveTowardsWithBoundary(targetPosition: Vector3, deltaTime: number, stopDistance: number = 0.3): void {
+  protected moveTowardsWithBoundary(targetPosition: Vector3, deltaTime: number, stopDistance: number = 0.3, keepRotation: boolean = false): void {
     const myPosition = this.character.getPosition();
 
     // 目標位置への方向ベクトルを計算（XZ平面上）
@@ -149,9 +153,11 @@ export abstract class BaseStateAI {
       return;
     }
 
-    // 移動方向を向く
-    const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
-    this.character.setRotation(angle);
+    // 移動方向を向く（keepRotationがfalseの場合のみ）
+    if (!keepRotation) {
+      const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
+      this.character.setRotation(angle);
+    }
 
     // 距離に応じた移動速度とモーション
     const isDashing = distance > 5.0;

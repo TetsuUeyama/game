@@ -59,6 +59,78 @@ export class Ball {
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
 
+  // パスのターゲット（キャッチ判定用）
+  private passTarget: Character | null = null;
+
+  // バウンスパス用の状態
+  private isBouncePass: boolean = false;
+  private bouncePassFinalTarget: Vector3 | null = null;
+  private hasBounced: boolean = false;
+
+  // スローインロック（スローイン中は指定されたパス以外でボールを解放できない）
+  private throwInLocked: boolean = false;
+  private throwInReceiver: Character | null = null;
+
+  /**
+   * スローインロックを設定
+   * @param receiver スローインで受け取る予定のキャラクター
+   */
+  public setThrowInLock(receiver: Character): void {
+    this.throwInLocked = true;
+    this.throwInReceiver = receiver;
+  }
+
+  /**
+   * スローインロックを解除
+   */
+  public clearThrowInLock(): void {
+    this.throwInLocked = false;
+    this.throwInReceiver = null;
+  }
+
+  /**
+   * スローインロック中かどうか
+   */
+  public isThrowInLocked(): boolean {
+    return this.throwInLocked;
+  }
+
+  /**
+   * パスターゲットを取得
+   */
+  public getPassTarget(): Character | null {
+    return this.passTarget;
+  }
+
+  /**
+   * パスターゲットをクリア
+   */
+  public clearPassTarget(): void {
+    // 前のパスターゲットのレシーバーモードを無効化
+    if (this.passTarget) {
+      this.passTarget.setPassReceiverMode(false);
+    }
+    this.passTarget = null;
+  }
+
+  /**
+   * パスターゲットを設定
+   * @param target パスの受け手キャラクター
+   */
+  private setPassTarget(target: Character | null): void {
+    // 前のパスターゲットのレシーバーモードを無効化
+    if (this.passTarget && this.passTarget !== target) {
+      this.passTarget.setPassReceiverMode(false);
+    }
+
+    this.passTarget = target;
+
+    // 新しいパスターゲットのレシーバーモードを有効化
+    if (target) {
+      target.setPassReceiverMode(true);
+    }
+  }
+
   // 軌道可視化用メッシュ
   private trajectoryLineMesh: LinesMesh | null = null;
   private trajectoryParabolaMesh: LinesMesh | null = null;
@@ -323,6 +395,12 @@ export class Ball {
 
     if (character !== null) {
       this.lastToucher = character;
+      // パスターゲットをクリア（レシーバーモードも無効化）
+      this.clearPassTarget();
+      // バウンスパス状態をリセット
+      this.isBouncePass = false;
+      this.bouncePassFinalTarget = null;
+      this.hasBounced = false;
       // ボールサイズを元に戻す
       this.mesh.scaling = Vector3.One();
 
@@ -341,9 +419,6 @@ export class Ball {
       if (this.physicsAggregate) {
         this.physicsAggregate.body.disablePreStep = false;
       }
-      console.log(`[Ball] setHolder: ボールを ${character.playerData?.basic?.NAME || character.team} に渡しました`);
-    } else {
-      console.log('[Ball] setHolder: ボールが解放されました');
     }
   }
 
@@ -402,6 +477,8 @@ export class Ball {
         this.setKinematic(true);
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+        // ボールが停止したらパスターゲットをクリア（パス失敗確定）
+        this.clearPassTarget();
       }
     }
   }
@@ -414,24 +491,79 @@ export class Ball {
     if (!this.physicsAggregate) {
       console.error("[Ball] Havok physics engine required but not available");
       this.inFlight = false;
+      this.clearPassTarget();
       return;
     }
 
     const velocity = this.physicsAggregate.body.getLinearVelocity();
     const position = this.getPosition();
     const speed = velocity.length();
-    const isOnGround = position.y <= PhysicsConstants.BALL.RADIUS + 0.05;
+    const isOnGround = position.y <= PhysicsConstants.BALL.RADIUS + 0.1;
+
+    // バウンスパスの処理: 地面に当たったら第2セグメントの速度を適用
+    if (this.isBouncePass && !this.hasBounced && isOnGround && this.bouncePassFinalTarget) {
+      this.hasBounced = true;
+
+      // 第2セグメント: バウンド点からレシーバーへの軌道を計算
+      const bouncePos = position.clone();
+      bouncePos.y = PhysicsConstants.BALL.RADIUS + 0.05; // 床の高さに調整
+
+      const target = this.bouncePassFinalTarget;
+
+      // 水平距離
+      const dx = target.x - bouncePos.x;
+      const dz = target.z - bouncePos.z;
+      const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+
+      // 第2セグメント用のアーチ高さ（バウンド後は低め）
+      const arcHeight = Math.max(0.3, horizontalDistance * 0.08);
+
+      // 第2セグメントの軌道を計算
+      const segment2Trajectory = new DeterministicTrajectory({
+        start: { x: bouncePos.x, y: bouncePos.y, z: bouncePos.z },
+        target: { x: target.x, y: target.y, z: target.z },
+        arcHeight,
+        gravity: PhysicsConstants.GRAVITY_MAGNITUDE,
+        damping: PhysicsConstants.BALL.LINEAR_DAMPING,
+      });
+
+      // 新しい速度を適用
+      const newVel = segment2Trajectory.getInitialVelocity();
+      this.physicsAggregate.body.setLinearVelocity(new Vector3(newVel.x, newVel.y, newVel.z));
+      return;
+    }
 
     // 地面で垂直方向の速度が十分小さい場合は飛行終了
     // 水平方向の転がりは飛行とは見なさない（地面にいれば状態更新が行われる）
     if (isOnGround && Math.abs(velocity.y) < PhysicsConstants.BALL.MIN_BOUNCE_VELOCITY) {
+      // バウンスパスでまだバウンドしていない場合は継続
+      if (this.isBouncePass && !this.hasBounced) {
+        return;
+      }
+
       this.inFlight = false;
+      // 注意: ここではpassTargetをクリアしない
+      // 理由: ball.update()がcollisionHandler.update()より先に実行されるため、
+      // ここでpassTargetをクリアすると、衝突判定でレシーバーがpassTargetとして認識されず、
+      // キャッチに失敗する可能性がある。
+      // passTargetは以下の場合にクリアされる:
+      // - ボールがキャッチされた時（setHolder内）
+      // - ボールが完全に停止した時（speed < 0.5でキネマティックモードになる時）
+      // - endFlight()が明示的に呼ばれた時
+      // - GameSceneでスローイン状態がクリアされた時
+
+      // バウンスパス状態をリセット
+      this.isBouncePass = false;
+      this.bouncePassFinalTarget = null;
+      this.hasBounced = false;
       // 水平方向の速度は維持（転がり続ける）、垂直方向のみ停止
       if (speed < 0.5) {
         // 完全に停止している場合のみキネマティックモードに
         this.setKinematic(true);
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+        // ボールが停止したらパスターゲットをクリア（パス失敗確定）
+        this.clearPassTarget();
       }
     }
   }
@@ -450,6 +582,12 @@ export class Ball {
     curveValue: number = 50
   ): boolean {
     if (this.inFlight) return false;
+
+    // スローインロック中はシュート禁止
+    if (this.throwInLocked) {
+      console.warn('[Ball] スローインロック中：シュートは拒否されました');
+      return false;
+    }
 
     const previousHolder = this.holder;
     this.holder = null;
@@ -553,6 +691,12 @@ export class Ball {
     noiseSeed?: number
   ): boolean {
     if (this.inFlight) return false;
+
+    // スローインロック中はシュート禁止
+    if (this.throwInLocked) {
+      console.warn('[Ball] スローインロック中：シュートは拒否されました');
+      return false;
+    }
 
     const previousHolder = this.holder;
     this.holder = null;
@@ -747,9 +891,6 @@ export class Ball {
       directionXZ.z * vHorizontal
     );
 
-    // デバッグ: 計算された初速度をログ出力
-    console.log(`[BallDebug] v0: ${v0.toFixed(4)} m/s, velocity: (${velocity.x.toFixed(4)}, ${velocity.y.toFixed(4)}, ${velocity.z.toFixed(4)})`);
-
     return velocity;
   }
 
@@ -771,6 +912,12 @@ export class Ball {
       this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
       this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
     }
+    // パスターゲットをクリア（レシーバーモードも無効化）
+    this.clearPassTarget();
+    // バウンスパス状態をリセット
+    this.isBouncePass = false;
+    this.bouncePassFinalTarget = null;
+    this.hasBounced = false;
   }
 
   /**
@@ -810,6 +957,16 @@ export class Ball {
     if (!this.holder) return false;
     if (this.inFlight) return false;
 
+    // スローインロック中は指定されたレシーバーへのパスのみ許可
+    if (this.throwInLocked) {
+      if (!targetCharacter || targetCharacter !== this.throwInReceiver) {
+        console.warn('[Ball] スローインロック中：指定レシーバー以外へのパスは拒否されました');
+        return false;
+      }
+      // スローインパスが実行されるのでロックを解除
+      this.clearThrowInLock();
+    }
+
     const previousHolder = this.holder;
     this.holder = null;
 
@@ -817,11 +974,16 @@ export class Ball {
       this.lastToucher = previousHolder;
     }
 
+    // パスターゲットを設定（キャッチ判定で使用、レシーバーモードも有効化）
+    this.setPassTarget(targetCharacter ?? null);
+    console.log(`[Ball] パスターゲット設定: ${targetCharacter?.playerPosition || 'null'}, passTarget=${this.passTarget?.playerPosition || 'null'}`);
+
     // パサーの胸の高さからスタート
+    // キャラクターのposition.yはheight/2にあるため、胸の高さ(height*0.65)までのオフセットはheight*0.15
     const passerHeight = previousHolder.config.physical.height;
     const startPosition = new Vector3(
       previousHolder.getPosition().x,
-      previousHolder.getPosition().y + passerHeight * 0.3, // 胸の高さ
+      previousHolder.getPosition().y + passerHeight * 0.15, // 胸の高さ
       previousHolder.getPosition().z
     );
 
@@ -831,7 +993,7 @@ export class Ball {
       const receiverHeight = targetCharacter.config.physical.height;
       adjustedTargetPosition = new Vector3(
         targetCharacter.getPosition().x,
-        targetCharacter.getPosition().y + receiverHeight * 0.3, // 胸の高さ
+        targetCharacter.getPosition().y + receiverHeight * 0.15, // 胸の高さ
         targetCharacter.getPosition().z
       );
     }
@@ -844,16 +1006,30 @@ export class Ball {
 
     // パスタイプに応じたアーチ高さを決定
     let arcHeight: number;
+    // バウンスパス用の状態をリセット
+    this.isBouncePass = false;
+    this.bouncePassFinalTarget = null;
+    this.hasBounced = false;
+
     switch (passType) {
       case 'chest':
         // チェストパス: 距離に応じて0.3〜1.0m
         arcHeight = Math.max(0.3, Math.min(1.0, horizontalDistance * 0.1));
         break;
       case 'bounce':
-        // バウンドパス: 床にバウンドさせるため低めのアーチ
-        arcHeight = 0.2;
-        // バウンドパスは床に向けて投げる
-        adjustedTargetPosition.y = 0.3; // 床近く
+        // バウンドパス: 2セグメント軌道（パサー→バウンド点→レシーバー）
+        // 最終目標を保存
+        this.bouncePassFinalTarget = adjustedTargetPosition.clone();
+        this.isBouncePass = true;
+        this.hasBounced = false;
+
+        // バウンド点を計算（中間点の床）
+        const bounceX = startPosition.x + (adjustedTargetPosition.x - startPosition.x) * 0.5;
+        const bounceZ = startPosition.z + (adjustedTargetPosition.z - startPosition.z) * 0.5;
+        adjustedTargetPosition = new Vector3(bounceX, PhysicsConstants.BALL.RADIUS + 0.05, bounceZ);
+
+        // 第1セグメント用のアーチ高さ
+        arcHeight = 0.3;
         break;
       case 'overhead':
         // オーバーヘッドパス: 高めのアーチ
@@ -866,6 +1042,15 @@ export class Ball {
     // メッシュの位置を設定
     this.mesh.position = startPosition.clone();
     this.targetPosition = adjustedTargetPosition.clone();
+
+    // デバッグ: エンドラインからのスローイン時の軌道情報を出力
+    const isEndLineThrowIn = Math.abs(startPosition.z) > 14.5; // エンドライン付近かどうか
+    if (isEndLineThrowIn) {
+      console.log(`[Ball] エンドラインスローイン軌道情報:`);
+      console.log(`  開始位置: (${startPosition.x.toFixed(2)}, ${startPosition.y.toFixed(2)}, ${startPosition.z.toFixed(2)})`);
+      console.log(`  目標位置: (${adjustedTargetPosition.x.toFixed(2)}, ${adjustedTargetPosition.y.toFixed(2)}, ${adjustedTargetPosition.z.toFixed(2)})`);
+      console.log(`  水平距離: ${horizontalDistance.toFixed(2)}m, アーチ高: ${arcHeight.toFixed(2)}m`);
+    }
 
     // 決定論的軌道を作成
     const startVec3: Vec3 = { x: startPosition.x, y: startPosition.y, z: startPosition.z };
@@ -883,7 +1068,11 @@ export class Ball {
     const initialVel = this.currentTrajectory.getInitialVelocity();
     const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
 
-    console.log(`[Ball] passWithArc: ${passType}, 距離=${horizontalDistance.toFixed(2)}m, アーチ=${arcHeight.toFixed(2)}m, 速度=${velocity.length().toFixed(2)}m/s`);
+    // デバッグ: エンドラインからのスローイン時の初速度を出力
+    if (isEndLineThrowIn) {
+      console.log(`  初速度: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)}, ${velocity.z.toFixed(2)})`);
+      console.log(`  飛行時間: ${this.currentTrajectory.getFlightTime().toFixed(2)}s`);
+    }
 
     // Havok物理エンジンを設定
     if (this.physicsAggregate) {

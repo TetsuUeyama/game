@@ -12,7 +12,6 @@ import {
 import {
   BALL_COLLISION_CONFIG,
   CHARACTER_COLLISION_CONFIG,
-  BODY_PART_CONFIG,
   BALL_PICKUP_CONFIG,
 } from "../config/CollisionConfig";
 
@@ -53,6 +52,14 @@ export class CollisionHandler {
   }
 
   /**
+   * キャラクターの状態のみを更新（AI更新前に呼び出す）
+   * ボール保持者の変化に応じて全キャラクターの状態を適切に設定
+   */
+  public updateStates(): void {
+    this.updateCharacterStates();
+  }
+
+  /**
    * ボールとキャラクターの衝突を解決（物理ベースのキャッチ判定）
    *
    * 物理ベースのピックアップシステム:
@@ -61,6 +68,10 @@ export class CollisionHandler {
    * 3. 制御可能なら手の方向に引き寄せるインパルスを適用
    * 4. 手元まで来たら完全にキャプチャ
    * 5. 速すぎる場合はファンブル（弾く）
+   *
+   * パスターゲットの場合:
+   * - 拡大されたリーチ範囲で即座にキャッチ
+   * - 速度チェックなし（ファンブルしない）
    */
   private resolveBallCharacterCollision(character: Character): void {
     // すでにボールが保持されている場合は衝突判定をスキップ
@@ -81,11 +92,29 @@ export class CollisionHandler {
 
     const ballPosition = this.ball.getPosition();
     const handPosition = character.getBallHoldingPosition();
-
-    // 高さの判定：ボールがキャラクターの手の届く範囲にあるかチェック
+    const characterPos = character.getPosition();
     const characterHeight = character.config.physical.height;
-    const minCatchHeight = characterHeight * BALL_PICKUP_CONFIG.MIN_CATCH_HEIGHT_RATIO;
-    const maxCatchHeight = characterHeight * BALL_PICKUP_CONFIG.MAX_CATCH_HEIGHT_RATIO;
+
+    // パスターゲットかどうかを確認
+    const passTarget = this.ball.getPassTarget();
+    const isPassTarget = passTarget === character;
+
+    // デバッグ: スローインレシーバーの判定状況を確認
+    const isThrowInReceiver = character.getState() === CharacterState.THROW_IN_RECEIVER;
+    if (isThrowInReceiver && this.ball.isInFlight()) {
+      const ballPos = this.ball.getPosition();
+      const charPos = character.getPosition();
+      const dist = Math.sqrt(Math.pow(ballPos.x - charPos.x, 2) + Math.pow(ballPos.z - charPos.z, 2));
+      console.log(`[CollisionHandler] スローインレシーバー: passTarget=${passTarget?.playerPosition || 'null'}, isPassTarget=${isPassTarget}, dist=${dist.toFixed(2)}, ballY=${ballPos.y.toFixed(2)}`);
+    }
+
+    // パスターゲットの場合は緩やかな高さチェック
+    const minCatchHeight = isPassTarget
+      ? characterHeight * (BALL_PICKUP_CONFIG.MIN_CATCH_HEIGHT_RATIO - 0.1)  // 下限を緩和
+      : characterHeight * BALL_PICKUP_CONFIG.MIN_CATCH_HEIGHT_RATIO;
+    const maxCatchHeight = isPassTarget
+      ? characterHeight * (BALL_PICKUP_CONFIG.MAX_CATCH_HEIGHT_RATIO + 0.1)  // 上限を緩和
+      : characterHeight * BALL_PICKUP_CONFIG.MAX_CATCH_HEIGHT_RATIO;
     const ballHeight = ballPosition.y;
 
     // 高さが手の届く範囲外ならキャッチできない
@@ -94,10 +123,31 @@ export class CollisionHandler {
     }
 
     // ボールと手の距離を計算（3D）
-    const distance = getDistance3D(handPosition, ballPosition);
+    const distanceToHand = getDistance3D(handPosition, ballPosition);
 
-    // リーチ範囲外ならスキップ
-    if (distance > BALL_PICKUP_CONFIG.REACH_RANGE) {
+    // ボールとキャラクター中心の距離（XZ平面）
+    const distanceToBodyXZ = getDistance2D(ballPosition, characterPos);
+
+    // キャラクターの体の半径（ボール方向）
+    const bodyRadius = character.getFootCircleRadiusInDirection({
+      x: ballPosition.x - characterPos.x,
+      z: ballPosition.z - characterPos.z
+    });
+
+    // パスターゲットの場合: 体に当たった時点でキャッチ（速度チェックなし）
+    if (isPassTarget) {
+      // 体に十分近いか、手に十分近い場合のみキャッチ
+      const isNearBody = distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + 0.1;
+      const isNearHand = distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 1.5;
+
+      if (isNearBody || isNearHand) {
+        this.captureBall(character);
+      }
+      return;
+    }
+
+    // リーチ範囲外ならスキップ（通常のキャッチ処理）
+    if (distanceToHand > BALL_PICKUP_CONFIG.REACH_RANGE) {
       return;
     }
 
@@ -108,20 +158,13 @@ export class CollisionHandler {
     const relativeSpeed = relativeVelocity.length();
 
     // リーチ範囲内の処理
-    if (distance < BALL_PICKUP_CONFIG.REACH_RANGE) {
+    if (distanceToHand < BALL_PICKUP_CONFIG.REACH_RANGE) {
       // ボールが静止状態（キネマティックモード）の場合は直接キャプチャ判定
       if (!this.ball.isPhysicsEnabled()) {
         // 静止ボールは近づくだけでキャプチャ可能（XZ平面での距離も考慮）
-        const characterPos = character.getPosition();
-        const distanceXZ = getDistance2D(ballPosition, characterPos);
-        const characterRadius = character.getFootCircleRadiusInDirection({
-          x: ballPosition.x - characterPos.x,
-          z: ballPosition.z - characterPos.z
-        });
-
         // キャラクターの体が十分近い、または手が十分近い場合はキャプチャ
-        if (distanceXZ < characterRadius + BALL_COLLISION_CONFIG.BALL_RADIUS ||
-            distance < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 2) {
+        if (distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS ||
+            distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 2) {
           this.captureBall(character);
         }
         return;
@@ -131,8 +174,15 @@ export class CollisionHandler {
       if (relativeSpeed < BALL_PICKUP_CONFIG.MAX_CONTROLLABLE_VELOCITY) {
         // 制御可能な速度 - 手の方向に引き寄せる
 
-        if (distance < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
+        // ボールが低速（3m/s以下）で転がっている場合、体に近いだけでキャプチャ可能
+        const isSlowRolling = relativeSpeed < 3.0;
+        const isNearBody = distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + 0.2;
+
+        if (distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
           // 手元まで来た - 完全にキャプチャ
+          this.captureBall(character);
+        } else if (isSlowRolling && isNearBody) {
+          // 低速ボールが体の近くにある - キャプチャ
           this.captureBall(character);
         } else {
           // 手の方向に少しずつ引き寄せる（物理的な挙動を残す）
@@ -150,7 +200,6 @@ export class CollisionHandler {
    */
   private captureBall(character: Character): void {
     this.ball.setHolder(character);
-    console.log(`[CollisionHandler] ${character.playerData?.basic?.NAME || character.team} がボールをキャッチ`);
   }
 
   /**
@@ -226,8 +275,6 @@ export class CollisionHandler {
 
     // ファンブル後のクールダウンを設定
     this.ball.setDeflectionCooldown();
-
-    console.log(`[CollisionHandler] ${character.playerData?.basic?.NAME || character.team} がボールをファンブル`);
   }
 
   /**
@@ -276,15 +323,45 @@ export class CollisionHandler {
   private updateCharacterStates(): void {
     const holder = this.ball.getHolder();
 
-    // ボールが飛行中（シュート中）の場合は状態を更新しない
-    // シュートが外れて誰かが保持するか、ゲーム再開になるまで現在の状態を維持
-    if (this.ball.isInFlight()) {
-      return;
+    // スローイン状態のキャラクターがいるかチェック
+    const hasThrowInState = this.allCharacters.some(char => {
+      const state = char.getState();
+      return state === CharacterState.THROW_IN_THROWER ||
+             state === CharacterState.THROW_IN_RECEIVER ||
+             state === CharacterState.THROW_IN_OTHER;
+    });
+
+    if (hasThrowInState) {
+      // スロワーがボールを持っている間、またはボールが飛行中は状態を更新しない
+      // レシーバーがキャッチした場合のみ状態を更新する
+      if (!holder || holder.getState() === CharacterState.THROW_IN_THROWER) {
+        return;
+      }
+      // ホルダーがスロワー以外（レシーバーがキャッチした）なら状態更新を続行
     }
 
-    // ボールが誰も保持していない場合（ルーズボール時）、全員BALL_LOST
-    // これにより、ルーズボール時は全員がボールを追いかける
+    // ボールが誰も保持していない場合
     if (!holder) {
+      // ボールが飛行中（パス中・シュート中）の場合
+      if (this.ball.isInFlight()) {
+        // パスターゲットがいる場合（パス中）は、パスターゲットに向かう準備をする
+        // - パサー（lastToucher）はOFF_BALL_PLAYERに
+        // - パスターゲットは一時的にまだOFF_BALL_PLAYERのまま（キャッチ後にON_BALL_PLAYERに）
+        // - シュート中の場合はlastToucherもnullまたはシューターなので状態維持
+        const passTarget = this.ball.getPassTarget();
+        if (passTarget) {
+          // パス中: パサーの状態を更新
+          const lastToucher = this.ball.getLastToucher();
+          if (lastToucher && lastToucher.getState() === CharacterState.ON_BALL_PLAYER) {
+            lastToucher.setState(CharacterState.OFF_BALL_PLAYER);
+          }
+        }
+        // シュート中の場合は状態を維持（シュートが外れるまで）
+        return;
+      }
+
+      // ルーズボール時（飛行中でない、保持者もいない）
+      // 全員BALL_LOSTに設定
       for (const character of this.allCharacters) {
         character.setState(CharacterState.BALL_LOST);
       }
@@ -292,6 +369,7 @@ export class CollisionHandler {
     }
 
     // ボール保持者をON_BALL_PLAYERに設定
+    console.log(`[CollisionHandler] ボール保持者を設定: ${holder.playerPosition}, team=${holder.team}, state→ON_BALL_PLAYER`);
     holder.setState(CharacterState.ON_BALL_PLAYER);
 
     // ボール保持者のチームを判定

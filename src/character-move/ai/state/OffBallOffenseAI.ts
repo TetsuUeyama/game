@@ -7,6 +7,9 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
+import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
+import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
+import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 
 /**
  * オフボールオフェンス時のAI
@@ -23,6 +26,12 @@ export class OffBallOffenseAI extends BaseStateAI {
   private readonly positionReevaluateInterval: number = 1.0; // 1秒ごとに再評価
   private readonly centerWeight: number = 0.55; // 中心セルに55%の確率
 
+  // パスレーン分析用
+  private trajectoryCalculator: PassTrajectoryCalculator;
+  private interceptionAnalyzer: InterceptionAnalyzer;
+  private readonly maxPassLaneRisk: number = 0.4; // この確率以下なら安全とみなす
+  private readonly passLaneCheckRadius: number = 2.0; // パスレーン確保のための探索半径
+
   constructor(
     character: Character,
     ball: Ball,
@@ -31,6 +40,8 @@ export class OffBallOffenseAI extends BaseStateAI {
   ) {
     super(character, ball, allCharacters, field);
     this.currentFormation = FormationUtils.getDefaultOffenseFormation();
+    this.trajectoryCalculator = new PassTrajectoryCalculator();
+    this.interceptionAnalyzer = new InterceptionAnalyzer();
   }
 
   /**
@@ -71,6 +82,26 @@ export class OffBallOffenseAI extends BaseStateAI {
    */
   public getCurrentTargetPosition(): { x: number; z: number } | null {
     return this.currentTargetPosition;
+  }
+
+  /**
+   * 状態遷移時のリセット処理
+   * OFF_BALL_PLAYERになった時に呼ばれる
+   */
+  public onEnterState(): void {
+    // 目標位置をリセット（新しい状況で再評価させる）
+    this.resetTargetPosition();
+  }
+
+  /**
+   * 状態から離れる時のリセット処理
+   * OFF_BALL_PLAYERから別の状態になる時に呼ばれる
+   */
+  public onExitState(): void {
+    // 目標位置をリセット
+    this.currentTargetPosition = null;
+    this.currentTargetCell = null;
+    this.positionReevaluateTimer = 0;
   }
 
   /**
@@ -146,9 +177,10 @@ export class OffBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * ヒートマップ方式で新しい目標位置を選択
+   * ヒートマップ方式で新しい目標位置を選択（パスレーンを考慮）
    */
   private selectNewTargetPosition(playerPosition: PlayerPosition, isAllyTeam: boolean): void {
+    // まずヒートマップから基本位置を取得
     const heatmapResult = FormationUtils.getHeatmapTargetPosition(
       this.currentFormation,
       playerPosition,
@@ -156,8 +188,10 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.centerWeight
     );
 
+    let basePosition: { x: number; z: number } | null = null;
+
     if (heatmapResult) {
-      this.currentTargetPosition = { x: heatmapResult.x, z: heatmapResult.z };
+      basePosition = { x: heatmapResult.x, z: heatmapResult.z };
       this.currentTargetCell = heatmapResult.cell;
     } else {
       // フォールバック: 通常の目標位置を使用
@@ -167,10 +201,164 @@ export class OffBallOffenseAI extends BaseStateAI {
         isAllyTeam
       );
       if (targetPos) {
-        this.currentTargetPosition = targetPos;
+        basePosition = targetPos;
         this.currentTargetCell = null;
       }
     }
+
+    if (!basePosition) {
+      this.currentTargetPosition = null;
+      return;
+    }
+
+    // オンボールプレイヤーを取得
+    const onBallPlayer = this.findOnBallPlayer();
+    if (!onBallPlayer) {
+      // オンボールプレイヤーがいない場合は基本位置をそのまま使用
+      this.currentTargetPosition = basePosition;
+      return;
+    }
+
+    // 基本位置でのパスレーンリスクを計算
+    const baseRisk = this.calculatePassLaneRisk(basePosition, onBallPlayer);
+
+    // リスクが許容範囲内なら基本位置を使用
+    if (baseRisk <= this.maxPassLaneRisk) {
+      this.currentTargetPosition = basePosition;
+      return;
+    }
+
+    // リスクが高い場合は、周囲でより安全な位置を探す
+    const betterPosition = this.findSaferPosition(basePosition, onBallPlayer, baseRisk);
+    this.currentTargetPosition = betterPosition || basePosition;
+  }
+
+  /**
+   * 指定位置からオンボールプレイヤーへのパスレーンリスクを計算
+   * @returns インターセプト確率（0-1）、計算できない場合は0
+   */
+  private calculatePassLaneRisk(
+    position: { x: number; z: number },
+    onBallPlayer: Character
+  ): number {
+    const onBallPos = onBallPlayer.getPosition();
+    const onBallHeight = onBallPlayer.config.physical.height;
+    const receiverHeight = this.character.config.physical.height;
+
+    // パサー（オンボール）の胸の高さ
+    const passerVec: Vec3 = {
+      x: onBallPos.x,
+      y: onBallPos.y + onBallHeight * 0.15,
+      z: onBallPos.z
+    };
+
+    // レシーバー（自分）の胸の高さ
+    const receiverVec: Vec3 = {
+      x: position.x,
+      y: this.character.getPosition().y + receiverHeight * 0.15,
+      z: position.z
+    };
+
+    // 水平距離を計算
+    const dx = receiverVec.x - passerVec.x;
+    const dz = receiverVec.z - passerVec.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    // 距離が短すぎる、または長すぎる場合
+    const chestConfig = PASS_TYPE_CONFIGS[PassType.CHEST];
+    const bounceConfig = PASS_TYPE_CONFIGS[PassType.BOUNCE];
+
+    if (distance < chestConfig.minDistance || distance > chestConfig.maxDistance) {
+      // チェストパスの範囲外の場合、バウンスパスをチェック
+      if (distance < bounceConfig.minDistance || distance > bounceConfig.maxDistance) {
+        return 1.0; // パス不可能
+      }
+    }
+
+    // チェストパスの軌道を計算
+    const chestTrajectory = this.trajectoryCalculator.calculateTrajectory(
+      passerVec,
+      receiverVec,
+      PassType.CHEST,
+      20
+    );
+
+    // バウンスパスの軌道を計算
+    const bounceTrajectory = this.trajectoryCalculator.calculateTrajectory(
+      passerVec,
+      receiverVec,
+      PassType.BOUNCE,
+      20
+    );
+
+    // 両方のパスタイプでリスクを分析し、より安全な方を採用
+    let minRisk = 1.0;
+
+    if (chestTrajectory) {
+      const chestRiskAnalysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+        chestTrajectory,
+        this.allCharacters,
+        this.character.team
+      );
+      const chestRisk = chestRiskAnalysis.maxRisk?.probability ?? 0;
+      minRisk = Math.min(minRisk, chestRisk);
+    }
+
+    if (bounceTrajectory) {
+      const bounceRiskAnalysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+        bounceTrajectory,
+        this.allCharacters,
+        this.character.team
+      );
+      const bounceRisk = bounceRiskAnalysis.maxRisk?.probability ?? 0;
+      minRisk = Math.min(minRisk, bounceRisk);
+    }
+
+    return minRisk;
+  }
+
+  /**
+   * 基本位置の周囲でより安全な位置を探す
+   */
+  private findSaferPosition(
+    basePosition: { x: number; z: number },
+    onBallPlayer: Character,
+    baseRisk: number
+  ): { x: number; z: number } | null {
+    const searchAngles = [0, 45, 90, 135, 180, 225, 270, 315]; // 8方向
+    const searchDistances = [1.0, 1.5, 2.0]; // 探索距離
+
+    let bestPosition: { x: number; z: number } | null = null;
+    let bestRisk = baseRisk;
+
+    for (const distance of searchDistances) {
+      for (const angleDeg of searchAngles) {
+        const angleRad = (angleDeg * Math.PI) / 180;
+        const candidateX = basePosition.x + Math.cos(angleRad) * distance;
+        const candidateZ = basePosition.z + Math.sin(angleRad) * distance;
+
+        // コート境界チェック（簡易）
+        if (Math.abs(candidateX) > 7 || Math.abs(candidateZ) > 14) {
+          continue;
+        }
+
+        const candidate = { x: candidateX, z: candidateZ };
+        const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
+
+        // より安全で、許容範囲内ならその位置を採用
+        if (risk < bestRisk && risk <= this.maxPassLaneRisk) {
+          bestRisk = risk;
+          bestPosition = candidate;
+        }
+      }
+
+      // 許容範囲内の位置が見つかったら終了
+      if (bestPosition && bestRisk <= this.maxPassLaneRisk) {
+        break;
+      }
+    }
+
+    return bestPosition;
   }
 
   /**

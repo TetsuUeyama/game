@@ -270,11 +270,22 @@ export class ActionController {
   }
 
   /**
-   * アクションを強制終了
+   * アクションを強制終了（activeフェーズの場合のみコールバックを呼ぶ）
    */
   public forceEndAction(): void {
     if (this.state.currentAction !== null && this.state.phase === 'active') {
       this.completeAction();
+    }
+  }
+
+  /**
+   * アクションを強制リセット（フェーズに関わらず即座に終了）
+   * 状態遷移時など、アクションを完全にクリアしたい場合に使用
+   */
+  public forceResetAction(): void {
+    if (this.state.currentAction !== null) {
+      console.log(`[ActionController] アクション強制リセット: ${this.state.currentAction} (phase: ${this.state.phase})`);
+      this.resetState();
     }
   }
 
