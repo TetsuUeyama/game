@@ -160,7 +160,7 @@ export class InputController {
             const dashDirection = this.getDashDirection(this.currentDashDirection);
             if (dashDirection) {
               // 方向別の速度倍率を取得
-              let directionMultiplier = DASH_SPEED_MULTIPLIERS.FORWARD;
+              let directionMultiplier: number = DASH_SPEED_MULTIPLIERS.FORWARD;
               if (this.currentDashDirection === "dash_left" || this.currentDashDirection === "dash_right") {
                 directionMultiplier = DASH_SPEED_MULTIPLIERS.SIDE;
               } else if (this.currentDashDirection === "dash_backward") {
@@ -317,7 +317,7 @@ export class InputController {
     // ジャンプが終了して着地硬直が待機中の場合
     if (this.pendingLandingMotion && currentMotion === "jump" && !isPlaying) {
       // 基本の着地時間を取得
-      let landingDuration = LANDING_CONFIG.SMALL_LANDING_DURATION;
+      let landingDuration: number = LANDING_CONFIG.SMALL_LANDING_DURATION;
       if (this.pendingLandingMotion === "landing_small") {
         landingDuration = LANDING_CONFIG.SMALL_LANDING_DURATION;
       } else if (this.pendingLandingMotion === "landing") {
@@ -450,7 +450,7 @@ export class InputController {
         const dashSpeedMax = this.character.config.movement.dashSpeedMax;
 
         // 方向別の速度倍率を取得
-        let directionMultiplier = DASH_SPEED_MULTIPLIERS.FORWARD;
+        let directionMultiplier: number = DASH_SPEED_MULTIPLIERS.FORWARD;
         if (dashMotionName === "dash_left" || dashMotionName === "dash_right") {
           directionMultiplier = DASH_SPEED_MULTIPLIERS.SIDE;
         } else if (dashMotionName === "dash_backward") {
@@ -583,7 +583,7 @@ export class InputController {
         const walkSpeed = this.character.config.movement.walkSpeed;
 
         // モーション名に基づいて歩行速度倍率を決定
-        let speedMultiplier = WALK_SPEED_MULTIPLIERS.FORWARD;
+        let speedMultiplier: number = WALK_SPEED_MULTIPLIERS.FORWARD;
         if (motionName === "walk_backward") {
           speedMultiplier = WALK_SPEED_MULTIPLIERS.BACKWARD;
         } else if (motionName === "walk_left" || motionName === "walk_right") {

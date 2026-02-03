@@ -14,6 +14,9 @@ export { OnBallOffenseAI } from './state/OnBallOffenseAI';
 export { OnBallDefenseAI } from './state/OnBallDefenseAI';
 export { OffBallOffenseAI } from './state/OffBallOffenseAI';
 export { OffBallDefenseAI } from './state/OffBallDefenseAI';
+
+// スローイン系AI（IMPROVEMENT_PLAN.md: フェーズ3）
+export { ThrowInBaseAI } from './state/ThrowInBaseAI';
 export { ThrowInThrowerAI } from './state/ThrowInThrowerAI';
 export { ThrowInReceiverAI } from './state/ThrowInReceiverAI';
 export { ThrowInOtherAI } from './state/ThrowInOtherAI';

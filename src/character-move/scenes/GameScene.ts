@@ -39,13 +39,15 @@ import {
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { ShootTrajectoryVisualizer } from "../visualization/ShootTrajectoryVisualizer";
 import { PassCheckController, DefenderPlacement } from "../controllers/check/PassCheckController";
-import { FieldGridUtils, CellCoord } from "../config/FieldGridConfig";
+import { ThrowInCheckController } from "../controllers/check/ThrowInCheckController";
+import { FieldGridUtils, CellCoord, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
 import { FormationUtils } from "../config/FormationConfig";
+import { getAllOuterCells, getValidReceiverCells, OuterCellInfo, THROW_IN_CHECK_CONFIG } from "../config/check/ThrowInCheckConfig";
 
 /**
  * ゲームモード
  */
-export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check';
+export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check' | 'throw_in_check';
 
 /**
  * character-moveゲームのメインシーン
@@ -890,6 +892,18 @@ export class GameScene {
       this.throwInTimer -= deltaTime;
       if (this.throwInTimer <= 0) {
         this.executeThrowIn();
+      }
+    } else if (this.throwInThrower && this.throwInPosition) {
+      // IMPROVEMENT_PLAN.md: バグ1追加修正
+      // パスを投げた後も、スロワーの位置を外側マスに固定し続ける
+      // （レシーバーがキャッチするまで、または状態がクリアされるまで）
+      this.throwInThrower.setPosition(this.throwInPosition, true);
+      this.throwInThrower.stopMovement();
+
+      // レシーバーの位置も固定する（ボールがキャッチされるまで）
+      if (this.throwInReceiver && this.throwInReceiverPosition && this.ball.isInFlight()) {
+        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
+        this.throwInReceiver.stopMovement();
       }
     }
   }
@@ -2792,6 +2806,193 @@ export class GameScene {
 
     // ゲームをリセット
     this.resetGame();
+  }
+
+  // ============================================
+  // スローインチェックモード関連
+  // ============================================
+
+  /**
+   * スローインチェックモード用のセットアップ
+   * @param throwerPlayerId スロワーの選手ID
+   * @param receiverPlayerId レシーバーの選手ID
+   * @param throwerCell スロワーの配置セル（外側マス）
+   * @param receiverCell レシーバーの配置セル（フィールド内）
+   * @param playerData 選手データ
+   */
+  public setupThrowInCheckMode(
+    throwerPlayerId: string,
+    receiverPlayerId: string,
+    throwerCell: { col: string; row: number },
+    receiverCell: { col: string; row: number },
+    playerData?: Record<string, PlayerData>
+  ): {
+    thrower: Character;
+    receiver: Character;
+  } | null {
+    // 全状態をリセット
+    this.resetForCheckMode();
+    this.setGameMode('throw_in_check');
+
+    // 使用する選手データを取得
+    const data = playerData || this.savedPlayerData;
+    if (!data) {
+      console.error('[GameScene] 選手データがありません');
+      return null;
+    }
+
+    const throwerData = data[throwerPlayerId];
+    const receiverData = data[receiverPlayerId];
+
+    if (!throwerData || !receiverData) {
+      console.error('[GameScene] 選手データが見つかりません');
+      return null;
+    }
+
+    // スロワーの位置を取得（外側マス）
+    const throwerWorld = FieldGridUtils.outerCellToWorld(throwerCell.col, throwerCell.row);
+    if (!throwerWorld) {
+      console.error('[GameScene] スロワーのセル位置が無効です:', throwerCell);
+      return null;
+    }
+
+    // レシーバーの位置を取得（フィールド内）
+    const receiverWorld = FieldGridUtils.cellToWorld(receiverCell.col, receiverCell.row);
+    if (!receiverWorld) {
+      console.error('[GameScene] レシーバーのセル位置が無効です:', receiverCell);
+      return null;
+    }
+
+    // スロワーを作成（外側マスに配置）
+    const thrower = this.createCheckModeCharacter('ally', throwerWorld, throwerData, 'PG');
+    thrower.setPosition(new Vector3(throwerWorld.x, 0, throwerWorld.z), true); // クランプをスキップ
+    this.allyCharacters.push(thrower);
+
+    // レシーバーを作成
+    const receiver = this.createCheckModeCharacter('ally', receiverWorld, receiverData, 'SG');
+    this.allyCharacters.push(receiver);
+
+    // 衝突判定を更新
+    this.updateCollisionHandlerForCheckMode([thrower, receiver]);
+
+    // 向きを設定
+    thrower.lookAt(receiver.getPosition());
+    receiver.lookAt(thrower.getPosition());
+
+    // ボールをスロワーに持たせる
+    this.ball.setHolder(thrower);
+
+    // 状態を設定
+    thrower.setState(CharacterState.THROW_IN_THROWER);
+    receiver.setState(CharacterState.THROW_IN_RECEIVER);
+
+    console.log(`[GameScene] スローインチェックモード: ${throwerCell.col}${throwerCell.row} → ${receiverCell.col}${receiverCell.row}`);
+
+    return { thrower, receiver };
+  }
+
+  /**
+   * スローインチェックコントローラーを作成
+   */
+  public createThrowInCheckController(
+    thrower: Character,
+    receiver: Character,
+    config: {
+      minDistance?: number;
+      maxDistance?: number;
+      timeoutSeconds?: number;
+      delayBetweenTests?: number;
+    } = {}
+  ): ThrowInCheckController {
+    const controller = new ThrowInCheckController(
+      thrower,
+      receiver,
+      this.ball,
+      config
+    );
+
+    // 位置再設定用のコールバックを設定
+    controller.setCallbacks({
+      setupPositions: (throwerCell, receiverCell) => {
+        // スロワーの位置を取得（外側マス）
+        const throwerWorld = FieldGridUtils.outerCellToWorld(throwerCell.col, throwerCell.row);
+        if (!throwerWorld) return;
+
+        // レシーバーの位置を取得（フィールド内）
+        const receiverWorld = FieldGridUtils.cellToWorld(receiverCell.col, receiverCell.row);
+        if (!receiverWorld) return;
+
+        // 位置を設定
+        thrower.setPosition(new Vector3(throwerWorld.x, 0, throwerWorld.z), true); // クランプをスキップ
+        receiver.setPosition(new Vector3(receiverWorld.x, 0, receiverWorld.z));
+
+        // 向きを設定
+        thrower.lookAt(receiver.getPosition());
+        receiver.lookAt(thrower.getPosition());
+
+        // ボールをスロワーに持たせる
+        this.ball.setHolder(thrower);
+
+        // 状態を設定
+        thrower.setState(CharacterState.THROW_IN_THROWER);
+        receiver.setState(CharacterState.THROW_IN_RECEIVER);
+      }
+    });
+
+    return controller;
+  }
+
+  /**
+   * スローインテストを1回実行
+   */
+  public executeThrowInTest(): boolean {
+    if (this.allyCharacters.length < 2) {
+      console.error('[GameScene] スロワーとレシーバーが必要です');
+      return false;
+    }
+
+    const thrower = this.allyCharacters[0];
+    const receiver = this.allyCharacters[1];
+
+    if (this.ball.getHolder() !== thrower) {
+      console.error('[GameScene] スロワーがボールを持っていません');
+      return false;
+    }
+
+    // レシーバーの胸の高さを目標に
+    const receiverHeight = receiver.config.physical.height;
+    const targetPosition = new Vector3(
+      receiver.getPosition().x,
+      receiverHeight * 0.65,
+      receiver.getPosition().z
+    );
+
+    console.log(`[GameScene] スローインテスト実行: 目標位置 (${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
+
+    // パスを実行
+    return this.ball.passWithArc(targetPosition, receiver, 'chest');
+  }
+
+  /**
+   * スローインチェック用の全外側マスを取得
+   */
+  public getAllOuterCellsForThrowInCheck(): OuterCellInfo[] {
+    return getAllOuterCells();
+  }
+
+  /**
+   * 指定された外側マスからパス可能なレシーバーマスを取得
+   */
+  public getValidReceiverCellsForThrowInCheck(
+    outerCell: OuterCellInfo,
+    minDistance?: number,
+    maxDistance?: number
+  ): Array<{ col: string; row: number; worldX: number; worldZ: number; distance: number }> {
+    return getValidReceiverCells(
+      outerCell,
+      minDistance ?? THROW_IN_CHECK_CONFIG.minPassDistance,
+      maxDistance ?? THROW_IN_CHECK_CONFIG.maxPassDistance
+    );
   }
 
   /**

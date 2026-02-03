@@ -2,17 +2,20 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { Field } from "../../entities/Field";
-import { BaseStateAI } from "./BaseStateAI";
-import { IDLE_MOTION } from "../../motion/IdleMotion";
+import { ThrowInBaseAI } from "./ThrowInBaseAI";
 
 /**
  * スローインレシーバーAI
  * スローインを受ける人の動作を制御
+ *
+ * IMPROVEMENT_PLAN.md: フェーズ3 - ThrowInBaseAIを継承してリファクタリング
+ *
+ * 責務:
  * - 指定位置で待機
  * - スローワーの方向を向く
  * - ボールを受け取る準備
  */
-export class ThrowInReceiverAI extends BaseStateAI {
+export class ThrowInReceiverAI extends ThrowInBaseAI {
   // 待機位置（外部から設定）
   private waitPosition: Vector3 | null = null;
   // スローワー（外部から設定）
@@ -42,16 +45,9 @@ export class ThrowInReceiverAI extends BaseStateAI {
   }
 
   /**
-   * 状態に入った時のリセット
-   */
-  public onEnterState(): void {
-    // 特に初期化なし
-  }
-
-  /**
    * 状態から出る時のリセット
    */
-  public onExitState(): void {
+  public override onExitState(): void {
     this.waitPosition = null;
     this.thrower = null;
   }
@@ -62,25 +58,10 @@ export class ThrowInReceiverAI extends BaseStateAI {
    * ここでは静止してスローワーの方向を向くだけ
    */
   public update(_deltaTime: number): void {
-    // 静止してアイドルモーションを再生
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
-    }
-    this.character.stopMovement();
+    // 静止してアイドルモーション（基底クラスの共通処理）
+    this.stopAndIdle();
 
-    // スローワーの方向を向く
-    if (this.thrower) {
-      const myPosition = this.character.getPosition();
-      const throwerPosition = this.thrower.getPosition();
-      const toThrower = new Vector3(
-        throwerPosition.x - myPosition.x,
-        0,
-        throwerPosition.z - myPosition.z
-      );
-      if (toThrower.length() > 0.01) {
-        const angle = Math.atan2(toThrower.x, toThrower.z);
-        this.character.setRotation(angle);
-      }
-    }
+    // スローワーの方向を向く（基底クラスの共通処理）
+    this.faceTowardsCharacter(this.thrower);
   }
 }

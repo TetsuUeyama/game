@@ -10,6 +10,8 @@ import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 /**
  * ルーズボール時のAI
  * ボールが誰にも保持されていない状態での行動を制御
+ *
+ * IMPROVEMENT_PLAN.md: バグ2修正 - 衝突時に代替方向を試す処理を追加
  */
 export class LooseBallAI extends BaseStateAI {
   constructor(
@@ -72,6 +74,7 @@ export class LooseBallAI extends BaseStateAI {
 
   /**
    * ボールに向かって移動
+   * IMPROVEMENT_PLAN.md: バグ2修正 - 衝突時に代替方向を試す
    */
   private moveTowardsBall(deltaTime: number): void {
     const ballPosition = this.ball.getPosition();
@@ -101,8 +104,17 @@ export class LooseBallAI extends BaseStateAI {
             this.character.playMotion(DASH_FORWARD_MOTION);
           }
         } else {
-          if (this.character.getCurrentMotionName() !== 'idle') {
-            this.character.playMotion(IDLE_MOTION);
+          // IMPROVEMENT_PLAN.md: バグ2修正 - 衝突で移動できない場合、代替方向を試す
+          const alternativeDir = this.tryAlternativeDirection(direction, deltaTime);
+          if (alternativeDir) {
+            this.character.move(alternativeDir, deltaTime);
+            if (this.character.getCurrentMotionName() !== 'walk_forward') {
+              this.character.playMotion(WALK_FORWARD_MOTION);
+            }
+          } else {
+            if (this.character.getCurrentMotionName() !== 'idle') {
+              this.character.playMotion(IDLE_MOTION);
+            }
           }
         }
       } else {
@@ -116,8 +128,17 @@ export class LooseBallAI extends BaseStateAI {
             this.character.playMotion(WALK_FORWARD_MOTION);
           }
         } else {
-          if (this.character.getCurrentMotionName() !== 'idle') {
-            this.character.playMotion(IDLE_MOTION);
+          // IMPROVEMENT_PLAN.md: バグ2修正 - 衝突で移動できない場合、代替方向を試す
+          const alternativeDir = this.tryAlternativeDirection(direction, deltaTime);
+          if (alternativeDir) {
+            this.character.move(alternativeDir, deltaTime);
+            if (this.character.getCurrentMotionName() !== 'walk_forward') {
+              this.character.playMotion(WALK_FORWARD_MOTION);
+            }
+          } else {
+            if (this.character.getCurrentMotionName() !== 'idle') {
+              this.character.playMotion(IDLE_MOTION);
+            }
           }
         }
       }
@@ -126,6 +147,39 @@ export class LooseBallAI extends BaseStateAI {
         this.character.playMotion(IDLE_MOTION);
       }
     }
+  }
+
+  /**
+   * 代替方向を試す
+   * IMPROVEMENT_PLAN.md: バグ2修正 - 衝突時に複数の方向を試す
+   * @param originalDirection 元の移動方向
+   * @param deltaTime 経過時間
+   * @returns 移動可能な方向、見つからない場合はnull
+   */
+  private tryAlternativeDirection(originalDirection: Vector3, deltaTime: number): Vector3 | null {
+    // 複数の角度で代替方向を試す（左右に45度、90度、135度）
+    const angles = [45, -45, 90, -90, 135, -135];
+
+    for (const angleDeg of angles) {
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const cos = Math.cos(angleRad);
+      const sin = Math.sin(angleRad);
+
+      // Y軸周りの回転を適用
+      const altDirection = new Vector3(
+        originalDirection.x * cos - originalDirection.z * sin,
+        0,
+        originalDirection.x * sin + originalDirection.z * cos
+      );
+
+      const adjusted = this.adjustDirectionForCollision(altDirection, deltaTime);
+      if (adjusted) {
+        return adjusted;
+      }
+    }
+
+    // すべての方向がブロックされている場合
+    return null;
   }
 
   /**

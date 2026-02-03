@@ -471,11 +471,13 @@ export class Character {
 
   /**
    * モーションによるY軸オフセットを設定
+   * 注意: setPosition()を呼び出すと境界クランプが再実行されてしまうため、
+   * メッシュのY位置のみを直接更新する
    */
   public setMotionOffsetY(offset: number): void {
     this.motionOffsetY = offset;
-    // 現在位置を再設定してオフセットを反映
-    this.setPosition(this.position);
+    // メッシュのY位置のみを直接更新（境界クランプをトリガーしない）
+    this.mesh.position.y = this.position.y + this.motionOffsetY;
   }
 
   /**

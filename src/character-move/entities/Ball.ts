@@ -47,6 +47,12 @@ export class Ball {
   private shooterCooldown: number = 0;
   private static readonly SHOOTER_COOLDOWN_TIME = 3.0;
 
+  // パス送信者のクールダウン（tickベース、秒単位）
+  // IMPROVEMENT_PLAN.md: バグ1修正 - スロワーが自分の投げたボールにぶつかる問題
+  private lastPasser: Character | null = null;
+  private passerCooldown: number = 0;
+  private static readonly PASSER_COOLDOWN_TIME = 0.5; // 約30フレーム
+
   // ブロック後のオフェンスチームクールダウン
   private blockedOffenseTeam: "ally" | "enemy" | null = null;
   private blockCooldown: number = 0;
@@ -453,6 +459,15 @@ export class Ball {
 
     if (this.deflectionCooldown > 0) {
       this.deflectionCooldown -= Ball.FIXED_DT;
+    }
+
+    // パス送信者クールダウン更新（tickベース）
+    // IMPROVEMENT_PLAN.md: バグ1修正
+    if (this.passerCooldown > 0) {
+      this.passerCooldown -= Ball.FIXED_DT;
+    }
+    if (this.lastPasser !== null && this.passerCooldown <= 0) {
+      this.lastPasser = null;
     }
 
     if (this.holder) {
@@ -1013,8 +1028,18 @@ export class Ball {
 
     switch (passType) {
       case 'chest':
-        // チェストパス: 距離に応じて0.3〜1.0m
-        arcHeight = Math.max(0.3, Math.min(1.0, horizontalDistance * 0.1));
+        // チェストパス: 距離に応じてアーチ高さを調整（速い球にするため低めに）
+        // 短距離（〜5m）: 0.2〜0.4m
+        // 中距離（5〜10m）: 0.4〜0.8m
+        // 長距離（10m〜）: 0.8〜2.0m（スローイン等で必要）
+        if (horizontalDistance <= 5) {
+          arcHeight = Math.max(0.2, horizontalDistance * 0.08);
+        } else if (horizontalDistance <= 10) {
+          arcHeight = 0.4 + (horizontalDistance - 5) * 0.08;
+        } else {
+          // 長距離: 0.8m + 距離に応じた追加（最大2.0m）
+          arcHeight = Math.min(2.0, 0.8 + (horizontalDistance - 10) * 0.12);
+        }
         break;
       case 'bounce':
         // バウンドパス: 2セグメント軌道（パサー→バウンド点→レシーバー）
@@ -1032,8 +1057,14 @@ export class Ball {
         arcHeight = 0.3;
         break;
       case 'overhead':
-        // オーバーヘッドパス: 高めのアーチ
-        arcHeight = Math.max(0.8, Math.min(1.5, horizontalDistance * 0.15));
+        // オーバーヘッドパス: 高めのアーチ（長距離対応）
+        // 短距離: 0.8〜1.5m
+        // 長距離: 1.5〜3.0m
+        if (horizontalDistance <= 10) {
+          arcHeight = Math.max(0.8, Math.min(1.5, horizontalDistance * 0.15));
+        } else {
+          arcHeight = Math.min(3.0, 1.5 + (horizontalDistance - 10) * 0.15);
+        }
         break;
       default:
         arcHeight = 0.5;
@@ -1119,6 +1150,11 @@ export class Ball {
     this.lastShooter = previousHolder;
     this.shooterCooldown = Ball.SHOOTER_COOLDOWN_TIME * 0.3;
 
+    // パス送信者を記録（スロワー衝突バグ修正）
+    // IMPROVEMENT_PLAN.md: バグ1修正 - パス送信者が自分のボールに当たらないようにする
+    this.lastPasser = previousHolder;
+    this.passerCooldown = Ball.PASSER_COOLDOWN_TIME;
+
     return true;
   }
 
@@ -1175,6 +1211,8 @@ export class Ball {
   /**
    * 指定したキャラクターがボールをキャッチできるかどうか
    * 決定論的: tickベースのクールダウン判定
+   *
+   * IMPROVEMENT_PLAN.md: バグ1修正 - パス送信者（スロワー含む）のクールダウンチェック追加
    */
   public canBeCaughtBy(character: Character): boolean {
     // 弾き後のクールダウン（tickベース）
@@ -1184,6 +1222,12 @@ export class Ball {
 
     // シュータークールダウン（tickベース）
     if (this.lastShooter === character && this.shooterCooldown > 0) {
+      return false;
+    }
+
+    // パス送信者クールダウン（tickベース）
+    // スローイン時のスロワーが自分の投げたボールに当たる問題を防止
+    if (this.lastPasser === character && this.passerCooldown > 0) {
       return false;
     }
 
