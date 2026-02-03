@@ -26,6 +26,7 @@ import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState } from "../types/CharacterState";
 import { IDLE_MOTION } from "../motion/IdleMotion";
+import { JUMP_BALL_MOTION } from "../motion/JumpMotion";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -43,6 +44,15 @@ import { ThrowInCheckController } from "../controllers/check/ThrowInCheckControl
 import { FieldGridUtils, CellCoord, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
 import { FormationUtils } from "../config/FormationConfig";
 import { getAllOuterCells, getValidReceiverCells, OuterCellInfo, THROW_IN_CHECK_CONFIG } from "../config/check/ThrowInCheckConfig";
+import {
+  CENTER_CIRCLE,
+  JUMP_BALL_POSITIONS,
+  JUMP_BALL_TIMING,
+  JUMP_BALL_PHYSICS,
+  JumpBallPhase,
+  JumpBallInfo,
+  DEFAULT_JUMP_BALL_INFO,
+} from "../config/JumpBallConfig";
 
 /**
  * ゲームモード
@@ -162,6 +172,13 @@ export class GameScene {
   private pendingOutOfBoundsReset: boolean = false;
   private outOfBoundsResetTimer: number = 0;
   private readonly outOfBoundsResetDelay: number = 1.5; // アウトオブバウンズ後のリセット待機時間（秒）
+
+  // ジャンプボール関連
+  private jumpBallInfo: JumpBallInfo = { ...DEFAULT_JUMP_BALL_INFO };
+  private jumpBallAllyJumper: Character | null = null;
+  private jumpBallEnemyJumper: Character | null = null;
+  private jumpBallTimer: number = 0;
+  private jumpBallTipReceived: boolean = false;
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -534,6 +551,12 @@ export class GameScene {
       for (const character of allCharacters) {
         character.initializePhysics();
       }
+
+      // 物理エンジン初期化後、ゲームモードの場合はジャンプボールを開始
+      if (this.gameMode === 'game' && this.allyCharacters.length > 0 && this.enemyCharacters.length > 0) {
+        console.log('[GameScene] 物理エンジン初期化完了、ジャンプボールを開始');
+        this.setupJumpBall();
+      }
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");
@@ -667,6 +690,25 @@ export class GameScene {
   private update(deltaTime: number): void {
     // 一時停止中はゲームロジックをすべてスキップ（レンダリングのみ継続）
     if (this.isPaused) {
+      return;
+    }
+
+    // ジャンプボール中の更新
+    if (this.isJumpBallActive()) {
+      this.updateJumpBall(deltaTime);
+      // ジャンプボール中もキャラクター、ボール、フィールドは更新
+      const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+      for (const character of allCharacters) {
+        character.update(deltaTime);
+      }
+      this.ball.update(deltaTime);
+      this.field.update(deltaTime);
+      // ジャンプボール中の衝突判定
+      if (this.collisionHandler) {
+        this.collisionHandler.update(deltaTime);
+      }
+      // カメラ更新
+      this.updateCamera(deltaTime);
       return;
     }
 
@@ -1027,6 +1069,393 @@ export class GameScene {
     this.throwInThrower = null;
     this.throwInPosition = null;
     this.throwInReceiverPosition = null;
+  }
+
+  // ==============================
+  // ジャンプボール関連メソッド
+  // ==============================
+
+  /**
+   * ジャンプボールをセットアップ
+   * 両チームからジャンパーを選択し、選手を配置
+   */
+  private setupJumpBall(): void {
+    console.log('[GameScene] ジャンプボールをセットアップ');
+
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    if (allCharacters.length < 2) {
+      console.warn('[GameScene] ジャンプボールに必要な選手が不足');
+      return;
+    }
+
+    // ジャンパーを選択（センターまたは最も背の高い選手）
+    this.jumpBallAllyJumper = this.selectJumper(this.allyCharacters);
+    this.jumpBallEnemyJumper = this.selectJumper(this.enemyCharacters);
+
+    if (!this.jumpBallAllyJumper || !this.jumpBallEnemyJumper) {
+      console.warn('[GameScene] ジャンパーを選択できませんでした');
+      return;
+    }
+
+    console.log(`[GameScene] ジャンパー: 味方=${this.jumpBallAllyJumper.playerPosition}, 敵=${this.jumpBallEnemyJumper.playerPosition}`);
+
+    // ジャンパーをセンターサークル中央に配置
+    const allyJumperPos = new Vector3(
+      CENTER_CIRCLE.CENTER_X,
+      this.jumpBallAllyJumper.config.physical.height / 2,
+      CENTER_CIRCLE.CENTER_Z - JUMP_BALL_POSITIONS.JUMPER_OFFSET_Z
+    );
+    const enemyJumperPos = new Vector3(
+      CENTER_CIRCLE.CENTER_X,
+      this.jumpBallEnemyJumper.config.physical.height / 2,
+      CENTER_CIRCLE.CENTER_Z + JUMP_BALL_POSITIONS.JUMPER_OFFSET_Z
+    );
+
+    this.jumpBallAllyJumper.setPosition(allyJumperPos);
+    this.jumpBallEnemyJumper.setPosition(enemyJumperPos);
+
+    // ジャンパーが向かい合うように設定
+    this.jumpBallAllyJumper.lookAt(enemyJumperPos);
+    this.jumpBallEnemyJumper.lookAt(allyJumperPos);
+
+    // 他の選手をセンターサークル外側に配置
+    this.positionOtherPlayersForJumpBall();
+
+    // 全選手にジャンプボール状態を設定
+    this.setJumpBallStates();
+
+    // ボールをセンターサークル上空に配置（審判位置）
+    const ballStartPos = new Vector3(
+      CENTER_CIRCLE.CENTER_X,
+      1.5, // 審判の手の高さ
+      CENTER_CIRCLE.CENTER_Z
+    );
+    this.ball.setPosition(ballStartPos, true);
+    this.ball.endFlight();
+
+    // ジャンプボール情報を初期化
+    this.jumpBallInfo = {
+      phase: 'preparing',
+      allyJumper: this.jumpBallAllyJumper.playerPosition || null,
+      enemyJumper: this.jumpBallEnemyJumper.playerPosition || null,
+      elapsedTime: 0,
+      ballTipped: false,
+    };
+    this.jumpBallTimer = JUMP_BALL_TIMING.PREPARATION_TIME;
+    this.jumpBallTipReceived = false;
+
+    // シュートクロックを停止
+    if (this.shotClockController) {
+      this.shotClockController.stop();
+    }
+
+    console.log('[GameScene] ジャンプボールセットアップ完了、準備中...');
+  }
+
+  /**
+   * チームからジャンパーを選択
+   * センター（C）を優先、いなければ最も背の高い選手
+   */
+  private selectJumper(team: Character[]): Character | null {
+    if (team.length === 0) return null;
+
+    // センターを探す
+    const center = team.find(c => c.playerPosition === 'C');
+    if (center) return center;
+
+    // センターがいない場合は最も背の高い選手
+    let tallest = team[0];
+    for (const char of team) {
+      if (char.config.physical.height > tallest.config.physical.height) {
+        tallest = char;
+      }
+    }
+    return tallest;
+  }
+
+  /**
+   * ジャンプボール時に他の選手を配置
+   */
+  private positionOtherPlayersForJumpBall(): void {
+    const minDistance = JUMP_BALL_POSITIONS.OTHER_PLAYER_MIN_DISTANCE;
+
+    // 味方チームの配置（センターサークルの左側）
+    let allyIndex = 0;
+    for (const char of this.allyCharacters) {
+      if (char === this.jumpBallAllyJumper) continue;
+
+      const angle = -Math.PI / 2 + (allyIndex * Math.PI / 4); // 左側に配置
+      const x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
+      const z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+
+      char.setPosition(new Vector3(x, char.config.physical.height / 2, z));
+      char.lookAt(new Vector3(CENTER_CIRCLE.CENTER_X, 0, CENTER_CIRCLE.CENTER_Z));
+      allyIndex++;
+    }
+
+    // 敵チームの配置（センターサークルの右側）
+    let enemyIndex = 0;
+    for (const char of this.enemyCharacters) {
+      if (char === this.jumpBallEnemyJumper) continue;
+
+      const angle = Math.PI / 2 + (enemyIndex * Math.PI / 4); // 右側に配置
+      const x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
+      const z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+
+      char.setPosition(new Vector3(x, char.config.physical.height / 2, z));
+      char.lookAt(new Vector3(CENTER_CIRCLE.CENTER_X, 0, CENTER_CIRCLE.CENTER_Z));
+      enemyIndex++;
+    }
+  }
+
+  /**
+   * ジャンプボール状態を設定
+   */
+  private setJumpBallStates(): void {
+    // 全キャラクターの状態をリセット
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const char of allCharacters) {
+      char.stopMovement();
+      char.playMotion(IDLE_MOTION);
+      const actionController = char.getActionController();
+      if (actionController) {
+        actionController.cancelAction();
+      }
+    }
+
+    // ジャンパーにJUMP_BALL_JUMPER状態を設定
+    if (this.jumpBallAllyJumper) {
+      this.jumpBallAllyJumper.setState(CharacterState.JUMP_BALL_JUMPER);
+    }
+    if (this.jumpBallEnemyJumper) {
+      this.jumpBallEnemyJumper.setState(CharacterState.JUMP_BALL_JUMPER);
+    }
+
+    // 他の選手にJUMP_BALL_OTHER状態を設定
+    for (const char of allCharacters) {
+      if (char !== this.jumpBallAllyJumper && char !== this.jumpBallEnemyJumper) {
+        char.setState(CharacterState.JUMP_BALL_OTHER);
+      }
+    }
+  }
+
+  /**
+   * ジャンプボールを更新（メインループから呼び出し）
+   */
+  private updateJumpBall(deltaTime: number): void {
+    if (this.jumpBallInfo.phase === 'idle' || this.jumpBallInfo.phase === 'completed') {
+      return;
+    }
+
+    this.jumpBallInfo.elapsedTime += deltaTime;
+
+    switch (this.jumpBallInfo.phase) {
+      case 'preparing':
+        this.jumpBallTimer -= deltaTime;
+        if (this.jumpBallTimer <= 0) {
+          this.executeJumpBallToss();
+        }
+        break;
+
+      case 'tossing':
+        // ボールが適切な高さに達したらジャンプフェーズへ
+        const ballHeight = this.ball.getPosition().y;
+        if (ballHeight >= JUMP_BALL_TIMING.TIP_ENABLED_MIN_HEIGHT) {
+          this.jumpBallInfo.phase = 'jumping';
+          this.triggerJumperJumps();
+        }
+        break;
+
+      case 'jumping':
+        // ボールがチップされていない場合、チップ処理を試行
+        if (!this.jumpBallInfo.ballTipped) {
+          this.tryTipBall();
+        }
+        // ボールが誰かに保持されたら完了
+        if (this.ball.isHeld()) {
+          this.completeJumpBall();
+        }
+        // チップ後、ボールが低くなったら（地面に近い）完了
+        // これにより通常のルーズボール状態へ移行
+        else if (this.jumpBallInfo.ballTipped) {
+          const currentBallHeight = this.ball.getPosition().y;
+          if (currentBallHeight < 1.0) {
+            console.log('[GameScene] ジャンプボール: ボールが地面付近に落下、通常状態へ移行');
+            this.completeJumpBall();
+          }
+        }
+        break;
+    }
+  }
+
+  /**
+   * ジャンプボールのボール投げ上げを実行
+   */
+  private executeJumpBallToss(): void {
+    console.log('[GameScene] ジャンプボール: ボール投げ上げ');
+
+    // ボールを投げ上げる
+    const tossPosition = new Vector3(
+      CENTER_CIRCLE.CENTER_X,
+      1.5, // 審判の手の高さ
+      CENTER_CIRCLE.CENTER_Z
+    );
+    this.ball.tossForJumpBall(tossPosition, JUMP_BALL_POSITIONS.BALL_TOSS_HEIGHT);
+
+    this.jumpBallInfo.phase = 'tossing';
+  }
+
+  /**
+   * ジャンパーにジャンプを指示
+   */
+  private triggerJumperJumps(): void {
+    console.log('[GameScene] ジャンプボール: ジャンパーがジャンプ');
+
+    // 各ジャンパーにジャンプアクションを実行させる
+    if (this.jumpBallAllyJumper) {
+      const actionController = this.jumpBallAllyJumper.getActionController();
+      if (actionController) {
+        actionController.startAction('jump_ball');
+      }
+      // ジャンプボールモーションを再生
+      this.jumpBallAllyJumper.playMotion(JUMP_BALL_MOTION);
+    }
+
+    if (this.jumpBallEnemyJumper) {
+      const actionController = this.jumpBallEnemyJumper.getActionController();
+      if (actionController) {
+        actionController.startAction('jump_ball');
+      }
+      // ジャンプボールモーションを再生
+      this.jumpBallEnemyJumper.playMotion(JUMP_BALL_MOTION);
+    }
+  }
+
+  /**
+   * ボールをチップできるか試行
+   * ジャンパーがボールに到達可能な場合、チップを実行
+   */
+  private tryTipBall(): void {
+    const ballPos = this.ball.getPosition();
+    const ballHeight = ballPos.y;
+
+    // ボールがチップ可能な高さ範囲にあるかチェック
+    if (ballHeight < JUMP_BALL_TIMING.TIP_ENABLED_MIN_HEIGHT ||
+        ballHeight > JUMP_BALL_TIMING.TIP_ENABLED_MAX_HEIGHT) {
+      return;
+    }
+
+    // ジャンパーがいない場合は何もしない
+    if (!this.jumpBallAllyJumper || !this.jumpBallEnemyJumper) {
+      return;
+    }
+
+    // 各ジャンパーとボールの水平距離を計算
+    const allyPos = this.jumpBallAllyJumper.getPosition();
+    const enemyPos = this.jumpBallEnemyJumper.getPosition();
+
+    const allyHorizontalDist = Math.sqrt(
+      Math.pow(ballPos.x - allyPos.x, 2) +
+      Math.pow(ballPos.z - allyPos.z, 2)
+    );
+    const enemyHorizontalDist = Math.sqrt(
+      Math.pow(ballPos.x - enemyPos.x, 2) +
+      Math.pow(ballPos.z - enemyPos.z, 2)
+    );
+
+    // リーチ範囲（ジャンプ時に手が届く範囲）
+    const reachRange = 1.2;
+
+    // どちらかがリーチ範囲内にいるかチェック
+    const allyCanReach = allyHorizontalDist <= reachRange;
+    const enemyCanReach = enemyHorizontalDist <= reachRange;
+
+    if (!allyCanReach && !enemyCanReach) {
+      return;
+    }
+
+    // チップの勝者を決定（身長とランダム要素）
+    let winner: 'ally' | 'enemy';
+    if (allyCanReach && !enemyCanReach) {
+      winner = 'ally';
+    } else if (!allyCanReach && enemyCanReach) {
+      winner = 'enemy';
+    } else {
+      // 両方がリーチ範囲内：身長差とランダム要素で決定
+      const allyHeight = this.jumpBallAllyJumper.config.physical.height;
+      const enemyHeight = this.jumpBallEnemyJumper.config.physical.height;
+      const heightAdvantage = (allyHeight - enemyHeight) * 0.1; // 身長10cmで10%のアドバンテージ
+      const randomFactor = Math.random() - 0.5; // -0.5 to 0.5
+      winner = (heightAdvantage + randomFactor) > 0 ? 'ally' : 'enemy';
+    }
+
+    // チップ方向を決定（勝者のチームの方向）
+    // ally: -Z方向（手前）、enemy: +Z方向（奥）
+    const tipDirection = new Vector3(
+      (Math.random() - 0.5) * JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO, // 横方向のランダム要素
+      JUMP_BALL_PHYSICS.TIP_VERTICAL_RATIO, // 少し上向き
+      winner === 'ally'
+        ? -JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO
+        : JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO
+    ).normalize();
+
+    // ボールをチップ
+    this.ball.tipBall(tipDirection, JUMP_BALL_PHYSICS.TIP_BALL_SPEED);
+    this.jumpBallInfo.ballTipped = true;
+
+    console.log(`[GameScene] ジャンプボール: ${winner}チームがチップ成功`);
+  }
+
+  /**
+   * ジャンプボールを完了
+   */
+  private completeJumpBall(): void {
+    console.log('[GameScene] ジャンプボール完了');
+
+    this.jumpBallInfo.phase = 'completed';
+    this.jumpBallInfo.ballTipped = true;
+
+    // 全選手のジャンプボール状態をクリア
+    this.clearJumpBallStates();
+
+    // ボール保持者のチームでシュートクロック開始
+    const holder = this.ball.getHolder();
+    if (holder && this.shotClockController) {
+      this.shotClockController.reset(holder.team);
+    }
+
+    // ジャンプボール情報をリセット
+    this.jumpBallAllyJumper = null;
+    this.jumpBallEnemyJumper = null;
+  }
+
+  /**
+   * ジャンプボール状態をクリア
+   */
+  private clearJumpBallStates(): void {
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    for (const char of allCharacters) {
+      const state = char.getState();
+      if (state === CharacterState.JUMP_BALL_JUMPER ||
+          state === CharacterState.JUMP_BALL_OTHER) {
+        // BALL_LOSTに戻す（CollisionHandlerが次フレームで正しく設定する）
+        char.setState(CharacterState.BALL_LOST);
+      }
+    }
+  }
+
+  /**
+   * ジャンプボールがアクティブかどうか
+   */
+  public isJumpBallActive(): boolean {
+    return this.jumpBallInfo.phase !== 'idle' && this.jumpBallInfo.phase !== 'completed';
+  }
+
+  /**
+   * ジャンプボール情報を取得
+   */
+  public getJumpBallInfo(): JumpBallInfo {
+    return { ...this.jumpBallInfo };
   }
 
   /**
@@ -1960,52 +2389,18 @@ export class GameScene {
     this.shotClockViolationBallPosition = null;
     this.clearThrowInState();
 
-    // ボール保持者をリセットしてセンターサークルから再開
-    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
-
     // ボールの飛行を停止
     this.ball.endFlight();
 
     // 全キャラクターのバランスをリセット
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
     for (const character of allCharacters) {
       character.resetBalance();
     }
 
-    if (allCharacters.length > 0) {
-      const circleRadius = this.field.getCenterCircleRadius();
-      const characterRadius = 0.3;
-      const positionOffset = circleRadius + characterRadius + 0.3;
-
-      // 味方チームがボールを持って開始
-      const ballHolder = this.allyCharacters[0];
-      if (ballHolder) {
-        const holderPosition = new Vector3(
-          0,
-          ballHolder.config.physical.height / 2,
-          -positionOffset
-        );
-        ballHolder.setPosition(holderPosition);
-        this.ball.setHolder(ballHolder);
-
-        // シュートクロックをリセット（味方チームでカウント開始）
-        if (this.shotClockController) {
-          this.shotClockController.reset('ally');
-        }
-      }
-
-      // 敵チームを反対側に配置
-      const opponent = this.enemyCharacters[0];
-      if (opponent) {
-        const opponentPosition = new Vector3(
-          0,
-          opponent.config.physical.height / 2,
-          positionOffset
-        );
-        opponent.setPosition(opponentPosition);
-      }
-    }
-
-      }
+    // ジャンプボールを開始
+    this.setupJumpBall();
+  }
 
   /**
    * ポジション配置ボードからの位置を適用
@@ -2901,43 +3296,21 @@ export class GameScene {
       minDistance?: number;
       maxDistance?: number;
       timeoutSeconds?: number;
-      delayBetweenTests?: number;
     } = {}
   ): ThrowInCheckController {
+    // デフォルト値を適用して必須フィールドを満たす
+    const fullConfig = {
+      minDistance: config.minDistance ?? 3,
+      maxDistance: config.maxDistance ?? 10,
+      timeoutSeconds: config.timeoutSeconds ?? 5,
+    };
+
     const controller = new ThrowInCheckController(
       thrower,
       receiver,
       this.ball,
-      config
+      fullConfig
     );
-
-    // 位置再設定用のコールバックを設定
-    controller.setCallbacks({
-      setupPositions: (throwerCell, receiverCell) => {
-        // スロワーの位置を取得（外側マス）
-        const throwerWorld = FieldGridUtils.outerCellToWorld(throwerCell.col, throwerCell.row);
-        if (!throwerWorld) return;
-
-        // レシーバーの位置を取得（フィールド内）
-        const receiverWorld = FieldGridUtils.cellToWorld(receiverCell.col, receiverCell.row);
-        if (!receiverWorld) return;
-
-        // 位置を設定
-        thrower.setPosition(new Vector3(throwerWorld.x, 0, throwerWorld.z), true); // クランプをスキップ
-        receiver.setPosition(new Vector3(receiverWorld.x, 0, receiverWorld.z));
-
-        // 向きを設定
-        thrower.lookAt(receiver.getPosition());
-        receiver.lookAt(thrower.getPosition());
-
-        // ボールをスロワーに持たせる
-        this.ball.setHolder(thrower);
-
-        // 状態を設定
-        thrower.setState(CharacterState.THROW_IN_THROWER);
-        receiver.setState(CharacterState.THROW_IN_RECEIVER);
-      }
-    });
 
     return controller;
   }

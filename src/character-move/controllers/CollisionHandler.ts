@@ -326,6 +326,16 @@ export class CollisionHandler {
       return;
     }
 
+    // ジャンプボール状態のキャラクターも衝突判定をスキップ
+    const isJumpBallState1 = state1 === CharacterState.JUMP_BALL_JUMPER ||
+                              state1 === CharacterState.JUMP_BALL_OTHER;
+    const isJumpBallState2 = state2 === CharacterState.JUMP_BALL_JUMPER ||
+                              state2 === CharacterState.JUMP_BALL_OTHER;
+
+    if (isJumpBallState1 || isJumpBallState2) {
+      return;
+    }
+
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
@@ -377,6 +387,20 @@ export class CollisionHandler {
   }
 
   /**
+   * ジャンプボール状態を全てクリア
+   */
+  private clearJumpBallStates(): void {
+    for (const character of this.allCharacters) {
+      const state = character.getState();
+      if (state === CharacterState.JUMP_BALL_JUMPER ||
+          state === CharacterState.JUMP_BALL_OTHER) {
+        // BALL_LOST状態に戻す（後でupdateCharacterStates()が適切な状態に更新）
+        character.setState(CharacterState.BALL_LOST);
+      }
+    }
+  }
+
+  /**
    * キャラクターの状態を更新
    * IMPROVEMENT_PLAN.md: バグ2修正 - スローインレシーバーがキャッチした場合に状態をクリア
    */
@@ -402,6 +426,24 @@ export class CollisionHandler {
         return;
       }
       // ホルダーがスロワー以外（レシーバーがキャッチした）なら状態更新を続行
+    }
+
+    // ジャンプボール状態のキャラクターがいるかチェック
+    const hasJumpBallState = this.allCharacters.some(char => {
+      const state = char.getState();
+      return state === CharacterState.JUMP_BALL_JUMPER ||
+             state === CharacterState.JUMP_BALL_OTHER;
+    });
+
+    if (hasJumpBallState) {
+      // ジャンプボール中は状態を更新しない（GameSceneが管理）
+      // ただし、ボールがキャッチされた場合は状態をクリア
+      if (holder) {
+        this.clearJumpBallStates();
+        // 状態クリア後、通常の状態更新を続行
+      } else {
+        return;
+      }
     }
 
     // ボールが誰も保持していない場合

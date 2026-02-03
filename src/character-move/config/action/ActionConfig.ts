@@ -4,6 +4,7 @@ import { SHOOT_MOTIONS } from "../../motion/ShootMotion";
 import { PASS_MOTIONS } from "../../motion/PassMotion";
 import { DEFENSE_MOTIONS } from "../../motion/DefenseMotion";
 import { DRIBBLE_MOTIONS } from "../../motion/DribbleMotion";
+import { JUMP_BALL_MOTIONS } from "../../motion/JumpMotion";
 
 /**
  * アクションカテゴリ
@@ -32,7 +33,9 @@ export type ActionType =
   | 'steal_attempt'   // スティール試行
   | 'pass_intercept'  // パスカット姿勢
   // 移動
-  | 'defense_stance'; // ディフェンス構え（移動速度低下、反応速度UP）
+  | 'defense_stance'  // ディフェンス構え（移動速度低下、反応速度UP）
+  // ジャンプボール
+  | 'jump_ball';      // ジャンプボール（センターで両手を上に伸ばす）
 
 /**
  * アクションフェーズ
@@ -274,6 +277,27 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     interruptible: true,   // いつでも解除可能
     // 重心: 低い姿勢 → 安定、すぐ動ける
   },
+
+  // ==============================
+  // ジャンプボールアクション
+  // ==============================
+
+  // ジャンプボール
+  jump_ball: {
+    type: 'jump_ball',
+    category: 'movement',
+    motion: 'jump_ball',
+    startupTime: 200,      // 0.2秒でジャンプ開始
+    activeTime: 500,       // 0.5秒間（空中時間）
+    priority: 12,
+    interruptible: false,  // ジャンプ中はキャンセル不可
+    hitbox: {
+      type: 'sphere',
+      radius: 0.25,        // 両手の判定半径
+      offset: new Vector3(0, 2.5, 0.1), // 頭上
+    },
+    // 重心: 大きなジャンプ → 着地後に大きな隙
+  },
 };
 
 /**
@@ -390,4 +414,7 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
 
   // ドリブル突破モーション
   dribble_breakthrough: DRIBBLE_MOTIONS.dribble_breakthrough,
+
+  // ジャンプボールモーション
+  jump_ball: JUMP_BALL_MOTIONS.jump_ball,
 };

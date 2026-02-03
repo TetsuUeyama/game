@@ -1398,6 +1398,91 @@ export class Ball {
   }
 
   /**
+   * ジャンプボール時にボールをチップ（弾く）
+   *
+   * @param direction チップ方向の単位ベクトル
+   * @param force チップの力（m/s単位の速度）
+   */
+  public tipBall(direction: Vector3, force: number): void {
+    if (!this.physicsAggregate) {
+      console.warn("[Ball] Havok physics required for tipBall");
+      return;
+    }
+
+    // 方向を正規化
+    const normalizedDirection = direction.normalize();
+
+    // 速度を設定
+    const velocity = normalizedDirection.scale(force);
+    this.physicsAggregate.body.setLinearVelocity(velocity);
+
+    // 飛行状態にする
+    this.inFlight = true;
+    this.flightTime = 0;
+    this.setKinematic(false);
+    this.physicsAggregate.body.disablePreStep = true;
+
+    console.log(`[Ball] チップ: direction=(${direction.x.toFixed(2)}, ${direction.y.toFixed(2)}, ${direction.z.toFixed(2)}), force=${force}`);
+  }
+
+  /**
+   * ジャンプボール用にボールを投げ上げる
+   *
+   * @param position ボール開始位置
+   * @param height 投げ上げる高さ（m）
+   */
+  public tossForJumpBall(position: Vector3, height: number): void {
+    if (!this.physicsAggregate) {
+      console.warn("[Ball] Havok physics required for tossForJumpBall");
+      return;
+    }
+
+    // ボールの位置を設定
+    this.mesh.position = position.clone();
+
+    // 物理ボディを再作成
+    this.physicsAggregate.dispose();
+    this.physicsAggregate = new PhysicsAggregate(
+      this.mesh,
+      PhysicsShapeType.SPHERE,
+      {
+        mass: PhysicsConstants.BALL.MASS,
+        restitution: PhysicsConstants.BALL.RESTITUTION,
+        friction: PhysicsConstants.BALL.FRICTION,
+      },
+      this.scene
+    );
+
+    // マテリアル設定
+    this.physicsAggregate.shape.material = {
+      restitution: PhysicsConstants.BALL.RESTITUTION,
+      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+      friction: PhysicsConstants.BALL.FRICTION,
+      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
+    };
+
+    // ダンピングを設定
+    this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
+    this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
+
+    // 投げ上げる速度を計算（v = sqrt(2gh)より少し大きめに）
+    const tossVelocity = Math.sqrt(2 * PhysicsConstants.GRAVITY_MAGNITUDE * height) * 1.1;
+    this.physicsAggregate.body.setLinearVelocity(new Vector3(0, tossVelocity, 0));
+
+    // 飛行状態にする
+    this.inFlight = true;
+    this.flightTime = 0;
+    this.setKinematic(false);
+    this.physicsAggregate.body.disablePreStep = true;
+    this.isKinematicMode = false;
+
+    // ホルダーをクリア
+    this.holder = null;
+
+    console.log(`[Ball] ジャンプボール投げ上げ: position=(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}), height=${height}m, velocity=${tossVelocity.toFixed(2)}m/s`);
+  }
+
+  /**
    * 破棄
    */
   dispose(): void {

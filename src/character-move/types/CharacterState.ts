@@ -18,6 +18,10 @@ export enum CharacterState {
   THROW_IN_RECEIVER = "THROW_IN_RECEIVER",
   /** スローイン中の他のプレイヤー（スローイン中に待機する人） */
   THROW_IN_OTHER = "THROW_IN_OTHER",
+  /** ジャンプボール参加者（2名） */
+  JUMP_BALL_JUMPER = "JUMP_BALL_JUMPER",
+  /** ジャンプボール中の待機選手 */
+  JUMP_BALL_OTHER = "JUMP_BALL_OTHER",
 }
 
 /**
@@ -32,4 +36,6 @@ export const CHARACTER_STATE_COLORS: Record<CharacterState, { r: number; g: numb
   [CharacterState.THROW_IN_THROWER]: { r: 0.0, g: 0.8, b: 1.0 }, // シアン
   [CharacterState.THROW_IN_RECEIVER]: { r: 0.8, g: 0.0, b: 1.0 }, // マゼンタ
   [CharacterState.THROW_IN_OTHER]: { r: 0.3, g: 0.3, b: 0.6 }, // 暗い青
+  [CharacterState.JUMP_BALL_JUMPER]: { r: 1.0, g: 0.8, b: 0.0 }, // 金色
+  [CharacterState.JUMP_BALL_OTHER]: { r: 0.4, g: 0.4, b: 0.4 }, // 濃いグレー
 };
