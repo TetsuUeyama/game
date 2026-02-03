@@ -12,6 +12,12 @@ export enum CharacterState {
   ON_BALL_DEFENDER = "ON_BALL_DEFENDER",
   /** オフボールディフェンダー（ボール保持者から遠い敵） */
   OFF_BALL_DEFENDER = "OFF_BALL_DEFENDER",
+  /** スローインスローワー（スローインを投げる人） */
+  THROW_IN_THROWER = "THROW_IN_THROWER",
+  /** スローインレシーバー（スローインを受ける人） */
+  THROW_IN_RECEIVER = "THROW_IN_RECEIVER",
+  /** スローイン中の他のプレイヤー（スローイン中に待機する人） */
+  THROW_IN_OTHER = "THROW_IN_OTHER",
 }
 
 /**
@@ -23,4 +29,7 @@ export const CHARACTER_STATE_COLORS: Record<CharacterState, { r: number; g: numb
   [CharacterState.OFF_BALL_PLAYER]: { r: 0.0, g: 1.0, b: 0.0 }, // 緑
   [CharacterState.ON_BALL_DEFENDER]: { r: 1.0, g: 0.0, b: 0.0 }, // 赤
   [CharacterState.OFF_BALL_DEFENDER]: { r: 1.0, g: 0.5, b: 0.0 }, // オレンジ
+  [CharacterState.THROW_IN_THROWER]: { r: 0.0, g: 0.8, b: 1.0 }, // シアン
+  [CharacterState.THROW_IN_RECEIVER]: { r: 0.8, g: 0.0, b: 1.0 }, // マゼンタ
+  [CharacterState.THROW_IN_OTHER]: { r: 0.3, g: 0.3, b: 0.6 }, // 暗い青
 };

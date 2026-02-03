@@ -262,10 +262,12 @@ export class PassCheckController {
     this.currentPassType = passType;
 
     // レシーバーの位置を取得
+    // キャラクターのposition.yはheight/2にあるため、胸の高さ(height*0.65)までのオフセットはheight*0.15
     const receiverPos = this.receiver.getPosition();
+    const receiverHeight = this.receiver.config?.physical?.height ?? DEFAULT_CHARACTER_CONFIG.physical.height;
     const targetPosition = new Vector3(
       receiverPos.x,
-      receiverPos.y + 1.0, // 胸の高さ
+      receiverPos.y + receiverHeight * 0.15, // 胸の高さ
       receiverPos.z
     );
 

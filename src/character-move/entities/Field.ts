@@ -11,7 +11,7 @@ import {
   PhysicsMaterialCombineMode,
 } from "@babylonjs/core";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
-import { GRID_CONFIG } from "../config/FieldGridConfig";
+import { GRID_CONFIG, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
 import { Net } from "./Net";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
 
@@ -29,6 +29,7 @@ export class Field {
   private centerCircle: Mesh; // センターサークル
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
+  private outerAreaMeshes: Mesh[] = []; // 外側マスエリア
 
   // 物理ボディ
   private groundPhysics: PhysicsAggregate | null = null;
@@ -36,10 +37,14 @@ export class Field {
   private backboard2Physics: PhysicsAggregate | null = null;
   private rim1Physics: PhysicsAggregate | null = null;
   private rim2Physics: PhysicsAggregate | null = null;
+  private outerAreaPhysics: PhysicsAggregate[] = []; // 外側マスエリアの物理ボディ
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.mesh = this.createField();
+
+    // 外側マスエリアを作成
+    this.createOuterCells();
 
     // センターサークルを作成
     this.centerCircle = this.createCenterCircle();
@@ -89,6 +94,179 @@ export class Field {
     this.createCustomGrid();
 
     return ground;
+  }
+
+  /**
+   * 外側マスエリアを作成（スローイン用）
+   * フィールドの外周に1マス分のエリアを追加
+   */
+  private createOuterCells(): void {
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const cellSize = OUTER_GRID_CONFIG.cellSize; // 1m
+    const groundY = 0.001; // 地面より少し上
+    const gridY = 0.011; // グリッド線
+
+    // 外側エリアの地面色（薄い緑で目立つように）
+    const outerMaterial = new StandardMaterial("outer-area-material", this.scene);
+    outerMaterial.diffuseColor = Color3.FromHexString('#7CB87C'); // 薄い緑
+    outerMaterial.specularColor = new Color3(0.1, 0.1, 0.1);
+
+    const gridColor = Color3.FromHexString('#707070'); // グリッド線の色
+
+    // 左サイドライン外側（@列）- フィールドに隣接、中心は -8.5m、幅は1.5m（-9.25 ~ -7.75）
+    // ただし視覚的にはフィールドから -9.0m まで（1.5m幅）
+    const leftOuter = MeshBuilder.CreateGround(
+      "outer-left",
+      { width: cellSize * 1.5, height: FIELD_CONFIG.length },
+      this.scene
+    );
+    leftOuter.position = new Vector3(-halfWidth - cellSize * 0.75, groundY, 0);
+    leftOuter.material = outerMaterial;
+    this.outerAreaMeshes.push(leftOuter);
+
+    // 右サイドライン外側（P列）- フィールドに隣接、中心は +8.5m、幅は1.5m（+7.75 ~ +9.25）
+    const rightOuter = MeshBuilder.CreateGround(
+      "outer-right",
+      { width: cellSize * 1.5, height: FIELD_CONFIG.length },
+      this.scene
+    );
+    rightOuter.position = new Vector3(halfWidth + cellSize * 0.75, groundY, 0);
+    rightOuter.material = outerMaterial;
+    this.outerAreaMeshes.push(rightOuter);
+
+    // 上エンドライン外側（0行）- コーナーを含む（幅は左右外側マスの端まで）
+    const topOuter = MeshBuilder.CreateGround(
+      "outer-top",
+      { width: FIELD_CONFIG.width + cellSize * 3, height: cellSize },
+      this.scene
+    );
+    topOuter.position = new Vector3(0, groundY, halfLength + cellSize / 2);
+    topOuter.material = outerMaterial;
+    this.outerAreaMeshes.push(topOuter);
+
+    // 下エンドライン外側（31行）- コーナーを含む（幅は左右外側マスの端まで）
+    const bottomOuter = MeshBuilder.CreateGround(
+      "outer-bottom",
+      { width: FIELD_CONFIG.width + cellSize * 3, height: cellSize },
+      this.scene
+    );
+    bottomOuter.position = new Vector3(0, groundY, -halfLength - cellSize / 2);
+    bottomOuter.material = outerMaterial;
+    this.outerAreaMeshes.push(bottomOuter);
+
+    // 外側エリアのグリッド線を描画
+    this.createOuterGridLines(gridY, gridColor);
+  }
+
+  /**
+   * 外側エリアのグリッド線を描画
+   * 外側マスの範囲: サイドラインから1.5m外側（中心が1m外側、幅1m）
+   */
+  private createOuterGridLines(gridY: number, color: Color3): void {
+    const halfWidth = FIELD_CONFIG.width / 2;
+    const halfLength = FIELD_CONFIG.length / 2;
+    const cellSize = OUTER_GRID_CONFIG.cellSize;
+    // 外側マスの外端（中心が halfWidth + cellSize なので、外端は halfWidth + cellSize * 1.5）
+    const outerEdge = cellSize * 1.5;
+
+    // 外側の境界線（外周）
+    const outerBoundary = [
+      new Vector3(-halfWidth - outerEdge, gridY, -halfLength - cellSize),
+      new Vector3(halfWidth + outerEdge, gridY, -halfLength - cellSize),
+      new Vector3(halfWidth + outerEdge, gridY, halfLength + cellSize),
+      new Vector3(-halfWidth - outerEdge, gridY, halfLength + cellSize),
+      new Vector3(-halfWidth - outerEdge, gridY, -halfLength - cellSize),
+    ];
+    const boundaryLine = MeshBuilder.CreateLines("outer-boundary", { points: outerBoundary }, this.scene);
+    boundaryLine.color = color;
+    this.gridLines.push(boundaryLine);
+
+    // 左サイドライン外側の縦線（@列の外端）
+    const leftLine = MeshBuilder.CreateLines("outer-left-line", {
+      points: [
+        new Vector3(-halfWidth - outerEdge, gridY, -halfLength - cellSize),
+        new Vector3(-halfWidth - outerEdge, gridY, halfLength + cellSize),
+      ],
+    }, this.scene);
+    leftLine.color = color;
+    this.gridLines.push(leftLine);
+
+    // 右サイドライン外側の縦線（P列の外端）
+    const rightLine = MeshBuilder.CreateLines("outer-right-line", {
+      points: [
+        new Vector3(halfWidth + outerEdge, gridY, -halfLength - cellSize),
+        new Vector3(halfWidth + outerEdge, gridY, halfLength + cellSize),
+      ],
+    }, this.scene);
+    rightLine.color = color;
+    this.gridLines.push(rightLine);
+
+    // 上エンドライン外側の横線（0行と1行の間）
+    const topLine = MeshBuilder.CreateLines("outer-top-line", {
+      points: [
+        new Vector3(-halfWidth - outerEdge, gridY, halfLength + cellSize),
+        new Vector3(halfWidth + outerEdge, gridY, halfLength + cellSize),
+      ],
+    }, this.scene);
+    topLine.color = color;
+    this.gridLines.push(topLine);
+
+    // 下エンドライン外側の横線（30行と31行の間）
+    const bottomLine = MeshBuilder.CreateLines("outer-bottom-line", {
+      points: [
+        new Vector3(-halfWidth - outerEdge, gridY, -halfLength - cellSize),
+        new Vector3(halfWidth + outerEdge, gridY, -halfLength - cellSize),
+      ],
+    }, this.scene);
+    bottomLine.color = color;
+    this.gridLines.push(bottomLine);
+
+    // 左右外側エリアの横線（1mごと）
+    for (let z = -halfLength; z <= halfLength + 0.001; z += cellSize) {
+      // 左外側
+      const leftHLine = MeshBuilder.CreateLines(`outer-left-h-${z}`, {
+        points: [
+          new Vector3(-halfWidth - outerEdge, gridY, z),
+          new Vector3(-halfWidth, gridY, z),
+        ],
+      }, this.scene);
+      leftHLine.color = color;
+      this.gridLines.push(leftHLine);
+
+      // 右外側
+      const rightHLine = MeshBuilder.CreateLines(`outer-right-h-${z}`, {
+        points: [
+          new Vector3(halfWidth, gridY, z),
+          new Vector3(halfWidth + outerEdge, gridY, z),
+        ],
+      }, this.scene);
+      rightHLine.color = color;
+      this.gridLines.push(rightHLine);
+    }
+
+    // 上下外側エリアの縦線（1mごと）
+    for (let x = -halfWidth; x <= halfWidth + 0.001; x += cellSize) {
+      // 上外側
+      const topVLine = MeshBuilder.CreateLines(`outer-top-v-${x}`, {
+        points: [
+          new Vector3(x, gridY, halfLength),
+          new Vector3(x, gridY, halfLength + cellSize),
+        ],
+      }, this.scene);
+      topVLine.color = color;
+      this.gridLines.push(topVLine);
+
+      // 下外側
+      const bottomVLine = MeshBuilder.CreateLines(`outer-bottom-v-${x}`, {
+        points: [
+          new Vector3(x, gridY, -halfLength),
+          new Vector3(x, gridY, -halfLength - cellSize),
+        ],
+      }, this.scene);
+      bottomVLine.color = color;
+      this.gridLines.push(bottomVLine);
+    }
   }
 
   /**
@@ -479,6 +657,21 @@ export class Field {
     // ネットの物理を初期化
     this.goal1Net.initializePhysics();
     this.goal2Net.initializePhysics();
+
+    // 外側マスエリアの静的物理ボディ（スローイン時のボール着地用）
+    for (const outerMesh of this.outerAreaMeshes) {
+      const outerPhysics = new PhysicsAggregate(
+        outerMesh,
+        PhysicsShapeType.BOX,
+        {
+          mass: 0, // 静的オブジェクト
+          restitution: PhysicsConstants.GROUND.RESTITUTION,
+          friction: PhysicsConstants.GROUND.FRICTION,
+        },
+        this.scene
+      );
+      this.outerAreaPhysics.push(outerPhysics);
+    }
   }
 
   /**
@@ -491,6 +684,10 @@ export class Field {
     this.backboard2Physics?.dispose();
     this.rim1Physics?.dispose();
     this.rim2Physics?.dispose();
+    for (const physics of this.outerAreaPhysics) {
+      physics?.dispose();
+    }
+    this.outerAreaPhysics = [];
 
     this.mesh.dispose();
     this.centerCircle.dispose();
@@ -512,5 +709,10 @@ export class Field {
       label.dispose();
     }
     this.gridLabels = [];
+    // 外側マスエリアを破棄
+    for (const mesh of this.outerAreaMeshes) {
+      mesh.dispose();
+    }
+    this.outerAreaMeshes = [];
   }
 }

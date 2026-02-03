@@ -74,6 +74,9 @@ export function PassCheckModePanel({ gameScene, onClose }: PassCheckModePanelPro
   // 結果
   const [results, setResults] = useState<PassCheckResult[]>([]);
 
+  // 距離表示
+  const [distance, setDistance] = useState<number | null>(null);
+
   // 選手データを読み込む
   useEffect(() => {
     const loadPlayers = async () => {
@@ -239,6 +242,18 @@ export function PassCheckModePanel({ gameScene, onClose }: PassCheckModePanelPro
 
       // フィールドの更新
       gameScene.getField().update(deltaTime);
+
+      // 衝突システムの更新（ボールのキャッチ判定に必要）
+      gameScene.updateCollisionSystems(deltaTime);
+
+      // パス軌道可視化の更新
+      gameScene.updatePassCheckVisualization();
+
+      // 距離を更新
+      const dist = gameScene.getPassCheckDistance();
+      if (dist !== null) {
+        setDistance(dist);
+      }
 
       // パスチェックコントローラーの更新
       if (passCheckControllerRef.current) {
@@ -711,7 +726,14 @@ export function PassCheckModePanel({ gameScene, onClose }: PassCheckModePanelPro
         <>
           {/* ヘッダー */}
           <div className="flex items-center justify-between p-4 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700 pointer-events-auto">
-            <h2 className="text-xl font-bold text-white">パスチェックモード（実行中）</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-bold text-white">パスチェックモード（実行中）</h2>
+              {distance !== null && (
+                <span className="px-3 py-1 bg-yellow-600/80 rounded-lg text-white font-semibold">
+                  距離: {distance.toFixed(2)}m
+                </span>
+              )}
+            </div>
             <button
               onClick={handleClose}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"

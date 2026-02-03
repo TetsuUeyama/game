@@ -16,9 +16,9 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import {
   PassType,
-  PASS_TYPE_CONFIGS,
   DESTINATION_PREDICTION_THRESHOLD,
   isPassDirectionValid,
+  InterceptionRiskLevel,
 } from "../config/PassTrajectoryConfig";
 import {
   PassTrajectoryCalculator,
@@ -148,12 +148,17 @@ export class PassTrajectoryVisualizer {
       c => c.team === holder.team && c !== holder
     );
 
-    // パサーの位置
+    // パサーの位置（キャラクターのposition.yはheight/2、胸の高さはheight*0.65なのでオフセットはheight*0.15）
     const passerPos = holder.getPosition();
-    const passerVec: Vec3 = { x: passerPos.x, y: passerPos.y + 1.0, z: passerPos.z }; // 胸の高さ
+    const passerHeight = holder.config.physical.height;
+    const passerVec: Vec3 = { x: passerPos.x, y: passerPos.y + passerHeight * 0.15, z: passerPos.z }; // 胸の高さ
 
     // 各チームメイトへのパス軌道を計算・可視化
     for (const teammate of teammates) {
+      // チームメイトの身長から胸の高さオフセットを計算
+      const teammateHeight = teammate.config.physical.height;
+      const chestOffset = teammateHeight * 0.15;
+
       // ターゲット位置を決定
       let targetPosition: Vector3;
 
@@ -163,18 +168,18 @@ export class PassTrajectoryVisualizer {
         if (predictedPos) {
           targetPosition = new Vector3(
             predictedPos.x,
-            teammate.getPosition().y + 1.0, // 胸の高さ
+            teammate.getPosition().y + chestOffset, // 胸の高さ
             predictedPos.z
           );
         } else {
           // 予測位置がない場合は現在位置
           const currentPos = teammate.getPosition();
-          targetPosition = new Vector3(currentPos.x, currentPos.y + 1.0, currentPos.z);
+          targetPosition = new Vector3(currentPos.x, currentPos.y + chestOffset, currentPos.z);
         }
       } else {
         // 現在位置を使用
         const currentPos = teammate.getPosition();
-        targetPosition = new Vector3(currentPos.x, currentPos.y + 1.0, currentPos.z);
+        targetPosition = new Vector3(currentPos.x, currentPos.y + chestOffset, currentPos.z);
       }
 
       const targetVec: Vec3 = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
@@ -211,6 +216,12 @@ export class PassTrajectoryVisualizer {
           this.allCharacters,
           holder.team
         );
+
+        // 危険度が高い（DANGER以上: 60%+）パスは表示しない
+        if (riskAnalysis.overallRiskLevel === InterceptionRiskLevel.DANGER ||
+            riskAnalysis.overallRiskLevel === InterceptionRiskLevel.HIGH_DANGER) {
+          continue;
+        }
 
         // 可視化を作成
         const visualization = this.createVisualization(

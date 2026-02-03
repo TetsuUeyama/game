@@ -11,6 +11,9 @@ import { PASS_COOLDOWN, PassUtils } from "../../config/PassConfig";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { DRIBBLE_STANCE_MOTION } from "../../motion/DribbleMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
+import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
+import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
+import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 
 /**
  * パス実行時のコールバック型
@@ -40,6 +43,14 @@ export class OnBallOffenseAI extends BaseStateAI {
   // 目標位置オーバーライド（設定時はゴールではなくこの位置に向かう）
   private targetPositionOverride: Vector3 | null = null;
 
+  // パスレーン分析用
+  private trajectoryCalculator: PassTrajectoryCalculator;
+  private interceptionAnalyzer: InterceptionAnalyzer;
+  private readonly maxPassLaneRisk: number = 0.5; // この確率以下なら安全とみなす
+  private passLaneAdjustmentTarget: Vector3 | null = null;
+  private passLaneAdjustmentTimer: number = 0;
+  private readonly passLaneReevaluateInterval: number = 0.5; // 0.5秒ごとに再評価
+
   constructor(
     character: Character,
     ball: Ball,
@@ -47,6 +58,8 @@ export class OnBallOffenseAI extends BaseStateAI {
     field: Field
   ) {
     super(character, ball, allCharacters, field);
+    this.trajectoryCalculator = new PassTrajectoryCalculator();
+    this.interceptionAnalyzer = new InterceptionAnalyzer();
   }
 
   /**
@@ -83,6 +96,29 @@ export class OnBallOffenseAI extends BaseStateAI {
    */
   public clearTargetPositionOverride(): void {
     this.targetPositionOverride = null;
+  }
+
+  /**
+   * 状態遷移時のリセット処理
+   * ON_BALL_PLAYERになった時に呼ばれる
+   */
+  public onEnterState(): void {
+    // targetPositionOverrideは外部から明示的に設定されるのでリセットしない
+    // パスレーン調整状態をリセット
+    this.passLaneAdjustmentTarget = null;
+    this.passLaneAdjustmentTimer = 0;
+  }
+
+  /**
+   * 状態から離れる時のリセット処理
+   * ON_BALL_PLAYERから別の状態になる時に呼ばれる
+   */
+  public onExitState(): void {
+    // 目標位置オーバーライドをクリア（スローイン等の一時的な設定をリセット）
+    this.targetPositionOverride = null;
+    // パスレーン調整状態をリセット
+    this.passLaneAdjustmentTarget = null;
+    this.passLaneAdjustmentTimer = 0;
   }
 
   /**
@@ -187,15 +223,16 @@ export class OnBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // 目標位置に向かって移動（境界チェック付き）
+    // 目標位置に向かって移動（境界チェック付き、向きはゴール方向を維持）
     const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
     console.log(`[OnBallOffenseAI] moveTowardsWithBoundary呼び出し: stopDistance=${stopDistance}`);
-    this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance);
+    this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance, true); // keepRotation=true
   }
 
   /**
    * 1on1状態（ディフェンダーが視野内）の処理
    * ドリブルモーションを使用し、アクションを実行
+   * パスレーンが塞がれている場合は移動してパスコースを作る
    */
   private handle1on1State(
     targetPosition: Vector3,
@@ -220,6 +257,12 @@ export class OnBallOffenseAI extends BaseStateAI {
     // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
     if (!this.targetPositionOverride && this.tryPass()) {
       console.log(`[OnBallOffenseAI] handle1on1State: パス実行`);
+      return;
+    }
+
+    // パスレーンが塞がれている場合、移動してパスコースを作る
+    if (!this.targetPositionOverride && this.moveToCreatePassLane(deltaTime)) {
+      console.log(`[OnBallOffenseAI] handle1on1State: パスレーン確保のため移動`);
       return;
     }
 
@@ -586,6 +629,232 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (result.success) {
       this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
       return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 全チームメイトへのパスレーンリスクを計算
+   * @returns 各チームメイトへのリスク情報の配列
+   */
+  private analyzeAllPassLanes(): Array<{
+    teammate: Character;
+    risk: number;
+    hasGoodLane: boolean;
+  }> {
+    const myPos = this.character.getPosition();
+    const myHeight = this.character.config.physical.height;
+    const passerVec: Vec3 = {
+      x: myPos.x,
+      y: myPos.y + myHeight * 0.15,
+      z: myPos.z
+    };
+
+    const teammates = this.allCharacters.filter(
+      c => c.team === this.character.team && c !== this.character
+    );
+
+    const results: Array<{
+      teammate: Character;
+      risk: number;
+      hasGoodLane: boolean;
+    }> = [];
+
+    for (const teammate of teammates) {
+      const teammatePos = teammate.getPosition();
+      const teammateHeight = teammate.config.physical.height;
+      const receiverVec: Vec3 = {
+        x: teammatePos.x,
+        y: teammatePos.y + teammateHeight * 0.15,
+        z: teammatePos.z
+      };
+
+      // 距離チェック
+      const dx = receiverVec.x - passerVec.x;
+      const dz = receiverVec.z - passerVec.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+
+      const chestConfig = PASS_TYPE_CONFIGS[PassType.CHEST];
+      const bounceConfig = PASS_TYPE_CONFIGS[PassType.BOUNCE];
+
+      // パス可能な距離かチェック
+      const inChestRange = distance >= chestConfig.minDistance && distance <= chestConfig.maxDistance;
+      const inBounceRange = distance >= bounceConfig.minDistance && distance <= bounceConfig.maxDistance;
+
+      if (!inChestRange && !inBounceRange) {
+        results.push({ teammate, risk: 1.0, hasGoodLane: false });
+        continue;
+      }
+
+      // チェストパスとバウンスパスのリスクを計算
+      let minRisk = 1.0;
+
+      if (inChestRange) {
+        const chestTrajectory = this.trajectoryCalculator.calculateTrajectory(
+          passerVec, receiverVec, PassType.CHEST, 20
+        );
+        if (chestTrajectory) {
+          const analysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+            chestTrajectory, this.allCharacters, this.character.team
+          );
+          minRisk = Math.min(minRisk, analysis.maxRisk?.probability ?? 0);
+        }
+      }
+
+      if (inBounceRange) {
+        const bounceTrajectory = this.trajectoryCalculator.calculateTrajectory(
+          passerVec, receiverVec, PassType.BOUNCE, 20
+        );
+        if (bounceTrajectory) {
+          const analysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+            bounceTrajectory, this.allCharacters, this.character.team
+          );
+          minRisk = Math.min(minRisk, analysis.maxRisk?.probability ?? 0);
+        }
+      }
+
+      results.push({
+        teammate,
+        risk: minRisk,
+        hasGoodLane: minRisk <= this.maxPassLaneRisk
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * パスレーンを作るための移動方向を計算
+   * @returns 移動すべき方向（パスレーンが良好なら null）
+   */
+  private calculatePassLaneAdjustmentDirection(): Vector3 | null {
+    const passLaneAnalysis = this.analyzeAllPassLanes();
+
+    // いずれかのチームメイトに良いパスレーンがあるか確認
+    const hasAnyGoodLane = passLaneAnalysis.some(p => p.hasGoodLane);
+
+    if (hasAnyGoodLane) {
+      return null; // 調整不要
+    }
+
+    // 全員のパスレーンが塞がれている場合、移動して開く
+    // 最もリスクの低いチームメイトを見つける
+    const bestOption = passLaneAnalysis.reduce((best, current) =>
+      current.risk < best.risk ? current : best
+    );
+
+    if (!bestOption || bestOption.risk >= 1.0) {
+      return null;
+    }
+
+    const myPos = this.character.getPosition();
+    const teammatePos = bestOption.teammate.getPosition();
+
+    // パスレーンを塞いでいるディフェンダーを見つける
+    const defenders = this.allCharacters.filter(c => c.team !== this.character.team);
+
+    // パスライン上で最も近いディフェンダーを見つける
+    let closestDefenderOnLine: Character | null = null;
+    let minDistToLine = Infinity;
+
+    for (const defender of defenders) {
+      const defPos = defender.getPosition();
+      // パスライン上への距離を計算（簡易版）
+      const lineDir = new Vector3(
+        teammatePos.x - myPos.x,
+        0,
+        teammatePos.z - myPos.z
+      ).normalize();
+
+      const toDefender = new Vector3(
+        defPos.x - myPos.x,
+        0,
+        defPos.z - myPos.z
+      );
+
+      // ディフェンダーがパスラインの手前にいるかチェック
+      const projLength = Vector3.Dot(toDefender, lineDir);
+      if (projLength > 0 && projLength < Vector3.Distance(myPos, teammatePos)) {
+        const perpDist = Math.abs(
+          toDefender.x * (-lineDir.z) + toDefender.z * lineDir.x
+        );
+
+        if (perpDist < 2.0 && perpDist < minDistToLine) {
+          minDistToLine = perpDist;
+          closestDefenderOnLine = defender;
+        }
+      }
+    }
+
+    if (!closestDefenderOnLine) {
+      return null;
+    }
+
+    // ディフェンダーの反対側に移動してパスレーンを開く
+    const defPos = closestDefenderOnLine.getPosition();
+    const toDefender = new Vector3(
+      defPos.x - myPos.x,
+      0,
+      defPos.z - myPos.z
+    );
+
+    // ディフェンダーと垂直な方向に移動
+    const perpDir = new Vector3(-toDefender.z, 0, toDefender.x).normalize();
+
+    // どちらの方向がゴールに近いかで決定
+    const goalPos = this.getTargetPosition();
+    const testPos1 = myPos.add(perpDir.scale(1.0));
+    const testPos2 = myPos.add(perpDir.scale(-1.0));
+
+    const dist1 = Vector3.Distance(testPos1, goalPos);
+    const dist2 = Vector3.Distance(testPos2, goalPos);
+
+    return dist1 < dist2 ? perpDir : perpDir.scale(-1);
+  }
+
+  /**
+   * パスレーン確保のための移動を実行
+   */
+  private moveToCreatePassLane(deltaTime: number): boolean {
+    // 再評価タイマーを更新
+    this.passLaneAdjustmentTimer += deltaTime;
+
+    if (this.passLaneAdjustmentTimer >= this.passLaneReevaluateInterval) {
+      this.passLaneAdjustmentTimer = 0;
+      const adjustmentDir = this.calculatePassLaneAdjustmentDirection();
+
+      if (adjustmentDir) {
+        const myPos = this.character.getPosition();
+        this.passLaneAdjustmentTarget = myPos.add(adjustmentDir.scale(1.5));
+      } else {
+        this.passLaneAdjustmentTarget = null;
+      }
+    }
+
+    if (!this.passLaneAdjustmentTarget) {
+      return false;
+    }
+
+    const myPos = this.character.getPosition();
+    const toTarget = this.passLaneAdjustmentTarget.subtract(myPos);
+    toTarget.y = 0;
+
+    if (toTarget.length() < 0.3) {
+      this.passLaneAdjustmentTarget = null;
+      return false;
+    }
+
+    // 移動方向を調整
+    const direction = toTarget.normalize();
+    const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+    if (boundaryAdjusted) {
+      const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+      if (adjustedDirection) {
+        this.character.move(adjustedDirection.scale(0.6), deltaTime);
+        return true;
+      }
     }
 
     return false;

@@ -43,6 +43,28 @@ export const GRID_CONFIG = {
 } as const;
 
 /**
+ * 外側マスの設定（スローイン用）
+ *
+ * フィールド外周に1マス分のエリアを追加:
+ * - @列（X = -8.5m）: 左サイドラインの外側
+ * - P列（X = +8.5m）: 右サイドラインの外側
+ * - 0行（Z = +15.5m）: 上エンドライン外側
+ * - 31行（Z = -15.5m）: 下エンドライン外側
+ */
+export const OUTER_GRID_CONFIG = {
+  // 外側列（サイドライン外）
+  outerColumnLeft: '@',   // X = -8.5m
+  outerColumnRight: 'P',  // X = +8.5m
+
+  // 外側行（エンドライン外）
+  outerRowTop: 0,         // Z = +15.5m
+  outerRowBottom: 31,     // Z = -15.5m
+
+  // 外側マスのセルサイズ（内側と同じ）
+  cellSize: 1.0,
+} as const;
+
+/**
  * フィールド座標ユーティリティ
  */
 export class FieldGridUtils {
@@ -230,5 +252,178 @@ export class FieldGridUtils {
       }
     }
     return blocks;
+  }
+
+  // ============================================
+  // 外側マス関連のメソッド
+  // ============================================
+
+  /**
+   * 指定されたセルが外側マスかどうかを判定
+   * @param col 列名（@ or P for outer columns, A-O for inner）
+   * @param row 行番号（0 or 31 for outer rows, 1-30 for inner）
+   */
+  static isOuterCell(col: string, row: number): boolean {
+    const isOuterColumn = col === OUTER_GRID_CONFIG.outerColumnLeft ||
+                          col === OUTER_GRID_CONFIG.outerColumnRight;
+    const isOuterRow = row === OUTER_GRID_CONFIG.outerRowTop ||
+                       row === OUTER_GRID_CONFIG.outerRowBottom;
+    const isInnerColumn = GRID_CONFIG.cell.colLabels.includes(col);
+    const isInnerRow = row >= 1 && row <= GRID_CONFIG.cell.rowCount;
+
+    // 外側列（@, P）で内側行（1-30）
+    if (isOuterColumn && isInnerRow) return true;
+    // 内側列（A-O）で外側行（0, 31）
+    if (isInnerColumn && isOuterRow) return true;
+    // コーナー外側（@0, @31, P0, P31）
+    if (isOuterColumn && isOuterRow) return true;
+
+    return false;
+  }
+
+  /**
+   * ワールド座標から外側マスの座標を取得
+   * @returns 外側マスの場合は座標、フィールド内の場合はnull
+   */
+  static worldToOuterCell(x: number, z: number): CellCoord | null {
+    // サイドライン外側の判定
+    if (x < -this.halfWidth) {
+      // 左サイドライン外側（@列）
+      const row = this.zToRow(z);
+      return { col: OUTER_GRID_CONFIG.outerColumnLeft, row };
+    }
+    if (x > this.halfWidth) {
+      // 右サイドライン外側（P列）
+      const row = this.zToRow(z);
+      return { col: OUTER_GRID_CONFIG.outerColumnRight, row };
+    }
+
+    // エンドライン外側の判定
+    if (z > this.halfLength) {
+      // 上エンドライン外側（0行）
+      const col = this.xToColumnName(x);
+      return { col, row: OUTER_GRID_CONFIG.outerRowTop };
+    }
+    if (z < -this.halfLength) {
+      // 下エンドライン外側（31行）
+      const col = this.xToColumnName(x);
+      return { col, row: OUTER_GRID_CONFIG.outerRowBottom };
+    }
+
+    return null; // フィールド内
+  }
+
+  /**
+   * X座標を列名に変換（A-O、クランプあり）
+   */
+  static xToColumnName(x: number): string {
+    const colIndex = Math.floor((x + this.halfWidth) / GRID_CONFIG.cell.size);
+    const clampedIndex = Math.max(0, Math.min(GRID_CONFIG.cell.colCount - 1, colIndex));
+    return GRID_CONFIG.cell.colLabels[clampedIndex];
+  }
+
+  /**
+   * Z座標を行番号に変換（1-30、クランプあり）
+   */
+  private static zToRow(z: number): number {
+    // Z座標は-15から+15、行番号は1から30
+    // z = -15 → row = 1, z = +15 → row = 30
+    const rowIndex = Math.floor((z + this.halfLength) / GRID_CONFIG.cell.size);
+    return Math.max(1, Math.min(GRID_CONFIG.cell.rowCount, rowIndex + 1));
+  }
+
+  /**
+   * 外側マスの座標からワールド座標（中心）を取得
+   * @param col 列名（@, A-O, P）
+   * @param row 行番号（0, 1-30, 31）
+   *
+   * 外側マスの中心座標（計画書準拠）:
+   * - @列: X = -8.5m（サイドライン -7.5m から 1m 外側）
+   * - P列: X = +8.5m（サイドライン +7.5m から 1m 外側）
+   * - 0行: Z = +15.5m（エンドライン +15m から 0.5m 外側）
+   * - 31行: Z = -15.5m（エンドライン -15m から 0.5m 外側）
+   */
+  static outerCellToWorld(col: string, row: number): { x: number; z: number } | null {
+    if (!this.isOuterCell(col, row)) {
+      // 内側のセルの場合は通常のcellToWorldを使用
+      return this.cellToWorld(col, row);
+    }
+
+    const cellSize = OUTER_GRID_CONFIG.cellSize;
+    let x: number;
+    let z: number;
+
+    // X座標の計算
+    if (col === OUTER_GRID_CONFIG.outerColumnLeft) {
+      // @列: 左サイドライン外側（サイドラインから1m外側の中心 = -7.5 - 1.0 = -8.5）
+      x = -this.halfWidth - cellSize;
+    } else if (col === OUTER_GRID_CONFIG.outerColumnRight) {
+      // P列: 右サイドライン外側（サイドラインから1m外側の中心 = +7.5 + 1.0 = +8.5）
+      x = this.halfWidth + cellSize;
+    } else {
+      // A-O列
+      const colIndex = GRID_CONFIG.cell.colLabels.indexOf(col);
+      if (colIndex === -1) return null;
+      x = -this.halfWidth + colIndex * cellSize + cellSize / 2;
+    }
+
+    // Z座標の計算
+    if (row === OUTER_GRID_CONFIG.outerRowTop) {
+      // 0行: 上エンドライン外側
+      z = this.halfLength + cellSize / 2;
+    } else if (row === OUTER_GRID_CONFIG.outerRowBottom) {
+      // 31行: 下エンドライン外側
+      z = -this.halfLength - cellSize / 2;
+    } else {
+      // 1-30行
+      z = -this.halfLength + (row - 1) * cellSize + cellSize / 2;
+    }
+
+    return { x, z };
+  }
+
+  /**
+   * ボールがアウトオブバウンズになった位置から、スローイン用の外側マスを取得
+   * @param ballOutX ボールがコート外に出た時のX座標
+   * @param ballOutZ ボールがコート外に出た時のZ座標
+   */
+  static getThrowInCell(ballOutX: number, ballOutZ: number): CellCoord {
+    // バックボード裏側のZ範囲（ゴール設定から）
+    const backboardDistance = 1.2; // GOAL_CONFIG.backboardDistance
+    const goal1BackboardZ = this.halfLength - backboardDistance; // 13.8m
+    const goal2BackboardZ = -this.halfLength + backboardDistance; // -13.8m
+
+    // サイドラインを超えた場合（X方向）
+    if (Math.abs(ballOutX) > this.halfWidth) {
+      const col = ballOutX < 0
+        ? OUTER_GRID_CONFIG.outerColumnLeft
+        : OUTER_GRID_CONFIG.outerColumnRight;
+
+      // Z座標を行番号に変換（バックボード裏側は調整）
+      let adjustedZ = ballOutZ;
+      if (adjustedZ > goal1BackboardZ) {
+        adjustedZ = goal1BackboardZ;
+      } else if (adjustedZ < goal2BackboardZ) {
+        adjustedZ = goal2BackboardZ;
+      }
+      const row = this.zToRow(adjustedZ);
+      return { col, row };
+    }
+
+    // エンドラインを超えた場合（Z方向）
+    if (Math.abs(ballOutZ) > this.halfLength) {
+      const col = this.xToColumnName(ballOutX);
+      const row = ballOutZ > 0
+        ? OUTER_GRID_CONFIG.outerRowTop
+        : OUTER_GRID_CONFIG.outerRowBottom;
+      return { col, row };
+    }
+
+    // どちらも超えていない場合（エラーケース）- 最も近いサイドラインを選択
+    const col = ballOutX >= 0
+      ? OUTER_GRID_CONFIG.outerColumnRight
+      : OUTER_GRID_CONFIG.outerColumnLeft;
+    const row = this.zToRow(ballOutZ);
+    return { col, row };
   }
 }
