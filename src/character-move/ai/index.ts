@@ -21,6 +21,10 @@ export { ThrowInThrowerAI } from './state/ThrowInThrowerAI';
 export { ThrowInReceiverAI } from './state/ThrowInReceiverAI';
 export { ThrowInOtherAI } from './state/ThrowInOtherAI';
 
+// ジャンプボール系AI
+export { JumpBallJumperAI } from './state/JumpBallJumperAI';
+export { JumpBallOtherAI } from './state/JumpBallOtherAI';
+
 // =============================================================================
 // 多層AIシステム
 // =============================================================================

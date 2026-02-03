@@ -329,6 +329,17 @@ export const ACTION_TYPE_FORCES: Record<string, ActionForceConfig> = {
     force: new Vector3(2400, 0, 400),
     duration: 0.12,
   },
+
+  // ==============================
+  // ジャンプボールアクション
+  // ==============================
+
+  // ジャンプボール（大きな垂直ジャンプ）
+  'jump_ball': {
+    force: new Vector3(0, 2000, 200),
+    duration: 0.15,
+    lock: true,
+  },
 };
 
 /**
