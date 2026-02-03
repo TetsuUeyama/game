@@ -2,8 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { Field } from "../../entities/Field";
-import { BaseStateAI } from "./BaseStateAI";
-import { IDLE_MOTION } from "../../motion/IdleMotion";
+import { ThrowInBaseAI } from "./ThrowInBaseAI";
 
 /**
  * スローインを投げる人用のコールバック
@@ -16,11 +15,15 @@ export type ThrowInExecuteCallback = (
 /**
  * スローインスローワーAI
  * スローインを投げる人の動作を制御
+ *
+ * IMPROVEMENT_PLAN.md: フェーズ3 - ThrowInBaseAIを継承してリファクタリング
+ *
+ * 責務:
  * - コート外の指定位置で静止
  * - レシーバーの方向を向く
  * - パス実行を待つ
  */
-export class ThrowInThrowerAI extends BaseStateAI {
+export class ThrowInThrowerAI extends ThrowInBaseAI {
   // スローイン位置（外部から設定）
   private throwInPosition: Vector3 | null = null;
   // スローインレシーバー（外部から設定）
@@ -59,16 +62,9 @@ export class ThrowInThrowerAI extends BaseStateAI {
   }
 
   /**
-   * 状態に入った時のリセット
-   */
-  public onEnterState(): void {
-    // 特に初期化なし
-  }
-
-  /**
    * 状態から出る時のリセット
    */
-  public onExitState(): void {
+  public override onExitState(): void {
     this.throwInPosition = null;
     this.receiver = null;
     this.executeCallback = null;
@@ -80,26 +76,11 @@ export class ThrowInThrowerAI extends BaseStateAI {
    * ここでは静止してレシーバーの方向を向くだけ
    */
   public update(_deltaTime: number): void {
-    // 静止してアイドルモーションを再生
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
-    }
-    this.character.stopMovement();
+    // 静止してアイドルモーション（基底クラスの共通処理）
+    this.stopAndIdle();
 
-    // レシーバーの方向を向く
-    if (this.receiver) {
-      const myPosition = this.character.getPosition();
-      const receiverPosition = this.receiver.getPosition();
-      const toReceiver = new Vector3(
-        receiverPosition.x - myPosition.x,
-        0,
-        receiverPosition.z - myPosition.z
-      );
-      if (toReceiver.length() > 0.01) {
-        const angle = Math.atan2(toReceiver.x, toReceiver.z);
-        this.character.setRotation(angle);
-      }
-    }
+    // レシーバーの方向を向く（基底クラスの共通処理）
+    this.faceTowardsCharacter(this.receiver);
   }
 
   /**

@@ -72,6 +72,8 @@ export class CollisionHandler {
    * パスターゲットの場合:
    * - 拡大されたリーチ範囲で即座にキャッチ
    * - 速度チェックなし（ファンブルしない）
+   *
+   * IMPROVEMENT_PLAN.md: バグ1修正 - スロワー状態の選手を衝突判定から除外
    */
   private resolveBallCharacterCollision(character: Character): void {
     // すでにボールが保持されている場合は衝突判定をスキップ
@@ -79,7 +81,14 @@ export class CollisionHandler {
       return;
     }
 
+    // スロワー状態の選手は衝突判定をスキップ
+    // IMPROVEMENT_PLAN.md: バグ1修正 - スロワーが自分の投げたボールにぶつかる問題
+    if (character.getState() === CharacterState.THROW_IN_THROWER) {
+      return;
+    }
+
     // シュート直後のシューター自身はキャッチできない（クールダウン中）
+    // パス送信者も同様にクールダウン中はキャッチできない
     if (!this.ball.canBeCaughtBy(character)) {
       return;
     }
@@ -119,6 +128,10 @@ export class CollisionHandler {
 
     // 高さが手の届く範囲外ならキャッチできない
     if (!isInRange(ballHeight, minCatchHeight, maxCatchHeight)) {
+      // パスターゲットの場合は高さチェック失敗をログ出力
+      if (isPassTarget) {
+        console.log(`[CollisionHandler] パスターゲット高さチェック失敗: ballHeight=${ballHeight.toFixed(2)}, min=${minCatchHeight.toFixed(2)}, max=${maxCatchHeight.toFixed(2)}`);
+      }
       return;
     }
 
@@ -137,10 +150,19 @@ export class CollisionHandler {
     // パスターゲットの場合: 体に当たった時点でキャッチ（速度チェックなし）
     if (isPassTarget) {
       // 体に十分近いか、手に十分近い場合のみキャッチ
-      const isNearBody = distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + 0.1;
-      const isNearHand = distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 1.5;
+      const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + 0.1;
+      const nearHandThreshold = BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 1.5;
+      const isNearBody = distanceToBodyXZ < nearBodyThreshold;
+      const isNearHand = distanceToHand < nearHandThreshold;
+
+      console.log(`[CollisionHandler] パスターゲットキャッチ判定:
+        distanceToBodyXZ=${distanceToBodyXZ.toFixed(2)}, bodyRadius=${bodyRadius.toFixed(2)}, nearBodyThreshold=${nearBodyThreshold.toFixed(2)}, isNearBody=${isNearBody}
+        distanceToHand=${distanceToHand.toFixed(2)}, nearHandThreshold=${nearHandThreshold.toFixed(2)}, isNearHand=${isNearHand}
+        ballPos=(${ballPosition.x.toFixed(2)}, ${ballPosition.y.toFixed(2)}, ${ballPosition.z.toFixed(2)})
+        charPos=(${characterPos.x.toFixed(2)}, ${characterPos.y.toFixed(2)}, ${characterPos.z.toFixed(2)})`);
 
       if (isNearBody || isNearHand) {
+        console.log(`[CollisionHandler] パスターゲットがボールをキャッチ！`);
         this.captureBall(character);
       }
       return;
@@ -163,8 +185,10 @@ export class CollisionHandler {
       if (!this.ball.isPhysicsEnabled()) {
         // 静止ボールは近づくだけでキャプチャ可能（XZ平面での距離も考慮）
         // キャラクターの体が十分近い、または手が十分近い場合はキャプチャ
-        if (distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS ||
-            distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE * 2) {
+        // IMPROVEMENT_PLAN.md: ルーズボール時のキャプチャ条件を緩和
+        const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + BALL_PICKUP_CONFIG.NEAR_BODY_OFFSET;
+        if (distanceToBodyXZ < nearBodyThreshold ||
+            distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
           this.captureBall(character);
         }
         return;
@@ -174,9 +198,11 @@ export class CollisionHandler {
       if (relativeSpeed < BALL_PICKUP_CONFIG.MAX_CONTROLLABLE_VELOCITY) {
         // 制御可能な速度 - 手の方向に引き寄せる
 
-        // ボールが低速（3m/s以下）で転がっている場合、体に近いだけでキャプチャ可能
-        const isSlowRolling = relativeSpeed < 3.0;
-        const isNearBody = distanceToBodyXZ < bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + 0.2;
+        // IMPROVEMENT_PLAN.md: 低速ボールの閾値を設定から取得
+        const slowRollingThreshold = BALL_PICKUP_CONFIG.SLOW_ROLLING_THRESHOLD;
+        const isSlowRolling = relativeSpeed < slowRollingThreshold;
+        const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + BALL_PICKUP_CONFIG.NEAR_BODY_OFFSET;
+        const isNearBody = distanceToBodyXZ < nearBodyThreshold;
 
         if (distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
           // 手元まで来た - 完全にキャプチャ
@@ -281,8 +307,25 @@ export class CollisionHandler {
    * キャラクター同士の衝突を解決
    * power値が高い方が低い方を押し出す
    * 8方向ごとの半径を考慮した衝突判定
+   *
+   * IMPROVEMENT_PLAN.md: バグ1追加修正 - スローイン状態のキャラクターは衝突判定をスキップ
    */
   private resolveCharacterCharacterCollision(character1: Character, character2: Character): void {
+    // スローイン状態のキャラクターは衝突判定をスキップ
+    // （外側マスにいるため、衝突解決でフィールド内にクランプされるのを防ぐ）
+    const state1 = character1.getState();
+    const state2 = character2.getState();
+    const isThrowInState1 = state1 === CharacterState.THROW_IN_THROWER ||
+                            state1 === CharacterState.THROW_IN_RECEIVER ||
+                            state1 === CharacterState.THROW_IN_OTHER;
+    const isThrowInState2 = state2 === CharacterState.THROW_IN_THROWER ||
+                            state2 === CharacterState.THROW_IN_RECEIVER ||
+                            state2 === CharacterState.THROW_IN_OTHER;
+
+    if (isThrowInState1 || isThrowInState2) {
+      return;
+    }
+
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
@@ -318,7 +361,24 @@ export class CollisionHandler {
   }
 
   /**
+   * スローイン状態を全てクリア
+   * IMPROVEMENT_PLAN.md: バグ2修正 - レシーバーがキャッチした後に状態をクリア
+   */
+  private clearThrowInStates(): void {
+    for (const character of this.allCharacters) {
+      const state = character.getState();
+      if (state === CharacterState.THROW_IN_THROWER ||
+          state === CharacterState.THROW_IN_RECEIVER ||
+          state === CharacterState.THROW_IN_OTHER) {
+        // BALL_LOST状態に戻す（後でupdateCharacterStates()が適切な状態に更新）
+        character.setState(CharacterState.BALL_LOST);
+      }
+    }
+  }
+
+  /**
    * キャラクターの状態を更新
+   * IMPROVEMENT_PLAN.md: バグ2修正 - スローインレシーバーがキャッチした場合に状態をクリア
    */
   private updateCharacterStates(): void {
     const holder = this.ball.getHolder();
@@ -332,9 +392,13 @@ export class CollisionHandler {
     });
 
     if (hasThrowInState) {
-      // スロワーがボールを持っている間、またはボールが飛行中は状態を更新しない
-      // レシーバーがキャッチした場合のみ状態を更新する
-      if (!holder || holder.getState() === CharacterState.THROW_IN_THROWER) {
+      // レシーバーがボールをキャッチした場合、全員のスローイン状態をクリア
+      // IMPROVEMENT_PLAN.md: バグ2修正
+      if (holder && holder.getState() === CharacterState.THROW_IN_RECEIVER) {
+        this.clearThrowInStates();
+        // 状態クリア後、通常の状態更新を続行
+      } else if (!holder || holder.getState() === CharacterState.THROW_IN_THROWER) {
+        // スロワーがボールを持っている間、またはボールが飛行中は状態を更新しない
         return;
       }
       // ホルダーがスロワー以外（レシーバーがキャッチした）なら状態更新を続行

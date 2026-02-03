@@ -2,17 +2,20 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { Field } from "../../entities/Field";
-import { BaseStateAI } from "./BaseStateAI";
-import { IDLE_MOTION } from "../../motion/IdleMotion";
+import { ThrowInBaseAI } from "./ThrowInBaseAI";
 import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
 
 /**
  * スローイン中の他プレイヤーAI
  * スローイン中に待機する人の動作を制御
+ *
+ * IMPROVEMENT_PLAN.md: フェーズ3 - ThrowInBaseAIを継承してリファクタリング
+ *
+ * 責務:
  * - フォーメーション位置で待機
  * - ボールの方向を向く
  */
-export class ThrowInOtherAI extends BaseStateAI {
+export class ThrowInOtherAI extends ThrowInBaseAI {
   // フォーメーション
   private currentFormation: Formation;
   // 目標位置（外部から設定可能）
@@ -50,14 +53,14 @@ export class ThrowInOtherAI extends BaseStateAI {
   /**
    * 状態に入った時のリセット
    */
-  public onEnterState(): void {
+  public override onEnterState(): void {
     this.targetPosition = null;
   }
 
   /**
    * 状態から出る時のリセット
    */
-  public onExitState(): void {
+  public override onExitState(): void {
     this.targetPosition = null;
   }
 
@@ -67,37 +70,17 @@ export class ThrowInOtherAI extends BaseStateAI {
    * ここではボールの方向を向いて静止するだけ
    */
   public update(_deltaTime: number): void {
-    // ボールの方向を向いて静止
-    this.faceBallandIdle();
-  }
+    // 静止してアイドルモーション（基底クラスの共通処理）
+    this.stopAndIdle();
 
-  /**
-   * ボールの方向を向いて静止
-   */
-  private faceBallandIdle(): void {
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
-    }
-    this.character.stopMovement();
-
-    // ボールの方向を向く
-    const ballPosition = this.ball.getPosition();
-    const myPosition = this.character.getPosition();
-    const toBall = new Vector3(
-      ballPosition.x - myPosition.x,
-      0,
-      ballPosition.z - myPosition.z
-    );
-    if (toBall.length() > 0.01) {
-      const angle = Math.atan2(toBall.x, toBall.z);
-      this.character.setRotation(angle);
-    }
+    // ボールの方向を向く（基底クラスの共通処理）
+    this.faceTowardsBall();
   }
 
   /**
    * フォーメーション位置を取得
    */
-  private getFormationPosition(): { x: number; z: number } | null {
+  public getFormationPosition(): { x: number; z: number } | null {
     const playerPosition = this.character.playerPosition;
     if (!playerPosition) {
       return null;

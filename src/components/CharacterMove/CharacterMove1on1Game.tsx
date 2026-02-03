@@ -10,8 +10,9 @@ import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
 import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
+import { ThrowInCheckModePanel } from './ThrowInCheckModePanel';
 
-type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check';
+type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'throw_in_check';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -356,6 +357,14 @@ export default function CharacterMove1on1Game() {
       {/* パスチェックモードパネル */}
       {currentMode === 'pass_check' && (
         <PassCheckModePanel
+          gameScene={gameSceneRef.current}
+          onClose={handleCloseCheckMode}
+        />
+      )}
+
+      {/* スローインチェックモードパネル */}
+      {currentMode === 'throw_in_check' && (
+        <ThrowInCheckModePanel
           gameScene={gameSceneRef.current}
           onClose={handleCloseCheckMode}
         />

@@ -38,17 +38,24 @@ export const BODY_PART_CONFIG = {
 /**
  * ボールピックアップ設定
  * 物理ベースのキャッチシステムの設定
+ *
+ * IMPROVEMENT_PLAN.md: ルーズボール時のキャプチャ条件を緩和
  */
 export const BALL_PICKUP_CONFIG = {
   // リーチ範囲（手を伸ばせる最大距離）（m）
   REACH_RANGE: 1.5,
 
   // キャプチャ距離（この距離以下で完全にキャッチ）（m）
-  CAPTURE_DISTANCE: 0.25,
+  // 0.25m → 0.5m に緩和（ルーズボール時にキャッチしやすく）
+  CAPTURE_DISTANCE: 0.5,
 
   // 制御可能な最大相対速度（m/s）
   // これより速いとファンブル（弾く）
   MAX_CONTROLLABLE_VELOCITY: 15.0,
+
+  // 低速ボールと判定する速度閾値（m/s）
+  // この速度以下なら体に近いだけでキャプチャ可能
+  SLOW_ROLLING_THRESHOLD: 5.0,
 
   // 引き寄せインパルスの強さ（N・s）
   PULL_IMPULSE_STRENGTH: 0.5,
@@ -62,4 +69,7 @@ export const BALL_PICKUP_CONFIG = {
   // キャッチ判定の高さ範囲（キャラクターの身長に対する割合）
   MIN_CATCH_HEIGHT_RATIO: 0.0,  // 地面から
   MAX_CATCH_HEIGHT_RATIO: 1.3,  // 身長の130%まで（ジャンプやリーチ考慮）
+
+  // 体に近い判定の追加距離（m）
+  NEAR_BODY_OFFSET: 0.4,
 } as const;
