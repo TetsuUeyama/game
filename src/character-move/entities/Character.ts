@@ -30,6 +30,7 @@ import { BalanceController } from "../controllers/BalanceController";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
+import { normalizeAngle } from "../utils/CollisionUtils";
 
 /**
  * 3Dキャラクターエンティティ
@@ -170,7 +171,6 @@ export class Character {
   private previousMoveDirection: Vector3 | null = null; // 前回の移動方向
   private previousMoveSpeed: number = 0; // 前回の移動速度
   private lastMoveTime: number = 0; // 最後に移動した時刻（ミリ秒）
-  private idleStartTime: number = 0; // 静止開始時刻（ミリ秒）
 
   // 重心球の可視化
   private balanceSphereMesh: Mesh | null = null;
@@ -188,6 +188,11 @@ export class Character {
   private leftHandPhysicsAggregate: PhysicsAggregate | null = null;
   private rightHandPhysicsAggregate: PhysicsAggregate | null = null;
   private physicsInitialized: boolean = false;
+
+  // スローインスロワー制御
+  // スロワーは外枠の固定位置から移動できないが、向きは変更可能
+  private isThrowInThrower: boolean = false;
+  private throwInFixedPosition: Vector3 | null = null;
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
@@ -569,7 +574,6 @@ export class Character {
     this.previousMoveDirection = normalizedDir.clone();
     this.previousMoveSpeed = speed;
     this.lastMoveTime = now;
-    this.idleStartTime = 0; // 移動中は静止開始時刻をリセット
 
     // === 実際の移動処理 ===
 
@@ -588,8 +592,6 @@ export class Character {
    * 急停止の重心力を適用
    */
   public stopMovement(): void {
-    const now = Date.now();
-
     // 移動中だった場合のみ処理
     if (this.previousMoveDirection !== null && this.previousMoveSpeed > 0) {
       // 急停止の重心力を適用
@@ -602,7 +604,6 @@ export class Character {
     // 移動状態をリセット
     this.previousMoveDirection = null;
     this.previousMoveSpeed = 0;
-    this.idleStartTime = now;
     this.velocity = Vector3.Zero();
   }
 
@@ -629,9 +630,7 @@ export class Character {
     const rotationSpeed = CHARACTER_CONFIG.rotationSpeed;
 
     // 角度差を計算（-π から π の範囲に正規化）
-    let diff = targetRotation - this.rotation;
-    while (diff > Math.PI) diff -= 2 * Math.PI;
-    while (diff < -Math.PI) diff += 2 * Math.PI;
+    const diff = normalizeAngle(targetRotation - this.rotation);
 
     // 回転量を計算（速度を考慮）
     const maxRotation = rotationSpeed * deltaTime;
@@ -1565,6 +1564,34 @@ export class Character {
    */
   public isDefeated(): boolean {
     return this.defeated;
+  }
+
+  /**
+   * スローインスロワーとして設定
+   * @param fixedPosition 固定位置（外枠マス）、nullで解除
+   */
+  public setAsThrowInThrower(fixedPosition: Vector3 | null): void {
+    if (fixedPosition) {
+      this.isThrowInThrower = true;
+      this.throwInFixedPosition = fixedPosition.clone();
+    } else {
+      this.isThrowInThrower = false;
+      this.throwInFixedPosition = null;
+    }
+  }
+
+  /**
+   * スローインスロワーかどうかを取得
+   */
+  public getIsThrowInThrower(): boolean {
+    return this.isThrowInThrower;
+  }
+
+  /**
+   * スローインスロワーの固定位置を取得
+   */
+  public getThrowInFixedPosition(): Vector3 | null {
+    return this.throwInFixedPosition;
   }
 
   /**

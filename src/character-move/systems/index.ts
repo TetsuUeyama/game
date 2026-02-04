@@ -9,3 +9,5 @@ export {
   type BalanceCollisionEvent,
   type BalanceCollisionCallbacks,
 } from './BalanceCollisionSystem';
+
+export { BallCatchSystem } from './BallCatchSystem';

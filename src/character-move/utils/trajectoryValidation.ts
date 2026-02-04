@@ -1,10 +1,14 @@
 /**
  * 軌道シミュレーション検証スクリプト
  *
+ * ⚠️ 開発専用ファイル - 本番コードからインポートしないでください
+ *
  * 実行方法:
  * npx ts-node src/character-move/utils/trajectoryValidation.ts
  *
  * または、ブラウザコンソールで runTrajectoryValidation() を呼び出し
+ *
+ * このファイルはconsole.logを意図的に使用しています（テスト出力用）。
  */
 
 import {

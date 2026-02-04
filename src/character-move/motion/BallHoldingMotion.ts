@@ -1,6 +1,6 @@
 import { MotionData, MotionConfig } from "../types/MotionTypes";
 import { buildKeyframes } from "../utils/MotionUtils";
-import { DominantHand, HoldingHand } from "../config/BallHoldingConfig";
+import { DominantHand } from "../config/BallHoldingConfig";
 
 /**
  * ボール保持モーション

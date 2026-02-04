@@ -49,6 +49,7 @@ export class OffBallDefenseAI extends BaseStateAI {
    * AIの更新処理
    * 同じポジションのオフェンスプレイヤーをマンマークする
    * シュート時はリバウンドポジションへ移動
+   * スローイン時は外側マスを避ける
    */
   public update(deltaTime: number): void {
     // ボールが飛行中（シュート中）の場合はリバウンドポジションへ
@@ -57,8 +58,16 @@ export class OffBallDefenseAI extends BaseStateAI {
       return;
     }
 
-    // オンボールプレイヤーがシュートアクション中の場合もリバウンドポジションへ
+    // オンボールプレイヤーを取得
     const onBallPlayer = this.findOnBallPlayer();
+
+    // スローイン中かチェック（相手チームがスローインスロワーの場合）
+    if (onBallPlayer && onBallPlayer.getIsThrowInThrower()) {
+      // スローイン中はマンマークしつつ外側マスを避ける
+      this.handleThrowInDefense(deltaTime);
+      return;
+    }
+
     if (onBallPlayer) {
       const actionController = onBallPlayer.getActionController();
       const currentAction = actionController.getCurrentAction();
@@ -70,6 +79,103 @@ export class OffBallDefenseAI extends BaseStateAI {
 
     // 同じポジションのオフェンスプレイヤーをマンマーク
     this.handleManToManDefense(deltaTime);
+  }
+
+  /**
+   * スローイン時のディフェンス処理
+   * 外側マスに入らないようにしながらマンマークする
+   */
+  private handleThrowInDefense(deltaTime: number): void {
+    // マークする相手を探す
+    const markTarget = this.findMarkTarget();
+
+    if (!markTarget) {
+      // マーク対象がいない場合はフォーメーション位置へ（外側を避ける）
+      this.handleFormationPositionAvoidingEdge(deltaTime);
+      return;
+    }
+
+    // マーク対象の位置を取得
+    const targetPosition = markTarget.getPosition();
+    const myPosition = this.character.getPosition();
+
+    // 守るべきゴールの位置を取得
+    const defendingGoal = this.getDefendingGoalPosition();
+
+    // マーク対象とゴールの間に位置取り
+    const targetToGoal = new Vector3(
+      defendingGoal.x - targetPosition.x,
+      0,
+      defendingGoal.z - targetPosition.z
+    );
+
+    if (targetToGoal.length() > 0.01) {
+      targetToGoal.normalize();
+    }
+
+    // マーク対象から1.5m程度ゴール側に位置取り
+    const markDistance = 1.5;
+    let idealX = targetPosition.x + targetToGoal.x * markDistance;
+    let idealZ = targetPosition.z + targetToGoal.z * markDistance;
+
+    // 外側マスを避ける（最外周1.5m以内に入らない）
+    const safeMinX = -6.0;  // -7.5 + 1.5
+    const safeMaxX = 6.0;   // 7.5 - 1.5
+    const safeMinZ = -13.5; // -15 + 1.5
+    const safeMaxZ = 13.5;  // 15 - 1.5
+
+    idealX = Math.max(safeMinX, Math.min(safeMaxX, idealX));
+    idealZ = Math.max(safeMinZ, Math.min(safeMaxZ, idealZ));
+
+    const idealPosition = new Vector3(idealX, myPosition.y, idealZ);
+
+    // 理想位置に向かって移動
+    this.moveTowardsMarkPosition(idealPosition, markTarget, deltaTime);
+  }
+
+  /**
+   * 外側マスを避けながらフォーメーション位置へ移動
+   */
+  private handleFormationPositionAvoidingEdge(deltaTime: number): void {
+    const playerPosition = this.character.playerPosition as PlayerPosition;
+    if (!playerPosition) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // フォーメーションから目標位置を取得
+    const isAllyTeam = this.character.team === 'ally';
+    const targetPos = FormationUtils.getTargetPosition(
+      this.currentFormation,
+      playerPosition,
+      isAllyTeam
+    );
+
+    if (!targetPos) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 外側マスを避ける
+    const safeMinX = -6.0;
+    const safeMaxX = 6.0;
+    const safeMinZ = -13.5;
+    const safeMaxZ = 13.5;
+
+    const safeX = Math.max(safeMinX, Math.min(safeMaxX, targetPos.x));
+    const safeZ = Math.max(safeMinZ, Math.min(safeMaxZ, targetPos.z));
+
+    const targetPosition = new Vector3(
+      safeX,
+      this.character.getPosition().y,
+      safeZ
+    );
+
+    this.moveTowardsFormationPosition(targetPosition, deltaTime);
   }
 
   /**
@@ -120,14 +226,9 @@ export class OffBallDefenseAI extends BaseStateAI {
    * 守るべきゴールの位置を取得
    */
   private getDefendingGoalPosition(): Vector3 {
-    const team = this.character.team;
     // allyチームはgoal1を攻める → goal2を守る
     // enemyチームはgoal2を攻める → goal1を守る
-    if (team === 'ally') {
-      return this.field.getGoal2Rim().position.clone();
-    } else {
-      return this.field.getGoal1Rim().position.clone();
-    }
+    return this.field.getDefendingGoalRim(this.character.team);
   }
 
   /**

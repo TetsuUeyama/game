@@ -29,6 +29,7 @@ import {
   InterceptionAnalyzer,
   TrajectoryRiskAnalysis,
 } from "../ai/analysis/InterceptionAnalyzer";
+import { getTeammates } from "../utils/TeamUtils";
 
 /**
  * 可視化されたパスオプション
@@ -144,9 +145,7 @@ export class PassTrajectoryVisualizer {
       passAccuracy >= DESTINATION_PREDICTION_THRESHOLD.MIN_PASSACCURACY;
 
     // 同チームのオフボールプレイヤーを取得
-    const teammates = this.allCharacters.filter(
-      c => c.team === holder.team && c !== holder
-    );
+    const teammates = getTeammates(this.allCharacters, holder);
 
     // パサーの位置（キャラクターのposition.yはheight/2、胸の高さはheight*0.65なのでオフセットはheight*0.15）
     const passerPos = holder.getPosition();
@@ -185,16 +184,20 @@ export class PassTrajectoryVisualizer {
       const targetVec: Vec3 = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
 
       // パス方向チェック（後ろ斜め・真後ろは不可）
-      const passerRotation = holder.getRotation();
-      if (!isPassDirectionValid(
-        passerRotation,
-        passerPos.x,
-        passerPos.z,
-        targetPosition.x,
-        targetPosition.z
-      )) {
-        // パス不可能な方向なのでスキップ
-        continue;
+      // ただし、スローインスロワーの場合は方向チェックをスキップ（投げる前に向きを変えるため）
+      const isThrowInThrower = holder.getIsThrowInThrower();
+      if (!isThrowInThrower) {
+        const passerRotation = holder.getRotation();
+        if (!isPassDirectionValid(
+          passerRotation,
+          passerPos.x,
+          passerPos.z,
+          targetPosition.x,
+          targetPosition.z
+        )) {
+          // パス不可能な方向なのでスキップ
+          continue;
+        }
       }
 
       // 利き腕チェック（簡易的に常にtrue）

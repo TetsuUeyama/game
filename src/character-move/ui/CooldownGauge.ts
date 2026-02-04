@@ -6,7 +6,6 @@ import { Scene, Vector3, Mesh, MeshBuilder, StandardMaterial, Color3, DynamicTex
  * キャラクターの頭上に表示される
  */
 export class CooldownGauge {
-  private scene: Scene;
   private gaugeMesh: Mesh;
   private material: StandardMaterial;
   private texture: DynamicTexture;
@@ -21,7 +20,6 @@ export class CooldownGauge {
   private totalDuration: number = 0; // クールダウン総時間
 
   constructor(scene: Scene) {
-    this.scene = scene;
 
     // ゲージメッシュを作成（平面）
     this.gaugeMesh = MeshBuilder.CreatePlane(

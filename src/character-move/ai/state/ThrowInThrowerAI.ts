@@ -24,8 +24,6 @@ export type ThrowInExecuteCallback = (
  * - パス実行を待つ
  */
 export class ThrowInThrowerAI extends ThrowInBaseAI {
-  // スローイン位置（外部から設定）
-  private throwInPosition: Vector3 | null = null;
   // スローインレシーバー（外部から設定）
   private receiver: Character | null = null;
   // スローイン実行コールバック
@@ -42,9 +40,10 @@ export class ThrowInThrowerAI extends ThrowInBaseAI {
 
   /**
    * スローイン位置を設定
+   * 現在未使用 - 将来の実装用に保持
    */
-  public setThrowInPosition(position: Vector3): void {
-    this.throwInPosition = position;
+  public setThrowInPosition(_position: Vector3): void {
+    // 将来の実装用
   }
 
   /**
@@ -65,7 +64,6 @@ export class ThrowInThrowerAI extends ThrowInBaseAI {
    * 状態から出る時のリセット
    */
   public override onExitState(): void {
-    this.throwInPosition = null;
     this.receiver = null;
     this.executeCallback = null;
   }

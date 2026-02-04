@@ -11,7 +11,6 @@ import {
 } from '@/character-move/controllers/check/ThrowInCheckController';
 import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
 import { PlayerData } from '@/character-move/types/PlayerData';
-import { GRID_CONFIG, OUTER_GRID_CONFIG } from '@/character-move/config/FieldGridConfig';
 
 interface ThrowInCheckModePanelProps {
   gameScene: GameScene | null;
@@ -251,7 +250,7 @@ export function ThrowInCheckModePanel({ gameScene, onClose }: ThrowInCheckModePa
                   >
                     {Object.entries(players).map(([id, player]) => (
                       <option key={id} value={id}>
-                        {player.name}
+                        {player.basic.NAME}
                       </option>
                     ))}
                   </select>
@@ -265,7 +264,7 @@ export function ThrowInCheckModePanel({ gameScene, onClose }: ThrowInCheckModePa
                   >
                     {Object.entries(players).map(([id, player]) => (
                       <option key={id} value={id}>
-                        {player.name}
+                        {player.basic.NAME}
                       </option>
                     ))}
                   </select>

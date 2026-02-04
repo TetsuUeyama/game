@@ -305,6 +305,17 @@ export function getAngleBetween(dir1: Vector3, dir2: Vector3): number {
 }
 
 /**
+ * 角度を [-PI, PI] の範囲に正規化
+ * @param angle 正規化する角度（ラジアン）
+ * @returns 正規化された角度
+ */
+export function normalizeAngle(angle: number): number {
+  while (angle > Math.PI) angle -= 2 * Math.PI;
+  while (angle < -Math.PI) angle += 2 * Math.PI;
+  return angle;
+}
+
+/**
  * 方向ベクトルが指定角度範囲内にあるか判定
  */
 export function isDirectionWithinAngle(

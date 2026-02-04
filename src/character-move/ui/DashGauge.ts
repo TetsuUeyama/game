@@ -7,7 +7,6 @@ import { Scene, Vector3, Mesh, MeshBuilder, StandardMaterial, Color3, DynamicTex
  * キャラクターの頭上に表示されるゲージ
  */
 export class DashGauge {
-  private scene: Scene;
   private gaugeMesh: Mesh;
   private material: StandardMaterial;
   private texture: DynamicTexture;
@@ -21,7 +20,6 @@ export class DashGauge {
   private readonly maxAccelerationTime: number = 1.0; // 最高速度到達までの時間（秒）
 
   constructor(scene: Scene) {
-    this.scene = scene;
 
     // ゲージメッシュを作成（平面）
     this.gaugeMesh = MeshBuilder.CreatePlane(

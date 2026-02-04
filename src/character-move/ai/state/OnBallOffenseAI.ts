@@ -14,6 +14,8 @@ import {DASH_FORWARD_MOTION} from "../../motion/DashMotion";
 import {PassTrajectoryCalculator, Vec3} from "../../physics/PassTrajectoryCalculator";
 import {InterceptionAnalyzer} from "../analysis/InterceptionAnalyzer";
 import {PassType, PASS_TYPE_CONFIGS} from "../../config/PassTrajectoryConfig";
+import { normalizeAngle } from "../../utils/CollisionUtils";
+import { getTeammates, getOpponents } from "../../utils/TeamUtils";
 
 /**
  * パス実行時のコールバック型
@@ -56,6 +58,9 @@ export class OnBallOffenseAI extends BaseStateAI {
   private readonly SURVEY_FACE_GOAL_DURATION: number = 0.2; // ゴール方向を向く時間（秒）
   private readonly SURVEY_LOOK_ANGLE: number = Math.PI / 3; // 左右を見る角度（60度）
   private readonly SURVEY_MAX_TOTAL_TIME: number = 3.0; // 周囲確認の最大時間（秒）- これを超えると強制終了
+
+  // スローインスロワー用の初期化フラグ
+  private throwInInitialized: boolean = false;
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     super(character, ball, allCharacters, field);
@@ -114,7 +119,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.surveyTimer = 0;
     this.surveyTotalTimer = 0;
     this.surveyStartRotation = this.character.getRotation();
-    console.log(`[OnBallOffenseAI] 周囲確認開始: 初期回転=${((this.surveyStartRotation * 180) / Math.PI).toFixed(1)}°`);
   }
 
   /**
@@ -143,7 +147,6 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 安全チェック: 周囲確認が最大時間を超えた場合は強制終了
     if (this.surveyTotalTimer >= this.SURVEY_MAX_TOTAL_TIME) {
-      console.warn(`[OnBallOffenseAI] 周囲確認が${this.SURVEY_MAX_TOTAL_TIME}秒を超えたため強制終了`);
       // 強制終了時もゴール方向を向く
       const targetPosition = this.getTargetPosition();
       const myPosition = this.character.getPosition();
@@ -186,7 +189,6 @@ export class OnBallOffenseAI extends BaseStateAI {
           if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
             this.surveyPhase = "look_right";
             this.surveyTimer = 0;
-            console.log(`[OnBallOffenseAI] 周囲確認: 左確認完了、右を確認`);
           }
         }
         break;
@@ -203,7 +205,6 @@ export class OnBallOffenseAI extends BaseStateAI {
           if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
             this.surveyPhase = "face_goal";
             this.surveyTimer = 0;
-            console.log(`[OnBallOffenseAI] 周囲確認: 右確認完了、ゴール方向を向く`);
           }
         }
         break;
@@ -214,9 +215,7 @@ export class OnBallOffenseAI extends BaseStateAI {
           const progress = Math.min(this.surveyTimer / this.SURVEY_FACE_GOAL_DURATION, 1.0);
           const startAngle = this.surveyStartRotation - this.SURVEY_LOOK_ANGLE;
           // 角度の差分を正規化して最短経路で回転
-          let angleDiff = goalAngle - startAngle;
-          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          const angleDiff = normalizeAngle(goalAngle - startAngle);
           const currentAngle = startAngle + angleDiff * progress;
           this.character.setRotation(currentAngle);
 
@@ -225,7 +224,6 @@ export class OnBallOffenseAI extends BaseStateAI {
             this.surveyTimer = 0;
             // 最終的にゴール方向を確実に向く
             this.character.setRotation(goalAngle);
-            console.log(`[OnBallOffenseAI] 周囲確認完了: ゴール方向=${((goalAngle * 180) / Math.PI).toFixed(1)}°`);
           }
         }
         break;
@@ -251,18 +249,19 @@ export class OnBallOffenseAI extends BaseStateAI {
    * AIの更新処理
    */
   public update(deltaTime: number): void {
-    // デバッグログ: 現在の状態を出力
-    const currentRotation = this.character.getRotation();
-    const myPos = this.character.getPosition();
-    console.log(`[OnBallOffenseAI] update開始: pos=(${myPos.x.toFixed(2)}, ${myPos.z.toFixed(2)}), rotation=${((currentRotation * 180) / Math.PI).toFixed(1)}°`);
+    // スローインスロワーの場合は特別な処理
+    if (this.character.getIsThrowInThrower()) {
+      this.updateThrowInThrower(deltaTime);
+      return;
+    } else if (this.throwInInitialized) {
+      // スローインが終了した場合、フラグをリセット
+      this.throwInInitialized = false;
+    }
 
     // 周囲確認フェーズの処理（ボールを受け取った直後）
     if (this.surveyPhase !== "none") {
-      console.log(`[OnBallOffenseAI] サーベイフェーズ中: ${this.surveyPhase}, timer=${this.surveyTimer.toFixed(2)}, totalTimer=${this.surveyTotalTimer.toFixed(2)}`);
       this.updateSurveyPhase(deltaTime);
       return; // 周囲確認中は他の行動をしない
-    } else {
-      console.log(`[OnBallOffenseAI] サーベイ完了後の通常処理`);
     }
 
     // フェイント成功後のドリブル突破ウィンドウ内ならドリブル突破を試みる
@@ -276,16 +275,12 @@ export class OnBallOffenseAI extends BaseStateAI {
     const targetPosition = this.getTargetPosition();
     const myPosition = this.character.getPosition();
 
-    console.log(`[OnBallOffenseAI] 目標位置: (${targetPosition.x.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
 
     // 【最優先】常にゴール方向を向く
     const toGoal = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
     if (toGoal.length() > 0.01) {
       const goalAngle = Math.atan2(toGoal.x, toGoal.z);
-      console.log(`[OnBallOffenseAI] ゴール方向に回転: ${((goalAngle * 180) / Math.PI).toFixed(1)}°`);
       this.character.setRotation(goalAngle);
-    } else {
-      console.log(`[OnBallOffenseAI] 目標が近すぎて回転不要: toGoal.length()=${toGoal.length()}`);
     }
 
     // 目の前にディフェンダーがいるかチェック
@@ -293,20 +288,15 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     if (onBallDefender) {
       const defenderPosition = onBallDefender.getPosition();
-      const distToDefender = Vector3.Distance(myPosition, defenderPosition);
-      console.log(`[OnBallOffenseAI] ディフェンダー検出: ${onBallDefender.playerPosition}, 距離=${distToDefender.toFixed(2)}m`);
 
       // 視野ベースで1on1状態を判定
       // オフェンスプレイヤーの視野内にディフェンダーがいるかどうか
       const isDefenderInFOV = DefenseUtils.is1on1StateByFieldOfView({x: myPosition.x, z: myPosition.z}, this.character.getRotation(), {x: defenderPosition.x, z: defenderPosition.z});
 
-      console.log(`[OnBallOffenseAI] ディフェンダー視野内判定: ${isDefenderInFOV}`);
-
       if (isDefenderInFOV) {
         // ========================================
         // 1on1状態（ディフェンダーが視野内）
         // ========================================
-        console.log(`[OnBallOffenseAI] handle1on1State呼び出し`);
         this.handle1on1State(targetPosition, deltaTime);
         return;
       } else {
@@ -314,14 +304,12 @@ export class OnBallOffenseAI extends BaseStateAI {
         // ディフェンダーが視野外に外れた瞬間
         // → ダッシュでゴールへ向かう OR シュートを狙う
         // ========================================
-        console.log(`[OnBallOffenseAI] handleDefenderOutOfFOV呼び出し`);
         this.handleDefenderOutOfFOV(targetPosition, deltaTime);
         return;
       }
     }
 
     // ディフェンダーがいない場合
-    console.log(`[OnBallOffenseAI] ディフェンダーなし、シュート/パス/移動を試行`);
 
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     // 目標位置オーバーライド時はシュートしない
@@ -337,7 +325,6 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 目標位置に向かって移動（境界チェック付き、向きはゴール方向を維持）
     const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
-    console.log(`[OnBallOffenseAI] moveTowardsWithBoundary呼び出し: stopDistance=${stopDistance}`);
     this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance, true); // keepRotation=true
   }
 
@@ -348,7 +335,6 @@ export class OnBallOffenseAI extends BaseStateAI {
    */
   private handle1on1State(targetPosition: Vector3, deltaTime: number): void {
     const myPosition = this.character.getPosition();
-    console.log(`[OnBallOffenseAI] handle1on1State: myPos=(${myPosition.x.toFixed(2)}, ${myPosition.z.toFixed(2)})`);
 
     // 1on1時は常にドリブル構えモーションを再生（歩行・アイドル共通）
     if (this.character.getCurrentMotionName() !== "dribble_stance") {
@@ -361,13 +347,11 @@ export class OnBallOffenseAI extends BaseStateAI {
     // 1on1状態: まずパスを試みる（ポジションに応じた判定）
     // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
     if (!this.targetPositionOverride && this.tryPass()) {
-      console.log(`[OnBallOffenseAI] handle1on1State: パス実行`);
       return;
     }
 
     // パスレーンが塞がれている場合、移動してパスコースを作る
     if (!this.targetPositionOverride && this.moveToCreatePassLane(deltaTime)) {
-      console.log(`[OnBallOffenseAI] handle1on1State: パスレーン確保のため移動`);
       return;
     }
 
@@ -382,19 +366,16 @@ export class OnBallOffenseAI extends BaseStateAI {
       // シュートレンジ内：シュート優先（50%）
       if (actionChoice < 0.5) {
         if (!this.targetPositionOverride && this.tryShoot()) {
-          console.log(`[OnBallOffenseAI] handle1on1State: シュート実行（レンジ内優先）`);
           return;
         }
       } else if (actionChoice < 0.7) {
         // 20%: フェイント
         if (this.tryFeint()) {
-          console.log(`[OnBallOffenseAI] handle1on1State: フェイント実行`);
           return;
         }
       } else if (actionChoice < 0.85) {
         // 15%: ドリブル突破
         if (this.tryDribbleMove()) {
-          console.log(`[OnBallOffenseAI] handle1on1State: ドリブル突破実行`);
           return;
         }
       }
@@ -404,13 +385,11 @@ export class OnBallOffenseAI extends BaseStateAI {
       if (actionChoice < 0.2) {
         // 20%: フェイント
         if (this.tryFeint()) {
-          console.log(`[OnBallOffenseAI] handle1on1State: フェイント実行`);
           return;
         }
       } else if (actionChoice < 0.45) {
         // 25%: ドリブル突破
         if (this.tryDribbleMove()) {
-          console.log(`[OnBallOffenseAI] handle1on1State: ドリブル突破実行`);
           return;
         }
       }
@@ -419,27 +398,22 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 1on1中も少し動く（目標方向に向かいながら）
     const distanceToTarget = toTarget.length();
-    console.log(`[OnBallOffenseAI] handle1on1State: 目標距離=${distanceToTarget.toFixed(2)}m`);
 
     if (distanceToTarget > 0.5) {
       const direction = toTarget.normalize();
       // 境界チェック・衝突チェックを試みるが、失敗しても移動する
       let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
-      console.log(`[OnBallOffenseAI] handle1on1State: boundaryAdjusted=${boundaryAdjusted ? `(${boundaryAdjusted.x.toFixed(2)}, ${boundaryAdjusted.z.toFixed(2)})` : "null"}`);
 
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
-        console.log(`[OnBallOffenseAI] handle1on1State: collisionAdjusted=${adjustedDirection ? `(${adjustedDirection.x.toFixed(2)}, ${adjustedDirection.z.toFixed(2)})` : "null"}`);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
         }
       }
       // ゆっくり移動（通常速度の50%）
-      console.log(`[OnBallOffenseAI] handle1on1State: move(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)}) * 0.5`);
       this.character.move(moveDirection.scale(0.5), deltaTime);
     } else {
-      console.log(`[OnBallOffenseAI] handle1on1State: 目標に近いので移動スキップ`);
     }
   }
 
@@ -449,7 +423,6 @@ export class OnBallOffenseAI extends BaseStateAI {
    */
   private handleDefenderOutOfFOV(targetPosition: Vector3, deltaTime: number): void {
     const myPosition = this.character.getPosition();
-    console.log(`[OnBallOffenseAI] handleDefenderOutOfFOV: myPos=(${myPosition.x.toFixed(2)}, ${myPosition.z.toFixed(2)})`);
 
     // 目標位置オーバーライド時以外は、まずシュートを試みる
     if (!this.targetPositionOverride && this.tryShoot()) {
@@ -460,7 +433,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
 
     const distanceToTarget = toTarget.length();
-    console.log(`[OnBallOffenseAI] 目標への距離: ${distanceToTarget.toFixed(2)}m`);
 
     if (distanceToTarget > 0.5) {
       // ダッシュモーションに切り替え
@@ -472,21 +444,17 @@ export class OnBallOffenseAI extends BaseStateAI {
       const direction = toTarget.normalize();
       let moveDirection = direction;
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
-      console.log(`[OnBallOffenseAI] boundaryAdjusted: ${boundaryAdjusted ? `(${boundaryAdjusted.x.toFixed(2)}, ${boundaryAdjusted.z.toFixed(2)})` : "null"}`);
 
       if (boundaryAdjusted) {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
-        console.log(`[OnBallOffenseAI] collisionAdjusted: ${adjustedDirection ? `(${adjustedDirection.x.toFixed(2)}, ${adjustedDirection.z.toFixed(2)})` : "null"}`);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
         }
       }
       // 全速力でダッシュ
-      console.log(`[OnBallOffenseAI] move呼び出し: direction=(${moveDirection.x.toFixed(2)}, ${moveDirection.z.toFixed(2)})`);
       this.character.move(moveDirection, deltaTime);
     } else {
       // 目標に近い場合はアイドル
-      console.log(`[OnBallOffenseAI] 目標に近いのでアイドル`);
       if (this.character.getCurrentMotionName() !== "idle") {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -500,8 +468,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (this.targetPositionOverride) {
       return this.targetPositionOverride;
     }
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Backboard() : this.field.getGoal2Backboard();
-    return attackingGoal.position;
+    return this.field.getAttackingBackboard(this.character.team);
   }
 
   /**
@@ -521,8 +488,7 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // ゴールまでの距離を計算（向きに関係なく）
     // 攻めるべきゴールを取得（allyは+Z側のgoal1、enemyは-Z側のgoal2）
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Rim() : this.field.getGoal2Rim();
-    const goalPosition = attackingGoal.position;
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
     const myPos = this.character.getPosition();
     const dx = goalPosition.x - myPos.x;
     const dz = goalPosition.z - myPos.z;
@@ -686,17 +652,13 @@ export class OnBallOffenseAI extends BaseStateAI {
     const myPos = this.character.getPosition();
 
     // 攻めるべきゴールを取得
-    const attackingGoal = this.character.team === "ally" ? this.field.getGoal1Rim() : this.field.getGoal2Rim();
-    const goalPosition = attackingGoal.position;
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
 
     // 自分がゴール下にいる場合はパスより得点を優先（パスしない）
     const amINearGoal = PassUtils.isNearGoal({x: myPos.x, z: myPos.z}, {x: goalPosition.x, z: goalPosition.z});
     if (amINearGoal) {
       return false;
     }
-
-    // チームメイトを取得
-    const teammates = this.allCharacters.filter((c) => c.team === this.character.team && c !== this.character);
 
     // パス候補を評価
     const passLaneAnalysis = this.analyzeAllPassLanes();
@@ -775,7 +737,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     const result = this.passCallback(this.character, passTarget, "pass_chest");
     if (result.success) {
       this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
-      console.log(`[OnBallOffenseAI] パス実行: ${this.character.playerPosition} → ${passTarget.playerPosition}`);
       return true;
     }
 
@@ -799,7 +760,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       z: myPos.z,
     };
 
-    const teammates = this.allCharacters.filter((c) => c.team === this.character.team && c !== this.character);
+    const teammates = getTeammates(this.allCharacters, this.character);
 
     const results: Array<{
       teammate: Character;
@@ -888,7 +849,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     const teammatePos = bestOption.teammate.getPosition();
 
     // パスレーンを塞いでいるディフェンダーを見つける
-    const defenders = this.allCharacters.filter((c) => c.team !== this.character.team);
+    const defenders = getOpponents(this.allCharacters, this.character);
 
     // パスライン上で最も近いディフェンダーを見つける
     let closestDefenderOnLine: Character | null = null;
@@ -933,6 +894,190 @@ export class OnBallOffenseAI extends BaseStateAI {
     const dist2 = Vector3.Distance(testPos2, goalPos);
 
     return dist1 < dist2 ? perpDir : perpDir.scale(-1);
+  }
+
+  /**
+   * スローインスロワー用の更新処理
+   * 移動はできないが、向きの変更とパスは可能
+   * 4人のチームメイト全員がパス対象
+   */
+  private updateThrowInThrower(deltaTime: number): void {
+    const myPos = this.character.getPosition();
+
+    // 移動を完全に停止
+    this.character.stopMovement();
+    this.character.clearAIMovement();
+
+    // スローイン用の初期化（初回のみ）
+    if (!this.throwInInitialized) {
+      this.throwInInitialized = true;
+      this.surveyPhase = "look_left";
+      this.surveyTimer = 0;
+      this.surveyTotalTimer = 0;
+      this.surveyStartRotation = this.character.getRotation();
+      this.passCooldown = 0; // パスクールダウンをリセット
+    }
+
+    // 周囲確認フェーズの処理（スロー前に周囲を確認）
+    if (this.surveyPhase !== "none") {
+      this.updateThrowInSurveyPhase(deltaTime);
+      return;
+    }
+
+    // サーベイ完了後、パス先を探す
+
+    // ドリブル構えモーションを維持
+    if (this.character.getCurrentMotionName() !== "dribble_stance") {
+      this.character.playMotion(DRIBBLE_STANCE_MOTION);
+    }
+
+    // パスレーン分析を行い、最も良いパス先を探す
+    const passLaneAnalysis = this.analyzeAllPassLanes();
+    const passableCandidates: Array<{
+      teammate: Character;
+      risk: number;
+      distanceToGoal: number;
+    }> = [];
+
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
+
+    for (const analysis of passLaneAnalysis) {
+      const teammatePos = analysis.teammate.getPosition();
+      const distance = Vector3.Distance(myPos, teammatePos);
+
+      // パス可能距離かチェック（デバッグログ付き）
+      const isPassable = PassUtils.isPassableDistance(distance);
+
+      if (!isPassable) {
+        continue;
+      }
+
+      // パスレーンのリスクが高すぎる場合でも候補には入れる（最悪でもパスする必要があるため）
+      const distanceToGoal = Vector3.Distance(teammatePos, goalPosition);
+
+      passableCandidates.push({
+        teammate: analysis.teammate,
+        risk: analysis.risk,
+        distanceToGoal,
+      });
+    }
+
+    if (passableCandidates.length === 0) {
+      return;
+    }
+
+    // パス先を選択（優先順位: 低リスク > ゴールに近い）
+    passableCandidates.sort((a, b) => {
+      if (Math.abs(a.risk - b.risk) < 0.1) {
+        return a.distanceToGoal - b.distanceToGoal;
+      }
+      return a.risk - b.risk;
+    });
+
+    const bestTarget = passableCandidates[0];
+
+    // ターゲットの方を向く
+    const targetPos = bestTarget.teammate.getPosition();
+    const toTarget = new Vector3(targetPos.x - myPos.x, 0, targetPos.z - myPos.z);
+    if (toTarget.length() > 0.01) {
+      const angle = Math.atan2(toTarget.x, toTarget.z);
+      this.character.setRotation(angle);
+    }
+
+    // パスクールダウンが終わっていればパスを実行
+
+    if (this.passCooldown <= 0 && this.passCallback) {
+      // スローイン時は重心をリセットしてからパスを実行
+      // （立ち止まっていても小さな揺れでパスできないことを防ぐ）
+      const balanceController = this.character.getBalanceController();
+      if (balanceController) {
+        balanceController.reset();
+      }
+
+      const result = this.passCallback(this.character, bestTarget.teammate, "pass_chest");
+      if (result.success) {
+        this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
+        // スロワーフラグはCollisionHandlerのupdateCharacterStates()で
+        // レシーバーがキャッチした時点で自動的にクリアされる
+      }
+    } else if (this.passCooldown > 0) {
+    } else if (!this.passCallback) {
+    }
+  }
+
+  /**
+   * スローインスロワー用の周囲確認フェーズ
+   * 通常のサーベイと同じだが、最後はゴールではなくコート内を向く
+   */
+  private updateThrowInSurveyPhase(deltaTime: number): void {
+    this.surveyTimer += deltaTime;
+    this.surveyTotalTimer += deltaTime;
+
+    // ドリブル構えモーションを維持
+    if (this.character.getCurrentMotionName() !== "dribble_stance") {
+      this.character.playMotion(DRIBBLE_STANCE_MOTION);
+    }
+
+    // 安全チェック: 周囲確認が最大時間を超えた場合は強制終了
+    if (this.surveyTotalTimer >= this.SURVEY_MAX_TOTAL_TIME) {
+      this.surveyPhase = "none";
+      this.surveyTimer = 0;
+      this.surveyTotalTimer = 0;
+      return;
+    }
+
+    switch (this.surveyPhase) {
+      case "look_left":
+        {
+          const progress = Math.min(this.surveyTimer / this.SURVEY_LOOK_DURATION, 1.0);
+          const targetAngle = this.surveyStartRotation + this.SURVEY_LOOK_ANGLE;
+          const currentAngle = this.surveyStartRotation + (targetAngle - this.surveyStartRotation) * progress;
+          this.character.setRotation(currentAngle);
+
+          if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
+            this.surveyPhase = "look_right";
+            this.surveyTimer = 0;
+          }
+        }
+        break;
+
+      case "look_right":
+        {
+          const progress = Math.min(this.surveyTimer / this.SURVEY_LOOK_DURATION, 1.0);
+          const startAngle = this.surveyStartRotation + this.SURVEY_LOOK_ANGLE;
+          const targetAngle = this.surveyStartRotation - this.SURVEY_LOOK_ANGLE;
+          const currentAngle = startAngle + (targetAngle - startAngle) * progress;
+          this.character.setRotation(currentAngle);
+
+          if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
+            this.surveyPhase = "face_goal";
+            this.surveyTimer = 0;
+          }
+        }
+        break;
+
+      case "face_goal":
+        // スローインの場合はゴールではなくコート中央方向を向く
+        {
+          const myPos = this.character.getPosition();
+          // コート中央方向（0, 0）を向く
+          const toCourt = new Vector3(-myPos.x, 0, -myPos.z);
+          const courtAngle = toCourt.length() > 0.01 ? Math.atan2(toCourt.x, toCourt.z) : 0;
+
+          const progress = Math.min(this.surveyTimer / this.SURVEY_FACE_GOAL_DURATION, 1.0);
+          const startAngle = this.surveyStartRotation - this.SURVEY_LOOK_ANGLE;
+          const angleDiff = normalizeAngle(courtAngle - startAngle);
+          const currentAngle = startAngle + angleDiff * progress;
+          this.character.setRotation(currentAngle);
+
+          if (this.surveyTimer >= this.SURVEY_FACE_GOAL_DURATION) {
+            this.surveyPhase = "none";
+            this.surveyTimer = 0;
+            this.character.setRotation(courtAngle);
+          }
+        }
+        break;
+    }
   }
 
   /**

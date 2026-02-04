@@ -562,6 +562,54 @@ export class Field {
     return this.goal2Net;
   }
 
+  // ============================================
+  // チーム別ゴール取得（GoalUtils）
+  // ============================================
+
+  /**
+   * 攻撃側のゴールリム位置を取得
+   * @param team チーム（'ally' | 'enemy'）
+   * @returns ゴールリムのワールド座標
+   */
+  public getAttackingGoalRim(team: 'ally' | 'enemy'): Vector3 {
+    // allyチームはgoal1（+Z方向）を攻撃
+    // enemyチームはgoal2（-Z方向）を攻撃
+    const rim = team === 'ally' ? this.goal1Rim : this.goal2Rim;
+    return rim.position.clone();
+  }
+
+  /**
+   * 守備側のゴールリム位置を取得
+   * @param team チーム（'ally' | 'enemy'）
+   * @returns ゴールリムのワールド座標
+   */
+  public getDefendingGoalRim(team: 'ally' | 'enemy'): Vector3 {
+    // allyチームはgoal2（-Z方向）を守備
+    // enemyチームはgoal1（+Z方向）を守備
+    const rim = team === 'ally' ? this.goal2Rim : this.goal1Rim;
+    return rim.position.clone();
+  }
+
+  /**
+   * 攻撃側のバックボード位置を取得
+   * @param team チーム（'ally' | 'enemy'）
+   * @returns バックボードのワールド座標
+   */
+  public getAttackingBackboard(team: 'ally' | 'enemy'): Vector3 {
+    const backboard = team === 'ally' ? this.goal1Backboard : this.goal2Backboard;
+    return backboard.position.clone();
+  }
+
+  /**
+   * 守備側のバックボード位置を取得
+   * @param team チーム（'ally' | 'enemy'）
+   * @returns バックボードのワールド座標
+   */
+  public getDefendingBackboard(team: 'ally' | 'enemy'): Vector3 {
+    const backboard = team === 'ally' ? this.goal2Backboard : this.goal1Backboard;
+    return backboard.position.clone();
+  }
+
   /**
    * 更新（ネットの物理シミュレーション）
    */

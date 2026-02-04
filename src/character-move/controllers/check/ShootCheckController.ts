@@ -26,7 +26,6 @@ export type { CellShootResult, ShootCheckState, ShotTypeFilter, ShootCheckConfig
 export class ShootCheckController {
   private character: Character;
   private ball: Ball;
-  private field: Field;
   private shootingController: ShootingController;
 
   // 設定
@@ -56,7 +55,6 @@ export class ShootCheckController {
   // シュート判定用
   private waitingForShot: boolean = false;
   private waitingForBallRelease: boolean = false; // ボール発射待ち（アニメーション中）
-  private lastBallPosition: Vector3 = Vector3.Zero();
   private shotStartTime: number = 0;
 
   // バウンド検知用
@@ -69,13 +67,12 @@ export class ShootCheckController {
   constructor(
     character: Character,
     ball: Ball,
-    field: Field,
+    _field: Field,
     shootingController: ShootingController,
     config: ShootCheckConfig
   ) {
     this.character = character;
     this.ball = ball;
-    this.field = field;
     this.shootingController = shootingController;
     // デフォルト値を設定
     this.config = {
@@ -518,7 +515,6 @@ export class ShootCheckController {
         this.waitingForBallRelease = false;
         this.ballReachedPeak = false;
         const ballPos = this.ball.getPosition();
-        this.lastBallPosition = ballPos.clone();
         this.lastBallY = ballPos.y;
       }
       return;

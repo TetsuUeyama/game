@@ -40,7 +40,6 @@ export class Ball {
   // 飛行中の状態管理
   private inFlight: boolean = false;
   private flightTime: number = 0;
-  private targetPosition: Vector3 = Vector3.Zero();
 
   // シューターのクールダウン（tickベース、秒単位）
   private lastShooter: Character | null = null;
@@ -52,11 +51,6 @@ export class Ball {
   private lastPasser: Character | null = null;
   private passerCooldown: number = 0;
   private static readonly PASSER_COOLDOWN_TIME = 0.5; // 約30フレーム
-
-  // ブロック後のオフェンスチームクールダウン
-  private blockedOffenseTeam: "ally" | "enemy" | null = null;
-  private blockCooldown: number = 0;
-  private static readonly BLOCK_COOLDOWN_TIME = 0.8;
 
   // 弾き後のクールダウン（tickベース、秒単位）
   private deflectionCooldown: number = 0;
@@ -109,6 +103,20 @@ export class Ball {
   }
 
   /**
+   * バウンスパスかどうかを取得
+   */
+  public getIsBouncePass(): boolean {
+    return this.isBouncePass;
+  }
+
+  /**
+   * バウンスパスがバウンド済みかどうかを取得
+   */
+  public getHasBounced(): boolean {
+    return this.hasBounced;
+  }
+
+  /**
    * パスターゲットをクリア
    */
   public clearPassTarget(): void {
@@ -144,7 +152,6 @@ export class Ball {
 
   // 決定論的軌道計算
   private currentTrajectory: DeterministicTrajectory | null = null;
-  private trajectoryStartTick: number = 0;  // フレームカウントベースの開始時刻
   private currentTick: number = 0;          // 現在のフレームカウント
   private static readonly FIXED_DT = 1 / 60; // 固定タイムステップ
 
@@ -189,7 +196,6 @@ export class Ball {
     // シーンに物理エンジンが有効化されているか確認
     // Havok物理エンジンは非同期で初期化されるため、後でreinitializePhysics()が呼ばれる
     if (!this.scene.getPhysicsEngine()) {
-      console.log("[Ball] Havok physics engine not yet initialized, waiting for reinitializePhysics()");
       return;
     }
 
@@ -617,7 +623,6 @@ export class Ball {
 
     // メッシュの位置を設定
     this.mesh.position = startPosition.clone();
-    this.targetPosition = targetPosition.clone();
 
     // 初速度を計算
     const velocity = this.calculateInitialVelocity(startPosition, targetPosition, launchAngle);
@@ -726,7 +731,6 @@ export class Ball {
 
     // メッシュの位置を設定
     this.mesh.position = startPosition.clone();
-    this.targetPosition = targetPosition.clone();
 
     // シュートカウンターをインクリメント（決定論的シード生成用）
     this.shootCounter++;
@@ -809,7 +813,6 @@ export class Ball {
 
     this.inFlight = true;
     this.flightTime = 0;
-    this.trajectoryStartTick = this.currentTick;
 
     // クールダウン設定（tickベース）
     this.lastShooter = previousHolder;
@@ -991,7 +994,6 @@ export class Ball {
 
     // パスターゲットを設定（キャッチ判定で使用、レシーバーモードも有効化）
     this.setPassTarget(targetCharacter ?? null);
-    console.log(`[Ball] パスターゲット設定: ${targetCharacter?.playerPosition || 'null'}, passTarget=${this.passTarget?.playerPosition || 'null'}`);
 
     // パサーの胸の高さからスタート
     // キャラクターのposition.yはheight/2にあるため、胸の高さ(height*0.65)までのオフセットはheight*0.15
@@ -1072,16 +1074,6 @@ export class Ball {
 
     // メッシュの位置を設定
     this.mesh.position = startPosition.clone();
-    this.targetPosition = adjustedTargetPosition.clone();
-
-    // デバッグ: エンドラインからのスローイン時の軌道情報を出力
-    const isEndLineThrowIn = Math.abs(startPosition.z) > 14.5; // エンドライン付近かどうか
-    if (isEndLineThrowIn) {
-      console.log(`[Ball] エンドラインスローイン軌道情報:`);
-      console.log(`  開始位置: (${startPosition.x.toFixed(2)}, ${startPosition.y.toFixed(2)}, ${startPosition.z.toFixed(2)})`);
-      console.log(`  目標位置: (${adjustedTargetPosition.x.toFixed(2)}, ${adjustedTargetPosition.y.toFixed(2)}, ${adjustedTargetPosition.z.toFixed(2)})`);
-      console.log(`  水平距離: ${horizontalDistance.toFixed(2)}m, アーチ高: ${arcHeight.toFixed(2)}m`);
-    }
 
     // 決定論的軌道を作成
     const startVec3: Vec3 = { x: startPosition.x, y: startPosition.y, z: startPosition.z };
@@ -1098,12 +1090,6 @@ export class Ball {
     // 軌道から初速度を取得
     const initialVel = this.currentTrajectory.getInitialVelocity();
     const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
-
-    // デバッグ: エンドラインからのスローイン時の初速度を出力
-    if (isEndLineThrowIn) {
-      console.log(`  初速度: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)}, ${velocity.z.toFixed(2)})`);
-      console.log(`  飛行時間: ${this.currentTrajectory.getFlightTime().toFixed(2)}s`);
-    }
 
     // Havok物理エンジンを設定
     if (this.physicsAggregate) {
@@ -1144,7 +1130,6 @@ export class Ball {
 
     this.inFlight = true;
     this.flightTime = 0;
-    this.trajectoryStartTick = this.currentTick;
 
     // パサーのクールダウン（シュートより短め）
     this.lastShooter = previousHolder;
@@ -1316,57 +1301,6 @@ export class Ball {
   }
 
   /**
-   * 軌道の可視化を作成（レガシー: ParabolaUtils使用）
-   * @deprecated visualizeTrajectoryDeterministic を使用してください
-   */
-  private visualizeTrajectory(start: Vector3, target: Vector3, arcHeight: number): void {
-    // 既存の可視化を削除
-    this.clearTrajectoryVisualization();
-
-    if (!this.trajectoryVisible) return;
-
-    // 直線（発射位置→目標位置）
-    const linePoints = [start.clone(), target.clone()];
-    this.trajectoryLineMesh = MeshBuilder.CreateLines(
-      "trajectory-line",
-      { points: linePoints },
-      this.scene
-    );
-    this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
-
-    // 放物線（空気抵抗を考慮した軌道）
-    const velocityResult = ParabolaUtils.calculateVelocityWithDamping(
-      start.x, start.y, start.z,
-      target.x, target.y, target.z,
-      arcHeight,
-      PhysicsConstants.GRAVITY_MAGNITUDE,
-      PhysicsConstants.BALL.LINEAR_DAMPING
-    );
-
-    const parabolaPoints: Vector3[] = [];
-    const segments = 50;
-    const flightTime = velocityResult.flightTime;
-
-    for (let i = 0; i <= segments; i++) {
-      const t = (i / segments) * flightTime;
-      const pos = ParabolaUtils.getPositionWithDamping(
-        start,
-        velocityResult,
-        PhysicsConstants.GRAVITY_MAGNITUDE,
-        PhysicsConstants.BALL.LINEAR_DAMPING,
-        t
-      );
-      parabolaPoints.push(new Vector3(pos.x, pos.y, pos.z));
-    }
-    this.trajectoryParabolaMesh = MeshBuilder.CreateLines(
-      "trajectory-parabola",
-      { points: parabolaPoints },
-      this.scene
-    );
-    this.trajectoryParabolaMesh.color = new Color3(0, 1, 1); // シアン
-  }
-
-  /**
    * 軌道の可視化を削除
    */
   private clearTrajectoryVisualization(): void {
@@ -1421,8 +1355,6 @@ export class Ball {
     this.flightTime = 0;
     this.setKinematic(false);
     this.physicsAggregate.body.disablePreStep = true;
-
-    console.log(`[Ball] チップ: direction=(${direction.x.toFixed(2)}, ${direction.y.toFixed(2)}, ${direction.z.toFixed(2)}), force=${force}`);
   }
 
   /**
@@ -1478,8 +1410,6 @@ export class Ball {
 
     // ホルダーをクリア
     this.holder = null;
-
-    console.log(`[Ball] ジャンプボール投げ上げ: position=(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}), height=${height}m, velocity=${tossVelocity.toFixed(2)}m/s`);
   }
 
   /**

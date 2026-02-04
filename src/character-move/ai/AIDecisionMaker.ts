@@ -73,7 +73,6 @@ export interface AIDecisionMakerConfig {
 export class AIDecisionMaker {
   private character: Character;
   private ball: Ball;
-  private _field: Field;
   private allCharacters: () => Character[];
 
   // レイヤーインスタンス
@@ -100,7 +99,6 @@ export class AIDecisionMaker {
   ) {
     this.character = character;
     this.ball = ball;
-    this._field = field;
     this.allCharacters = getAllCharacters;
     this.config = config;
 
@@ -261,18 +259,10 @@ export class AIDecisionMaker {
   }
 
   /**
-   * デバッグ情報をログ出力
+   * デバッグ情報をログ出力（本番では無効化）
    */
-  private logDebugInfo(result: AIDecisionResult): void {
-    const name = this.character.playerData?.basic?.NAME ?? 'Unknown';
-    console.group(`AI Decision: ${name}`);
-    console.log('Situation:', result.layers.situation.phase, result.layers.situation.ballRelation);
-    console.log('Tactical Action:', result.layers.tacticalAction.type, result.layers.tacticalAction.reason);
-    console.log('Ego:', result.layers.ego.action, `intensity: ${result.layers.ego.intensity.toFixed(2)}`);
-    console.log('Final:', result.finalDecision.action.type,
-      result.finalDecision.overrideReason ? `(override: ${result.finalDecision.overrideReason})` : '');
-    console.log(`Processing: ${result.processingTimeMs.toFixed(2)}ms`);
-    console.groupEnd();
+  private logDebugInfo(_result: AIDecisionResult): void {
+    // デバッグ用：本番では出力しない
   }
 
   /**

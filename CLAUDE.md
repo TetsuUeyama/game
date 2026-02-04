@@ -1,0 +1,74 @@
+# Claude Code プロジェクト設定
+
+## 重要: セッション開始時の確認事項
+
+**毎回のセッション開始時、以下のファイルを最初に確認してください:**
+
+```
+src/character-move/UTILS_SYSTEM_REFACTORING.md
+```
+
+このファイルには以下が含まれています:
+- 作業手順書（Phase 0〜4）
+- 実装予定のタスクリスト
+- 将来計画（IK+アニメーションブレンディング）
+- 変更履歴
+
+## コード作成・修正時のルール
+
+1. **作業前**: 作業手順書を確認し、該当タスクのチェックボックスを確認
+2. **作業中**: 新しい発見・課題があれば作業手順書に追記
+3. **作業後**: 完了したタスクのチェックボックスを `[x]` に更新
+4. **変更履歴**: 重要な変更は変更履歴セクションに追記
+
+## 必須: コード品質ルール
+
+### 未使用変数の削除
+**「宣言されていますが、その値が読み取られることはありません」エラーは必ず修正すること。**
+
+コード修正後、以下のパターンが残っていないか確認:
+- 使用されなくなった変数宣言
+- 削除したコードで使われていた変数
+- リファクタリング後の不要な変数
+
+修正方法:
+1. 変数が本当に不要なら削除
+2. 将来使う予定があるなら `_` プレフィックスを付ける（例: `_unusedVar`）
+3. 分割代入で不要な値は `_` で受ける（例: `const [_, needed] = array`）
+
+**確認コマンド（必ず実行）**:
+```bash
+npx tsc --noEmit --noUnusedLocals 2>&1 | grep "TS6133\|TS6192"
+```
+※ 通常の `npx tsc --noEmit` では未使用変数エラーは表示されないため、必ず `--noUnusedLocals` オプションを付ける
+
+## プロジェクト概要
+
+- **言語**: TypeScript
+- **フレームワーク**: Babylon.js（3Dゲームエンジン）
+- **物理エンジン**: Havok
+- **対象**: バスケットボールゲームのキャラクター制御システム
+
+## 主要ディレクトリ構造
+
+```
+src/character-move/
+├── ai/           # AI制御（状態別AI、分析）
+├── config/       # 設定ファイル
+├── controllers/  # コントローラー（Motion, Balance, Collision等）
+├── entities/     # エンティティ（Character, Ball, Field）
+├── motion/       # モーションデータ
+├── physics/      # 物理計算（軌道計算等）
+├── systems/      # システム（BallCatch, BalanceCollision等）
+├── types/        # 型定義
+├── utils/        # ユーティリティ関数
+└── UTILS_SYSTEM_REFACTORING.md  # 作業手順書
+```
+
+## 現在の優先タスク
+
+1. Phase 0: クリーンアップ（console.log削除、DEBUGコメント削除）
+2. Phase 1: 基本ユーティリティ（normalizeAngle, TeamUtils, GoalUtils）
+3. Phase 2: リスク判定システム（DefenderStateUtils, RiskAssessmentSystem）
+4. Phase 3: 既存コード置き換え
+5. Phase 4: 統合・最適化

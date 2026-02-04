@@ -194,7 +194,6 @@ export class JumpBallJumperAI extends BaseStateAI {
       actionController.startAction('jump_ball');
     }
 
-    console.log(`[JumpBallJumperAI] ${this.character.playerPosition} がジャンプを実行`);
   }
 
   /**
@@ -255,7 +254,6 @@ export class JumpBallJumperAI extends BaseStateAI {
       this.tipCallback(this.character, finalDirection);
     }
 
-    console.log(`[JumpBallJumperAI] ${this.character.playerPosition} がボールをチップ`);
   }
 
   /**

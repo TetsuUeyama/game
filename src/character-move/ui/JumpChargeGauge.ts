@@ -5,7 +5,6 @@ import { Scene, Vector3, Mesh, MeshBuilder, StandardMaterial, Color3, DynamicTex
  * キャラクターの足元に表示されるゲージ
  */
 export class JumpChargeGauge {
-  private scene: Scene;
   private gaugeMesh: Mesh;
   private material: StandardMaterial;
   private texture: DynamicTexture;
@@ -14,7 +13,6 @@ export class JumpChargeGauge {
   // ゲージのサイズ
   private readonly gaugeWidth: number = 1.0;
   private readonly gaugeHeight: number = 0.1;
-  private readonly gaugeDepth: number = 0.02;
 
   // チャージレベルの閾値（秒）
   private readonly smallJumpThreshold: number = 0.05;
@@ -22,8 +20,6 @@ export class JumpChargeGauge {
   private readonly maxChargeTime: number = 0.3;
 
   constructor(scene: Scene) {
-    this.scene = scene;
-
     // ゲージメッシュを作成（平面）
     this.gaugeMesh = MeshBuilder.CreatePlane(
       "jumpChargeGauge",
