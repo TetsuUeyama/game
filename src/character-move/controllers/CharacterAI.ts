@@ -8,6 +8,7 @@ import { FeintController } from "./action/FeintController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
 import { IDLE_MOTION } from "../motion/IdleMotion";
+import { DribbleUtils } from "../config/DribbleConfig";
 import {
   LooseBallAI,
   OnBallOffenseAI,
@@ -47,6 +48,13 @@ export class CharacterAI {
 
   // 前回の状態（状態遷移検出用）
   private previousState: CharacterState | null = null;
+
+  // 前回のボール保持状態（ボールを受け取った時の検出用）
+  private wasBallHolder: boolean = false;
+
+  // 状態遷移後の反応遅延タイマー（秒）
+  // reflexesに基づいて計算され、この時間中はアイドル状態でボールを見る
+  private stateTransitionReactionTimer: number = 0;
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     this.character = character;
@@ -177,18 +185,95 @@ export class CharacterAI {
     const state = this.character.getState();
 
     // 状態遷移を検出してリセット処理を実行（アクション実行中でも行う）
+    let stateTransitionedToOnBall = false;
     if (this.previousState !== null && this.previousState !== state) {
+      console.log(`[CharacterAI] 状態遷移検出: ${this.character.playerPosition} ${this.previousState} → ${state}`);
       this.handleStateTransition(this.previousState, state);
+      if (state === CharacterState.ON_BALL_PLAYER) {
+        stateTransitionedToOnBall = true;
+      }
+    } else if (this.previousState === null && state === CharacterState.ON_BALL_PLAYER) {
+      // 最初のフレームでON_BALL_PLAYERの場合も初期化が必要
+      console.log(`[CharacterAI] 初回ON_BALL_PLAYER検出: ${this.character.playerPosition}`);
     }
     this.previousState = state;
+
+    // ボールを受け取った瞬間を検出（状態遷移とは別に）
+    // スローイン、ルーズボール、リフレクション等でボールを保持した時に周囲確認を開始
+    // ※状態遷移でonEnterStateが呼ばれた場合は二重呼び出しを防ぐ
+    const isBallHolder = this.ball.getHolder() === this.character;
+
+    // デバッグ: ボール保持状態の変化を監視
+    if (state === CharacterState.ON_BALL_PLAYER) {
+      if (isBallHolder !== this.wasBallHolder) {
+        console.log(`[CharacterAI] ボール保持状態変化: ${this.character.playerPosition} holder=${isBallHolder} was=${this.wasBallHolder} transitioned=${stateTransitionedToOnBall}`);
+      }
+    }
+
+    if (isBallHolder && !this.wasBallHolder && state === CharacterState.ON_BALL_PLAYER && !stateTransitionedToOnBall) {
+      // ボールを受け取った瞬間（状態変化なし）：前の行動をリセットして周囲確認を開始
+      console.log(`[CharacterAI] ボール受け取り検出（状態変化なし）: ${this.character.playerPosition} - onEnterState呼び出し`);
+
+      // アクションを強制リセット（前の状態の行動を停止）
+      const actionCtrl = this.character.getActionController();
+      actionCtrl.forceResetAction();
+
+      // AI移動をクリア（OneOnOneBattleController等との競合を防ぐ）
+      this.character.clearAIMovement();
+
+      // 移動とモーションをリセット
+      this.character.stopMovement();
+      this.character.playMotion(IDLE_MOTION);
+
+      // 周囲確認を開始
+      this.onBallOffenseAI.onEnterState();
+    }
+    this.wasBallHolder = isBallHolder;
 
     // アクション実行中（シュート等）は移動処理をスキップ
     const actionController = this.character.getActionController();
     const currentAction = actionController.getCurrentAction();
     const currentPhase = actionController.getCurrentPhase();
+
+    // 安全チェック: currentActionがnullなのにphaseがidleでない場合は異常状態
+    // これを検出して修正する（本来は発生しないはずだが、念のため）
+    if (currentAction === null && currentPhase !== 'idle') {
+      console.warn(`[CharacterAI] 異常状態を検出: ${this.character.playerPosition} - action=null but phase=${currentPhase}. 強制リセットします。`);
+      actionController.forceResetAction();
+    }
+
     if (currentAction !== null || currentPhase !== 'idle') {
       // アクション中は待機モーションも再生しない（アクションモーションが再生中）
+      if (state === CharacterState.ON_BALL_PLAYER) {
+        console.log(`[CharacterAI] ON_BALL_PLAYER AI更新スキップ: ${this.character.playerPosition} action=${currentAction} phase=${currentPhase}`);
+      }
       return;
+    }
+
+    // 状態遷移後の反応遅延中はボールを見てアイドル状態を維持
+    // 以下の状態は反応遅延をスキップ：
+    // - ON_BALL_PLAYER: 独自のサーベイ処理がある
+    // - THROW_IN_*: スローイン準備は即座に行う必要がある
+    const skipReactionDelay =
+      state === CharacterState.ON_BALL_PLAYER ||
+      state === CharacterState.THROW_IN_THROWER ||
+      state === CharacterState.THROW_IN_RECEIVER ||
+      state === CharacterState.THROW_IN_OTHER;
+
+    if (this.stateTransitionReactionTimer > 0 && !skipReactionDelay) {
+      this.stateTransitionReactionTimer -= deltaTime;
+
+      // ボール方向を向く
+      this.faceBall();
+
+      // 反応遅延中はAI処理をスキップ
+      if (this.stateTransitionReactionTimer > 0) {
+        return;
+      }
+
+      // 反応遅延が終了したらonEnterStateを呼び出し
+      console.log(`[CharacterAI] 反応遅延終了: ${this.character.playerPosition} state=${state}`);
+      this.callOnEnterState(state);
     }
 
     switch (state) {
@@ -228,6 +313,52 @@ export class CharacterAI {
   }
 
   /**
+   * ボール方向を向く
+   */
+  private faceBall(): void {
+    const characterPos = this.character.getPosition();
+    const ballPos = this.ball.getPosition();
+
+    const dirToBall = ballPos.subtract(characterPos);
+    if (dirToBall.length() > 0.1) {
+      const targetRotation = Math.atan2(dirToBall.x, dirToBall.z);
+      this.character.setRotation(targetRotation);
+    }
+  }
+
+  /**
+   * 指定された状態のonEnterStateを呼び出す
+   */
+  private callOnEnterState(state: CharacterState): void {
+    switch (state) {
+      case CharacterState.BALL_LOST:
+        this.looseBallAI.onEnterState();
+        break;
+      case CharacterState.ON_BALL_PLAYER:
+        this.onBallOffenseAI.onEnterState();
+        break;
+      case CharacterState.OFF_BALL_PLAYER:
+        this.offBallOffenseAI.onEnterState();
+        break;
+      case CharacterState.ON_BALL_DEFENDER:
+        this.onBallDefenseAI.onEnterState();
+        break;
+      case CharacterState.OFF_BALL_DEFENDER:
+        this.offBallDefenseAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_THROWER:
+        this.throwInThrowerAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_RECEIVER:
+        this.throwInReceiverAI.onEnterState();
+        break;
+      case CharacterState.THROW_IN_OTHER:
+        this.throwInOtherAI.onEnterState();
+        break;
+    }
+  }
+
+  /**
    * 状態遷移時のリセット処理
    * @param fromState 遷移前の状態
    * @param toState 遷移後の状態
@@ -239,18 +370,33 @@ export class CharacterAI {
     const actionController = this.character.getActionController();
     actionController.forceResetAction();
 
+    // AI移動をクリア（OneOnOneBattleController等との競合を防ぐ）
+    this.character.clearAIMovement();
+
     // キャラクターのモーションと移動状態をリセット
     // 前の状態のアクションが引き継がれないようにする
     this.character.stopMovement();
     this.character.playMotion(IDLE_MOTION);
 
+    // ボール方向を向く
+    this.faceBall();
+
     // 前の状態からのExit処理
     switch (fromState) {
+      case CharacterState.BALL_LOST:
+        this.looseBallAI.onExitState();
+        break;
       case CharacterState.ON_BALL_PLAYER:
         this.onBallOffenseAI.onExitState();
         break;
       case CharacterState.OFF_BALL_PLAYER:
         this.offBallOffenseAI.onExitState();
+        break;
+      case CharacterState.ON_BALL_DEFENDER:
+        this.onBallDefenseAI.onExitState();
+        break;
+      case CharacterState.OFF_BALL_DEFENDER:
+        this.offBallDefenseAI.onExitState();
         break;
       case CharacterState.THROW_IN_THROWER:
         this.throwInThrowerAI.onExitState();
@@ -261,25 +407,35 @@ export class CharacterAI {
       case CharacterState.THROW_IN_OTHER:
         this.throwInOtherAI.onExitState();
         break;
+      // JUMP_BALL_JUMPER, JUMP_BALL_OTHER はGameSceneで管理
     }
 
-    // 新しい状態へのEnter処理
-    switch (toState) {
-      case CharacterState.ON_BALL_PLAYER:
-        this.onBallOffenseAI.onEnterState();
-        break;
-      case CharacterState.OFF_BALL_PLAYER:
-        this.offBallOffenseAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_THROWER:
-        this.throwInThrowerAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_RECEIVER:
-        this.throwInReceiverAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_OTHER:
-        this.throwInOtherAI.onEnterState();
-        break;
+    // reflexesに基づいた反応遅延を計算
+    // 以下の状態は即座にonEnterStateを呼び出す（反応遅延なし）：
+    // - ON_BALL_PLAYER: 独自のサーベイ処理がある
+    // - THROW_IN_*: スローイン準備は即座に行う必要がある
+    const skipReactionDelay =
+      toState === CharacterState.ON_BALL_PLAYER ||
+      toState === CharacterState.THROW_IN_THROWER ||
+      toState === CharacterState.THROW_IN_RECEIVER ||
+      toState === CharacterState.THROW_IN_OTHER;
+
+    if (skipReactionDelay) {
+      this.stateTransitionReactionTimer = 0;
+      this.callOnEnterState(toState);
+    } else {
+      // 他の状態はreflexesに基づいて反応遅延を設定
+      const reflexes = this.character.playerData?.stats.reflexes;
+      const delayMs = DribbleUtils.calculateReflexesDelay(reflexes);
+      this.stateTransitionReactionTimer = delayMs / 1000; // ミリ秒→秒
+
+      console.log(`[CharacterAI] 反応遅延設定: ${this.character.playerPosition} reflexes=${reflexes} delay=${delayMs}ms`);
+
+      // 遅延が0の場合は即座にonEnterStateを呼び出す
+      if (this.stateTransitionReactionTimer <= 0) {
+        this.callOnEnterState(toState);
+      }
+      // 遅延がある場合はupdate()で遅延後にonEnterStateが呼び出される
     }
   }
 

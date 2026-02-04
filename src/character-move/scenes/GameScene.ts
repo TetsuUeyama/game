@@ -120,6 +120,8 @@ export class GameScene {
 
   // パスチェックモード用距離表示ライン
   private passCheckDistanceLine?: LinesMesh;
+  private passCheckPasser?: Character;
+  private passCheckReceiver?: Character;
 
   // シュートクロック違反後のリセット待機状態
   private pendingShotClockViolationReset: boolean = false;
@@ -725,12 +727,6 @@ export class GameScene {
         character.update(deltaTime);
       }
 
-      // 1on1バトルコントローラーの更新（ドリブル突破とAI移動）
-      if (this.oneOnOneBattleController) {
-        this.oneOnOneBattleController.updateDribbleBreakthrough(deltaTime);
-        this.oneOnOneBattleController.update1on1Movement(deltaTime);
-      }
-
       // 競り合いコントローラーの更新（キャラクター同士の押し合い）
       if (this.contestController) {
         this.contestController.update(deltaTime);
@@ -746,9 +742,28 @@ export class GameScene {
         this.feintController.update(deltaTime);
       }
 
+      // スローイン中の位置強制（衝突判定前に実行してレシーバー位置を正確にする）
+      this.enforceThrowInPositions();
+
+      // ボールを更新（キャラクター位置が確定した後にボール位置を更新）
+      // 衝突判定より先に実行して、正しいボール位置で判定する
+      this.ball.update(deltaTime);
+
+      // ボール衝突判定（ボールキャッチ処理）を状態更新前に実行
+      // これにより、ボールをキャッチした瞬間に正しい状態が設定される
+      if (this.collisionHandler) {
+        this.collisionHandler.update(deltaTime);
+      }
+
       // キャラクターの状態を更新（AI更新前に実行して正しい状態でAIが動作するようにする）
       if (this.collisionHandler) {
         this.collisionHandler.updateStates();
+      }
+
+      // 1on1バトルコントローラーの更新（状態更新後に実行して正しい状態で動作）
+      if (this.oneOnOneBattleController) {
+        this.oneOnOneBattleController.updateDribbleBreakthrough(deltaTime);
+        this.oneOnOneBattleController.update1on1Movement(deltaTime);
       }
 
       // 全AIコントローラーを更新
@@ -795,16 +810,13 @@ export class GameScene {
       }
     }
 
-    // ボールを更新（保持中はキャラクターに追従）
-    this.ball.update(deltaTime);
+    // モーション確認モードの場合のみボールを更新（通常モードは上で更新済み）
+    if (this.isMotionConfirmationMode) {
+      this.ball.update(deltaTime);
+    }
 
     // フィールドを更新（ネットの物理シミュレーション）
     this.field.update(deltaTime);
-
-    // 衝突判定を常に更新
-    if (this.collisionHandler) {
-      this.collisionHandler.update(deltaTime);
-    }
 
     // 関節操作コントローラーは常に更新（Ctrl+ドラッグ用）
     if (this.jointController) {
@@ -1041,6 +1053,38 @@ export class GameScene {
     this.ball.clearThrowInLock();
     // キャラクターのスローイン状態もクリア
     this.clearAllThrowInCharacterStates();
+  }
+
+  /**
+   * スローイン中のキャラクター位置を強制（衝突判定前に呼び出す）
+   * これにより、レシーバーが正確な位置でボールをキャッチできる
+   */
+  private enforceThrowInPositions(): void {
+    // スローイン待機中の場合
+    if (this.isThrowInPending) {
+      if (this.throwInThrower && this.throwInPosition) {
+        this.throwInThrower.setPosition(this.throwInPosition, true);
+        if (this.throwInReceiverPosition) {
+          this.throwInThrower.lookAt(this.throwInReceiverPosition);
+        }
+      }
+      if (this.throwInReceiver && this.throwInReceiverPosition) {
+        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
+        if (this.throwInPosition) {
+          this.throwInReceiver.lookAt(this.throwInPosition);
+        }
+      }
+    }
+    // ボールが飛行中の場合（スローイン実行後）
+    else if (this.throwInThrower && this.throwInPosition) {
+      this.throwInThrower.setPosition(this.throwInPosition, true);
+      this.throwInThrower.stopMovement();
+
+      if (this.throwInReceiver && this.throwInReceiverPosition && this.ball.isInFlight()) {
+        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
+        this.throwInReceiver.stopMovement();
+      }
+    }
   }
 
   /**
@@ -3070,6 +3114,10 @@ export class GameScene {
       this.passTrajectoryVisualizer.setEnabled(true);
     }
 
+    // パスチェック用の参照を保存（距離ライン更新用）
+    this.passCheckPasser = passer;
+    this.passCheckReceiver = receiver;
+
     // 距離表示ラインを作成
     this.createPassCheckDistanceLine(passer, receiver);
 
@@ -3152,6 +3200,11 @@ export class GameScene {
     if (this.passTrajectoryVisualizer) {
       this.passTrajectoryVisualizer.update();
     }
+
+    // 距離表示ラインを更新（選手が移動しても追従する）
+    if (this.passCheckPasser && this.passCheckReceiver) {
+      this.createPassCheckDistanceLine(this.passCheckPasser, this.passCheckReceiver);
+    }
   }
 
   /**
@@ -3159,6 +3212,8 @@ export class GameScene {
    */
   public clearPassCheckVisualization(): void {
     this.clearPassCheckDistanceLine();
+    this.passCheckPasser = undefined;
+    this.passCheckReceiver = undefined;
     if (this.passTrajectoryVisualizer) {
       this.passTrajectoryVisualizer.clearVisualizations();
     }

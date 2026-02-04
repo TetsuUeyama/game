@@ -81,9 +81,12 @@ export class CollisionHandler {
       return;
     }
 
-    // スロワー状態の選手は衝突判定をスキップ
-    // IMPROVEMENT_PLAN.md: バグ1修正 - スロワーが自分の投げたボールにぶつかる問題
-    if (character.getState() === CharacterState.THROW_IN_THROWER) {
+    // スローイン中のスロワーと他のプレイヤーは衝突判定をスキップ
+    // - THROW_IN_THROWER: スロワーが自分の投げたボールにぶつかる問題を防止
+    // - THROW_IN_OTHER: レシーバー以外がボールを先に取ってしまう問題を防止
+    const characterState = character.getState();
+    if (characterState === CharacterState.THROW_IN_THROWER ||
+        characterState === CharacterState.THROW_IN_OTHER) {
       return;
     }
 
@@ -181,14 +184,21 @@ export class CollisionHandler {
 
     // リーチ範囲内の処理
     if (distanceToHand < BALL_PICKUP_CONFIG.REACH_RANGE) {
+      // 体に近い判定の閾値を計算
+      const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + BALL_PICKUP_CONFIG.NEAR_BODY_OFFSET;
+      const isNearBody = distanceToBodyXZ < nearBodyThreshold;
+
+      // 足元のボール判定（地面に近いボールで、体の近くにある場合）
+      // ボールの高さがキャラクターの膝以下（身長の25%以下）なら足元と判定
+      const isAtFeetLevel = ballHeight < characterHeight * 0.25;
+      const isAtFeet = isAtFeetLevel && isNearBody;
+
       // ボールが静止状態（キネマティックモード）の場合は直接キャプチャ判定
       if (!this.ball.isPhysicsEnabled()) {
         // 静止ボールは近づくだけでキャプチャ可能（XZ平面での距離も考慮）
         // キャラクターの体が十分近い、または手が十分近い場合はキャプチャ
         // IMPROVEMENT_PLAN.md: ルーズボール時のキャプチャ条件を緩和
-        const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + BALL_PICKUP_CONFIG.NEAR_BODY_OFFSET;
-        if (distanceToBodyXZ < nearBodyThreshold ||
-            distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
+        if (isNearBody || distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
           this.captureBall(character);
         }
         return;
@@ -201,8 +211,6 @@ export class CollisionHandler {
         // IMPROVEMENT_PLAN.md: 低速ボールの閾値を設定から取得
         const slowRollingThreshold = BALL_PICKUP_CONFIG.SLOW_ROLLING_THRESHOLD;
         const isSlowRolling = relativeSpeed < slowRollingThreshold;
-        const nearBodyThreshold = bodyRadius + BALL_COLLISION_CONFIG.BALL_RADIUS + BALL_PICKUP_CONFIG.NEAR_BODY_OFFSET;
-        const isNearBody = distanceToBodyXZ < nearBodyThreshold;
 
         if (distanceToHand < BALL_PICKUP_CONFIG.CAPTURE_DISTANCE) {
           // 手元まで来た - 完全にキャプチャ
@@ -210,6 +218,14 @@ export class CollisionHandler {
         } else if (isSlowRolling && isNearBody) {
           // 低速ボールが体の近くにある - キャプチャ
           this.captureBall(character);
+        } else if (isAtFeet) {
+          // 足元のボール - 速度に関係なくキャプチャ可能（拾い上げ動作）
+          // ただし非常に速い場合（10m/s以上）は弾く
+          if (relativeSpeed < 10.0) {
+            this.captureBall(character);
+          } else {
+            this.applyFumble(character, handPosition, ballPosition);
+          }
         } else {
           // 手の方向に少しずつ引き寄せる（物理的な挙動を残す）
           this.pullBallTowardHand(character, handPosition, ballPosition);
