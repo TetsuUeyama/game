@@ -45,7 +45,6 @@ import {
  * キーボード入力を管理し、キャラクターの移動を制御
  */
 export class InputController {
-  private scene: Scene;
   private character: Character;
   private inputState: InputState;
   private motionController: MotionController;
@@ -63,7 +62,6 @@ export class InputController {
   private dashJumpDirection: string | null = null; // ジャンプ時のダッシュ方向名
 
   constructor(scene: Scene, character: Character) {
-    this.scene = scene;
     this.character = character;
 
     // ジャンプチャージゲージを初期化

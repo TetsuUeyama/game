@@ -261,16 +261,12 @@ export class ThrowInCheckController {
    * テストを開始
    */
   public start(): void {
-    console.log('[ThrowInCheck] スローインチェックを開始');
-
     // 全ての外側マスを取得
     this.outerCells = this.getAllOuterCells();
     this.currentOuterCellIndex = 0;
     this.results = [];
     this.totalSuccessCount = 0;
     this.totalFailCount = 0;
-
-    console.log(`[ThrowInCheck] 外側マス数: ${this.outerCells.length}`);
 
     // 最初の外側マスへ移動
     this.moveToNextOuterCell();
@@ -293,13 +289,10 @@ export class ThrowInCheckController {
     this.currentOuterCellTests = [];
 
     if (this.innerCells.length === 0) {
-      console.log(`[ThrowInCheck] 外側マス ${outerCell.col}${outerCell.row}: 有効な内側マスなし、スキップ`);
       this.currentOuterCellIndex++;
       this.moveToNextOuterCell();
       return;
     }
-
-    console.log(`[ThrowInCheck] 外側マス ${outerCell.col}${outerCell.row} (${outerCell.type}): 有効内側マス ${this.innerCells.length}個`);
 
     // スロワーを移動
     this.thrower.setPosition(new Vector3(outerCell.worldX, 0, outerCell.worldZ), true);
@@ -319,7 +312,6 @@ export class ThrowInCheckController {
       return;
     }
 
-    const outerCell = this.outerCells[this.currentOuterCellIndex];
     const innerCell = this.innerCells[this.currentInnerCellIndex];
 
     // レシーバーを移動
@@ -344,15 +336,7 @@ export class ThrowInCheckController {
    * スローインを実行
    */
   private executeThrowIn(): void {
-    const outerCell = this.outerCells[this.currentOuterCellIndex];
     const innerCell = this.innerCells[this.currentInnerCellIndex];
-
-    // 距離を計算
-    const dx = innerCell.worldX - outerCell.worldX;
-    const dz = innerCell.worldZ - outerCell.worldZ;
-    const distance = Math.sqrt(dx * dx + dz * dz);
-
-    console.log(`[ThrowInCheck] パス実行: ${outerCell.col}${outerCell.row} -> ${innerCell.col}${innerCell.row} (${distance.toFixed(1)}m)`);
 
     // レシーバーの胸の高さを目標に
     const receiverHeight = this.receiver.config.physical.height;
@@ -366,7 +350,6 @@ export class ThrowInCheckController {
     const success = this.ball.passWithArc(targetPosition, this.receiver, 'chest');
 
     if (!success) {
-      console.error('[ThrowInCheck] パス実行失敗');
       this.recordResult(false, 'パス実行失敗');
       return;
     }
@@ -403,21 +386,18 @@ export class ThrowInCheckController {
 
         // レシーバーがボールをキャッチしたかチェック
         if (this.ball.getHolder() === this.receiver) {
-          console.log(`[ThrowInCheck] キャッチ成功 (${this.throwTime.toFixed(2)}秒)`);
           this.recordResult(true, undefined, this.throwTime);
           return;
         }
 
         // ボールが地面で停止したかチェック（キャッチ失敗）
         if (!this.ball.isInFlight() && !this.ball.isHeld()) {
-          console.log('[ThrowInCheck] キャッチ失敗（ボール停止）');
           this.recordResult(false, 'ボール停止');
           return;
         }
 
         // タイムアウトチェック
         if (this.throwTime >= this.config.timeoutSeconds) {
-          console.log('[ThrowInCheck] タイムアウト');
           this.recordResult(false, 'タイムアウト');
           return;
         }
@@ -483,8 +463,6 @@ export class ThrowInCheckController {
 
     this.results.push(result);
 
-    console.log(`[ThrowInCheck] 外側マス ${outerCell.col}${outerCell.row} 完了: ${successCount}/${this.currentOuterCellTests.length} (${result.successRate.toFixed(1)}%)`);
-
     // コールバック
     if (this.onOuterCellComplete) {
       this.onOuterCellComplete(result);
@@ -500,9 +478,6 @@ export class ThrowInCheckController {
    */
   private completeAllTests(): void {
     this.state = 'completed';
-
-    const totalTests = this.totalSuccessCount + this.totalFailCount;
-    console.log(`[ThrowInCheck] 全テスト完了: 成功 ${this.totalSuccessCount}, 失敗 ${this.totalFailCount}, 合計 ${totalTests}`);
 
     if (this.onAllComplete) {
       this.onAllComplete(this.results);

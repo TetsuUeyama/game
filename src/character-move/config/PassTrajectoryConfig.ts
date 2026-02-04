@@ -2,6 +2,8 @@
  * パス軌道可視化システムの設定
  */
 
+import { normalizeAngle } from "../utils/CollisionUtils";
+
 /**
  * パスタイプ（5種類）
  */
@@ -184,12 +186,8 @@ export function isPassDirectionValid(
   // ターゲットへの角度を計算（atan2は-πからπを返す）
   const angleToTarget = Math.atan2(dx, dz);
 
-  // パサーの向きとターゲット方向の角度差を計算
-  let angleDiff = angleToTarget - passerRotation;
-
-  // 角度差を-πからπの範囲に正規化
-  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+  // パサーの向きとターゲット方向の角度差を計算（-πからπの範囲に正規化）
+  const angleDiff = normalizeAngle(angleToTarget - passerRotation);
 
   // 角度差の絶対値を度に変換
   const angleDiffDegrees = Math.abs(angleDiff) * (180 / Math.PI);

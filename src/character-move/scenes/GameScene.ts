@@ -41,7 +41,7 @@ import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisuali
 import { ShootTrajectoryVisualizer } from "../visualization/ShootTrajectoryVisualizer";
 import { PassCheckController, DefenderPlacement } from "../controllers/check/PassCheckController";
 import { ThrowInCheckController } from "../controllers/check/ThrowInCheckController";
-import { FieldGridUtils, CellCoord, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
+import { FieldGridUtils, CellCoord } from "../config/FieldGridConfig";
 import { FormationUtils } from "../config/FormationConfig";
 import { getAllOuterCells, getValidReceiverCells, OuterCellInfo, THROW_IN_CHECK_CONFIG } from "../config/check/ThrowInCheckConfig";
 import {
@@ -49,7 +49,6 @@ import {
   JUMP_BALL_POSITIONS,
   JUMP_BALL_TIMING,
   JUMP_BALL_PHYSICS,
-  JumpBallPhase,
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
 } from "../config/JumpBallConfig";
@@ -142,11 +141,12 @@ export class GameScene {
   private throwInThrower: Character | null = null;
   private throwInReceiver: Character | null = null;
   private throwInPosition: Vector3 | null = null; // スロワーの固定位置（外側マスの中心）
-  private throwInReceiverPosition: Vector3 | null = null; // レシーバーの固定位置
   private readonly throwInDelay: number = 3.0; // スローインまでの遅延（秒）- 他の選手がポジション移動する時間
 
-  // 3Dモデルロード状態
-  private modelLoaded: boolean = false;
+  // スローイン5秒ルール（フリースロークロック）
+  private throwInViolationTimer: number = 0;
+  private isThrowInViolationTimerRunning: boolean = false;
+  private readonly throwInTimeLimit: number = 5.0; // 5秒以内に投げ入れる
 
   // モーション確認モード（入力とモーション再生を停止）
   private isMotionConfirmationMode: boolean = false;
@@ -180,7 +180,6 @@ export class GameScene {
   private jumpBallAllyJumper: Character | null = null;
   private jumpBallEnemyJumper: Character | null = null;
   private jumpBallTimer: number = 0;
-  private jumpBallTipReceived: boolean = false;
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -556,78 +555,12 @@ export class GameScene {
 
       // 物理エンジン初期化後、ゲームモードの場合はジャンプボールを開始
       if (this.gameMode === 'game' && this.allyCharacters.length > 0 && this.enemyCharacters.length > 0) {
-        console.log('[GameScene] 物理エンジン初期化完了、ジャンプボールを開始');
         this.setupJumpBall();
       }
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");
     }
-  }
-
-  /**
-   * 味方キャラクターを作成
-   */
-  private createAlly(): Character {
-    // デフォルト設定を使用
-    const config = DEFAULT_CHARACTER_CONFIG;
-
-    // プレイヤーの右側に配置
-    const initialPosition = new Vector3(3, config.physical.height / 2, 2);
-
-    const ally = new Character(this.scene, initialPosition, config);
-
-    // 味方は緑色で表示
-    ally.setColor(0.3, 0.8, 0.3);
-
-    // チームを味方に設定
-    ally.setTeam("ally");
-
-    return ally;
-  }
-
-  /**
-   * 敵キャラクター1を作成
-   */
-  private createEnemy1(): Character {
-    // デフォルト設定を使用
-    const config = DEFAULT_CHARACTER_CONFIG;
-
-    // プレイヤーの前方左側に配置
-    const initialPosition = new Vector3(-4, config.physical.height / 2, 5);
-
-    const enemy = new Character(this.scene, initialPosition, config);
-
-    // 敵は赤色で表示
-    enemy.setColor(0.9, 0.2, 0.2);
-
-    // チームを敵に設定
-    enemy.setTeam("enemy");
-
-    
-    return enemy;
-  }
-
-  /**
-   * 敵キャラクター2を作成
-   */
-  private createEnemy2(): Character {
-    // デフォルト設定を使用
-    const config = DEFAULT_CHARACTER_CONFIG;
-
-    // プレイヤーの前方右側に配置
-    const initialPosition = new Vector3(4, config.physical.height / 2, 5);
-
-    const enemy = new Character(this.scene, initialPosition, config);
-
-    // 敵は赤色で表示
-    enemy.setColor(0.9, 0.2, 0.2);
-
-    // チームを敵に設定
-    enemy.setTeam("enemy");
-
-    
-    return enemy;
   }
 
   /**
@@ -862,30 +795,45 @@ export class GameScene {
       }
       this.previousBallHolder = currentBallHolder;
 
-      // スローインのレシーバーがボールを受け取ったらクリア
-      if (this.throwInReceiver && currentBallHolder === this.throwInReceiver) {
-        console.log('[GameScene] スローインレシーバーがボールを受け取りました。通常状態に復帰します。');
+      // スローインが完了したかチェック（ボールを誰かが受け取った）
+      // 新設計: 特定のレシーバーではなく、スロワー以外の誰かがボールを持ったら完了
+      // 待機中（isThrowInPending）は完了判定をスキップ（まだパスを投げていないため）
+      if (this.throwInThrower && currentBallHolder && currentBallHolder !== this.throwInThrower && !this.isThrowInPending) {
+
+        // 5秒違反タイマーを停止
+        this.isThrowInViolationTimerRunning = false;
+        this.throwInViolationTimer = 0;
+
+        // シュートクロックを開始（スローインが成功したのでここで開始）
+        if (this.shotClockController) {
+          this.shotClockController.reset(currentBallHolder.team);
+        }
+
+        // スロワーのスローインフラグを解除
+        this.throwInThrower.setAsThrowInThrower(null);
         this.throwInThrower = null;
         this.throwInReceiver = null;
-        // スローイン状態を通常の状態に戻す（CollisionHandlerが次フレームで設定する）
-        this.clearAllThrowInCharacterStates();
+        // 状態は既にCollisionHandlerが通常状態に設定しているはず
       }
     }
 
     // ボールが飛行を終了したらスローイン状態をクリア（タイムアウト）
     // アウトオブバウンズ判定の前にクリアして、正しく判定されるようにする
-    if (this.throwInReceiver && !this.ball.isInFlight() && !this.ball.isHeld()) {
-      console.log('[GameScene] スローインボールが飛行終了（未キャッチ）。通常状態に復帰します。');
+    // 新設計: throwInThrowerが設定されている場合にチェック
+    // 待機中（isThrowInPending）はボールが一時的に離れてもクリアしない（下のコードで再セットされる）
+    if (this.throwInThrower && !this.ball.isInFlight() && !this.ball.isHeld() && !this.isThrowInPending) {
+      // スロワーのスローインフラグを解除
+      this.throwInThrower.setAsThrowInThrower(null);
       this.throwInThrower = null;
       this.throwInReceiver = null;
       // パスターゲットもクリア（Ball.updateFlightPhysicsでクリアしなくなったため）
       this.ball.clearPassTarget();
-      this.clearAllThrowInCharacterStates();
     }
 
     // アウトオブバウンズ判定（ゴール後・アウトオブバウンズのリセット待機中・スローイン中は判定しない）
     // スローイン中はボールが外側マスから投げられるため、判定をスキップ
-    const isThrowInActive = this.isThrowInPending || this.throwInThrower !== null || this.throwInReceiver !== null;
+    // 新設計: throwInReceiverは使わない
+    const isThrowInActive = this.isThrowInPending || this.throwInThrower !== null;
     if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !isThrowInActive && this.checkOutOfBounds()) {
       // リセットを予約（遅延実行）
       this.pendingOutOfBoundsReset = true;
@@ -919,54 +867,72 @@ export class GameScene {
 
     // スローイン待機処理
     if (this.isThrowInPending) {
-      // スロワーとレシーバーの位置を固定（毎フレーム）
+      // スロワーの位置を固定（毎フレーム）、向きはAIに任せる
       if (this.throwInThrower && this.throwInPosition) {
         this.throwInThrower.setPosition(this.throwInPosition, true); // 外側マスなのでクランプをスキップ
-        // スロワーがレシーバーの方を向く
-        if (this.throwInReceiverPosition) {
-          this.throwInThrower.lookAt(this.throwInReceiverPosition);
-        }
+        // 新設計: 向きはAI（OnBallOffenseAI.updateThrowInThrower）が制御
+        // 待機中もAIがサーベイを行うので、向きを上書きしない
 
         // ボールがスロワーに保持されていることを確認
         // 何らかの理由でボールが落ちた場合、再セットする
         const currentHolder = this.ball.getHolder();
         if (currentHolder !== this.throwInThrower && !this.ball.isInFlight()) {
-          console.log('[GameScene] スローイン待機中：ボールがスロワーから離れています。再セットします。');
           this.ball.setHolder(this.throwInThrower);
         }
       }
-      if (this.throwInReceiver && this.throwInReceiverPosition) {
-        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
-        // レシーバーがスロワーの方を向く
-        if (this.throwInPosition) {
-          this.throwInReceiver.lookAt(this.throwInPosition);
-        }
-      }
+      // 新設計: 特定のレシーバー位置固定は不要（全員が自由に動いてパスを受ける位置に移動）
 
       this.throwInTimer -= deltaTime;
       if (this.throwInTimer <= 0) {
         this.executeThrowIn();
       }
     } else if (this.throwInThrower && this.throwInPosition) {
-      // IMPROVEMENT_PLAN.md: バグ1追加修正
-      // パスを投げた後も、スロワーの位置を外側マスに固定し続ける
-      // （レシーバーがキャッチするまで、または状態がクリアされるまで）
+      // スローイン実行フェーズ: スロワーの位置を外側マスに固定し続ける
+      // AIがパスを実行し、誰かがキャッチするまで固定
       this.throwInThrower.setPosition(this.throwInPosition, true);
       this.throwInThrower.stopMovement();
+      // 新設計: 向きはAI（OnBallOffenseAI.updateThrowInThrower）が制御
 
-      // レシーバーの位置も固定する（ボールがキャッチされるまで）
-      if (this.throwInReceiver && this.throwInReceiverPosition && this.ball.isInFlight()) {
-        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
-        this.throwInReceiver.stopMovement();
+      // 5秒スローイン違反タイマーのチェック
+      if (this.isThrowInViolationTimerRunning) {
+        this.throwInViolationTimer -= deltaTime;
+        if (this.throwInViolationTimer <= 0) {
+          this.handleThrowInViolation();
+        }
       }
     }
   }
 
   /**
-   * スローインを実行
+   * スローイン5秒違反を処理（相手ボールに）
+   */
+  private handleThrowInViolation(): void {
+    if (!this.throwInThrower) return;
+
+    const violatingTeam = this.throwInThrower.team;
+
+    // 同じ位置から相手チームのスローインを開始
+    const throwInPosition = this.throwInPosition?.clone() || this.ball.getPosition().clone();
+
+    // 違反したチームのスロワーフラグを解除
+    this.throwInThrower.setAsThrowInThrower(null);
+
+    // スローイン状態をクリア（5秒タイマーも含む）
+    this.isThrowInViolationTimerRunning = false;
+    this.throwInViolationTimer = 0;
+    this.clearThrowInState();
+
+    // 相手チームのスローインを実行（違反したチームをoffendingTeamとして渡す）
+    this.executeThrowInReset(violatingTeam, throwInPosition);
+  }
+
+  /**
+   * スローインを実行（待機フェーズから実行フェーズへ移行）
+   * 新設計: AIがパスを実行するので、ここでは移行処理のみ
    */
   private executeThrowIn(): void {
-    if (!this.throwInThrower || !this.throwInReceiver || !this.throwInPosition || !this.throwInReceiverPosition) {
+    // 新設計: throwInReceiverは不要（全員がレシーバー候補）
+    if (!this.throwInThrower || !this.throwInPosition) {
       console.warn('[GameScene] スローイン情報が不足しています');
       this.clearThrowInState();
       return;
@@ -982,61 +948,24 @@ export class GameScene {
     // スロワーを外側マスの固定位置に戻す（移動していた場合に備えて）
     this.throwInThrower.setPosition(this.throwInPosition, true); // 外側マスなのでクランプをスキップ
 
-    // レシーバーも固定位置に戻す
-    this.throwInReceiver.setPosition(this.throwInReceiverPosition);
 
-    // スロワーとレシーバーの距離を計算（保存した固定位置を使用）
-    const throwerPos = this.throwInPosition;
-    const receiverPos = this.throwInReceiverPosition;
-    const distance = Math.sqrt(
-      Math.pow(receiverPos.x - throwerPos.x, 2) +
-      Math.pow(receiverPos.z - throwerPos.z, 2)
-    );
+    // 5秒スローイン違反タイマーを開始（ショットクロックではなくフリースロークロック）
+    this.throwInViolationTimer = this.throwInTimeLimit;
+    this.isThrowInViolationTimerRunning = true;
 
-    // スローインでは常にチェストパスを使用
-    // （バウンズパスは物理計算が複雑で問題が起きやすいため）
-    const passType: 'chest' | 'bounce' = 'chest';
-
-    console.log(`[GameScene] スローイン実行: ${passType}パス (距離: ${distance.toFixed(1)}m)`);
-    console.log(`[GameScene] スロワー位置: (${throwerPos.x.toFixed(2)}, ${throwerPos.z.toFixed(2)})`);
-    console.log(`[GameScene] レシーバー位置: (${receiverPos.x.toFixed(2)}, ${receiverPos.z.toFixed(2)})`);
-
-    // パス実行前の状態を確認
-    console.log(`[GameScene] スローインパス実行前: holder=${this.ball.getHolder()?.playerPosition}, inFlight=${this.ball.isInFlight()}`);
-
-    // パスでボールを投げ入れる
-    const passSuccess = this.ball.passWithArc(
-      receiverPos,
-      this.throwInReceiver,
-      passType
-    );
-
-    // パス実行後の状態を確認
-    console.log(`[GameScene] スローインパス実行後: passSuccess=${passSuccess}, holder=${this.ball.getHolder()?.playerPosition}, inFlight=${this.ball.isInFlight()}`);
-    console.log(`[GameScene] パスターゲット: ${this.ball.getPassTarget()?.playerPosition}`);
-
-    if (!passSuccess) {
-      console.error('[GameScene] スローインパスの実行に失敗しました');
-      this.clearThrowInState();
-      return;
-    }
-
-    console.log(`[GameScene] スローインパス実行成功`);
-
-    // シュートクロックをリセット（レシーバーのチームでカウント開始）
+    // シュートクロックは停止したまま（スローインが完了してから再開）
     if (this.shotClockController) {
-      this.shotClockController.reset(this.throwInReceiver.team);
+      this.shotClockController.stop();
     }
 
-    // スロワーとその他のプレイヤーはスローイン状態を維持
-    // （レシーバーがボールを受け取るまで、または一定時間経過まで動かない）
-    // 状態変更は clearAllThrowInCharacterStates() で行われる
+    // スローインロックを解除（新設計では全員がレシーバー候補なのでロック不要）
+    this.ball.clearThrowInLock();
 
-    // スローイン待機状態はクリアするが、スロワーとレシーバー情報は保持
-    // （ボールを受け取るまで全員のスローイン状態を維持するため）
+    // スローイン待機状態はクリアするが、スロワー情報は保持
+    // AIがパスを実行し、誰かがキャッチするまでスロワーは外側マスに固定
     this.isThrowInPending = false;
     this.throwInTimer = 0;
-    // throwInThrower と throwInReceiver はボール受け取りまで保持
+    // throwInThrowerはボール受け取りまで保持（位置固定のため）
   }
 
   /**
@@ -1048,7 +977,9 @@ export class GameScene {
     this.throwInThrower = null;
     this.throwInReceiver = null;
     this.throwInPosition = null;
-    this.throwInReceiverPosition = null;
+    // 5秒違反タイマーもクリア
+    this.isThrowInViolationTimerRunning = false;
+    this.throwInViolationTimer = 0;
     // スローインロックを解除
     this.ball.clearThrowInLock();
     // キャラクターのスローイン状態もクリア
@@ -1057,33 +988,24 @@ export class GameScene {
 
   /**
    * スローイン中のキャラクター位置を強制（衝突判定前に呼び出す）
-   * これにより、レシーバーが正確な位置でボールをキャッチできる
+   * 新設計: スロワーの位置のみ固定、向きはAIが制御
+   * 特定のレシーバーは設定しない（全員がパス対象）
    */
   private enforceThrowInPositions(): void {
     // スローイン待機中の場合
     if (this.isThrowInPending) {
       if (this.throwInThrower && this.throwInPosition) {
+        // 位置のみ固定、向きはAI（OnBallOffenseAI.updateThrowInThrower）が制御
         this.throwInThrower.setPosition(this.throwInPosition, true);
-        if (this.throwInReceiverPosition) {
-          this.throwInThrower.lookAt(this.throwInReceiverPosition);
-        }
       }
-      if (this.throwInReceiver && this.throwInReceiverPosition) {
-        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
-        if (this.throwInPosition) {
-          this.throwInReceiver.lookAt(this.throwInPosition);
-        }
-      }
+      // 新設計: 特定のレシーバー位置固定は不要（全員が自由に動ける）
     }
-    // ボールが飛行中の場合（スローイン実行後）
+    // スローイン実行中の場合（待機終了後）
     else if (this.throwInThrower && this.throwInPosition) {
+      // スロワーの位置のみ固定（向きはAIが制御するので変更しない）
       this.throwInThrower.setPosition(this.throwInPosition, true);
       this.throwInThrower.stopMovement();
-
-      if (this.throwInReceiver && this.throwInReceiverPosition && this.ball.isInFlight()) {
-        this.throwInReceiver.setPosition(this.throwInReceiverPosition);
-        this.throwInReceiver.stopMovement();
-      }
+      // 新設計: 特定のレシーバーは設定しないので、位置固定も不要
     }
   }
 
@@ -1104,17 +1026,6 @@ export class GameScene {
     }
   }
 
-  /**
-   * スローイン待機状態のみクリア（レシーバーは保持）
-   */
-  private clearThrowInPendingState(): void {
-    this.isThrowInPending = false;
-    this.throwInTimer = 0;
-    this.throwInThrower = null;
-    this.throwInPosition = null;
-    this.throwInReceiverPosition = null;
-  }
-
   // ==============================
   // ジャンプボール関連メソッド
   // ==============================
@@ -1124,7 +1035,6 @@ export class GameScene {
    * 両チームからジャンパーを選択し、選手を配置
    */
   private setupJumpBall(): void {
-    console.log('[GameScene] ジャンプボールをセットアップ');
 
     const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
     if (allCharacters.length < 2) {
@@ -1141,7 +1051,6 @@ export class GameScene {
       return;
     }
 
-    console.log(`[GameScene] ジャンパー: 味方=${this.jumpBallAllyJumper.playerPosition}, 敵=${this.jumpBallEnemyJumper.playerPosition}`);
 
     // ジャンパーをセンターサークル中央に配置
     const allyJumperPos = new Vector3(
@@ -1186,14 +1095,12 @@ export class GameScene {
       ballTipped: false,
     };
     this.jumpBallTimer = JUMP_BALL_TIMING.PREPARATION_TIME;
-    this.jumpBallTipReceived = false;
 
     // シュートクロックを停止
     if (this.shotClockController) {
       this.shotClockController.stop();
     }
 
-    console.log('[GameScene] ジャンプボールセットアップ完了、準備中...');
   }
 
   /**
@@ -1324,7 +1231,6 @@ export class GameScene {
         else if (this.jumpBallInfo.ballTipped) {
           const currentBallHeight = this.ball.getPosition().y;
           if (currentBallHeight < 1.0) {
-            console.log('[GameScene] ジャンプボール: ボールが地面付近に落下、通常状態へ移行');
             this.completeJumpBall();
           }
         }
@@ -1336,7 +1242,6 @@ export class GameScene {
    * ジャンプボールのボール投げ上げを実行
    */
   private executeJumpBallToss(): void {
-    console.log('[GameScene] ジャンプボール: ボール投げ上げ');
 
     // ボールを投げ上げる
     const tossPosition = new Vector3(
@@ -1353,7 +1258,6 @@ export class GameScene {
    * ジャンパーにジャンプを指示
    */
   private triggerJumperJumps(): void {
-    console.log('[GameScene] ジャンプボール: ジャンパーがジャンプ');
 
     // 各ジャンパーにジャンプアクションを実行させる
     if (this.jumpBallAllyJumper) {
@@ -1447,14 +1351,12 @@ export class GameScene {
     this.ball.tipBall(tipDirection, JUMP_BALL_PHYSICS.TIP_BALL_SPEED);
     this.jumpBallInfo.ballTipped = true;
 
-    console.log(`[GameScene] ジャンプボール: ${winner}チームがチップ成功`);
   }
 
   /**
    * ジャンプボールを完了
    */
   private completeJumpBall(): void {
-    console.log('[GameScene] ジャンプボール完了');
 
     this.jumpBallInfo.phase = 'completed';
     this.jumpBallInfo.ballTipped = true;
@@ -1826,17 +1728,20 @@ export class GameScene {
     // activeフェーズに入ったらボールを投げるコールバックを設定
     actionController.setCallbacks({
       onActive: (action) => {
+        // ボールを持っていない場合はパスしない
+        if (this.ball.getHolder() !== passer) {
+          return;
+        }
+
         if (action.startsWith('pass_')) {
           // パス先のキャラクターを決定
           let passTarget = target;
           if (!passTarget) {
-            // ターゲット未指定の場合はチームメイトの最初の一人
             const teammates = passer.team === 'ally' ? this.allyCharacters : this.enemyCharacters;
             passTarget = teammates.find(c => c !== passer);
           }
 
           if (passTarget) {
-            // ボールをパス（実際のパス処理）
             const targetPosition = passTarget.getPosition();
             this.ball.pass(targetPosition, passTarget);
           }
@@ -2078,8 +1983,6 @@ export class GameScene {
     const adjustedThrowInZ = throwInWorldPos.z;
 
     // デバッグログ: スローイン位置計算
-    console.log(`[GameScene] calculateThrowInPosition: col=${throwInCell.col}, row=${throwInCell.row}`);
-    console.log(`[GameScene] throwInWorldPos: x=${throwInWorldPos.x.toFixed(2)}, z=${throwInWorldPos.z.toFixed(2)}`);
 
     if (throwInCell.col === '@') {
       // 左サイドライン外側からのスローイン
@@ -2099,7 +2002,6 @@ export class GameScene {
       receiverX = adjustedThrowInX;
       // コート内は-Z方向（z=15.5から減算してz<15にする）
       receiverZ = throwInWorldPos.z - receiverDistance;
-      console.log(`[GameScene] Row 0 分岐: adjustedThrowInX=${adjustedThrowInX.toFixed(2)}, receiverZ=${receiverZ.toFixed(2)}`);
     } else if (throwInCell.row === 31) {
       // 下エンドライン外側からのスローイン（z = -15.5m、負のZ側）
       // ゴールを避けるため、スロワーをサイドライン寄りに配置
@@ -2110,7 +2012,6 @@ export class GameScene {
       receiverX = adjustedThrowInX;
       // コート内は+Z方向（z=-15.5に加算してz>-15にする）
       receiverZ = throwInWorldPos.z + receiverDistance;
-      console.log(`[GameScene] Row 31 分岐: adjustedThrowInX=${adjustedThrowInX.toFixed(2)}, receiverZ=${receiverZ.toFixed(2)}`);
     } else {
       // デフォルト（この分岐に入るとレシーバーとスロワーが同じ位置になる）
       console.warn(`[GameScene] デフォルト分岐に入りました - col=${throwInCell.col}, row=${throwInCell.row}`);
@@ -2118,7 +2019,6 @@ export class GameScene {
       receiverZ = throwInWorldPos.z;
     }
 
-    console.log(`[GameScene] 最終位置: thrower=(${adjustedThrowInX.toFixed(2)}, ${adjustedThrowInZ.toFixed(2)}), receiver=(${receiverX.toFixed(2)}, ${receiverZ.toFixed(2)})`);
 
     // スロワー位置を調整後の座標で更新
     const throwInPosition = new Vector3(adjustedThrowInX, 0, adjustedThrowInZ);
@@ -2176,12 +2076,8 @@ export class GameScene {
     }
 
     // スローイン位置を計算（外側マス対応）
-    const { throwInPosition, throwInCell, receiverPosition } = this.calculateThrowInPosition(ballPosition);
+    const { throwInPosition, receiverPosition } = this.calculateThrowInPosition(ballPosition);
 
-    console.log(`[GameScene] スローイン: 外側マス ${throwInCell.col}${throwInCell.row} から実行`);
-    console.log(`[GameScene] ボール位置: (${ballPosition.x.toFixed(2)}, ${ballPosition.z.toFixed(2)})`);
-    console.log(`[GameScene] スロワー配置位置: (${throwInPosition.x.toFixed(2)}, ${throwInPosition.z.toFixed(2)})`);
-    console.log(`[GameScene] レシーバー配置位置: (${receiverPosition.x.toFixed(2)}, ${receiverPosition.z.toFixed(2)})`);
 
     // スローイン担当者（PGを優先）
     const thrower = throwingTeam.find(c => c.playerPosition === 'PG') || throwingTeam[0];
@@ -2260,7 +2156,6 @@ export class GameScene {
     this.throwInReceiver = receiver;
     // スローイン位置を保存（スロワーが移動しても正しい位置からパスを実行するため）
     this.throwInPosition = throwerPos.clone();
-    this.throwInReceiverPosition = receiverPos.clone();
 
     // スローイン状態を設定
     this.setThrowInStates(thrower, receiver, throwingTeam, defendingTeam);
@@ -2273,10 +2168,13 @@ export class GameScene {
 
   /**
    * スローイン状態を設定
+   * 新設計: THROW_IN_*状態ではなく、通常のON_BALL_PLAYER/OFF_BALL_PLAYER状態を使用
+   * スロワーは外枠の固定位置から移動できないが、向きの変更とパスは可能
+   * 4人のチームメイト全員がパス対象（特定のレシーバーは設定しない）
    */
   private setThrowInStates(
     thrower: Character,
-    receiver: Character,
+    receiver: Character, // 後方互換性のため残すが、新設計では特定のレシーバーは設定しない
     throwingTeam: Character[],
     defendingTeam: Character[]
   ): void {
@@ -2291,32 +2189,50 @@ export class GameScene {
       if (actionController) {
         actionController.cancelAction();
       }
+      // 既存のスローインスロワーフラグをクリア
+      char.setAsThrowInThrower(null);
     }
 
-    // スローワーにTHROW_IN_THROWER状態を設定
-    thrower.setState(CharacterState.THROW_IN_THROWER);
+    // スロワーにON_BALL_PLAYER状態を設定
+    thrower.setState(CharacterState.ON_BALL_PLAYER);
+    // スロワーとして固定位置を設定（移動不可だが向き変更は可能）
+    thrower.setAsThrowInThrower(this.throwInPosition!);
 
-    // レシーバーにTHROW_IN_RECEIVER状態を設定
-    receiver.setState(CharacterState.THROW_IN_RECEIVER);
-
-    // スローワーとレシーバー以外の全員にTHROW_IN_OTHER状態を設定
-    for (const char of [...throwingTeam, ...defendingTeam]) {
-      if (char !== thrower && char !== receiver) {
-        char.setState(CharacterState.THROW_IN_OTHER);
+    // 攻撃チームの他のメンバーはOFF_BALL_PLAYER状態
+    for (const char of throwingTeam) {
+      if (char !== thrower) {
+        char.setState(CharacterState.OFF_BALL_PLAYER);
       }
     }
 
-    // AIにスローイン情報を設定
-    for (const ai of this.characterAIs) {
-      const character = ai.getCharacter();
-      if (character === thrower) {
-        ai.getThrowInThrowerAI().setThrowInPosition(this.throwInPosition!);
-        ai.getThrowInThrowerAI().setReceiver(receiver);
-      } else if (character === receiver) {
-        ai.getThrowInReceiverAI().setWaitPosition(this.throwInReceiverPosition!);
-        ai.getThrowInReceiverAI().setThrower(thrower);
+    // 守備チームはON_BALL_DEFENDER状態（ボール保持者をマーク）
+    // 最も近い選手をON_BALL_DEFENDERに、他はOFF_BALL_DEFENDERに
+    const throwerPos = thrower.getPosition();
+    let closestDefender: Character | null = null;
+    let closestDist = Infinity;
+    for (const char of defendingTeam) {
+      const dist = Vector3.Distance(char.getPosition(), throwerPos);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestDefender = char;
       }
     }
+
+    for (const char of defendingTeam) {
+      if (char === closestDefender) {
+        char.setState(CharacterState.ON_BALL_DEFENDER);
+      } else {
+        char.setState(CharacterState.OFF_BALL_DEFENDER);
+      }
+    }
+
+    // throwInReceiverをnullに設定（特定のレシーバーは不要）
+    // ただし位置制御のために一時的に保持する
+    this.throwInReceiver = null;
+
+    // 新設計: ボールのスローインロックを解除（全チームメイトへのパスを許可）
+    this.ball.clearThrowInLock();
+
   }
 
   /**
@@ -2378,7 +2294,6 @@ export class GameScene {
     // ゴール中心付近の位置（スローイン計算でゴール回避されるため、x=0で良い）
     const throwInBallPosition = new Vector3(0, 0, endLineZ);
 
-    console.log(`[GameScene] ゴール後リセット: ${scoringTeam}チームが得点 → エンドライン(z=${endLineZ.toFixed(1)})からスローイン`);
 
     // スローインで再開（得点したチームが違反扱いでスローイン権を相手に渡す）
     this.executeThrowInReset(scoringTeam, throwInBallPosition);
@@ -2613,6 +2528,20 @@ export class GameScene {
    */
   public getShotClockOffenseTeam(): 'ally' | 'enemy' | null {
     return this.shotClockController?.getCurrentOffenseTeam() ?? null;
+  }
+
+  /**
+   * スローイン残り時間を取得（5秒ルール）
+   */
+  public getThrowInRemainingTime(): number {
+    return Math.max(0, this.throwInViolationTimer);
+  }
+
+  /**
+   * スローイン5秒タイマーが動作中かどうかを取得
+   */
+  public isThrowInTimerRunning(): boolean {
+    return this.isThrowInViolationTimerRunning;
   }
 
   /**
@@ -3336,7 +3265,6 @@ export class GameScene {
     thrower.setState(CharacterState.THROW_IN_THROWER);
     receiver.setState(CharacterState.THROW_IN_RECEIVER);
 
-    console.log(`[GameScene] スローインチェックモード: ${throwerCell.col}${throwerCell.row} → ${receiverCell.col}${receiverCell.row}`);
 
     return { thrower, receiver };
   }
@@ -3395,7 +3323,6 @@ export class GameScene {
       receiver.getPosition().z
     );
 
-    console.log(`[GameScene] スローインテスト実行: 目標位置 (${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
 
     // パスを実行
     return this.ball.passWithArc(targetPosition, receiver, 'chest');

@@ -36,7 +36,6 @@ export class PassCheckController {
   private receiver: Character;
   private defenders: Character[] = [];
   private ball: Ball;
-  private field: Field;
 
   // 設定
   private config: PassCheckConfig;
@@ -66,13 +65,12 @@ export class PassCheckController {
     passer: Character,
     receiver: Character,
     ball: Ball,
-    field: Field,
+    _field: Field,
     config: PassCheckConfig
   ) {
     this.passer = passer;
     this.receiver = receiver;
     this.ball = ball;
-    this.field = field;
     this.config = {
       ...config,
       trialsPerConfig: config.trialsPerConfig ?? PASS_CHECK_TIMING.DEFAULT_TRIALS_PER_CONFIG,
@@ -281,8 +279,6 @@ export class PassCheckController {
     };
 
     this.ball.passWithArc(targetPosition, this.receiver, passTypeMap[passType]);
-
-    console.log(`[PassCheckController] パス実行: ${passType} -> ${this.receiver.playerPosition}`);
   }
 
   /**

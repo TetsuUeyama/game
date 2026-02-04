@@ -23,6 +23,7 @@ import {
 } from "../config/ShootTrajectoryConfig";
 import { ParabolaUtils } from "../utils/parabolaUtils";
 import { SHOOT_RANGE, SHOOT_ANGLE } from "../config/action/ShootingConfig";
+import { normalizeAngle } from "../utils/CollisionUtils";
 
 /**
  * 可視化されたシュートオプション
@@ -45,7 +46,6 @@ export class ShootTrajectoryVisualizer {
   private scene: Scene;
   private ball: Ball;
   private field: Field;
-  private allCharacters: Character[];
 
   // 可視化オプション
   private isEnabled: boolean = true;
@@ -60,12 +60,11 @@ export class ShootTrajectoryVisualizer {
     scene: Scene,
     ball: Ball,
     field: Field,
-    allCharacters: Character[]
+    _allCharacters: Character[]
   ) {
     this.scene = scene;
     this.ball = ball;
     this.field = field;
-    this.allCharacters = allCharacters;
   }
 
   /**
@@ -87,9 +86,10 @@ export class ShootTrajectoryVisualizer {
 
   /**
    * キャラクターリストを更新
+   * 現在未使用 - 将来のブロック判定向け
    */
-  public updateCharacters(allCharacters: Character[]): void {
-    this.allCharacters = allCharacters;
+  public updateCharacters(_allCharacters: Character[]): void {
+    // 将来の実装用
   }
 
   /**
@@ -166,18 +166,13 @@ export class ShootTrajectoryVisualizer {
    */
   private getTargetGoal(shooter: Character): { position: Vector3; rimHeight: number } | null {
     // allyチームはgoal1、enemyチームはgoal2を攻撃
-    const isAlly = shooter.team === 'ally';
-    const rim = isAlly ? this.field.getGoal1Rim() : this.field.getGoal2Rim();
-
-    if (!rim) {
-      return null;
-    }
+    const rimPosition = this.field.getAttackingGoalRim(shooter.team);
 
     return {
       position: new Vector3(
-        rim.position.x,
+        rimPosition.x,
         SHOOT_TRAJECTORY_CONFIG.RIM_HEIGHT,
-        rim.position.z
+        rimPosition.z
       ),
       rimHeight: SHOOT_TRAJECTORY_CONFIG.RIM_HEIGHT,
     };
@@ -223,11 +218,8 @@ export class ShootTrajectoryVisualizer {
     // シューターの向き
     const facingAngle = shooterRotation;
 
-    // 角度差
-    let angleDiff = toGoalAngle - facingAngle;
-    // -PI から PI の範囲に正規化
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+    // 角度差（-PI から PI の範囲に正規化）
+    const angleDiff = normalizeAngle(toGoalAngle - facingAngle);
 
     // シュートタイプに応じた許容角度
     let allowedAngle: number;

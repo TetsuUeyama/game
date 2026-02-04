@@ -223,7 +223,16 @@ export class PassTrajectoryCalculator {
     const validOptions: ValidPassOption[] = [];
     const distance = this.calculateHorizontalDistance(start, target);
 
-    for (const passType of Object.values(PassType)) {
+    // すべてのパスタイプを列挙
+    const allPassTypes: PassType[] = [
+      PassType.CHEST,
+      PassType.BOUNCE,
+      PassType.LOB,
+      PassType.LONG,
+      PassType.ONE_HAND,
+    ];
+
+    for (const passType of allPassTypes) {
       const config = PASS_TYPE_CONFIGS[passType];
 
       // 利き腕チェック
@@ -244,6 +253,7 @@ export class PassTrajectoryCalculator {
           trajectory,
           config,
         });
+      } else {
       }
     }
 

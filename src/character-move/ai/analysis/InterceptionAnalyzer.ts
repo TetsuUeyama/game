@@ -9,11 +9,11 @@ import {
   INTERCEPTION_CONFIG,
   INTERCEPTION_RISK_COLORS,
   getInterceptionRiskLevel,
+  PassType,
 } from "../../config/PassTrajectoryConfig";
 import {
   TrajectoryResult,
   Vec3,
-  PassTrajectoryCalculator,
 } from "../../physics/PassTrajectoryCalculator";
 
 /**
@@ -52,10 +52,8 @@ export interface TrajectoryRiskAnalysis {
  * インターセプト分析クラス
  */
 export class InterceptionAnalyzer {
-  private trajectoryCalculator: PassTrajectoryCalculator;
-
   constructor() {
-    this.trajectoryCalculator = new PassTrajectoryCalculator();
+    // 将来の軌道計算拡張用にPassTrajectoryCalculatorを使用予定
   }
 
   /**
@@ -64,7 +62,9 @@ export class InterceptionAnalyzer {
    * アルゴリズム:
    * 1. ディフェンダーの反応時間 = BASE_REACTION_TIME * (100 / quickness)
    * 2. 到達時間 = 反応時間 + (距離 - インターセプト半径) / 速度
-   * 3. タイミングマージン = ボール到達時間 - ディフェンダー到達時間
+   * 3. タイミングマージン = ディフェンダー到達時間 - ボール到達時間
+   *    - 負: ディフェンダーが先に到達（危険）
+   *    - 正: ボールが先に到達（安全）
    * 4. マージンに基づき確率を算出
    */
   public calculateSingleDefenderRisk(
@@ -91,6 +91,14 @@ export class InterceptionAnalyzer {
     // ディフェンダーの移動速度を計算
     const defenderSpeed = INTERCEPTION_CONFIG.BASE_DEFENDER_SPEED * (speed / 50);
 
+    // バウンスパスの場合、バウンド前はインターセプト不可
+    // バウンドポイントの時間を計算
+    let bounceTime = 0;
+    if (trajectory.passType === PassType.BOUNCE && trajectory.bouncePoint) {
+      // バウンドポイントまでの時間を推定（軌道の半分くらい）
+      bounceTime = trajectory.flightTime * 0.5;
+    }
+
     // 軌道上の各点に対してインターセプト可能性をチェック
     let closestPointOnTrajectory: Vec3 | null = null;
     let minTimeDiff = Infinity;
@@ -98,6 +106,11 @@ export class InterceptionAnalyzer {
     let closestDistance = Infinity;
 
     for (const point of trajectory.points) {
+      // バウンスパスの場合、バウンド前の点はスキップ（インターセプト不可）
+      if (trajectory.passType === PassType.BOUNCE && point.time < bounceTime) {
+        continue;
+      }
+
       // ディフェンダーからこの点までの距離
       const dx = point.position.x - defenderVec.x;
       const dy = point.position.y - defenderVec.y;
@@ -111,8 +124,9 @@ export class InterceptionAnalyzer {
       // ボールがこの点に到達する時間
       const ballArrivalTime = point.time;
 
-      // タイミング差
-      const timeDiff = ballArrivalTime - timeToReachPoint;
+      // タイミング差（ディフェンダー到達時間 - ボール到達時間）
+      // 正 = ボールが先に到達（安全）、負 = ディフェンダーが先に到達（危険）
+      const timeDiff = timeToReachPoint - ballArrivalTime;
 
       // ディフェンダーがボールより先に到達できる（またはほぼ同時）点を探す
       if (Math.abs(timeDiff) < Math.abs(minTimeDiff) || distance < closestDistance) {
@@ -128,24 +142,25 @@ export class InterceptionAnalyzer {
     }
 
     // インターセプト確率を計算
-    // タイミングマージンが負（ディフェンダーが先に到達）なら高確率
-    // タイミングマージンが正（ボールが先に到達）なら低確率
+    // timeDiff = ディフェンダー到達時間 - ボール到達時間
+    // timeDiff < 0: ディフェンダーが先に到達（危険）
+    // timeDiff > 0: ボールが先に到達（安全）
     let probability: number;
 
     if (minTimeDiff <= -0.3) {
-      // ディフェンダーが0.3秒以上早く到達 → 90-100%
+      // ディフェンダーが0.3秒以上早く到達 → 90-100%（非常に危険）
       probability = 0.9 + Math.min(0.1, Math.abs(minTimeDiff) * 0.1);
     } else if (minTimeDiff <= 0) {
-      // ディフェンダーが0-0.3秒早く到達 → 60-90%
+      // ディフェンダーが0-0.3秒早く到達 → 60-90%（危険）
       probability = 0.6 + Math.abs(minTimeDiff) * 1.0;
     } else if (minTimeDiff <= 0.2) {
-      // ボールが0-0.2秒早く到達 → 30-60%
+      // ボールが0-0.2秒早く到達 → 30-60%（やや危険）
       probability = 0.3 + (0.2 - minTimeDiff) * 1.5;
     } else if (minTimeDiff <= 0.5) {
-      // ボールが0.2-0.5秒早く到達 → 10-30%
+      // ボールが0.2-0.5秒早く到達 → 10-30%（やや安全）
       probability = 0.1 + (0.5 - minTimeDiff) * 0.67;
     } else {
-      // ボールが0.5秒以上早く到達 → 0-10%
+      // ボールが0.5秒以上早く到達 → 0-10%（安全）
       probability = Math.max(0, 0.1 - (minTimeDiff - 0.5) * 0.1);
     }
 

@@ -60,10 +60,8 @@ export const FIELD_ANALYSIS_CONFIG = {
  * フィールド分析レイヤー
  */
 export class FieldAnalyzer {
-  private field: Field;
-
-  constructor(field: Field) {
-    this.field = field;
+  constructor(_field: Field) {
+    // 将来のフィールドベース分析用にFieldを使用予定
   }
 
   /**

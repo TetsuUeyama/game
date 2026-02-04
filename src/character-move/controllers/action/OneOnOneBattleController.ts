@@ -38,11 +38,9 @@ export class OneOnOneBattleController {
   private circlesInContact: boolean = false;
 
   // 外部参照
-  private ball: Ball;
   private getAllCharacters: () => Character[];
 
-  constructor(ball: Ball, getAllCharacters: () => Character[]) {
-    this.ball = ball;
+  constructor(_ball: Ball, getAllCharacters: () => Character[]) {
     this.getAllCharacters = getAllCharacters;
   }
 

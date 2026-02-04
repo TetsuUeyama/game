@@ -16,8 +16,6 @@ import { ThrowInBaseAI } from "./ThrowInBaseAI";
  * - ボールを受け取る準備
  */
 export class ThrowInReceiverAI extends ThrowInBaseAI {
-  // 待機位置（外部から設定）
-  private waitPosition: Vector3 | null = null;
   // スローワー（外部から設定）
   private thrower: Character | null = null;
 
@@ -32,9 +30,10 @@ export class ThrowInReceiverAI extends ThrowInBaseAI {
 
   /**
    * 待機位置を設定
+   * 現在未使用 - 将来の実装用に保持
    */
-  public setWaitPosition(position: Vector3): void {
-    this.waitPosition = position;
+  public setWaitPosition(_position: Vector3): void {
+    // 将来の実装用
   }
 
   /**
@@ -48,7 +47,6 @@ export class ThrowInReceiverAI extends ThrowInBaseAI {
    * 状態から出る時のリセット
    */
   public override onExitState(): void {
-    this.waitPosition = null;
     this.thrower = null;
   }
 

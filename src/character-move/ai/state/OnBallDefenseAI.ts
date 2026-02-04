@@ -33,16 +33,9 @@ export class OnBallDefenseAI extends BaseStateAI {
    * （攻めるゴールの逆が守るゴール）
    */
   private getDefendingGoalPosition(): Vector3 {
-    const team = this.character.team;
     // allyチームはgoal1を攻める → goal2を守る
     // enemyチームはgoal2を攻める → goal1を守る
-    if (team === 'ally') {
-      const rim = this.field.getGoal2Rim();
-      return rim.position.clone();
-    } else {
-      const rim = this.field.getGoal1Rim();
-      return rim.position.clone();
-    }
+    return this.field.getDefendingGoalRim(this.character.team);
   }
 
   /**
