@@ -283,8 +283,12 @@ export class ActionController {
    * 状態遷移時など、アクションを完全にクリアしたい場合に使用
    */
   public forceResetAction(): void {
+    // currentActionがある場合はログを出力
     if (this.state.currentAction !== null) {
       console.log(`[ActionController] アクション強制リセット: ${this.state.currentAction} (phase: ${this.state.phase})`);
+    }
+    // currentActionがなくてもphaseがidleでない場合は異常状態なのでリセット
+    if (this.state.currentAction !== null || this.state.phase !== 'idle') {
       this.resetState();
     }
   }

@@ -36,6 +36,20 @@ export abstract class BaseStateAI {
   public abstract update(deltaTime: number): void;
 
   /**
+   * 状態に入った時の処理（サブクラスでオーバーライド可能）
+   */
+  public onEnterState(): void {
+    // デフォルトでは何もしない
+  }
+
+  /**
+   * 状態から出る時の処理（サブクラスでオーバーライド可能）
+   */
+  public onExitState(): void {
+    // デフォルトでは何もしない
+  }
+
+  /**
    * 目標位置に向かって移動
    */
   protected moveTowards(targetPosition: Vector3, deltaTime: number, stopDistance: number = 0.3): void {
