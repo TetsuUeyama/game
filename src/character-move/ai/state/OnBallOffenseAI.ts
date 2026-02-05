@@ -61,6 +61,8 @@ export class OnBallOffenseAI extends BaseStateAI {
 
   // スローインスロワー用の初期化フラグ
   private throwInInitialized: boolean = false;
+  // スローインサーベイ完了フラグ（一度完了したら再実行しない）
+  private throwInSurveyCompleted: boolean = false;
 
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     super(character, ball, allCharacters, field);
@@ -256,6 +258,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     } else if (this.throwInInitialized) {
       // スローインが終了した場合、フラグをリセット
       this.throwInInitialized = false;
+      this.throwInSurveyCompleted = false;
     }
 
     // 周囲確認フェーズの処理（ボールを受け取った直後）
@@ -915,7 +918,8 @@ export class OnBallOffenseAI extends BaseStateAI {
     }
 
     // 周囲確認フェーズの処理（スロー前に周囲を確認）
-    if (this.surveyPhase !== "none") {
+    // サーベイ完了済みの場合はスキップ（onEnterStateでsurveyPhaseがリセットされても再実行しない）
+    if (this.surveyPhase !== "none" && !this.throwInSurveyCompleted) {
       this.updateThrowInSurveyPhase(deltaTime);
       return;
     }
@@ -996,8 +1000,6 @@ export class OnBallOffenseAI extends BaseStateAI {
         // スロワーフラグはCollisionHandlerのupdateCharacterStates()で
         // レシーバーがキャッチした時点で自動的にクリアされる
       }
-    } else if (this.passCooldown > 0) {
-    } else if (!this.passCallback) {
     }
   }
 
@@ -1019,6 +1021,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.surveyPhase = "none";
       this.surveyTimer = 0;
       this.surveyTotalTimer = 0;
+      this.throwInSurveyCompleted = true; // サーベイ完了をマーク
       return;
     }
 
@@ -1069,6 +1072,7 @@ export class OnBallOffenseAI extends BaseStateAI {
           if (this.surveyTimer >= this.SURVEY_FACE_GOAL_DURATION) {
             this.surveyPhase = "none";
             this.surveyTimer = 0;
+            this.throwInSurveyCompleted = true; // サーベイ完了をマーク
             this.character.setRotation(courtAngle);
           }
         }

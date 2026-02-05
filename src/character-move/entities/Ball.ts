@@ -583,8 +583,11 @@ export class Ball {
         this.setKinematic(true);
         this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
-        // ボールが停止したらパスターゲットをクリア（パス失敗確定）
-        this.clearPassTarget();
+        // 注意: ここではpassTargetをクリアしない
+        // 理由: ball.update()がcollisionHandler.update()より先に実行されるため、
+        // ここでpassTargetをクリアすると、BallCatchSystemでレシーバーが
+        // THROW_INシナリオとして認識されず、キャッチに失敗する可能性がある。
+        // passTargetはルーズボール時のupdate()（speed < 0.3）でクリアされる。
       }
     }
   }

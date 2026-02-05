@@ -62,13 +62,6 @@ export class BallCatchSystem {
       return null;
     }
 
-    // DEBUG: パスターゲットの状態
-    const passTarget = this.ball.getPassTarget();
-    const lastToucher = this.ball.getLastToucher();
-    if (passTarget || (lastToucher && lastToucher.getIsThrowInThrower())) {
-      console.log(`[BallCatchSystem] update - passTarget: ${passTarget?.playerData?.basic?.NAME ?? 'null'}, isThrowIn: ${lastToucher?.getIsThrowInThrower() ?? false}`);
-    }
-
     // キャッチ候補者を収集
     const candidates = this.collectCatchCandidates();
 
@@ -171,14 +164,11 @@ export class BallCatchSystem {
     ballPosition: Vector3
   ): CatchScenario | null {
     const passTarget = this.ball.getPassTarget();
-    const isPassTarget = passTarget === character;
+    // playerPositionで比較（オブジェクト参照が異なる場合でも正しく判定）
+    const isPassTarget = passTarget !== null &&
+      passTarget.playerPosition === character.playerPosition;
     const lastToucher = this.ball.getLastToucher();
     const isThrowIn = lastToucher && lastToucher.getIsThrowInThrower();
-
-    // DEBUG: スローイン時のシナリオ判定
-    if (isThrowIn && isPassTarget) {
-      console.log(`[BallCatchSystem] THROW_IN passTarget detected: ${character.playerData?.basic?.NAME ?? 'unknown'}`);
-    }
 
     // バウンスパス保護: バウンド前はパスターゲットのみがキャッチ可能
     if (this.ball.getIsBouncePass() && !this.ball.getHasBounced() && !isPassTarget) {
@@ -187,7 +177,8 @@ export class BallCatchSystem {
 
     // スローイン保護: スローイン中はパスターゲットのみがキャッチ可能
     // （他のプレイヤーがボールを弾くのを防ぐ）
-    if (isThrowIn && !isPassTarget) {
+    // passTargetがnullの場合は保護をスキップ（ルーズボールとして処理）
+    if (isThrowIn && passTarget && !isPassTarget) {
       return null;
     }
 
@@ -195,7 +186,6 @@ export class BallCatchSystem {
     if (isPassTarget) {
       // スローインの場合はTHROW_INシナリオを使用（より広い判定距離）
       if (isThrowIn) {
-        console.log(`[BallCatchSystem] Using THROW_IN scenario for ${character.playerData?.basic?.NAME ?? 'unknown'}`);
         return CatchScenario.THROW_IN;
       }
       return CatchScenario.PASS_TARGET;
@@ -254,14 +244,6 @@ export class BallCatchSystem {
 
       const isNearBody = distanceToBody < nearBodyThreshold;
       const isNearHand = distanceToHand < nearHandThreshold;
-
-      // DEBUG: スローイン時のキャッチ判定
-      if (config.scenario === CatchScenario.THROW_IN) {
-        console.log(`[BallCatchSystem] THROW_IN catch check: ${character.playerData?.basic?.NAME ?? 'unknown'}`);
-        console.log(`  distanceToBody: ${distanceToBody.toFixed(2)}m (threshold: ${nearBodyThreshold.toFixed(2)}m)`);
-        console.log(`  distanceToHand: ${distanceToHand.toFixed(2)}m (threshold: ${nearHandThreshold.toFixed(2)}m)`);
-        console.log(`  isNearBody: ${isNearBody}, isNearHand: ${isNearHand}`);
-      }
 
       if (isNearBody || isNearHand) {
         return this.executeCatch(character, config.scenario, ballPosition);
@@ -358,9 +340,6 @@ export class BallCatchSystem {
     handPosition: Vector3,
     ballPosition: Vector3
   ): void {
-    // DEBUG: ファンブル発生時のログ
-    console.log(`[BallCatchSystem] FUMBLE by ${character.playerData?.basic?.NAME ?? 'unknown'}`);
-
     // ボールが物理モードでない場合はスキップ
     if (!this.ball.isPhysicsEnabled()) {
       return;
@@ -454,8 +433,8 @@ export class BallCatchSystem {
       return false;
     }
 
-    // パスターゲット自身は通常のパスターゲット処理で扱う
-    if (character === passTarget) {
+    // パスターゲット自身は通常のパスターゲット処理で扱う（playerPositionで比較）
+    if (character.playerPosition === passTarget.playerPosition) {
       return false;
     }
 
