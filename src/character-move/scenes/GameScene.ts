@@ -2009,10 +2009,19 @@ export class GameScene {
       return;
     }
 
+    // ルーズボール状態の場合、最後に触った選手のチームを違反チームとする
+    let actualOffendingTeam = offendingTeam;
+    if (!this.ball.getHolder()) {
+      const lastToucher = this.ball.getLastToucher();
+      if (lastToucher) {
+        actualOffendingTeam = lastToucher.team;
+      }
+    }
+
     // リセット待機状態を設定
     this.pendingShotClockViolationReset = true;
     this.shotClockViolationResetTimer = this.shotClockViolationResetDelay;
-    this.shotClockViolatingTeam = offendingTeam;
+    this.shotClockViolatingTeam = actualOffendingTeam;
     this.shotClockViolationBallPosition = ballPosition.clone();
   }
 

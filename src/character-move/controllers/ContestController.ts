@@ -2,6 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CONTEST_CONFIG, ContestStatType } from "../config/ContestConfig";
+import { FieldGridUtils } from "../config/FieldGridConfig";
 
 // 設定をre-export（既存のインポートを壊さないため）
 export { CONTEST_CONFIG };
@@ -91,6 +92,7 @@ export class ContestController {
 
   /**
    * 指定したステータスタイプの値を取得
+   * ディフェンスの場合は位置係数を適用（自軍ゴールに近いほど高い）
    */
   private getStatValue(character: Character, statType: ContestStatType): number {
     const stats = character.playerData?.stats;
@@ -100,7 +102,9 @@ export class ContestController {
       case 'offense':
         return stats.offense ?? 50;
       case 'defense':
-        return stats.defense ?? 50;
+        // ディフェンス値に位置係数を適用
+        const baseDefense = stats.defense ?? 50;
+        return FieldGridUtils.applyDefenseCoefficient(baseDefense, character.getPosition().z, character.team);
       case 'power':
         return stats.power ?? 50;
       case 'speed':

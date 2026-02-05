@@ -31,6 +31,7 @@ import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "../utils/CollisionUtils";
+import { FieldGridUtils } from "../config/FieldGridConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -1788,10 +1789,14 @@ export class Character {
     if (isOffense) {
       // 自分がオフェンス → 自分のオフェンス能力 vs 相手のディフェンス能力
       myStrength = this.playerData?.stats.offense ?? 50;
-      otherStrength = other.playerData?.stats.defense ?? 50;
+      // 相手のディフェンス値に位置係数を適用（自軍ゴールに近いほど高い）
+      const otherBaseDefense = other.playerData?.stats.defense ?? 50;
+      otherStrength = FieldGridUtils.applyDefenseCoefficient(otherBaseDefense, other.getPosition().z, other.team);
     } else {
       // 自分がディフェンス → 自分のディフェンス能力 vs 相手のオフェンス能力
-      myStrength = this.playerData?.stats.defense ?? 50;
+      // 自分のディフェンス値に位置係数を適用（自軍ゴールに近いほど高い）
+      const myBaseDefense = this.playerData?.stats.defense ?? 50;
+      myStrength = FieldGridUtils.applyDefenseCoefficient(myBaseDefense, this.getPosition().z, this.team);
       otherStrength = other.playerData?.stats.offense ?? 50;
     }
 

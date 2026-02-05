@@ -136,6 +136,34 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
+   * 全内部状態を強制リセット
+   * リセット処理（センターサークル再開等）で使用
+   */
+  public forceReset(): void {
+    // クールダウンをリセット
+    this.shootCooldown = 0;
+    this.feintCooldown = 0;
+    this.passCooldown = 0;
+
+    // 目標位置オーバーライドをクリア
+    this.targetPositionOverride = null;
+
+    // パスレーン調整状態をリセット
+    this.passLaneAdjustmentTarget = null;
+    this.passLaneAdjustmentTimer = 0;
+
+    // 周囲確認フェーズを完全にリセット
+    this.surveyPhase = "none";
+    this.surveyTimer = 0;
+    this.surveyTotalTimer = 0;
+    this.surveyStartRotation = 0;
+
+    // スローイン関連をリセット
+    this.throwInInitialized = false;
+    this.throwInSurveyCompleted = false;
+  }
+
+  /**
    * 状態から離れる時のリセット処理
    * ON_BALL_PLAYERから別の状態になる時に呼ばれる
    */
