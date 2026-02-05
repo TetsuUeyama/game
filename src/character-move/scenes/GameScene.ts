@@ -1929,7 +1929,8 @@ export class GameScene {
 
   /**
    * アウトオブバウンズ後のリセット処理
-   * 最後にボールに触れた選手の相手チームがサイドラインからスローイン
+   * - サイドライン（X方向）：スローインで再開
+   * - エンドライン（Z方向）：ゴール下で相手チームボール保持で再開
    */
   private resetAfterOutOfBounds(): void {
     const lastToucher = this.ball.getLastToucher();
@@ -1944,8 +1945,21 @@ export class GameScene {
     const ballPosition = this.outOfBoundsBallPosition || this.ball.getPosition();
     this.outOfBoundsBallPosition = null;
 
-    // サイドラインスローインで再開
-    this.executeThrowInReset(offendingTeam, ballPosition);
+    // どの境界を越えたか判定
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 14m
+    const isOutX = Math.abs(ballPosition.x) > halfWidth;
+    const isOutZ = Math.abs(ballPosition.z) > halfLength;
+
+    if (isOutZ) {
+      // エンドライン（ゴールサイドライン）からのアウトオブバウンズ
+      // → ゴール下で相手チームボール保持で再開
+      this.executeGoalUnderReset(offendingTeam);
+    } else if (isOutX) {
+      // サイドラインからのアウトオブバウンズ
+      // → スローインで再開
+      this.executeThrowInReset(offendingTeam, ballPosition);
+    }
   }
 
   /**
@@ -2122,9 +2136,12 @@ export class GameScene {
     // スローイン状態をクリア
     this.clearThrowInState();
 
-    // 全キャラクターのバランスをリセット
+    // 全キャラクターのバランス・速度・アクションをリセット
     for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
       character.resetBalance();
+      character.velocity = Vector3.Zero();
+      character.clearAIMovement();
+      character.getActionController().forceResetAction();
     }
 
     // ボールを保持するチーム（offendingTeamの相手）
@@ -2185,6 +2202,11 @@ export class GameScene {
 
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
     this.collisionHandler?.updateStates();
+
+    // 全AIを強制初期化（前回の行動や状態を完全にクリア）
+    for (const ai of this.characterAIs) {
+      ai.forceInitialize();
+    }
   }
 
   /**
@@ -2385,6 +2407,14 @@ export class GameScene {
       return;
     }
 
+    // 全キャラクターのバランス・速度・アクションをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+      character.velocity = Vector3.Zero();
+      character.clearAIMovement();
+      character.getActionController().forceResetAction();
+    }
+
     const ballHolder = receivingTeam[0];
 
     const circleRadius = this.field.getCenterCircleRadius();
@@ -2408,6 +2438,11 @@ export class GameScene {
 
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
     this.collisionHandler?.updateStates();
+
+    // 全AIを強制初期化（前回の行動や状態を完全にクリア）
+    for (const ai of this.characterAIs) {
+      ai.forceInitialize();
+    }
   }
 
   /**
@@ -2444,9 +2479,12 @@ export class GameScene {
     // スローイン状態をクリア
     this.clearThrowInState();
 
-    // 全キャラクターのバランスをリセット
+    // 全キャラクターのバランス・速度・アクションをリセット
     for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
       character.resetBalance();
+      character.velocity = Vector3.Zero();
+      character.clearAIMovement();
+      character.getActionController().forceResetAction();
     }
 
     // ボールを保持するチーム（offendingTeamの相手）
@@ -2513,6 +2551,11 @@ export class GameScene {
 
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
     this.collisionHandler?.updateStates();
+
+    // 全AIを強制初期化（前回の行動や状態を完全にクリア）
+    for (const ai of this.characterAIs) {
+      ai.forceInitialize();
+    }
   }
 
   /**
