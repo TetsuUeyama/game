@@ -196,6 +196,9 @@ export class CharacterAI {
     // モーションをアイドルに
     this.character.playMotion(IDLE_MOTION);
 
+    // 各状態AIの内部状態をリセット
+    this.onBallOffenseAI.forceReset();
+
     // 状態に応じた初期化を実行
     if (state === CharacterState.ON_BALL_PLAYER) {
       this.onBallOffenseAI.onEnterState();

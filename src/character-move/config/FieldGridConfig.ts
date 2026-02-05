@@ -383,6 +383,52 @@ export class FieldGridUtils {
   }
 
   /**
+   * 位置に応じたディフェンス係数を取得
+   * 自軍ゴール付近で100%、相手ゴール付近で10%
+   * 行番号（row）に基づいて線形補間
+   *
+   * @param z キャラクターのZ座標
+   * @param team キャラクターのチーム（'ally' | 'enemy'）
+   * @returns ディフェンス係数（0.1〜1.0）
+   *
+   * ally: 自軍ゴールは-Z側 → row 1で100%、row 30で10%
+   * enemy: 自軍ゴールは+Z側 → row 30で100%、row 1で10%
+   */
+  static getDefenseCoefficient(z: number, team: 'ally' | 'enemy'): number {
+    const MIN_COEFFICIENT = 0.1;  // 10%
+    const MAX_COEFFICIENT = 1.0;  // 100%
+
+    // Z座標を0-1の範囲に正規化（-15mで0、+15mで1）
+    const normalizedZ = (z + this.halfLength) / (this.halfLength * 2);
+    const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+
+    // ally: Z小さい（自軍ゴール側）= 高い係数、Z大きい（相手ゴール側）= 低い係数
+    // enemy: Z大きい（自軍ゴール側）= 高い係数、Z小さい（相手ゴール側）= 低い係数
+    let coefficient: number;
+    if (team === 'ally') {
+      // ally: clampedZ=0で1.0、clampedZ=1で0.1
+      coefficient = MAX_COEFFICIENT - (MAX_COEFFICIENT - MIN_COEFFICIENT) * clampedZ;
+    } else {
+      // enemy: clampedZ=0で0.1、clampedZ=1で1.0
+      coefficient = MIN_COEFFICIENT + (MAX_COEFFICIENT - MIN_COEFFICIENT) * clampedZ;
+    }
+
+    return coefficient;
+  }
+
+  /**
+   * ディフェンス値に位置係数を適用
+   * @param baseDefense 基本ディフェンス値
+   * @param z キャラクターのZ座標
+   * @param team キャラクターのチーム
+   * @returns 位置係数を適用したディフェンス値
+   */
+  static applyDefenseCoefficient(baseDefense: number, z: number, team: 'ally' | 'enemy'): number {
+    const coefficient = this.getDefenseCoefficient(z, team);
+    return baseDefense * coefficient;
+  }
+
+  /**
    * ボールがアウトオブバウンズになった位置から、スローイン用の外側マスを取得
    * @param ballOutX ボールがコート外に出た時のX座標
    * @param ballOutZ ボールがコート外に出た時のZ座標
