@@ -343,6 +343,13 @@ export class GameScene {
         }
       }
 
+      // 全AIコントローラーにShotClockControllerを設定
+      if (this.shotClockController) {
+        for (const ai of this.characterAIs) {
+          ai.setShotClockController(this.shotClockController);
+        }
+      }
+
       // 全AIコントローラーにパスコールバックを設定
       for (const ai of this.characterAIs) {
         ai.setPassCallback((passer, target, passType) => {
@@ -2209,8 +2216,15 @@ export class GameScene {
       this.shotClockController.reset(ballHandler.team);
     }
 
+    // 1on1バトルコントローラーをリセット（接触状態やバトル状態をクリア）
+    if (this.oneOnOneBattleController) {
+      this.oneOnOneBattleController.forceReset();
+    }
+
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
-    this.collisionHandler?.updateStates();
+    if (this.collisionHandler) {
+      this.collisionHandler.updateStates();
+    }
 
     // 全AIを強制初期化（前回の行動や状態を完全にクリア）
     for (const ai of this.characterAIs) {
@@ -2445,8 +2459,15 @@ export class GameScene {
       this.shotClockController.reset(ballHolder.team);
     }
 
+    // 1on1バトルコントローラーをリセット（接触状態やバトル状態をクリア）
+    if (this.oneOnOneBattleController) {
+      this.oneOnOneBattleController.forceReset();
+    }
+
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
-    this.collisionHandler?.updateStates();
+    if (this.collisionHandler) {
+      this.collisionHandler.updateStates();
+    }
 
     // 全AIを強制初期化（前回の行動や状態を完全にクリア）
     for (const ai of this.characterAIs) {
@@ -2558,8 +2579,15 @@ export class GameScene {
       this.shotClockController.reset(ballHandler.team);
     }
 
+    // 1on1バトルコントローラーをリセット（接触状態やバトル状態をクリア）
+    if (this.oneOnOneBattleController) {
+      this.oneOnOneBattleController.forceReset();
+    }
+
     // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
-    this.collisionHandler?.updateStates();
+    if (this.collisionHandler) {
+      this.collisionHandler.updateStates();
+    }
 
     // 全AIを強制初期化（前回の行動や状態を完全にクリア）
     for (const ai of this.characterAIs) {
@@ -3039,6 +3067,11 @@ export class GameScene {
         // FeintControllerを設定
         if (this.feintController) {
           ai.setFeintController(this.feintController);
+        }
+
+        // ShotClockControllerを設定
+        if (this.shotClockController) {
+          ai.setShotClockController(this.shotClockController);
         }
 
         // パスコールバックを設定

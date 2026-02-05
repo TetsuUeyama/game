@@ -5,6 +5,7 @@ import {Field} from "../../entities/Field";
 import {BaseStateAI} from "./BaseStateAI";
 import {ShootingController} from "../../controllers/action/ShootingController";
 import {FeintController} from "../../controllers/action/FeintController";
+import {ShotClockController} from "../../controllers/ShotClockController";
 import {SHOOT_COOLDOWN, ShootingUtils} from "../../config/action/ShootingConfig";
 import {DefenseUtils} from "../../config/DefenseConfig";
 import {PASS_COOLDOWN, PassUtils} from "../../config/PassConfig";
@@ -29,7 +30,11 @@ export type PassCallback = (passer: Character, target: Character, passType: "pas
 export class OnBallOffenseAI extends BaseStateAI {
   private shootingController: ShootingController | null = null;
   private feintController: FeintController | null = null;
+  private shotClockController: ShotClockController | null = null;
   private passCallback: PassCallback | null = null;
+
+  // シュートクロック残り時間の閾値（この秒数以下でシュート優先）
+  private readonly SHOT_CLOCK_URGENT_THRESHOLD: number = 5.0;
 
   // シュートクールダウン（連続シュート防止）
   private shootCooldown: number = 0;
@@ -64,6 +69,12 @@ export class OnBallOffenseAI extends BaseStateAI {
   // スローインサーベイ完了フラグ（一度完了したら再実行しない）
   private throwInSurveyCompleted: boolean = false;
 
+  // アイドル時間追跡（静止状態が続いた場合に強制行動）
+  private idleTimer: number = 0;
+  private lastPosition: Vector3 | null = null;
+  private readonly IDLE_FORCE_ACTION_THRESHOLD: number = 3.0; // 3秒以上静止で強制行動
+  private readonly IDLE_POSITION_THRESHOLD: number = 0.1; // この距離以下の移動は静止とみなす
+
   constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
     super(character, ball, allCharacters, field);
     this.trajectoryCalculator = new PassTrajectoryCalculator();
@@ -82,6 +93,13 @@ export class OnBallOffenseAI extends BaseStateAI {
    */
   public setFeintController(controller: FeintController): void {
     this.feintController = controller;
+  }
+
+  /**
+   * ShotClockControllerを設定
+   */
+  public setShotClockController(controller: ShotClockController): void {
+    this.shotClockController = controller;
   }
 
   /**
@@ -124,6 +142,10 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.surveyTimer = 0;
     this.surveyTotalTimer = 0;
     this.surveyStartRotation = this.character.getRotation();
+
+    // アイドル時間追跡をリセット
+    this.idleTimer = 0;
+    this.lastPosition = null;
   }
 
   /**
@@ -161,6 +183,10 @@ export class OnBallOffenseAI extends BaseStateAI {
     // スローイン関連をリセット
     this.throwInInitialized = false;
     this.throwInSurveyCompleted = false;
+
+    // アイドル時間追跡をリセット
+    this.idleTimer = 0;
+    this.lastPosition = null;
   }
 
   /**
@@ -177,6 +203,9 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.surveyPhase = "none";
     this.surveyTimer = 0;
     this.surveyTotalTimer = 0;
+    // アイドル時間追跡をリセット
+    this.idleTimer = 0;
+    this.lastPosition = null;
   }
 
   /**
@@ -307,6 +336,17 @@ export class OnBallOffenseAI extends BaseStateAI {
       return; // 周囲確認中は他の行動をしない
     }
 
+    // アイドル時間追跡の更新
+    this.updateIdleTracking(deltaTime);
+
+    // 3秒以上静止状態の場合は強制行動
+    if (this.idleTimer >= this.IDLE_FORCE_ACTION_THRESHOLD) {
+      if (this.tryForceActionWhenIdle()) {
+        this.idleTimer = 0; // 行動後はリセット
+        return;
+      }
+    }
+
     // フェイント成功後のドリブル突破ウィンドウ内ならドリブル突破を試みる
     if (this.feintController && this.feintController.isInBreakthroughWindow(this.character)) {
       if (this.tryBreakthroughAfterFeint()) {
@@ -324,6 +364,13 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (toGoal.length() > 0.01) {
       const goalAngle = Math.atan2(toGoal.x, toGoal.z);
       this.character.setRotation(goalAngle);
+    }
+
+    // シュートクロック残り時間が少ない場合は最優先でシュートを試みる
+    if (!this.targetPositionOverride && this.isShotClockUrgent()) {
+      if (this.tryShoot()) {
+        return;
+      }
     }
 
     // 目の前にディフェンダーがいるかチェック
@@ -352,7 +399,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
     }
 
-    // ディフェンダーがいない場合
+    // ディフェンダーがいない場合 → 積極的に前進
 
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     // 目標位置オーバーライド時はシュートしない
@@ -366,9 +413,30 @@ export class OnBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // 目標位置に向かって移動（境界チェック付き、向きはゴール方向を維持）
-    const stopDistance = this.targetPositionOverride ? 0.5 : 2.0; // オーバーライド時は目標近くまで行く
-    this.moveTowardsWithBoundary(targetPosition, deltaTime, stopDistance, true); // keepRotation=true
+    // ディフェンダーがいないので、積極的に前進（衝突チェックなしで移動）
+    const distanceToTarget = toGoal.length();
+    const stopDistance = this.targetPositionOverride ? 0.5 : 2.0;
+
+    if (distanceToTarget > stopDistance) {
+      // ダッシュモーションで前進
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      // 境界チェックのみ行う（他キャラクターとの衝突はチェックしない）
+      const direction = toGoal.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        // 全速力でダッシュ
+        this.character.move(boundaryAdjusted, deltaTime);
+      }
+    } else {
+      // 目標に近い場合はアイドル
+      if (this.character.getCurrentMotionName() !== "idle") {
+        this.character.playMotion(IDLE_MOTION);
+      }
+    }
   }
 
   /**
@@ -386,6 +454,13 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // 目標への方向ベクトル（update()で既に向きは設定済み）
     const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+
+    // シュートクロック残り時間が少ない場合は最優先でシュートを試みる
+    if (!this.targetPositionOverride && this.isShotClockUrgent()) {
+      if (this.tryShoot()) {
+        return;
+      }
+    }
 
     // 1on1状態: まずパスを試みる（ポジションに応じた判定）
     // ただし目標位置オーバーライド時はパスしない（1on1テスト用）
@@ -424,22 +499,22 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
       // 5%: 様子見
     } else {
-      // シュートレンジ外：移動優先
-      if (actionChoice < 0.2) {
-        // 20%: フェイント
+      // シュートレンジ外：積極的に前進
+      if (actionChoice < 0.05) {
+        // 5%: フェイント
         if (this.tryFeint()) {
           return;
         }
-      } else if (actionChoice < 0.45) {
-        // 25%: ドリブル突破
+      } else if (actionChoice < 0.15) {
+        // 10%: ドリブル突破
         if (this.tryDribbleMove()) {
           return;
         }
       }
-      // 55%: 移動（ゴールに近づく）
+      // 85%: 積極的に前進（相手を押し下げる）
     }
 
-    // 1on1中も少し動く（目標方向に向かいながら）
+    // 1on1中も積極的に前進（目標方向に向かいながら相手を押し下げる）
     const distanceToTarget = toTarget.length();
 
     if (distanceToTarget > 0.5) {
@@ -454,8 +529,11 @@ export class OnBallOffenseAI extends BaseStateAI {
           moveDirection = adjustedDirection;
         }
       }
-      // ゆっくり移動（通常速度の50%）
-      this.character.move(moveDirection.scale(0.5), deltaTime);
+      // シュートレンジ内外で速度を変える
+      // シュートレンジ外：積極的に前進（通常速度の90%）
+      // シュートレンジ内：やや控えめ（通常速度の60%）
+      const moveSpeed = inShootRange ? 0.6 : 0.9;
+      this.character.move(moveDirection.scale(moveSpeed), deltaTime);
     } else {
     }
   }
@@ -1162,6 +1240,81 @@ export class OnBallOffenseAI extends BaseStateAI {
         this.character.move(adjustedDirection.scale(0.6), deltaTime);
         return true;
       }
+    }
+
+    return false;
+  }
+
+  /**
+   * シュートクロック残り時間が少ないかどうかを判定
+   * @returns 残り時間が閾値以下ならtrue
+   */
+  private isShotClockUrgent(): boolean {
+    if (!this.shotClockController) {
+      return false;
+    }
+
+    const remainingTime = this.shotClockController.getRemainingTime();
+    return remainingTime <= this.SHOT_CLOCK_URGENT_THRESHOLD;
+  }
+
+  /**
+   * アイドル時間追跡の更新
+   * 位置がほぼ変わっていない場合にアイドル時間を加算
+   */
+  private updateIdleTracking(deltaTime: number): void {
+    const currentPosition = this.character.getPosition();
+
+    if (this.lastPosition) {
+      const distance = Vector3.Distance(currentPosition, this.lastPosition);
+      if (distance < this.IDLE_POSITION_THRESHOLD) {
+        // 静止状態
+        this.idleTimer += deltaTime;
+      } else {
+        // 移動中
+        this.idleTimer = 0;
+      }
+    }
+
+    // 現在位置を記録
+    this.lastPosition = currentPosition.clone();
+  }
+
+  /**
+   * 3秒以上静止状態の場合に強制的に行動を選択
+   * 優先順位: シュート > パス > ドリブル突破
+   * @returns 行動を実行した場合true
+   */
+  private tryForceActionWhenIdle(): boolean {
+    // シュートを試みる（目標位置オーバーライド時以外）
+    if (!this.targetPositionOverride && this.tryShoot()) {
+      return true;
+    }
+
+    // パスを試みる（目標位置オーバーライド時以外）
+    if (!this.targetPositionOverride && this.tryPass()) {
+      return true;
+    }
+
+    // ドリブル突破を試みる
+    if (this.tryDribbleMove()) {
+      return true;
+    }
+
+    // どの行動も実行できなかった場合、目標に向かってダッシュ
+    const targetPosition = this.getTargetPosition();
+    const myPosition = this.character.getPosition();
+    const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+
+    if (toTarget.length() > 0.5) {
+      // ダッシュモーションで前進
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      const direction = toTarget.normalize();
+      this.character.move(direction, 0.016); // 1フレーム分移動
+      return true;
     }
 
     return false;

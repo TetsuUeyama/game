@@ -5,6 +5,7 @@ import { CharacterState } from "../types/CharacterState";
 import { Field } from "../entities/Field";
 import { ShootingController } from "./action/ShootingController";
 import { FeintController } from "./action/FeintController";
+import { ShotClockController } from "./ShotClockController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
 import { IDLE_MOTION } from "../motion/IdleMotion";
@@ -89,6 +90,13 @@ export class CharacterAI {
    */
   public setFeintController(controller: FeintController): void {
     this.onBallOffenseAI.setFeintController(controller);
+  }
+
+  /**
+   * ShotClockControllerを設定
+   */
+  public setShotClockController(controller: ShotClockController): void {
+    this.onBallOffenseAI.setShotClockController(controller);
   }
 
   /**
@@ -197,18 +205,12 @@ export class CharacterAI {
     this.character.playMotion(IDLE_MOTION);
 
     // 各状態AIの内部状態をリセット
+    // forceReset()は surveyPhase = "none" に設定するので、サーベイをスキップして即座に行動開始
     this.onBallOffenseAI.forceReset();
 
-    // 状態に応じた初期化を実行
-    if (state === CharacterState.ON_BALL_PLAYER) {
-      this.onBallOffenseAI.onEnterState();
-    } else if (state === CharacterState.OFF_BALL_PLAYER) {
-      // OFF_BALL_PLAYERは特別な初期化不要
-    } else if (state === CharacterState.ON_BALL_DEFENDER) {
-      // ON_BALL_DEFENDERは特別な初期化不要
-    } else if (state === CharacterState.OFF_BALL_DEFENDER) {
-      // OFF_BALL_DEFENDERは特別な初期化不要
-    }
+    // 注意: onEnterState()は呼ばない
+    // onEnterState()はサーベイを開始するため、強制リセット時には不要
+    // forceReset()で全ての必要な初期化が完了している
   }
 
   /**
