@@ -38,9 +38,11 @@ export class OneOnOneBattleController {
   private circlesInContact: boolean = false;
 
   // 外部参照
+  private ball: Ball;
   private getAllCharacters: () => Character[];
 
-  constructor(_ball: Ball, getAllCharacters: () => Character[]) {
+  constructor(ball: Ball, getAllCharacters: () => Character[]) {
+    this.ball = ball;
     this.getAllCharacters = getAllCharacters;
   }
 
@@ -599,16 +601,10 @@ export class OneOnOneBattleController {
 
   /**
    * オンボールプレイヤーを探す
+   * Ball.getHolder() を使用してボール保持者を取得
    */
   public findOnBallPlayer(): Character | null {
-    const allCharacters = this.getAllCharacters();
-    for (const char of allCharacters) {
-      const state = char.getState();
-      if (state === "ON_BALL_PLAYER") {
-        return char;
-      }
-    }
-    return null;
+    return this.ball.getHolder();
   }
 
   /**

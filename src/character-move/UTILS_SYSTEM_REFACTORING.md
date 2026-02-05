@@ -179,44 +179,56 @@ public getDefendingBackboard(team: 'ally' | 'enemy'): Vector3 {
 
 ## Phase 2: 中優先度
 
-### 4. [ ] 距離計算の統一（CollisionUtils使用への置き換え）
+### 4. [x] 距離計算の統一（CollisionUtils使用への置き換え） ✅
 **対象**: 手動で `Math.sqrt(dx*dx + dz*dz)` を使用している箇所
 
 **置き換え先**:
-- `getDistance2D(pos1, pos2)` - 2D距離
-- `getDistance3D(pos1, pos2)` - 3D距離
+- `getDistance2D(pos1, pos2)` - 2D距離（Vector3型用）
+- `getDistance3D(pos1, pos2)` - 3D距離（Vector3型用）
+- `getDistance2DSimple(pos1, pos2)` - 2D距離（`{ x: number; z: number }` 型用）
 
-**置き換え対象ファイル**（23箇所以上、主要なもの）:
-- [ ] ShootTrajectoryVisualizer.ts:192
-- [ ] Character.ts:1225
-- [ ] OnBallOffenseAI.ts:505
-- [ ] OffBallOffenseAI.ts:443, 648, 994
-- [ ] PassTrajectoryCalculator.ts:173, 289
-- [ ] DefenseConfig.ts:314
-- [ ] PassTrajectoryConfig.ts:179
+**完了**（2026-02-05）:
+- [x] ShootTrajectoryVisualizer.ts - getDistance2D使用
+- [x] BallCatchSystem.ts - 独自関数を削除、CollisionUtilsからインポート
+- [x] OnBallOffenseAI.ts:495 - getDistance2D使用
+- [x] GameScene.ts:1305, 3164 - getDistance2D使用
+- [x] OffBallOffenseAI.ts:644, 944 - getDistance2DSimple使用
+- [x] OnBallOffenseAI.ts:781 - getDistance2DSimple使用
+- [x] DefenseConfig.ts:314 - getDistance2DSimple使用
+- [x] PassTrajectoryConfig.ts:181 - getDistance2DSimple使用
+- [x] PassConfig.ts:38 - getDistance2DSimple使用
+- [x] BaseStateAI.ts:238, 464, 476 - getDistance2DSimple使用
+
+**対象外**（そのまま維持）:
+- CollisionUtils.ts - 関数の実装自体
+- OffBallOffenseAI.ts:441 - グリッド検索のループ変数（位置間距離ではない）
+- parabolaUtils.ts, PassTrajectoryCalculator.ts - 内部ユーティリティ（自己完結）
+- その他のコントローラー内（将来的に対応可能）
 
 ---
 
-### 5. [ ] 視野判定の統一
+### 5. [x] 視野判定の統一 ✅
 **対象**: `DefenseUtils.isInFieldOfView()` と `Character.isInVision()` の統一
 
-**確認事項**:
-- 両者のロジックの差異を確認
-- どちらかに統一、または両方を維持して使い分けを明確化
+**完了**（2026-02-05）:
+- CollisionUtils に `isInFieldOfView2D()` 関数を追加
+- Character.isInVision() を共通関数を使用するよう更新
+- DefenseUtils.isInFieldOfView() は `{ x: number; z: number }` 型用のため維持（将来的に統合可能）
 
 ---
 
-### 6. [ ] findOnBallPlayer の統一
+### 6. [x] findOnBallPlayer の統一 ✅
 **対象**: 複数クラスに存在する `findOnBallPlayer()` メソッド
 
-**現在の実装箇所**:
-- BaseStateAI.ts:361
-- ShootingController.ts:688
-- OneOnOneBattleController.ts:605
+**完了**（2026-02-05）:
+- BaseStateAI.ts - Ball.getHolder() を使用するよう変更
+- ShootingController.ts - Ball.getHolder() を使用するよう変更
+- OneOnOneBattleController.ts - Ball.getHolder() を使用するよう変更
 
-**対応案**:
-- Ball.getHolder() を使用するよう統一
-- または CharacterFilterSystem に集約
+**対応内容**:
+- 各クラスの findOnBallPlayer() を Ball.getHolder() を呼び出すように統一
+- OneOnOneBattleController に ball プロパティを追加
+- ShootingController から不要になった getAllCharacters プロパティを削除
 
 ---
 
@@ -810,12 +822,28 @@ export type { RiskAssessment, PassRiskDetail, ShootRiskDetail } from './RiskAsse
 
 ---
 
-### 12. [ ] 既存 InterceptionAnalyzer の統合（オプション）
+### 12. [x] 既存 InterceptionAnalyzer の統合 ✅
 **対象**: `src/character-move/ai/analysis/InterceptionAnalyzer.ts`
 
-**対応案**:
-- RiskAssessmentSystem に統合後、InterceptionAnalyzer を非推奨化
-- または InterceptionAnalyzer から RiskAssessmentSystem を呼び出すラッパーに変更
+**完了**（2026-02-05）:
+
+**RiskAssessmentSystem に追加したメソッド**:
+- `assessTrajectoryRisk(trajectory, passerTeam)` - TrajectoryResult を使用した詳細分析
+- `selectSafestTrajectory(trajectories, passerTeam)` - 最も安全な軌道を選択
+- `calculateTrajectoryInterceptionRisk()` - 内部メソッド（DefenderStateUtils 使用）
+
+**新しい型**:
+- `TrajectoryInterceptionRisk` - InterceptionRisk 互換
+- `TrajectoryRiskAnalysisResult` - TrajectoryRiskAnalysis 互換
+
+**InterceptionAnalyzer の更新**:
+- クラスとメソッドに `@deprecated` タグ追加
+- 非推奨警告に RiskAssessmentSystem への移行ガイドを記載
+- 既存コードとの後方互換性は維持
+
+**systems/index.ts に追加**:
+- `TrajectoryInterceptionRisk` 型をエクスポート
+- `TrajectoryRiskAnalysisResult` 型をエクスポート
 
 ---
 
@@ -848,21 +876,21 @@ export class CharacterFilterSystem {
 2. [x] TeamUtils 作成
 3. [x] Field に GoalUtils メソッド追加
 
-### Phase 2: リスク判定システム
-4. [ ] DefenderStateUtils 作成
-5. [ ] RiskAssessmentConfig 作成
-6. [ ] RiskAssessmentSystem 作成
-7. [ ] systems/index.ts にエクスポート追加
+### Phase 2: リスク判定システム ✅ 完了
+4. [x] DefenderStateUtils 作成
+5. [x] RiskAssessmentConfig 作成
+6. [x] RiskAssessmentSystem 作成
+7. [x] systems/index.ts にエクスポート追加
 
-### Phase 3: 既存コード置き換え ✅ 完了（Phase 1に統合）
+### Phase 3: 既存コード置き換え ✅ 完了
 8. [x] normalizeAngle 置き換え
 9. [x] TeamUtils 置き換え
 10. [x] GoalUtils 置き換え
-11. [ ] 距離計算の統一（中優先度 - 後日）
+11. [x] 距離計算の統一（getDistance2DSimple追加、対象ファイル更新完了）
 
 ### Phase 4: 統合・最適化
-12. [ ] InterceptionAnalyzer の RiskAssessmentSystem 統合
-13. [ ] AI での RiskAssessmentSystem 使用
+12. [x] InterceptionAnalyzer の RiskAssessmentSystem 統合 ✅
+13. [△] AI での RiskAssessmentSystem 使用（オプション - 段階的移行）
 
 ---
 
@@ -968,3 +996,9 @@ class CharacterIKSystem {
 | 2024-02-05 | IK+アニメーションブレンディング将来計画追加 |
 | 2024-02-05 | Phase 0 完了（console.log削除、DEBUGコメント削除、trajectoryValidation.ts対処） |
 | 2024-02-05 | Phase 1 完了（normalizeAngle追加、TeamUtils作成、GoalUtilsメソッド追加、全置き換え完了） |
+| 2026-02-05 | Phase 2 完了（DefenderStateUtils、RiskAssessmentConfig、RiskAssessmentSystem作成） |
+| 2026-02-05 | 距離計算の統一（一部完了、Vector3型を使用する箇所のみ置き換え） |
+| 2026-02-05 | 視野判定の統一（isInFieldOfView2D追加、Character.isInVision更新） |
+| 2026-02-05 | findOnBallPlayer の統一（全てBall.getHolder()を使用） |
+| 2026-02-05 | Phase 4: InterceptionAnalyzer の RiskAssessmentSystem 統合完了 |
+| 2026-02-05 | Phase 3-11: 距離計算の統一完了（getDistance2DSimple追加、8ファイル更新） |

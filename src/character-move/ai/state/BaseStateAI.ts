@@ -7,6 +7,7 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { FIELD_CONFIG } from "../../config/gameConfig";
+import { getDistance2DSimple } from "../../utils/CollisionUtils";
 
 /**
  * 状態別AIの基底クラス
@@ -233,9 +234,7 @@ export abstract class BaseStateAI {
       const otherRadius = other.getFootCircleRadius();
 
       // XZ平面上での距離を計算
-      const dx = newPosition.x - otherPosition.x;
-      const dz = newPosition.z - otherPosition.z;
-      const distance = Math.sqrt(dx * dx + dz * dz);
+      const distance = getDistance2DSimple(newPosition, otherPosition);
 
       // 衝突半径の合計より近い場合は衝突
       const minDistance = myRadius + otherRadius;
@@ -357,14 +356,10 @@ export abstract class BaseStateAI {
 
   /**
    * オンボールプレイヤーを見つける
+   * Ball.getHolder() を使用してボール保持者を取得
    */
   protected findOnBallPlayer(): Character | null {
-    for (const char of this.allCharacters) {
-      if (char.getState() === CharacterState.ON_BALL_PLAYER) {
-        return char;
-      }
-    }
-    return null;
+    return this.ball.getHolder();
   }
 
   /**
@@ -461,7 +456,7 @@ export abstract class BaseStateAI {
 
     if (lengthSquared === 0) {
       // 線分の始点と終点が同じ場合
-      return Math.sqrt((x0 - x1) * (x0 - x1) + (z0 - z1) * (z0 - z1));
+      return getDistance2DSimple({ x: x0, z: z0 }, { x: x1, z: z1 });
     }
 
     // 線分上の最近点のパラメータt（0から1の範囲）
@@ -473,7 +468,7 @@ export abstract class BaseStateAI {
     const nearestZ = z1 + t * dz;
 
     // 点から最近点までの距離
-    return Math.sqrt((x0 - nearestX) * (x0 - nearestX) + (z0 - nearestZ) * (z0 - nearestZ));
+    return getDistance2DSimple({ x: x0, z: z0 }, { x: nearestX, z: nearestZ });
   }
 
   /**

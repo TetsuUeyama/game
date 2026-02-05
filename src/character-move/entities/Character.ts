@@ -30,7 +30,7 @@ import { BalanceController } from "../controllers/BalanceController";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
-import { normalizeAngle } from "../utils/CollisionUtils";
+import { normalizeAngle, isInFieldOfView2D } from "../utils/CollisionUtils";
 
 /**
  * 3Dキャラクターエンティティ
@@ -1427,44 +1427,17 @@ export class Character {
   public isInVision(targetPosition: Vector3): boolean {
     const characterPosition = this.getPosition();
 
-    // 目の位置（視野の始点）
-    const headOffsetY = 0.6; // 上半身の中心から頭までのオフセット
-    const eyeY = 0.03; // 頭の中心から目までのオフセット
-    const visionStartPosition = new Vector3(
-      characterPosition.x,
-      characterPosition.y + headOffsetY + eyeY,
-      characterPosition.z
-    );
-
-    // 対象までの距離
-    const distance = Vector3.Distance(visionStartPosition, targetPosition);
-
-    // 視野範囲外ならfalse
-    if (distance > this.visionRange) {
-      return false;
-    }
-
-    // キャラクターの向き（正面方向）
-    const forwardDirection = new Vector3(
-      Math.sin(this.rotation),
-      0,
-      Math.cos(this.rotation)
-    );
-
-    // 対象への方向ベクトル
-    const toTarget = targetPosition.subtract(visionStartPosition);
-    toTarget.y = 0; // Y軸（高さ）は無視して水平面で判定
-    toTarget.normalize();
-
-    // 内積から角度を計算
-    const dotProduct = Vector3.Dot(forwardDirection, toTarget);
-    const angleToTarget = Math.acos(Math.max(-1, Math.min(1, dotProduct))); // clampして安全に
-
     // 視野角の半分（ラジアン）
     const halfVisionAngleRad = (this.visionAngle / 2) * (Math.PI / 180);
 
-    // 視野角内ならtrue
-    return angleToTarget <= halfVisionAngleRad;
+    // CollisionUtils の共通関数を使用
+    return isInFieldOfView2D(
+      characterPosition,
+      this.rotation,
+      targetPosition,
+      halfVisionAngleRad,
+      this.visionRange
+    );
   }
 
   /**

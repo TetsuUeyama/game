@@ -14,7 +14,7 @@ import {DASH_FORWARD_MOTION} from "../../motion/DashMotion";
 import {PassTrajectoryCalculator, Vec3} from "../../physics/PassTrajectoryCalculator";
 import {InterceptionAnalyzer} from "../analysis/InterceptionAnalyzer";
 import {PassType, PASS_TYPE_CONFIGS} from "../../config/PassTrajectoryConfig";
-import { normalizeAngle } from "../../utils/CollisionUtils";
+import { normalizeAngle, getDistance2D, getDistance2DSimple } from "../../utils/CollisionUtils";
 import { getTeammates, getOpponents } from "../../utils/TeamUtils";
 
 /**
@@ -490,9 +490,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     // 攻めるべきゴールを取得（allyは+Z側のgoal1、enemyは-Z側のgoal2）
     const goalPosition = this.field.getAttackingGoalRim(this.character.team);
     const myPos = this.character.getPosition();
-    const dx = goalPosition.x - myPos.x;
-    const dz = goalPosition.z - myPos.z;
-    const distanceToGoal = Math.sqrt(dx * dx + dz * dz);
+    const distanceToGoal = getDistance2D(myPos, goalPosition);
 
     // ShootingUtilsを使用してレンジ判定
     if (!ShootingUtils.isInShootRange(distanceToGoal)) {
@@ -500,7 +498,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     }
 
     // シュートレンジ内に入ったらゴール方向を向く
-    const angle = Math.atan2(dx, dz);
+    const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
     this.character.setRotation(angle);
 
     // 向きを変えた後、正式にチェック
@@ -778,9 +776,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       };
 
       // 距離チェック
-      const dx = receiverVec.x - passerVec.x;
-      const dz = receiverVec.z - passerVec.z;
-      const distance = Math.sqrt(dx * dx + dz * dz);
+      const distance = getDistance2DSimple(receiverVec, passerVec);
 
       const chestConfig = PASS_TYPE_CONFIGS[PassType.CHEST];
       const bounceConfig = PASS_TYPE_CONFIGS[PassType.BOUNCE];

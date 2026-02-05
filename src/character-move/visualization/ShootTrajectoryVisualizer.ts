@@ -23,7 +23,7 @@ import {
 } from "../config/ShootTrajectoryConfig";
 import { ParabolaUtils } from "../utils/parabolaUtils";
 import { SHOOT_RANGE, SHOOT_ANGLE } from "../config/action/ShootingConfig";
-import { normalizeAngle } from "../utils/CollisionUtils";
+import { normalizeAngle, getDistance2D } from "../utils/CollisionUtils";
 
 /**
  * 可視化されたシュートオプション
@@ -182,9 +182,7 @@ export class ShootTrajectoryVisualizer {
    * ゴールまでの水平距離を計算
    */
   private getDistanceToGoal(shooterPos: Vector3, goalPos: Vector3): number {
-    const dx = goalPos.x - shooterPos.x;
-    const dz = goalPos.z - shooterPos.z;
-    return Math.sqrt(dx * dx + dz * dz);
+    return getDistance2D(shooterPos, goalPos);
   }
 
   /**

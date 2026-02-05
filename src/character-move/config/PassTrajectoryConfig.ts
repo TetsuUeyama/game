@@ -2,7 +2,7 @@
  * パス軌道可視化システムの設定
  */
 
-import { normalizeAngle } from "../utils/CollisionUtils";
+import { normalizeAngle, getDistance2DSimple } from "../utils/CollisionUtils";
 
 /**
  * パスタイプ（5種類）
@@ -178,7 +178,7 @@ export function isPassDirectionValid(
   const dz = targetZ - passerZ;
 
   // 距離が非常に近い場合は許可
-  const distance = Math.sqrt(dx * dx + dz * dz);
+  const distance = getDistance2DSimple({ x: passerX, z: passerZ }, { x: targetX, z: targetZ });
   if (distance < 0.5) {
     return true;
   }

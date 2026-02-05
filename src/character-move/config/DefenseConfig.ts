@@ -3,6 +3,8 @@
  * 1on1バトル、ディフェンス位置取り、反応時間に関する定数とユーティリティメソッドを提供
  */
 
+import { getDistance2DSimple } from "../utils/CollisionUtils";
+
 /**
  * ディフェンス距離設定（メートル）
  */
@@ -311,7 +313,7 @@ export class DefenseUtils {
     const dz = targetPos.z - observerPos.z;
 
     // 距離チェック
-    const distance = Math.sqrt(dx * dx + dz * dz);
+    const distance = getDistance2DSimple(observerPos, targetPos);
     if (distance > maxDistance) {
       return false;
     }
