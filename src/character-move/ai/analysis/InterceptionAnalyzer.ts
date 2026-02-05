@@ -1,6 +1,13 @@
 /**
  * インターセプト分析クラス
  * ディフェンダーのパスインターセプト確率を計算する
+ *
+ * @deprecated このクラスは非推奨です。代わりに RiskAssessmentSystem を使用してください。
+ * - assessTrajectoryRisk() - TrajectoryResult を使用した詳細分析
+ * - selectSafestTrajectory() - 最も安全な軌道を選択
+ *
+ * RiskAssessmentSystem は DefenderStateUtils を使用し、重心状態を考慮した
+ * より正確なリスク判定を提供します。
  */
 
 import { Character } from "../../entities/Character";
@@ -50,6 +57,7 @@ export interface TrajectoryRiskAnalysis {
 
 /**
  * インターセプト分析クラス
+ * @deprecated 代わりに RiskAssessmentSystem を使用してください
  */
 export class InterceptionAnalyzer {
   constructor() {
@@ -58,6 +66,7 @@ export class InterceptionAnalyzer {
 
   /**
    * 単一ディフェンダーのインターセプトリスクを計算
+   * @deprecated 代わりに RiskAssessmentSystem.assessTrajectoryRisk() を使用してください
    *
    * アルゴリズム:
    * 1. ディフェンダーの反応時間 = BASE_REACTION_TIME * (100 / quickness)
@@ -188,6 +197,7 @@ export class InterceptionAnalyzer {
 
   /**
    * 全ディフェンダーのインターセプトリスクを分析
+   * @deprecated 代わりに RiskAssessmentSystem.assessTrajectoryRisk() を使用してください
    */
   public analyzeTrajectoryRisk(
     trajectory: TrajectoryResult,
@@ -230,6 +240,7 @@ export class InterceptionAnalyzer {
 
   /**
    * 複数の軌道オプションの中から最も安全なものを選択
+   * @deprecated 代わりに RiskAssessmentSystem.selectSafestTrajectory() を使用してください
    */
   public selectSafestOption(
     trajectories: TrajectoryResult[],

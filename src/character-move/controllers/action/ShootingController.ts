@@ -63,7 +63,6 @@ export class ShootingController {
   private scene: Scene;
   private ball: Ball;
   private field: Field;
-  private getAllCharacters: () => Character[];
 
   // ゴール判定用の状態
   private lastBallY: number = 0;
@@ -82,11 +81,10 @@ export class ShootingController {
   // シュート試行時のコールバック（ショットクロック用）
   private onShotAttemptCallback: (() => void) | null = null;
 
-  constructor(scene: Scene, ball: Ball, field: Field, getAllCharacters: () => Character[]) {
+  constructor(scene: Scene, ball: Ball, field: Field, _getAllCharacters: () => Character[]) {
     this.scene = scene;
     this.ball = ball;
     this.field = field;
-    this.getAllCharacters = getAllCharacters;
     this.createShootRangeMeshes();
   }
 
@@ -671,15 +669,10 @@ export class ShootingController {
 
   /**
    * オンボールプレイヤーを取得
+   * Ball.getHolder() を使用してボール保持者を取得
    */
   public findOnBallPlayer(): Character | null {
-    const allCharacters = this.getAllCharacters();
-    for (const char of allCharacters) {
-      if (char.getState() === "ON_BALL_PLAYER") {
-        return char;
-      }
-    }
-    return null;
+    return this.ball.getHolder();
   }
 
   /**

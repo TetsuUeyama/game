@@ -2,6 +2,8 @@
  * パス関連の設定
  */
 
+import { getDistance2DSimple } from "../utils/CollisionUtils";
+
 /**
  * パス距離設定
  */
@@ -33,9 +35,7 @@ export class PassUtils {
    * @returns ゴール下にいる場合true
    */
   public static isNearGoal(characterPosition: { x: number; z: number }, goalPosition: { x: number; z: number }): boolean {
-    const dx = characterPosition.x - goalPosition.x;
-    const dz = characterPosition.z - goalPosition.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
+    const distance = getDistance2DSimple(characterPosition, goalPosition);
     return distance <= PASS_DISTANCE.LAYUP_RANGE;
   }
 

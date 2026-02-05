@@ -11,6 +11,7 @@ import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalc
 import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 import { getTeammates } from "../../utils/TeamUtils";
+import { getDistance2DSimple } from "../../utils/CollisionUtils";
 
 /**
  * オフボールオフェンス時のAI
@@ -638,9 +639,7 @@ export class OffBallOffenseAI extends BaseStateAI {
     };
 
     // 水平距離を計算
-    const dx = receiverVec.x - passerVec.x;
-    const dz = receiverVec.z - passerVec.z;
-    const distance = Math.sqrt(dx * dx + dz * dz);
+    const distance = getDistance2DSimple(receiverVec, passerVec);
 
     // 距離が短すぎる、または長すぎる場合
     const chestConfig = PASS_TYPE_CONFIGS[PassType.CHEST];
@@ -938,9 +937,7 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     for (const teammate of teammates) {
       const teammatePos = teammate.getPosition();
-      const dx = position.x - teammatePos.x;
-      const dz = position.z - teammatePos.z;
-      const distance = Math.sqrt(dx * dx + dz * dz);
+      const distance = getDistance2DSimple(position, teammatePos);
 
       if (distance < this.minTeammateDistance) {
         return true;

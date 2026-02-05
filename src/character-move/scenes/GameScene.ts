@@ -52,6 +52,7 @@ import {
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
 } from "../config/JumpBallConfig";
+import { getDistance2D } from "../utils/CollisionUtils";
 
 /**
  * ゲームモード
@@ -1302,14 +1303,8 @@ export class GameScene {
     const allyPos = this.jumpBallAllyJumper.getPosition();
     const enemyPos = this.jumpBallEnemyJumper.getPosition();
 
-    const allyHorizontalDist = Math.sqrt(
-      Math.pow(ballPos.x - allyPos.x, 2) +
-      Math.pow(ballPos.z - allyPos.z, 2)
-    );
-    const enemyHorizontalDist = Math.sqrt(
-      Math.pow(ballPos.x - enemyPos.x, 2) +
-      Math.pow(ballPos.z - enemyPos.z, 2)
-    );
+    const allyHorizontalDist = getDistance2D(ballPos, allyPos);
+    const enemyHorizontalDist = getDistance2D(ballPos, enemyPos);
 
     // リーチ範囲（ジャンプ時に手が届く範囲）
     const reachRange = 1.2;
@@ -3159,9 +3154,7 @@ export class GameScene {
     const receiver = this.allyCharacters[1];
     const passerPos = passer.getPosition();
     const receiverPos = receiver.getPosition();
-    const dx = receiverPos.x - passerPos.x;
-    const dz = receiverPos.z - passerPos.z;
-    return Math.sqrt(dx * dx + dz * dz);
+    return getDistance2D(passerPos, receiverPos);
   }
 
   /**

@@ -11,3 +11,13 @@ export {
 } from './BalanceCollisionSystem';
 
 export { BallCatchSystem } from './BallCatchSystem';
+
+export {
+  RiskAssessmentSystem,
+  RiskLevel,
+  type RiskAssessment,
+  type PassRiskDetail,
+  type ShootRiskDetail,
+  type TrajectoryInterceptionRisk,
+  type TrajectoryRiskAnalysisResult,
+} from './RiskAssessmentSystem';

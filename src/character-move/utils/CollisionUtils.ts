@@ -42,6 +42,35 @@ export function getDistanceSquared3D(pos1: Vector3, pos2: Vector3): number {
 }
 
 // ============================================
+// シンプル型用の距離計算
+// ============================================
+
+/**
+ * シンプルな座標オブジェクト用の2D距離計算（XZ平面）
+ * { x: number; z: number } 型または Vec3 型に対応
+ */
+export function getDistance2DSimple(
+  pos1: { x: number; z: number },
+  pos2: { x: number; z: number }
+): number {
+  const dx = pos1.x - pos2.x;
+  const dz = pos1.z - pos2.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/**
+ * シンプルな座標オブジェクト用の2D距離の2乗（パフォーマンス最適化用）
+ */
+export function getDistanceSquared2DSimple(
+  pos1: { x: number; z: number },
+  pos2: { x: number; z: number }
+): number {
+  const dx = pos1.x - pos2.x;
+  const dz = pos1.z - pos2.z;
+  return dx * dx + dz * dz;
+}
+
+// ============================================
 // 衝突判定
 // ============================================
 
@@ -325,6 +354,56 @@ export function isDirectionWithinAngle(
 ): boolean {
   const angle = getAngleBetween(direction, targetDirection);
   return angle <= maxAngle;
+}
+
+// ============================================
+// 視野判定
+// ============================================
+
+/**
+ * ターゲットが視野内にあるか判定（2D、XZ平面）
+ * @param observerPos オブザーバーの位置
+ * @param observerRotation オブザーバーの回転（Y軸、ラジアン）
+ * @param targetPos ターゲットの位置
+ * @param fovHalfAngleRad 視野角の半分（ラジアン）
+ * @param maxDistance 最大距離（メートル）
+ * @returns 視野内かつ距離内の場合true
+ */
+export function isInFieldOfView2D(
+  observerPos: Vector3,
+  observerRotation: number,
+  targetPos: Vector3,
+  fovHalfAngleRad: number,
+  maxDistance: number
+): boolean {
+  // 距離チェック
+  const distance = getDistance2D(observerPos, targetPos);
+  if (distance > maxDistance) {
+    return false;
+  }
+
+  // 距離がほぼ0の場合は視野内とみなす
+  if (distance < 0.01) {
+    return true;
+  }
+
+  // オブザーバーの正面方向
+  const forwardDirection = new Vector3(
+    Math.sin(observerRotation),
+    0,
+    Math.cos(observerRotation)
+  );
+
+  // ターゲットへの方向ベクトル（2D）
+  const toTarget = new Vector3(
+    targetPos.x - observerPos.x,
+    0,
+    targetPos.z - observerPos.z
+  ).normalize();
+
+  // 角度チェック
+  const angle = getAngleBetween(forwardDirection, toTarget);
+  return angle <= fovHalfAngleRad;
 }
 
 // ============================================

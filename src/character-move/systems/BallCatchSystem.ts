@@ -30,23 +30,7 @@ import {
   BALL_CATCH_PHYSICS,
   BALL_RADIUS,
 } from "../config/BallCatchConfig";
-import { normalizeAngle } from "../utils/CollisionUtils";
-
-/**
- * 2D距離を計算（XZ平面）
- */
-function getDistance2D(pos1: Vector3, pos2: Vector3): number {
-  const dx = pos1.x - pos2.x;
-  const dz = pos1.z - pos2.z;
-  return Math.sqrt(dx * dx + dz * dz);
-}
-
-/**
- * 3D距離を計算
- */
-function getDistance3D(pos1: Vector3, pos2: Vector3): number {
-  return Vector3.Distance(pos1, pos2);
-}
+import { normalizeAngle, getDistance2D, getDistance3D } from "../utils/CollisionUtils";
 
 /**
  * ボールキャッチシステム
@@ -76,6 +60,13 @@ export class BallCatchSystem {
     // すでにボールが保持されている場合はスキップ
     if (this.ball.isHeld()) {
       return null;
+    }
+
+    // DEBUG: パスターゲットの状態
+    const passTarget = this.ball.getPassTarget();
+    const lastToucher = this.ball.getLastToucher();
+    if (passTarget || (lastToucher && lastToucher.getIsThrowInThrower())) {
+      console.log(`[BallCatchSystem] update - passTarget: ${passTarget?.playerData?.basic?.NAME ?? 'null'}, isThrowIn: ${lastToucher?.getIsThrowInThrower() ?? false}`);
     }
 
     // キャッチ候補者を収集
@@ -181,14 +172,32 @@ export class BallCatchSystem {
   ): CatchScenario | null {
     const passTarget = this.ball.getPassTarget();
     const isPassTarget = passTarget === character;
+    const lastToucher = this.ball.getLastToucher();
+    const isThrowIn = lastToucher && lastToucher.getIsThrowInThrower();
+
+    // DEBUG: スローイン時のシナリオ判定
+    if (isThrowIn && isPassTarget) {
+      console.log(`[BallCatchSystem] THROW_IN passTarget detected: ${character.playerData?.basic?.NAME ?? 'unknown'}`);
+    }
 
     // バウンスパス保護: バウンド前はパスターゲットのみがキャッチ可能
     if (this.ball.getIsBouncePass() && !this.ball.getHasBounced() && !isPassTarget) {
       return null;
     }
 
+    // スローイン保護: スローイン中はパスターゲットのみがキャッチ可能
+    // （他のプレイヤーがボールを弾くのを防ぐ）
+    if (isThrowIn && !isPassTarget) {
+      return null;
+    }
+
     // パスターゲットの場合
     if (isPassTarget) {
+      // スローインの場合はTHROW_INシナリオを使用（より広い判定距離）
+      if (isThrowIn) {
+        console.log(`[BallCatchSystem] Using THROW_IN scenario for ${character.playerData?.basic?.NAME ?? 'unknown'}`);
+        return CatchScenario.THROW_IN;
+      }
       return CatchScenario.PASS_TARGET;
     }
 
@@ -245,6 +254,14 @@ export class BallCatchSystem {
 
       const isNearBody = distanceToBody < nearBodyThreshold;
       const isNearHand = distanceToHand < nearHandThreshold;
+
+      // DEBUG: スローイン時のキャッチ判定
+      if (config.scenario === CatchScenario.THROW_IN) {
+        console.log(`[BallCatchSystem] THROW_IN catch check: ${character.playerData?.basic?.NAME ?? 'unknown'}`);
+        console.log(`  distanceToBody: ${distanceToBody.toFixed(2)}m (threshold: ${nearBodyThreshold.toFixed(2)}m)`);
+        console.log(`  distanceToHand: ${distanceToHand.toFixed(2)}m (threshold: ${nearHandThreshold.toFixed(2)}m)`);
+        console.log(`  isNearBody: ${isNearBody}, isNearHand: ${isNearHand}`);
+      }
 
       if (isNearBody || isNearHand) {
         return this.executeCatch(character, config.scenario, ballPosition);
@@ -341,6 +358,9 @@ export class BallCatchSystem {
     handPosition: Vector3,
     ballPosition: Vector3
   ): void {
+    // DEBUG: ファンブル発生時のログ
+    console.log(`[BallCatchSystem] FUMBLE by ${character.playerData?.basic?.NAME ?? 'unknown'}`);
+
     // ボールが物理モードでない場合はスキップ
     if (!this.ball.isPhysicsEnabled()) {
       return;
@@ -475,7 +495,7 @@ export class BallCatchSystem {
     }
 
     // ボールまでの距離が適切かチェック
-    const distanceToBall = Math.sqrt(toBallX * toBallX + toBallZ * toBallZ);
+    const distanceToBall = getDistance2D(characterPos, ballPosition);
 
     return distanceToBall < BALL_CATCH_PHYSICS.VIEW_CATCH_MAX_DISTANCE;
   }
