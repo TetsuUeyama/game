@@ -35,6 +35,7 @@ import {
   CAMERA_CONFIG,
   LIGHT_CONFIG,
   FIELD_CONFIG,
+  GOAL_CONFIG,
   // MODEL_CONFIG, // 一旦無効化
 } from "../config/gameConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
@@ -175,6 +176,12 @@ export class GameScene {
   private pendingOutOfBoundsReset: boolean = false;
   private outOfBoundsResetTimer: number = 0;
   private readonly outOfBoundsResetDelay: number = 1.5; // アウトオブバウンズ後のリセット待機時間（秒）
+
+  // ボールの前フレーム位置（アウトオブバウンズの方向判定用）
+  private previousBallPosition: Vector3 | null = null;
+
+  // スローイン: スロワーがボールを投げたかどうか（投げた後は移動可能）
+  private throwInBallThrown: boolean = false;
 
   // ジャンプボール関連
   private jumpBallInfo: JumpBallInfo = { ...DEFAULT_JUMP_BALL_INFO };
@@ -798,12 +805,15 @@ export class GameScene {
 
       // スローインが完了したかチェック（ボールを誰かが受け取った）
       // 新設計: 特定のレシーバーではなく、スロワー以外の誰かがボールを持ったら完了
-      // 待機中（isThrowInPending）は完了判定をスキップ（まだパスを投げていないため）
-      if (this.throwInThrower && currentBallHolder && currentBallHolder !== this.throwInThrower && !this.isThrowInPending) {
-
+      // isThrowInPendingに関係なく、スロワー以外がボールを持ったらスローイン完了
+      if (this.throwInThrower && currentBallHolder && currentBallHolder !== this.throwInThrower) {
         // 5秒違反タイマーを停止
         this.isThrowInViolationTimerRunning = false;
         this.throwInViolationTimer = 0;
+
+        // スローイン待機中フラグもクリア
+        this.isThrowInPending = false;
+        this.throwInTimer = 0;
 
         // シュートクロックを開始（スローインが成功したのでここで開始）
         if (this.shotClockController) {
@@ -814,28 +824,29 @@ export class GameScene {
         this.throwInThrower.setAsThrowInThrower(null);
         this.throwInThrower = null;
         this.throwInReceiver = null;
+        this.throwInPosition = null;
         // 状態は既にCollisionHandlerが通常状態に設定しているはず
       }
     }
 
-    // ボールが飛行を終了したらスローイン状態をクリア（タイムアウト）
-    // アウトオブバウンズ判定の前にクリアして、正しく判定されるようにする
-    // 新設計: throwInThrowerが設定されている場合にチェック
-    // 待機中（isThrowInPending）はボールが一時的に離れてもクリアしない（下のコードで再セットされる）
-    if (this.throwInThrower && !this.ball.isInFlight() && !this.ball.isHeld() && !this.isThrowInPending) {
-      // スロワーのスローインフラグを解除
-      this.throwInThrower.setAsThrowInThrower(null);
-      this.throwInThrower = null;
-      this.throwInReceiver = null;
-      // パスターゲットもクリア（Ball.updateFlightPhysicsでクリアしなくなったため）
-      this.ball.clearPassTarget();
+    // スローイン後、ボールがルーズ状態（誰も保持せず、飛行中でもない）になった場合
+    // passTargetをクリアして、誰でもLOOSE_BALLとしてキャッチできるようにする
+    // isThrowInThrowerフラグは残す（スロワーがキャッチできないようにするため）
+    if (this.throwInThrower && !currentBallHolder && !this.ball.isInFlight()) {
+      const lastToucher = this.ball.getLastToucher();
+      if (lastToucher === this.throwInThrower && this.ball.getPassTarget()) {
+        // passTargetをクリア（スローイン保護を解除し、誰でもキャッチできるようにする）
+        this.ball.clearPassTarget();
+      }
     }
 
     // アウトオブバウンズ判定（ゴール後・アウトオブバウンズのリセット待機中・スローイン中は判定しない）
     // スローイン中はボールが外側マスから投げられるため、判定をスキップ
-    // 新設計: throwInReceiverは使わない
-    const isThrowInActive = this.isThrowInPending || this.throwInThrower !== null;
-    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !isThrowInActive && this.checkOutOfBounds()) {
+    // ただし、ボールが投げられて着地した後（飛行中でなく、誰も保持していない）は判定を有効にする
+    const ballHolder = this.ball.getHolder();
+    const ballInFlight = this.ball.isInFlight();
+    const isThrowInBeforeThrow = this.isThrowInPending || (this.throwInThrower !== null && (ballHolder === this.throwInThrower || ballInFlight));
+    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !isThrowInBeforeThrow && this.checkOutOfBounds()) {
       // リセットを予約（遅延実行）
       this.pendingOutOfBoundsReset = true;
       this.outOfBoundsResetTimer = this.outOfBoundsResetDelay;
@@ -875,9 +886,13 @@ export class GameScene {
         // 待機中もAIがサーベイを行うので、向きを上書きしない
 
         // ボールがスロワーに保持されていることを確認
-        // 何らかの理由でボールが落ちた場合、再セットする
+        // ボールが誰にも保持されておらず、飛行中でもない場合のみスロワーに戻す
+        // （誰かがキャッチした場合や、パス中は戻さない）
+        // 注意: lastToucherがスロワーの場合、スロワーが既にボールを投げた後なので戻さない
         const currentHolder = this.ball.getHolder();
-        if (currentHolder !== this.throwInThrower && !this.ball.isInFlight()) {
+        const lastToucher = this.ball.getLastToucher();
+        const throwerAlreadyThrew = lastToucher === this.throwInThrower && currentHolder !== this.throwInThrower;
+        if (currentHolder === null && !this.ball.isInFlight() && !throwerAlreadyThrew) {
           this.ball.setHolder(this.throwInThrower);
         }
       }
@@ -888,20 +903,39 @@ export class GameScene {
         this.executeThrowIn();
       }
     } else if (this.throwInThrower && this.throwInPosition) {
-      // スローイン実行フェーズ: スロワーの位置を外側マスに固定し続ける
-      // AIがパスを実行し、誰かがキャッチするまで固定
-      this.throwInThrower.setPosition(this.throwInPosition, true);
-      this.throwInThrower.stopMovement();
-      // 新設計: 向きはAI（OnBallOffenseAI.updateThrowInThrower）が制御
+      // スローイン実行フェーズ
 
-      // 5秒スローイン違反タイマーのチェック
-      if (this.isThrowInViolationTimerRunning) {
+      // スロワーがボールを投げたかチェック
+      const lastToucher = this.ball.getLastToucher();
+      const throwerHasBall = this.ball.getHolder() === this.throwInThrower;
+      const throwerHasThrown = lastToucher === this.throwInThrower && !throwerHasBall;
+
+      if (throwerHasThrown) {
+        // ボールを投げた後: スロワーはフィールド内に移動可能
+        // isThrowInThrowerフラグを解除して通常のプレイヤーとして動けるようにする
+        if (!this.throwInBallThrown) {
+          this.throwInBallThrown = true;
+          this.throwInThrower.setAsThrowInThrower(null);
+          // throwInThrower参照は保持（スローイン完了判定に必要）
+        }
+        // 位置固定を解除、自由に移動可能
+      } else {
+        // ボールを投げる前: 位置を固定
+        this.throwInThrower.setPosition(this.throwInPosition, true);
+        this.throwInThrower.stopMovement();
+      }
+
+      // 5秒スローイン違反タイマーのチェック（投げる前のみ）
+      if (!throwerHasThrown && this.isThrowInViolationTimerRunning) {
         this.throwInViolationTimer -= deltaTime;
         if (this.throwInViolationTimer <= 0) {
           this.handleThrowInViolation();
         }
       }
     }
+
+    // ボールの前フレーム位置を更新（アウトオブバウンズ方向判定用）
+    this.previousBallPosition = this.ball.getPosition().clone();
   }
 
   /**
@@ -940,19 +974,27 @@ export class GameScene {
     }
 
     // ボールがスローイン担当者に保持されているか確認
-    if (this.ball.getHolder() !== this.throwInThrower) {
+    // 注意: AIが待機フェーズ中に既にボールを投げた場合もある（正常動作）
+    const holder = this.ball.getHolder();
+    const ballAlreadyThrown = holder === null && (this.ball.isInFlight() || this.ball.getLastToucher() === this.throwInThrower);
+
+    if (holder !== this.throwInThrower && !ballAlreadyThrown) {
+      // ボールが別の人に渡っている場合はエラー
       console.warn('[GameScene] スローイン担当者がボールを持っていません');
       this.clearThrowInState();
       return;
     }
 
-    // スロワーを外側マスの固定位置に戻す（移動していた場合に備えて）
+    // スロワーを外側マスの固定位置に固定し続ける
     this.throwInThrower.setPosition(this.throwInPosition, true); // 外側マスなのでクランプをスキップ
 
-
-    // 5秒スローイン違反タイマーを開始（ショットクロックではなくフリースロークロック）
-    this.throwInViolationTimer = this.throwInTimeLimit;
-    this.isThrowInViolationTimerRunning = true;
+    // ボールが既に投げられている場合は5秒違反タイマーは不要（パスは既に実行済み）
+    // まだ投げていない場合のみタイマーを開始
+    if (!ballAlreadyThrown) {
+      // 5秒スローイン違反タイマーを開始（ショットクロックではなくフリースロークロック）
+      this.throwInViolationTimer = this.throwInTimeLimit;
+      this.isThrowInViolationTimerRunning = true;
+    }
 
     // シュートクロックは停止したまま（スローインが完了してから再開）
     if (this.shotClockController) {
@@ -978,6 +1020,7 @@ export class GameScene {
     this.throwInThrower = null;
     this.throwInReceiver = null;
     this.throwInPosition = null;
+    this.throwInBallThrown = false; // スロワー投げ済みフラグをリセット
     // 5秒違反タイマーもクリア
     this.isThrowInViolationTimerRunning = false;
     this.throwInViolationTimer = 0;
@@ -993,6 +1036,11 @@ export class GameScene {
    * 特定のレシーバーは設定しない（全員がパス対象）
    */
   private enforceThrowInPositions(): void {
+    // ボールを投げた後は位置固定しない（フィールド内に入れる）
+    if (this.throwInBallThrown) {
+      return;
+    }
+
     // スローイン待機中の場合
     if (this.isThrowInPending) {
       if (this.throwInThrower && this.throwInPosition) {
@@ -1001,7 +1049,7 @@ export class GameScene {
       }
       // 新設計: 特定のレシーバー位置固定は不要（全員が自由に動ける）
     }
-    // スローイン実行中の場合（待機終了後）
+    // スローイン実行中の場合（待機終了後、投げる前）
     else if (this.throwInThrower && this.throwInPosition) {
       // スロワーの位置のみ固定（向きはAIが制御するので変更しない）
       this.throwInThrower.setPosition(this.throwInPosition, true);
@@ -1854,11 +1902,29 @@ export class GameScene {
     const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
     const halfLength = FIELD_CONFIG.length / 2; // 14m
 
-    // コート境界チェック
-    const isOutX = Math.abs(ballPosition.x) > halfWidth;
-    const isOutZ = Math.abs(ballPosition.z) > halfLength;
+    // 現在のボール位置がコート外かチェック
+    const isCurrentlyOutX = Math.abs(ballPosition.x) > halfWidth;
+    const isCurrentlyOutZ = Math.abs(ballPosition.z) > halfLength;
+    const isCurrentlyOut = isCurrentlyOutX || isCurrentlyOutZ;
 
-    return isOutX || isOutZ;
+    // 現在コート内ならアウトオブバウンズではない
+    if (!isCurrentlyOut) {
+      return false;
+    }
+
+    // 前フレームの位置がない場合（初回）はアウトオブバウンズとしない
+    if (!this.previousBallPosition) {
+      return false;
+    }
+
+    // 前フレームの位置がコート内だったかチェック
+    const wasPreviouslyInX = Math.abs(this.previousBallPosition.x) <= halfWidth;
+    const wasPreviouslyInZ = Math.abs(this.previousBallPosition.z) <= halfLength;
+    const wasPreviouslyIn = wasPreviouslyInX && wasPreviouslyInZ;
+
+    // 内側から外側に出た場合のみアウトオブバウンズ
+    // （外側から内側に入る場合はアウトオブバウンズにならない）
+    return wasPreviouslyIn && isCurrentlyOut;
   }
 
   /**
@@ -2037,12 +2103,88 @@ export class GameScene {
     }
 
     const offendingTeam = this.shotClockViolatingTeam;
-    const ballPosition = this.shotClockViolationBallPosition || this.ball.getPosition();
     this.shotClockViolatingTeam = null;
     this.shotClockViolationBallPosition = null;
 
-    // サイドラインスローインで再開
-    this.executeThrowInReset(offendingTeam, ballPosition);
+    // センターサークル内で相手ボール保持状態で再開
+    this.executeCenterCircleReset(offendingTeam);
+  }
+
+  /**
+   * センターサークルから再開（ボール保持状態）
+   * シュートクロック違反後に使用
+   * @param offendingTeam 違反したチーム（この相手チームがボールを保持）
+   */
+  private executeCenterCircleReset(offendingTeam: 'ally' | 'enemy'): void {
+    // ボールの飛行を停止
+    this.ball.endFlight();
+
+    // スローイン状態をクリア
+    this.clearThrowInState();
+
+    // 全キャラクターのバランスをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+    }
+
+    // ボールを保持するチーム（offendingTeamの相手）
+    const receivingTeam = offendingTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
+    const defendingTeam = offendingTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+
+    // ボールを持つ選手（PGを優先）
+    const ballHandler = receivingTeam.find(c => c.playerPosition === 'PG') || receivingTeam[0];
+
+    // ボールハンドラーをセンターサークル内に配置
+    const ballHandlerPos = new Vector3(0, ballHandler.config.physical.height / 2, 0);
+    ballHandler.setPosition(ballHandlerPos);
+
+    // ボールをボールハンドラーに渡す
+    this.ball.setHolder(ballHandler);
+
+    // 他のオフェンス選手をフォーメーション位置に配置
+    const offenseFormation = FormationUtils.getDefaultOffenseFormation();
+    const isReceivingTeamAlly = offendingTeam === 'enemy';
+    for (const teammate of receivingTeam) {
+      if (teammate === ballHandler) continue;
+      if (!teammate.playerPosition) continue;
+
+      const targetPos = FormationUtils.getTargetPosition(
+        offenseFormation,
+        teammate.playerPosition,
+        isReceivingTeamAlly
+      );
+      if (targetPos) {
+        const pos = new Vector3(targetPos.x, teammate.config.physical.height / 2, targetPos.z);
+        teammate.setPosition(pos);
+        teammate.lookAt(ballHandlerPos);
+      }
+    }
+
+    // ディフェンスチームをディフェンスフォーメーション位置に配置
+    const defenseFormation = FormationUtils.getDefaultDefenseFormation();
+    const isDefendingTeamAlly = offendingTeam === 'ally';
+    for (const defender of defendingTeam) {
+      if (!defender.playerPosition) continue;
+
+      const targetPos = FormationUtils.getTargetPosition(
+        defenseFormation,
+        defender.playerPosition,
+        isDefendingTeamAlly
+      );
+      if (targetPos) {
+        const pos = new Vector3(targetPos.x, defender.config.physical.height / 2, targetPos.z);
+        defender.setPosition(pos);
+        defender.lookAt(ballHandlerPos);
+      }
+    }
+
+    // シュートクロックをリセット
+    if (this.shotClockController) {
+      this.shotClockController.reset(ballHandler.team);
+    }
+
+    // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
+    this.collisionHandler?.updateStates();
   }
 
   /**
@@ -2141,14 +2283,15 @@ export class GameScene {
     // ボールをスローイン担当者に渡す
     this.ball.setHolder(thrower);
 
-    // スローインロックを設定（指定レシーバー以外へのパス/シュートを禁止）
-    this.ball.setThrowInLock(receiver);
+    // 新設計: スローインロックは設定しない（4人全員がパス対象）
+    // 旧設計では setThrowInLock(receiver) で特定レシーバーのみ許可していた
 
     // スローイン実行を予約（タイマーベース）
     this.isThrowInPending = true;
     this.throwInTimer = this.throwInDelay;
     this.throwInThrower = thrower;
     this.throwInReceiver = receiver;
+    this.throwInBallThrown = false; // スロワー投げ済みフラグをリセット
     // スローイン位置を保存（スロワーが移動しても正しい位置からパスを実行するため）
     this.throwInPosition = throwerPos.clone();
 
@@ -2262,6 +2405,9 @@ export class GameScene {
     if (this.shotClockController) {
       this.shotClockController.reset(ballHolder.team);
     }
+
+    // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
+    this.collisionHandler?.updateStates();
   }
 
   /**
@@ -2279,19 +2425,94 @@ export class GameScene {
     this.pendingGoalScoringTeam = null;
     this.goalResetTimer = 0;
 
-    // ゴールを決められた側（相手チーム）がエンドラインからスローインで再開
-    // 得点されたゴールの裏（エンドライン外側）からスローイン
-    // ally（味方）が得点 → enemy（敵）が-Zゴール裏からスローイン（ally攻撃方向の裏）
-    // enemy（敵）が得点 → ally（味方）が+Zゴール裏からスローイン（enemy攻撃方向の裏）
-    const halfLength = FIELD_CONFIG.length / 2; // 15m
-    const endLineZ = scoringTeam === 'ally' ? halfLength + 1.0 : -halfLength - 1.0;
+    // ゴール下で相手ボール保持状態で再開
+    // 得点されたゴールの下で、得点された側のチームがボールを保持
+    // ally（味方）が得点 → enemy（敵）が+Zゴール下でボール保持（allyが得点したゴール）
+    // enemy（敵）が得点 → ally（味方）が-Zゴール下でボール保持（enemyが得点したゴール）
+    this.executeGoalUnderReset(scoringTeam);
+  }
 
-    // ゴール中心付近の位置（スローイン計算でゴール回避されるため、x=0で良い）
-    const throwInBallPosition = new Vector3(0, 0, endLineZ);
+  /**
+   * ゴール下から再開（ボール保持状態）
+   * ゴール後やシュートクロック違反後に使用
+   * @param offendingTeam 違反/得点したチーム（この相手チームがボールを保持）
+   */
+  private executeGoalUnderReset(offendingTeam: 'ally' | 'enemy'): void {
+    // ボールの飛行を停止
+    this.ball.endFlight();
 
+    // スローイン状態をクリア
+    this.clearThrowInState();
 
-    // スローインで再開（得点したチームが違反扱いでスローイン権を相手に渡す）
-    this.executeThrowInReset(scoringTeam, throwInBallPosition);
+    // 全キャラクターのバランスをリセット
+    for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+      character.resetBalance();
+    }
+
+    // ボールを保持するチーム（offendingTeamの相手）
+    const receivingTeam = offendingTeam === 'ally' ? this.enemyCharacters : this.allyCharacters;
+    const defendingTeam = offendingTeam === 'ally' ? this.allyCharacters : this.enemyCharacters;
+
+    // ゴール位置を計算
+    // ally得点 → +Zゴール下（allyの攻撃ゴール）
+    // enemy得点 → -Zゴール下（enemyの攻撃ゴール）
+    const halfLength = FIELD_CONFIG.length / 2;
+    const goalZ = offendingTeam === 'ally' ? halfLength - GOAL_CONFIG.backboardDistance - 1.0 : -(halfLength - GOAL_CONFIG.backboardDistance - 1.0);
+
+    // ボールを持つ選手（PGを優先）
+    const ballHandler = receivingTeam.find(c => c.playerPosition === 'PG') || receivingTeam[0];
+
+    // ボールハンドラーをゴール下に配置
+    const ballHandlerPos = new Vector3(0, ballHandler.config.physical.height / 2, goalZ);
+    ballHandler.setPosition(ballHandlerPos);
+
+    // ボールをボールハンドラーに渡す
+    this.ball.setHolder(ballHandler);
+
+    // 他のオフェンス選手をフォーメーション位置に配置
+    const offenseFormation = FormationUtils.getDefaultOffenseFormation();
+    const isReceivingTeamAlly = offendingTeam === 'enemy';
+    for (const teammate of receivingTeam) {
+      if (teammate === ballHandler) continue;
+      if (!teammate.playerPosition) continue;
+
+      const targetPos = FormationUtils.getTargetPosition(
+        offenseFormation,
+        teammate.playerPosition,
+        isReceivingTeamAlly
+      );
+      if (targetPos) {
+        const pos = new Vector3(targetPos.x, teammate.config.physical.height / 2, targetPos.z);
+        teammate.setPosition(pos);
+        teammate.lookAt(ballHandlerPos);
+      }
+    }
+
+    // ディフェンスチームをディフェンスフォーメーション位置に配置
+    const defenseFormation = FormationUtils.getDefaultDefenseFormation();
+    const isDefendingTeamAlly = offendingTeam === 'ally';
+    for (const defender of defendingTeam) {
+      if (!defender.playerPosition) continue;
+
+      const targetPos = FormationUtils.getTargetPosition(
+        defenseFormation,
+        defender.playerPosition,
+        isDefendingTeamAlly
+      );
+      if (targetPos) {
+        const pos = new Vector3(targetPos.x, defender.config.physical.height / 2, targetPos.z);
+        defender.setPosition(pos);
+        defender.lookAt(ballHandlerPos);
+      }
+    }
+
+    // シュートクロックをリセット
+    if (this.shotClockController) {
+      this.shotClockController.reset(ballHandler.team);
+    }
+
+    // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
+    this.collisionHandler?.updateStates();
   }
 
   /**

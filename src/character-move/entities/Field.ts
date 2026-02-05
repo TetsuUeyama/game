@@ -39,12 +39,19 @@ export class Field {
   private rim2Physics: PhysicsAggregate | null = null;
   private outerAreaPhysics: PhysicsAggregate[] = []; // 外側マスエリアの物理ボディ
 
+  // 境界壁（ボールがフィールド外に出るのを防ぐ）
+  private boundaryWalls: Mesh[] = [];
+  private boundaryWallPhysics: PhysicsAggregate[] = [];
+
   constructor(scene: Scene) {
     this.scene = scene;
     this.mesh = this.createField();
 
     // 外側マスエリアを作成
     this.createOuterCells();
+
+    // 境界壁を作成（ボールがフィールド外に出るのを防ぐ）
+    this.createBoundaryWalls();
 
     // センターサークルを作成
     this.centerCircle = this.createCenterCircle();
@@ -157,6 +164,64 @@ export class Field {
 
     // 外側エリアのグリッド線を描画
     this.createOuterGridLines(gridY, gridColor);
+  }
+
+  /**
+   * 境界壁を作成（半透明ガラス風、高さ5m）
+   * フィールドの端に壁を設置してボールが外に出ないようにする
+   */
+  private createBoundaryWalls(): void {
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 15m
+    const wallHeight = 5.0; // 壁の高さ
+    const wallThickness = 0.1; // 壁の厚さ
+
+    // 半透明ガラス風マテリアル
+    const wallMaterial = new StandardMaterial("wall-material", this.scene);
+    wallMaterial.diffuseColor = new Color3(0.7, 0.85, 0.95); // 薄い青みがかった白
+    wallMaterial.specularColor = new Color3(0.5, 0.5, 0.5); // 反射
+    wallMaterial.alpha = 0.15; // 半透明（ガラス風）
+    wallMaterial.backFaceCulling = false; // 両面表示
+
+    // 左壁（x = -halfWidth）
+    const leftWall = MeshBuilder.CreateBox(
+      "boundary-wall-left",
+      { width: wallThickness, height: wallHeight, depth: FIELD_CONFIG.length },
+      this.scene
+    );
+    leftWall.position = new Vector3(-halfWidth - wallThickness / 2, wallHeight / 2, 0);
+    leftWall.material = wallMaterial;
+    this.boundaryWalls.push(leftWall);
+
+    // 右壁（x = +halfWidth）
+    const rightWall = MeshBuilder.CreateBox(
+      "boundary-wall-right",
+      { width: wallThickness, height: wallHeight, depth: FIELD_CONFIG.length },
+      this.scene
+    );
+    rightWall.position = new Vector3(halfWidth + wallThickness / 2, wallHeight / 2, 0);
+    rightWall.material = wallMaterial;
+    this.boundaryWalls.push(rightWall);
+
+    // 奥壁（z = +halfLength）
+    const backWall = MeshBuilder.CreateBox(
+      "boundary-wall-back",
+      { width: FIELD_CONFIG.width, height: wallHeight, depth: wallThickness },
+      this.scene
+    );
+    backWall.position = new Vector3(0, wallHeight / 2, halfLength + wallThickness / 2);
+    backWall.material = wallMaterial;
+    this.boundaryWalls.push(backWall);
+
+    // 手前壁（z = -halfLength）
+    const frontWall = MeshBuilder.CreateBox(
+      "boundary-wall-front",
+      { width: FIELD_CONFIG.width, height: wallHeight, depth: wallThickness },
+      this.scene
+    );
+    frontWall.position = new Vector3(0, wallHeight / 2, -halfLength - wallThickness / 2);
+    frontWall.material = wallMaterial;
+    this.boundaryWalls.push(frontWall);
   }
 
   /**
@@ -720,6 +785,21 @@ export class Field {
       );
       this.outerAreaPhysics.push(outerPhysics);
     }
+
+    // 境界壁の静的物理ボディ（ボールが外に出るのを防ぐ）
+    for (const wallMesh of this.boundaryWalls) {
+      const wallPhysics = new PhysicsAggregate(
+        wallMesh,
+        PhysicsShapeType.BOX,
+        {
+          mass: 0, // 静的オブジェクト
+          restitution: 0.5, // 適度な反発
+          friction: 0.3,
+        },
+        this.scene
+      );
+      this.boundaryWallPhysics.push(wallPhysics);
+    }
   }
 
   /**
@@ -736,6 +816,11 @@ export class Field {
       physics?.dispose();
     }
     this.outerAreaPhysics = [];
+    // 境界壁の物理ボディを破棄
+    for (const physics of this.boundaryWallPhysics) {
+      physics?.dispose();
+    }
+    this.boundaryWallPhysics = [];
 
     this.mesh.dispose();
     this.centerCircle.dispose();
@@ -762,5 +847,10 @@ export class Field {
       mesh.dispose();
     }
     this.outerAreaMeshes = [];
+    // 境界壁を破棄
+    for (const wall of this.boundaryWalls) {
+      wall.dispose();
+    }
+    this.boundaryWalls = [];
   }
 }

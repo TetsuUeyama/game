@@ -160,13 +160,16 @@ export class CollisionHandler {
     const throwInThrower = this.allCharacters.find(char => char.getIsThrowInThrower());
 
     if (throwInThrower) {
-      // スロワーがボールを持っている間は状態を更新しない
-      if (!holder || holder === throwInThrower) {
+      // スロワーがボールを持っている間のみ状態更新をスキップ
+      // ボールが飛行中（パス後）の場合は状態更新を続行（スロワーをOFF_BALL_PLAYERに）
+      if (holder === throwInThrower) {
         return;
       }
       // 誰かがボールをキャッチした場合、スローイン状態をクリア
-      this.clearThrowInStates();
-      // 状態クリア後、通常の状態更新を続行
+      if (holder && holder !== throwInThrower) {
+        this.clearThrowInStates();
+      }
+      // スローイン中でもボール飛行中は状態更新を続行
     }
 
     // ジャンプボール状態のキャラクターがいるかチェック
@@ -208,8 +211,13 @@ export class CollisionHandler {
       }
 
       // ルーズボール時（飛行中でない、保持者もいない）
-      // 全員BALL_LOSTに設定
+      // 全員BALL_LOSTに設定（ただしスロワーは除く）
       for (const character of this.allCharacters) {
+        // スロワーはBALL_LOSTにしない（ボールに向かって移動するのを防ぐ）
+        if (character.getIsThrowInThrower()) {
+          character.setState(CharacterState.OFF_BALL_PLAYER);
+          continue;
+        }
         character.setState(CharacterState.BALL_LOST);
       }
       return;

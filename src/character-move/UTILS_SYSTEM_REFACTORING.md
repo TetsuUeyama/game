@@ -1002,3 +1002,56 @@ class CharacterIKSystem {
 | 2026-02-05 | findOnBallPlayer の統一（全てBall.getHolder()を使用） |
 | 2026-02-05 | Phase 4: InterceptionAnalyzer の RiskAssessmentSystem 統合完了 |
 | 2026-02-05 | Phase 3-11: 距離計算の統一完了（getDistance2DSimple追加、8ファイル更新） |
+| 2026-02-05 | スローイン問題のデバッグ開始（下記「未解決問題」参照） |
+
+---
+
+## 解決済み: スローインのボールキャッチ（2026/02/05）
+
+### 問題
+スローインでパスを投げた時、レシーバーがボールをキャッチできない
+
+### 原因（3つ）
+
+**原因1**: `setupThrowIn()`で`setThrowInLock(receiver)`を呼んでいた
+- `throwInLock`は特定のレシーバーのみにパスを許可する仕組み
+- AIは最適なターゲット（`bestTarget.teammate`）を選ぶ
+- AIが選んだターゲットがロックで設定されたレシーバーと異なる場合、`Ball.passWithArc()`でパスが拒否されていた
+
+**原因2**: `GameScene.update()`で`passTarget`が早期にクリアされていた
+- GameScene.ts の更新処理で、ボールが着地（`!isInFlight()`）かつ保持されていない（`!isHeld()`）場合に `clearPassTarget()` を呼んでいた
+- 更新順序:
+  1. `Ball.update()` - ボールが着地、`inFlight = false`
+  2. `GameScene.update()` - `!inFlight && !isHeld` を検出、`clearPassTarget()` を呼ぶ
+  3. `BallCatchSystem.update()` - `passTarget` が null なので THROW_IN シナリオが判定されず、ルーズボール扱いになる
+- 結果: レシーバーは THROW_IN シナリオ（広い判定距離）ではなく LOOSE_BALL（狭い判定距離）で判定され、キャッチできない
+
+**原因3（根本原因）**: スロワーの`isThrowInThrower`フラグが早期にクリアされていた
+- GameScene.ts の更新処理で、ボールが停止（speed < 0.5）するとスロワーの`isThrowInThrower`フラグをクリアしていた
+- このコードは`collisionHandler.update()`（BallCatchSystem）より**先**に実行される
+- BallCatchSystemの`determineCatchScenario()`では`lastToucher.getIsThrowInThrower()`でTHROW_INシナリオを判定
+- フラグがクリアされた後では`isThrowIn = false`になり、THROW_INシナリオが適用されない
+- 結果: LOOSE_BALLシナリオが適用され、速度チェックでファンブルが発生
+
+### 修正
+
+1. `setupThrowIn()`から`setThrowInLock(receiver)`の呼び出しを削除
+2. `GameScene.ts`の`clearPassTarget()`呼び出しを削除（`Ball.update()`や`setHolder()`で自然にクリアされる）
+3. **`GameScene.ts`のスロワーフラグ早期クリアコードを削除**
+   - 以前: ボール停止（speed < 0.5）時にスロワーフラグをクリア
+   - 修正後: スロワーフラグは誰かがキャッチした時のみクリア（line 802-822）
+   - ボールが停止してキャッチされない場合はLOOSE_BALLとして処理され、次のキャッチで状態がクリアされる
+4. **`CollisionHandler.updateCharacterStates()`の早期リターン条件を修正**
+   - 以前: `throwInThrower`がいて`!holder`の場合に早期リターン（ボール飛行中も含む）
+   - 修正後: `holder === throwInThrower`の場合のみ早期リターン
+   - これによりボール飛行中にスロワーの状態がOFF_BALL_PLAYERに更新される
+   - 修正前: スロワーがボールを投げた後も`updateThrowInThrower()`が呼び続けられ棒立ちになる
+5. **`Ball.updateFlightPhysics()`の`clearPassTarget()`呼び出しを削除**
+   - 着地時（speed < 0.5）に`clearPassTarget()`を呼んでいた
+   - これは`ball.update()`内で実行され、`BallCatchSystem`より先に動く
+   - passTargetがクリアされるとTHROW_INシナリオが判定されない
+   - 修正後: passTargetはキャッチ成功時（setHolder()）またはルーズボール完全停止時にクリア
+6. **`BallCatchConfig.ts`のTHROW_IN閾値を拡大**
+   - bodyDistanceThreshold: 3.0m → 5.0m
+   - handDistanceThreshold: 3.5m → 5.5m
+   - スローインは長距離で着地誤差が大きいため、より広い範囲でキャッチ可能に

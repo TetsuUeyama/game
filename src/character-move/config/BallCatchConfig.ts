@@ -13,7 +13,7 @@ import { CatchScenario, type CatchConfig } from "../types/BallCatchTypes";
  * | シナリオ     | 体距離 | 手距離 | 速度チェック | 高さチェック | 優先度 |
  * |-------------|-------|-------|------------|------------|-------|
  * | PASS_TARGET | 1.5m  | 2.0m  | スキップ    | スキップ    | 10    |
- * | THROW_IN    | 2.0m  | 2.5m  | スキップ    | スキップ    | 9     |
+ * | THROW_IN    | 3.0m  | 3.5m  | スキップ    | スキップ    | 9     |
  * | INTERCEPTOR | 3.0m  | 3.0m  | スキップ    | あり       | 8     |
  * | JUMP_BALL   | 1.0m  | 1.5m  | あり        | あり       | 5     |
  * | REBOUND     | 1.0m  | 1.5m  | あり        | あり       | 5     |
@@ -30,8 +30,8 @@ export const CATCH_SCENARIO_CONFIGS: Record<CatchScenario, CatchConfig> = {
   },
   [CatchScenario.THROW_IN]: {
     scenario: CatchScenario.THROW_IN,
-    bodyDistanceThreshold: 2.0,
-    handDistanceThreshold: 2.5,
+    bodyDistanceThreshold: 5.0,  // スローインは長距離で着地誤差が大きいため広めに
+    handDistanceThreshold: 5.5,  // レシーバーが少し離れていても反応できるように
     skipVelocityCheck: true,
     skipHeightCheck: true,
     priority: 9,
