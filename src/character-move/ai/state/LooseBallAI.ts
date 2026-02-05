@@ -7,10 +7,20 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 
+/** ルーズボール追跡者の最大人数 */
+const MAX_CHASERS_PER_TEAM = 2;
+
+/** 自陣に戻る際のZ座標（守備エリア） */
+const DEFENSIVE_ZONE_Z = {
+  ALLY: -8.0,   // ally チームの守備エリア（goal2側）
+  ENEMY: 8.0,   // enemy チームの守備エリア（goal1側）
+};
+
 /**
  * ルーズボール時のAI
  * ボールが誰にも保持されていない状態での行動を制御
  *
+ * 改善: チームで1-2名のみがボールを追い、残りは自陣に戻る
  * IMPROVEMENT_PLAN.md: バグ2修正 - 衝突時に代替方向を試す処理を追加
  */
 export class LooseBallAI extends BaseStateAI {
@@ -51,8 +61,152 @@ export class LooseBallAI extends BaseStateAI {
       return;
     }
 
-    // 通常のボールロスト処理（全員がボールを取りに行く）
-    this.moveTowardsBall(deltaTime);
+    // 通常のルーズボール処理
+    // チーム内で到達時間が早い1-2名のみがボールを追う
+    const shouldChase = this.shouldChaseBall();
+
+    if (shouldChase) {
+      // 追跡者はボールを取りに行く
+      this.moveTowardsBall(deltaTime);
+    } else {
+      // それ以外は自陣に戻る（相手ボールに備える）
+      this.returnToDefensiveZone(deltaTime);
+    }
+  }
+
+  /**
+   * この選手がボールを追うべきかどうかを判定
+   * チーム内で到達時間が早い順に1-2名のみがtrue
+   */
+  private shouldChaseBall(): boolean {
+    const ballPosition = this.ball.getPosition();
+    const myTeam = this.character.team;
+
+    // 同じチームの選手をフィルタリング
+    const teammates = this.allCharacters.filter(char => char.team === myTeam);
+
+    // 各チームメイトの到達時間を計算
+    const arrivalTimes: { character: Character; time: number }[] = teammates.map(char => {
+      const distance = Vector3.Distance(char.getPosition(), ballPosition);
+      // スピードを考慮した到達時間（スピードが高いほど早く到達）
+      const speed = char.playerData?.stats.speed ?? 50;
+      // スピード50で基準速度、100で1.5倍速として計算
+      const speedMultiplier = 0.5 + (speed / 100);
+      const baseSpeed = 5.0; // 基準移動速度 (m/s)
+      const effectiveSpeed = baseSpeed * speedMultiplier;
+      const time = distance / effectiveSpeed;
+      return { character: char, time };
+    });
+
+    // 到達時間でソート（早い順）
+    arrivalTimes.sort((a, b) => a.time - b.time);
+
+    // 自分が上位MAX_CHASERS_PER_TEAM名以内かどうかをチェック
+    const chaserCount = Math.min(MAX_CHASERS_PER_TEAM, arrivalTimes.length);
+    for (let i = 0; i < chaserCount; i++) {
+      if (arrivalTimes[i].character === this.character) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 自陣（守備エリア）に戻る
+   */
+  private returnToDefensiveZone(deltaTime: number): void {
+    const myPosition = this.character.getPosition();
+    const myTeam = this.character.team;
+
+    // 自陣のZ座標を決定
+    const defensiveZ = myTeam === 'ally' ? DEFENSIVE_ZONE_Z.ALLY : DEFENSIVE_ZONE_Z.ENEMY;
+
+    // X座標はポジションに応じて分散（ペイントエリア周辺）
+    // ポジションに基づいてX座標を決定
+    let targetX = 0;
+    const position = this.character.playerPosition;
+    switch (position) {
+      case 'PG':
+        targetX = 0;      // 中央
+        break;
+      case 'SG':
+        targetX = -3.0;   // 左サイド
+        break;
+      case 'SF':
+        targetX = 3.0;    // 右サイド
+        break;
+      case 'PF':
+        targetX = -1.5;   // 左インサイド
+        break;
+      case 'C':
+        targetX = 1.5;    // 右インサイド
+        break;
+      default:
+        targetX = (Math.random() - 0.5) * 6; // ランダム
+    }
+
+    const targetPosition = new Vector3(targetX, myPosition.y, defensiveZ);
+    const distanceToTarget = Vector3.Distance(myPosition, targetPosition);
+
+    // 既に守備エリアに近い場合はボール方向を見て待機
+    if (distanceToTarget < 1.5) {
+      const ballPosition = this.ball.getPosition();
+      const toBall = new Vector3(
+        ballPosition.x - myPosition.x,
+        0,
+        ballPosition.z - myPosition.z
+      );
+      if (toBall.length() > 0.01) {
+        const angle = Math.atan2(toBall.x, toBall.z);
+        this.character.setRotation(angle);
+      }
+
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 守備エリアに向かって移動
+    const direction = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    ).normalize();
+
+    const angle = Math.atan2(direction.x, direction.z);
+    this.character.setRotation(angle);
+
+    const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
+
+    if (adjustedDirection) {
+      this.character.move(adjustedDirection, deltaTime);
+
+      // 距離が遠い場合はダッシュ
+      if (distanceToTarget > 5.0) {
+        if (this.character.getCurrentMotionName() !== 'dash_forward') {
+          this.character.playMotion(DASH_FORWARD_MOTION);
+        }
+      } else {
+        if (this.character.getCurrentMotionName() !== 'walk_forward') {
+          this.character.playMotion(WALK_FORWARD_MOTION);
+        }
+      }
+    } else {
+      // 代替方向を試す
+      const alternativeDir = this.tryAlternativeDirection(direction, deltaTime);
+      if (alternativeDir) {
+        this.character.move(alternativeDir, deltaTime);
+        if (this.character.getCurrentMotionName() !== 'walk_forward') {
+          this.character.playMotion(WALK_FORWARD_MOTION);
+        }
+      } else {
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
+      }
+    }
   }
 
   /**

@@ -15,6 +15,19 @@ import { GRID_CONFIG, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
 import { Net } from "./Net";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
 
+/**
+ * NBA 3ポイントライン設定
+ * - アーク半径: 23フィート9インチ = 7.24m（バスケット中心から）
+ * - コーナー距離: 22フィート = 6.71m
+ */
+const THREE_POINT_LINE_CONFIG = {
+  arcRadius: 7.24,         // アーク半径 (m)
+  cornerDistance: 6.71,    // コーナーからバスケットまでの距離 (m)
+  lineColor: '#FFFFFF',    // ライン色（白）
+  lineY: 0.02,             // 地面からの高さ
+  arcSegments: 48,         // アークのセグメント数
+};
+
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
@@ -27,6 +40,7 @@ export class Field {
   private goal2Net: Net; // ゴール2のネット
   private goal2TargetMarker: Mesh; // ゴール2のシュート目標マーカー
   private centerCircle: Mesh; // センターサークル
+  private threePointLines: Mesh[] = []; // 3ポイントライン
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
   private outerAreaMeshes: Mesh[] = []; // 外側マスエリア
@@ -55,6 +69,9 @@ export class Field {
 
     // センターサークルを作成
     this.centerCircle = this.createCenterCircle();
+
+    // 3ポイントラインを作成
+    this.createThreePointLines();
 
     // 座標ラベルを作成
     this.createGridLabels();
@@ -491,6 +508,138 @@ export class Field {
   }
 
   /**
+   * 3ポイントラインを作成（両ゴール用）
+   * NBA仕様: アーク半径7.24m、コーナー距離6.71m
+   */
+  private createThreePointLines(): void {
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+    const { arcRadius, cornerDistance, lineColor, lineY, arcSegments } = THREE_POINT_LINE_CONFIG;
+
+    // goal1（+Z側）のバスケット中心位置
+    const basket1Z = fieldHalfLength - GOAL_CONFIG.backboardDistance - GOAL_CONFIG.rimOffset;
+    // goal2（-Z側）のバスケット中心位置
+    const basket2Z = -basket1Z;
+
+    // アークとコーナーラインの交点のZ座標を計算
+    // アーク: x² + (z - basketZ)² = arcRadius²
+    // コーナーライン: x = ±cornerDistance
+    // → (z - basketZ)² = arcRadius² - cornerDistance²
+    const deltaZ = Math.sqrt(arcRadius * arcRadius - cornerDistance * cornerDistance);
+
+    // goal1の3ポイントライン
+    this.createThreePointLineForGoal(basket1Z, deltaZ, cornerDistance, arcRadius, lineY, lineColor, arcSegments, 1);
+
+    // goal2の3ポイントライン（反転）
+    this.createThreePointLineForGoal(basket2Z, deltaZ, cornerDistance, arcRadius, lineY, lineColor, arcSegments, 2);
+  }
+
+  /**
+   * 1つのゴール用の3ポイントラインを作成
+   */
+  private createThreePointLineForGoal(
+    basketZ: number,
+    deltaZ: number,
+    cornerDistance: number,
+    arcRadius: number,
+    lineY: number,
+    lineColor: string,
+    arcSegments: number,
+    goalNumber: number
+  ): void {
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+    const color = Color3.FromHexString(lineColor);
+
+    // goal1は+Z側、goal2は-Z側
+    const zSign = goalNumber === 1 ? 1 : -1;
+
+    // コーナーラインとアークの交点
+    const intersectionZ = basketZ - zSign * deltaZ;
+
+    // ベースライン位置
+    const baselineZ = zSign * fieldHalfLength;
+
+    // 左コーナーライン（X = -cornerDistance、ベースラインから交点まで）
+    const leftCornerPoints = [
+      new Vector3(-cornerDistance, lineY, baselineZ),
+      new Vector3(-cornerDistance, lineY, intersectionZ),
+    ];
+    const leftCornerLine = MeshBuilder.CreateLines(
+      `three-point-corner-left-${goalNumber}`,
+      { points: leftCornerPoints },
+      this.scene
+    );
+    leftCornerLine.color = color;
+    this.threePointLines.push(leftCornerLine);
+
+    // 右コーナーライン（X = +cornerDistance、ベースラインから交点まで）
+    const rightCornerPoints = [
+      new Vector3(cornerDistance, lineY, baselineZ),
+      new Vector3(cornerDistance, lineY, intersectionZ),
+    ];
+    const rightCornerLine = MeshBuilder.CreateLines(
+      `three-point-corner-right-${goalNumber}`,
+      { points: rightCornerPoints },
+      this.scene
+    );
+    rightCornerLine.color = color;
+    this.threePointLines.push(rightCornerLine);
+
+    // アーク（左交点から右交点まで）
+    // goal1: 左(-cornerDistance, intersectionZ)から右(cornerDistance, intersectionZ)へ、下に膨らむ
+    // goal2: 左(-cornerDistance, intersectionZ)から右(cornerDistance, intersectionZ)へ、上に膨らむ
+    const arcPoints: Vector3[] = [];
+
+    // アークの開始角度と終了角度を計算
+    // バスケット中心を原点とした座標系で考える
+    // 左交点: (-cornerDistance, intersectionZ - basketZ) = (-cornerDistance, -zSign * deltaZ)
+    // 右交点: (cornerDistance, intersectionZ - basketZ) = (cornerDistance, -zSign * deltaZ)
+    //
+    // 角度: atan2(z - basketZ, x)
+    // 左交点の角度: atan2(-zSign * deltaZ, -cornerDistance)
+    // 右交点の角度: atan2(-zSign * deltaZ, cornerDistance)
+
+    const leftAngle = Math.atan2(-zSign * deltaZ, -cornerDistance);
+    const rightAngle = Math.atan2(-zSign * deltaZ, cornerDistance);
+
+    // goal1: アークは下側（-Z方向）に膨らむ → 角度は約-160度から約-20度
+    // goal2: アークは上側（+Z方向）に膨らむ → 角度は約160度から約20度
+    //
+    // leftAngle to rightAngle の範囲でアークを描画
+    // goal1の場合、leftAngle ≈ -2.4rad, rightAngle ≈ -0.7rad なので leftAngle < rightAngle
+    // goal2の場合、leftAngle ≈ 2.4rad, rightAngle ≈ 0.7rad なので leftAngle > rightAngle
+
+    let startAngle: number;
+    let endAngle: number;
+
+    if (goalNumber === 1) {
+      // goal1: 左から右へ（角度増加方向）
+      startAngle = leftAngle;
+      endAngle = rightAngle;
+    } else {
+      // goal2: 左から右へ（角度減少方向）
+      startAngle = leftAngle;
+      endAngle = rightAngle;
+    }
+
+    // アークを描画
+    for (let i = 0; i <= arcSegments; i++) {
+      const t = i / arcSegments;
+      const angle = startAngle + (endAngle - startAngle) * t;
+      const x = Math.cos(angle) * arcRadius;
+      const z = basketZ + Math.sin(angle) * arcRadius;
+      arcPoints.push(new Vector3(x, lineY, z));
+    }
+
+    const arcLine = MeshBuilder.CreateLines(
+      `three-point-arc-${goalNumber}`,
+      { points: arcPoints },
+      this.scene
+    );
+    arcLine.color = color;
+    this.threePointLines.push(arcLine);
+  }
+
+  /**
    * バスケットゴールを作成
    * @param goalNumber ゴール番号（1または2）
    */
@@ -824,6 +973,11 @@ export class Field {
 
     this.mesh.dispose();
     this.centerCircle.dispose();
+    // 3ポイントラインを破棄
+    for (const line of this.threePointLines) {
+      line.dispose();
+    }
+    this.threePointLines = [];
     this.goal1Backboard.dispose();
     this.goal1Rim.dispose();
     this.goal1Net.dispose();

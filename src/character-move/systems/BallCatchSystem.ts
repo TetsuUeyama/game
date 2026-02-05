@@ -29,6 +29,7 @@ import {
   CATCH_SCENARIO_CONFIGS,
   BALL_CATCH_PHYSICS,
   BALL_RADIUS,
+  LOOSE_BALL_PICKUP,
 } from "../config/BallCatchConfig";
 import { normalizeAngle, getDistance2D, getDistance3D } from "../utils/CollisionUtils";
 
@@ -39,6 +40,12 @@ export class BallCatchSystem {
   private ball: Ball;
   private allCharacters: Character[];
   private callbacks: BallCatchCallbacks = {};
+
+  /** ルーズボール滞在時間追跡（キャラクター → サークル内滞在時間(秒)） */
+  private looseBallDwellTimes: Map<Character, number> = new Map();
+
+  /** ボールが完全にサークル内にあるかどうか（キャラクター → boolean） */
+  private ballCompletelyInside: Map<Character, boolean> = new Map();
 
   constructor(ball: Ball, characters: Character[]) {
     this.ball = ball;
@@ -56,11 +63,16 @@ export class BallCatchSystem {
    * メイン更新処理
    * @returns キャッチイベント（キャッチ成功時）、またはnull
    */
-  public update(_deltaTime: number): BallCatchEvent | null {
-    // すでにボールが保持されている場合はスキップ
+  public update(deltaTime: number): BallCatchEvent | null {
+    // すでにボールが保持されている場合は滞在時間をリセットしてスキップ
     if (this.ball.isHeld()) {
+      this.looseBallDwellTimes.clear();
+      this.ballCompletelyInside.clear();
       return null;
     }
+
+    // ルーズボール滞在時間を更新
+    this.updateLooseBallDwellTimes(deltaTime);
 
     // キャッチ候補者を収集
     const candidates = this.collectCatchCandidates();
@@ -171,6 +183,113 @@ export class BallCatchSystem {
   }
 
   /**
+   * ルーズボール滞在時間を更新
+   * 各キャラクターのサークル（円柱）内にボールがあるかチェックし、滞在時間を更新
+   */
+  private updateLooseBallDwellTimes(deltaTime: number): void {
+    const ballPosition = this.ball.getPosition();
+
+    for (const character of this.allCharacters) {
+      const cylinderState = this.checkBallCylinderState(character, ballPosition);
+      const currentTime = this.looseBallDwellTimes.get(character) || 0;
+
+      if (cylinderState === 'outside') {
+        // サークル外に出た場合、滞在時間をリセット
+        if (currentTime > 0) {
+          console.log(`[DwellTime] ${character.playerPosition} reset (was ${currentTime.toFixed(2)}s)`);
+        }
+        this.looseBallDwellTimes.set(character, 0);
+        this.ballCompletelyInside.set(character, false);
+      } else {
+        // サークル内（完全 or 一部）にいる場合、滞在時間を加算
+        const newTime = currentTime + deltaTime;
+        this.looseBallDwellTimes.set(character, newTime);
+        // 完全に内側かどうかを記録
+        this.ballCompletelyInside.set(character, cylinderState === 'inside');
+
+        // 定期的にログを出力（0.5秒ごと）
+        if (Math.floor(newTime * 2) > Math.floor(currentTime * 2)) {
+          console.log(`[DwellTime] ${character.playerPosition} state=${cylinderState}, time=${newTime.toFixed(2)}s`);
+        }
+      }
+    }
+  }
+
+  /**
+   * ボールとキャラクターの円柱の位置関係をチェック
+   * @returns 'inside' = ボールが完全に内側, 'touching' = 一部触れている, 'outside' = 完全に外
+   */
+  private checkBallCylinderState(
+    character: Character,
+    ballPosition: Vector3
+  ): 'inside' | 'touching' | 'outside' {
+    const characterPos = character.getPosition();
+    const characterHeight = character.config.physical.height;
+    const ballRadius = BALL_RADIUS;
+
+    // 円柱の高さ範囲（地面=0から身長+マージンまで）
+    const minHeight = 0;
+    const maxHeight = characterHeight + LOOSE_BALL_PICKUP.HEIGHT_MARGIN;
+
+    // ボール方向での円柱半径を取得
+    const dirToBall = {
+      x: ballPosition.x - characterPos.x,
+      z: ballPosition.z - characterPos.z,
+    };
+    const circleRadius = character.getFootCircleRadiusInDirection(dirToBall);
+
+    // 水平距離（ボール中心からキャラクター中心）
+    const horizontalDistance = getDistance2D(ballPosition, characterPos);
+
+    // 高さ判定（ボールの上端と下端を考慮）
+    const ballTop = ballPosition.y + ballRadius;
+    const ballBottom = Math.max(0, ballPosition.y - ballRadius); // 地面より下にはならない
+
+    // デバッグログ（近くにいる場合のみ）
+    if (horizontalDistance < 2.0) {
+      console.log(`[Cylinder] ${character.playerPosition}: hDist=${horizontalDistance.toFixed(2)}, circleR=${circleRadius.toFixed(2)}, ballY=${ballPosition.y.toFixed(2)}, ballTop=${ballTop.toFixed(2)}, ballBottom=${ballBottom.toFixed(2)}, maxH=${maxHeight.toFixed(2)}`);
+    }
+
+    // 完全に外側かチェック
+    // 高さ: ボールの下端が円柱の上より上、またはボールの上端が地面より下
+    if (ballBottom > maxHeight || ballTop < minHeight) {
+      return 'outside';
+    }
+
+    // 水平方向で完全に外側（ボールの端が円柱に触れていない）
+    if (horizontalDistance - ballRadius > circleRadius) {
+      return 'outside';
+    }
+
+    // 完全に内側かチェック
+    // 高さ: ボールの上端が円柱内、ボールの下端が地面以上
+    // 水平: ボールの端（中心+半径）が円柱内
+    const isHeightInside = ballTop <= maxHeight && ballBottom >= minHeight;
+    const isHorizontalInside = horizontalDistance + ballRadius <= circleRadius;
+
+    if (isHeightInside && isHorizontalInside) {
+      return 'inside';
+    }
+
+    // 一部触れている
+    return 'touching';
+  }
+
+  /**
+   * キャラクターのルーズボール滞在時間を取得
+   */
+  public getLooseBallDwellTime(character: Character): number {
+    return this.looseBallDwellTimes.get(character) || 0;
+  }
+
+  /**
+   * ボールがキャラクターのサークルに完全に収まっているかを取得
+   */
+  public isBallCompletelyInside(character: Character): boolean {
+    return this.ballCompletelyInside.get(character) || false;
+  }
+
+  /**
    * シナリオ判定
    * キャラクターの状態からキャッチシナリオを決定
    */
@@ -245,6 +364,28 @@ export class BallCatchSystem {
         console.log(`[TryCatch] ${character.playerPosition} FAIL height: ball=${ballHeight.toFixed(2)}, min=${minCatchHeight.toFixed(2)}, max=${maxCatchHeight.toFixed(2)}`);
         return null;
       }
+    }
+
+    // ルーズボールの場合: サークル内滞在時間チェック
+    // 滞在時間が満たされたら即座に保持状態に移行
+    if (config.scenario === CatchScenario.LOOSE_BALL) {
+      const dwellTime = this.looseBallDwellTimes.get(character) || 0;
+      const isCompletelyInside = this.ballCompletelyInside.get(character) || false;
+
+      // ボールが完全にサークル内にある場合は0.3秒、一部触れている場合は1秒
+      const requiredTime = isCompletelyInside
+        ? LOOSE_BALL_PICKUP.REQUIRED_DWELL_TIME_INSIDE
+        : LOOSE_BALL_PICKUP.REQUIRED_DWELL_TIME_TOUCHING;
+
+      if (dwellTime >= requiredTime) {
+        // 滞在時間を満たしたら即座にキャッチ
+        console.log(`[TryCatch] ${character.playerPosition} CATCH (dwell time): ${dwellTime.toFixed(2)}s >= ${requiredTime}s (inside=${isCompletelyInside})`);
+        return this.executeCatch(character, config.scenario, ballPosition);
+      }
+      // 滞在時間が足りない場合は他の条件もチェックせずスキップ
+      // （サークル外の場合はdwellTime=0なのでここに来る）
+      console.log(`[TryCatch] ${character.playerPosition} WAIT dwell time: ${dwellTime.toFixed(2)}s < ${requiredTime}s (inside=${isCompletelyInside})`);
+      return null;
     }
 
     // キャラクターの体の半径（ボール方向）
