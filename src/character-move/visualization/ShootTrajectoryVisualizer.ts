@@ -22,8 +22,10 @@ import {
   getSuccessRateColor,
 } from "../config/ShootTrajectoryConfig";
 import { ParabolaUtils } from "../utils/parabolaUtils";
+import { DeterministicTrajectory } from "../utils/DeterministicTrajectory";
 import { SHOOT_RANGE, SHOOT_ANGLE } from "../config/action/ShootingConfig";
 import { normalizeAngle, getDistance2D } from "../utils/CollisionUtils";
+import { PhysicsConstants } from "../../physics/PhysicsConfig";
 
 /**
  * 可視化されたシュートオプション
@@ -125,9 +127,16 @@ export class ShootTrajectoryVisualizer {
     const shooterHeight = holder.config.physical.height;
     const shooterRotation = holder.getRotation();
 
-    // シュート開始位置（手の高さ）
+    // シュート開始位置（実際のシュートと同じ：前方0.7mオフセット）
+    const forwardOffsetDistance = 0.7;
+    const forwardOffsetX = Math.sin(shooterRotation) * forwardOffsetDistance;
+    const forwardOffsetZ = Math.cos(shooterRotation) * forwardOffsetDistance;
     const startY = shooterPos.y + shooterHeight * SHOOT_TRAJECTORY_CONFIG.HAND_HEIGHT_RATIO + SHOOT_TRAJECTORY_CONFIG.HEAD_OFFSET;
-    const startPosition = new Vector3(shooterPos.x, startY, shooterPos.z);
+    const startPosition = new Vector3(
+      shooterPos.x + forwardOffsetX,
+      startY,
+      shooterPos.z + forwardOffsetZ
+    );
 
     // ゴールまでの距離
     const distance = this.getDistanceToGoal(shooterPos, targetGoal.position);
@@ -148,12 +157,14 @@ export class ShootTrajectoryVisualizer {
     // シュート成功率を計算
     const successRate = this.calculateSuccessRate(holder, shootType, distance);
 
-    // 軌道を可視化
+    // 軌道を可視化（実際のシュートと同じパラメータを使用）
     const visualization = this.createVisualization(
+      holder,
       startPosition,
       targetGoal.position,
       shootType,
-      successRate
+      successRate,
+      distance
     );
 
     if (visualization) {
@@ -168,10 +179,13 @@ export class ShootTrajectoryVisualizer {
     // allyチームはgoal1、enemyチームはgoal2を攻撃
     const rimPosition = this.field.getAttackingGoalRim(shooter.team);
 
+    // 実際のシュートと同じターゲット高さ（リム高さ + ボール半径）
+    const targetY = SHOOT_TRAJECTORY_CONFIG.RIM_HEIGHT + SHOOT_TRAJECTORY_CONFIG.BALL_RADIUS;
+
     return {
       position: new Vector3(
         rimPosition.x,
-        SHOOT_TRAJECTORY_CONFIG.RIM_HEIGHT,
+        targetY,
         rimPosition.z
       ),
       rimHeight: SHOOT_TRAJECTORY_CONFIG.RIM_HEIGHT,
@@ -283,10 +297,12 @@ export class ShootTrajectoryVisualizer {
    * 単一シュートオプションの可視化を作成
    */
   private createVisualization(
+    shooter: Character,
     startPosition: Vector3,
     targetPosition: Vector3,
     shootType: Exclude<ShootType, 'out_of_range'>,
-    successRate: number
+    successRate: number,
+    distance: number
   ): VisualizedShootOption | null {
     const config = SHOOT_TYPE_CONFIGS[shootType];
     if (!config) {
@@ -304,11 +320,24 @@ export class ShootTrajectoryVisualizer {
       b: baseColor.b * (1 - blendFactor) + successColor.b * blendFactor,
     };
 
-    // 軌道ポイントを計算
-    const trajectoryPoints = this.calculateTrajectoryPoints(
+    // 実際のシュートと同じアーチ高さ計算（ステータス調整含む）
+    const baseArcHeight = ParabolaUtils.getArcHeight(shootType, distance);
+
+    // ステータスによるアーチ高さ調整（ShootingControllerと同じ計算）
+    const statValue = shootType === '3pt'
+      ? (shooter.playerData?.stats['3paccuracy'] ?? 42)
+      : (shooter.playerData?.stats.shootccuracy ?? 42);
+    const arcHeightAdjust = (statValue - 42) / 100;
+
+    // 最小アーチ高さを保証（ShootingControllerと同じ）
+    const minArcHeight = shootType === 'layup' ? 0.6 : 0.8;
+    const arcHeight = Math.max(minArcHeight, baseArcHeight + arcHeightAdjust);
+
+    // 軌道ポイントを計算（ダンピングを考慮したDeterministicTrajectoryを使用）
+    const trajectoryPoints = this.calculateTrajectoryPointsWithDamping(
       startPosition,
       targetPosition,
-      config.arcHeight
+      arcHeight
     );
 
     // 軌道ラインを作成
@@ -325,28 +354,30 @@ export class ShootTrajectoryVisualizer {
   }
 
   /**
-   * 軌道ポイントを計算
+   * 軌道ポイントを計算（ダンピングを考慮）
+   * 実際のシュートと同じDeterministicTrajectoryを使用
    */
-  private calculateTrajectoryPoints(
+  private calculateTrajectoryPointsWithDamping(
     startPosition: Vector3,
     targetPosition: Vector3,
     arcHeight: number
   ): Vector3[] {
-    const points: Vector3[] = [];
+    // DeterministicTrajectoryを使用（実際のシュートと同じ）
+    const trajectory = new DeterministicTrajectory({
+      start: { x: startPosition.x, y: startPosition.y, z: startPosition.z },
+      target: { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z },
+      arcHeight,
+      gravity: PhysicsConstants.GRAVITY_MAGNITUDE,
+      damping: PhysicsConstants.BALL.LINEAR_DAMPING,
+    });
+
+    // 軌道をサンプリング
     const segments = SHOOT_TRAJECTORY_CONFIG.TRAJECTORY_SEGMENTS;
+    const trajectoryPoints = trajectory.sample(segments);
 
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      const pos = ParabolaUtils.getPositionOnParabola(
-        { x: startPosition.x, y: startPosition.y, z: startPosition.z },
-        { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z },
-        arcHeight,
-        t
-      );
-      points.push(new Vector3(pos.x, pos.y, pos.z));
-    }
-
-    return points;
+    return trajectoryPoints.map(
+      (p) => new Vector3(p.position.x, p.position.y, p.position.z)
+    );
   }
 
   /**

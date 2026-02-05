@@ -40,6 +40,7 @@ import {
 } from "../config/gameConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { ShootTrajectoryVisualizer } from "../visualization/ShootTrajectoryVisualizer";
+import { DribblePathVisualizer } from "../visualization/DribblePathVisualizer";
 import { PassCheckController, DefenderPlacement } from "../controllers/check/PassCheckController";
 import { ThrowInCheckController } from "../controllers/check/ThrowInCheckController";
 import { FieldGridUtils, CellCoord } from "../config/FieldGridConfig";
@@ -118,6 +119,9 @@ export class GameScene {
 
   // シュート軌道可視化
   private shootTrajectoryVisualizer?: ShootTrajectoryVisualizer;
+
+  // ドリブル導線可視化
+  private dribblePathVisualizer?: DribblePathVisualizer;
 
   // パスチェックモード用距離表示ライン
   private passCheckDistanceLine?: LinesMesh;
@@ -376,6 +380,16 @@ export class GameScene {
         this.field,
         allCharacters
       );
+
+      // ドリブル導線可視化の初期化
+      this.dribblePathVisualizer = new DribblePathVisualizer(
+        this.scene,
+        this.ball,
+        this.field,
+        allCharacters
+      );
+      // デフォルトで有効化
+      this.dribblePathVisualizer.setEnabled(true);
     }
 
     // 入力コントローラーの初期化（プレイヤーキャラクター）
@@ -755,6 +769,11 @@ export class GameScene {
       // シュート軌道可視化を更新
       if (this.shootTrajectoryVisualizer) {
         this.shootTrajectoryVisualizer.update();
+      }
+
+      // ドリブル導線可視化を更新
+      if (this.dribblePathVisualizer) {
+        this.dribblePathVisualizer.update();
       }
     }
 
@@ -2900,6 +2919,31 @@ export class GameScene {
   }
 
   /**
+   * ドリブル導線可視化の表示/非表示を設定
+   */
+  public setDribblePathVisible(visible: boolean): void {
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.setEnabled(visible);
+    }
+  }
+
+  /**
+   * ドリブル導線可視化の表示状態を取得
+   */
+  public isDribblePathVisible(): boolean {
+    return this.dribblePathVisualizer?.getEnabled() ?? false;
+  }
+
+  /**
+   * ドリブル導線可視化の表示/非表示を切り替え
+   */
+  public toggleDribblePathVisible(): void {
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.setEnabled(!this.dribblePathVisualizer.getEnabled());
+    }
+  }
+
+  /**
    * キャラクターを指定位置に配置
    */
   public setCharacterPosition(character: Character, x: number, z: number): void {
@@ -2954,6 +2998,12 @@ export class GameScene {
     if (this.shootTrajectoryVisualizer) {
       this.shootTrajectoryVisualizer.setEnabled(false);
       this.shootTrajectoryVisualizer.clearVisualizations();
+    }
+
+    // ドリブル導線可視化を無効化・クリア
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.setEnabled(false);
+      this.dribblePathVisualizer.clearVisualizations();
     }
 
     // シュートレンジ表示をクリア
@@ -3177,6 +3227,18 @@ export class GameScene {
     dribbler.setState(CharacterState.ON_BALL_PLAYER);
     defender.setState(CharacterState.ON_BALL_DEFENDER);
 
+    // ドリブル導線可視化を有効化（チェックモード用にallCharactersを更新）
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.dispose();
+      this.dribblePathVisualizer = new DribblePathVisualizer(
+        this.scene,
+        this.ball,
+        this.field,
+        [dribbler, defender]
+      );
+      this.dribblePathVisualizer.setEnabled(true);
+    }
+
     return { dribbler, defender };
   }
 
@@ -3221,6 +3283,30 @@ export class GameScene {
 
     // ボールをシューターに持たせる
     this.ball.setHolder(shooter);
+
+    // シュート軌道可視化を有効化（チェックモード用にallCharactersを更新）
+    if (this.shootTrajectoryVisualizer) {
+      this.shootTrajectoryVisualizer.dispose();
+      this.shootTrajectoryVisualizer = new ShootTrajectoryVisualizer(
+        this.scene,
+        this.ball,
+        this.field,
+        [shooter]
+      );
+      this.shootTrajectoryVisualizer.setEnabled(true);
+    }
+
+    // ドリブル導線可視化を有効化（チェックモード用にallCharactersを更新）
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.dispose();
+      this.dribblePathVisualizer = new DribblePathVisualizer(
+        this.scene,
+        this.ball,
+        this.field,
+        [shooter]
+      );
+      this.dribblePathVisualizer.setEnabled(true);
+    }
 
     return shooter;
   }
@@ -3733,6 +3819,9 @@ export class GameScene {
     }
     if (this.shootTrajectoryVisualizer) {
       this.shootTrajectoryVisualizer.dispose();
+    }
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.dispose();
     }
     this.clearPassCheckDistanceLine();
     this.ball.dispose();
