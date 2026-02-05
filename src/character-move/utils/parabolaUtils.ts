@@ -24,7 +24,7 @@ export const SHOOT_ARC_HEIGHT = {
   THREE_POINT: 2.4,           // 3Pシュート：2.4m（高めのアーチ）
   MIDRANGE: 1.5,              // ミドルレンジ：1.5m
   LAYUP: 0.8,                 // レイアップ：0.8m（低めのアーチ）
-  LAYUP_CLOSE: 0.5,           // レイアップ（近距離）：0.5m
+  LAYUP_CLOSE: 0.6,           // レイアップ（近距離）：0.6m（リムに確実に届く最小値）
   DEFAULT: 1.2,               // デフォルト：1.2m
   LAYUP_CLOSE_DISTANCE: 1.2,  // レイアップ近距離判定閾値（m）
 } as const;

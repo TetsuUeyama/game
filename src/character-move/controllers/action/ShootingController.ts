@@ -392,9 +392,10 @@ export class ShootingController {
     const shooterPos = shooter.getPosition();
 
     // シューターの頭上前方からボールを発射
+    // 前方オフセットは体・手の物理体との衝突を避けるため十分な距離が必要
     const shooterHeight = shooter.config.physical.height;
     const shooterRotation = shooter.getRotation();
-    const forwardOffsetDistance = 0.3;
+    const forwardOffsetDistance = 0.7;
     const forwardOffsetX = Math.sin(shooterRotation) * forwardOffsetDistance;
     const forwardOffsetZ = Math.cos(shooterRotation) * forwardOffsetDistance;
     const headPosition = new Vector3(
@@ -456,7 +457,11 @@ export class ShootingController {
       : (shooter.playerData?.stats.shootccuracy ?? 42);
     const arcHeightAdjust = (statValue - 42) / 100;
     const radiusAdjust = (statValue - 42) / 3000;
-    const arcHeight = baseArcHeight + arcHeightAdjust;
+
+    // 最小アーチ高さを保証（シュートタイプごとに設定）
+    // 低すぎるとボールがリムに届かない
+    const minArcHeight = shootType === 'layup' ? 0.6 : 0.8;
+    const arcHeight = Math.max(minArcHeight, baseArcHeight + arcHeightAdjust);
 
     const curveValue = shooter.playerData?.stats.curve ?? 50;
     const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue, radiusAdjust);

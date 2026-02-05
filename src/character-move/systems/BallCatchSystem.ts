@@ -67,8 +67,11 @@ export class BallCatchSystem {
 
     // 候補者がいない場合は終了
     if (candidates.length === 0) {
+      console.log(`[BallCatch] No candidates found`);
       return null;
     }
+
+    console.log(`[BallCatch] ${candidates.length} candidates found`);
 
     // 優先度順にソート（高い順）
     candidates.sort((a, b) => b.config.priority - a.config.priority);
@@ -92,15 +95,27 @@ export class BallCatchSystem {
     const ballPosition = this.ball.getPosition();
     const ballVelocity = this.ball.getVelocity();
 
+    // デバッグ: ボール状態
+    console.log(`[BallCatch] Ball pos=(${ballPosition.x.toFixed(2)}, ${ballPosition.y.toFixed(2)}, ${ballPosition.z.toFixed(2)}), isHeld=${this.ball.isHeld()}, physicsEnabled=${this.ball.isPhysicsEnabled()}`);
+
     for (const character of this.allCharacters) {
+      const characterPos = character.getPosition();
+      const distanceToBody = getDistance2D(ballPosition, characterPos);
+
       // 前提条件チェック
       if (!this.passesPreConditions(character)) {
+        if (distanceToBody < 2.0) {
+          console.log(`[BallCatch] ${character.playerPosition} failed preConditions, dist=${distanceToBody.toFixed(2)}`);
+        }
         continue;
       }
 
       // シナリオ判定
       const scenario = this.determineCatchScenario(character, ballPosition);
       if (scenario === null) {
+        if (distanceToBody < 2.0) {
+          console.log(`[BallCatch] ${character.playerPosition} scenario=null, dist=${distanceToBody.toFixed(2)}`);
+        }
         continue;
       }
 
@@ -108,16 +123,16 @@ export class BallCatchSystem {
       const config = CATCH_SCENARIO_CONFIGS[scenario];
 
       // 距離計算
-      const characterPos = character.getPosition();
       const handPosition = character.getBallHoldingPosition();
 
-      const distanceToBody = getDistance2D(ballPosition, characterPos);
       const distanceToHand = getDistance3D(ballPosition, handPosition);
 
       // 相対速度計算
       const characterVelocity = character.velocity || Vector3.Zero();
       const relativeVelocity = ballVelocity.subtract(characterVelocity);
       const relativeSpeed = relativeVelocity.length();
+
+      console.log(`[BallCatch] ${character.playerPosition} scenario=${CatchScenario[scenario]}, bodyDist=${distanceToBody.toFixed(2)}, handDist=${distanceToHand.toFixed(2)}, speed=${relativeSpeed.toFixed(2)}`);
 
       candidates.push({
         character,
@@ -227,6 +242,7 @@ export class BallCatchSystem {
       const maxCatchHeight = characterHeight * BALL_CATCH_PHYSICS.MAX_CATCH_HEIGHT_RATIO;
 
       if (ballHeight < minCatchHeight || ballHeight > maxCatchHeight) {
+        console.log(`[TryCatch] ${character.playerPosition} FAIL height: ball=${ballHeight.toFixed(2)}, min=${minCatchHeight.toFixed(2)}, max=${maxCatchHeight.toFixed(2)}`);
         return null;
       }
     }
@@ -246,6 +262,7 @@ export class BallCatchSystem {
       const isNearHand = distanceToHand < nearHandThreshold;
 
       if (isNearBody || isNearHand) {
+        console.log(`[TryCatch] ${character.playerPosition} CATCH (skipVelocity) nearBody=${isNearBody}, nearHand=${isNearHand}`);
         return this.executeCatch(character, config.scenario, ballPosition);
       }
       return null;
@@ -255,6 +272,7 @@ export class BallCatchSystem {
 
     // リーチ範囲外ならスキップ
     if (distanceToHand > BALL_CATCH_PHYSICS.REACH_RANGE) {
+      console.log(`[TryCatch] ${character.playerPosition} FAIL reach: handDist=${distanceToHand.toFixed(2)}, REACH_RANGE=${BALL_CATCH_PHYSICS.REACH_RANGE}`);
       return null;
     }
 
@@ -268,8 +286,11 @@ export class BallCatchSystem {
     const isAtFeetLevel = ballHeight < characterHeight * BALL_CATCH_PHYSICS.FEET_HEIGHT_RATIO;
     const isAtFeet = isAtFeetLevel && isNearBody;
 
+    console.log(`[TryCatch] ${character.playerPosition} bodyRadius=${bodyRadius.toFixed(2)}, nearBodyThresh=${nearBodyThreshold.toFixed(2)}, isNearBody=${isNearBody}, isAtFeet=${isAtFeet}, ballH=${ballHeight.toFixed(2)}, feetH=${(characterHeight * BALL_CATCH_PHYSICS.FEET_HEIGHT_RATIO).toFixed(2)}`);
+
     // ボールが静止状態（キネマティックモード）の場合は直接キャプチャ判定
     if (!this.ball.isPhysicsEnabled()) {
+      console.log(`[TryCatch] ${character.playerPosition} physics disabled, nearBody=${isNearBody}, handCapture=${distanceToHand < BALL_CATCH_PHYSICS.CAPTURE_DISTANCE}`);
       if (isNearBody || distanceToHand < BALL_CATCH_PHYSICS.CAPTURE_DISTANCE) {
         return this.executeCatch(character, config.scenario, ballPosition);
       }
@@ -281,27 +302,35 @@ export class BallCatchSystem {
       // 制御可能な速度
       const isSlowRolling = relativeSpeed < BALL_CATCH_PHYSICS.SLOW_ROLLING_THRESHOLD;
 
+      console.log(`[TryCatch] ${character.playerPosition} physics mode: speed=${relativeSpeed.toFixed(2)}, isSlowRolling=${isSlowRolling}, captureDist=${BALL_CATCH_PHYSICS.CAPTURE_DISTANCE}`);
+
       if (distanceToHand < BALL_CATCH_PHYSICS.CAPTURE_DISTANCE) {
         // 手元まで来た - 完全にキャプチャ
+        console.log(`[TryCatch] ${character.playerPosition} CATCH (hand capture)`);
         return this.executeCatch(character, config.scenario, ballPosition);
       } else if (isSlowRolling && isNearBody) {
         // 低速ボールが体の近くにある - キャプチャ
+        console.log(`[TryCatch] ${character.playerPosition} CATCH (slow+nearBody)`);
         return this.executeCatch(character, config.scenario, ballPosition);
       } else if (isAtFeet) {
         // 足元のボール
         if (relativeSpeed < BALL_CATCH_PHYSICS.FEET_FAST_BALL_THRESHOLD) {
+          console.log(`[TryCatch] ${character.playerPosition} CATCH (at feet)`);
           return this.executeCatch(character, config.scenario, ballPosition);
         } else {
+          console.log(`[TryCatch] ${character.playerPosition} FUMBLE (feet too fast)`);
           this.executeFumble(character, handPosition, ballPosition);
           return null;
         }
       } else {
         // 手の方向に少しずつ引き寄せる
+        console.log(`[TryCatch] ${character.playerPosition} PULL (not close enough)`);
         this.executePullToHand(character, handPosition, ballPosition);
         return null;
       }
     } else {
       // 速すぎて捕れない - ファンブル
+      console.log(`[TryCatch] ${character.playerPosition} FUMBLE (too fast: ${relativeSpeed.toFixed(2)})`);
       this.executeFumble(character, handPosition, ballPosition);
       return null;
     }
