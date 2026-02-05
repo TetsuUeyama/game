@@ -711,6 +711,33 @@ export class Character {
   }
 
   /**
+   * AI移動を適用（衝突判定なし）
+   * 接触中のオフェンスが前進する際に使用
+   * @param deltaTime フレーム時間（秒）
+   */
+  public applyAIMovementWithoutCollision(deltaTime: number): void {
+    if (this.aiMovementDirection === null || this.aiMovementSpeed <= 0) {
+      return;
+    }
+
+    // 遅延時間が経過していない場合は移動しない（reflexesベースの反応時間）
+    const currentTime = Date.now();
+    const elapsedTime = currentTime - this.aiMovementStartTime;
+    if (elapsedTime < this.aiMovementDelay) {
+      return; // まだ反応時間中
+    }
+
+    // 重心が安定していない場合は移動しない（重心システム）
+    if (!this.balanceController.canTransition()) {
+      return; // 重心が不安定
+    }
+
+    // 衝突判定をスキップして移動を実行
+    const scaledDirection = this.aiMovementDirection.scale(this.aiMovementSpeed);
+    this.move(scaledDirection, deltaTime);
+  }
+
+  /**
    * モーションを再生
    */
   public playMotion(motion: MotionData, speed: number = 1.0, blendDuration: number = 0.3): void {
@@ -1836,8 +1863,8 @@ export class Character {
     // 2. 能力差による追加の押し込み力（接触中は常に発生）
     // pushRatio > 0: 自分の能力が高い → 相手を押し込む
     // pushRatio < 0: 相手の能力が高い → 自分が押し込まれる
-    // 毎フレーム最大0.03m（60fpsで約1.8m/秒）の押し込み
-    const pushForce = 0.03 * pushRatio;
+    // 毎フレーム最大0.08m（60fpsで約4.8m/秒）の押し込み
+    const pushForce = 0.08 * pushRatio;
 
     // 分離は能力差に応じて分配
     const selfSeparation = separationPush * (0.5 - pushRatio * 0.5);

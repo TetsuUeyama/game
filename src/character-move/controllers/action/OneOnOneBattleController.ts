@@ -113,18 +113,37 @@ export class OneOnOneBattleController {
       }
     }
 
-    // オフェンス側の移動を試行（通常の衝突判定）
+    // 先に接触状態をチェック（移動前に判定）
+    let wasInContact = false;
+    if (onBallPlayer && onBallDefender) {
+      const offensePos = onBallPlayer.getPosition();
+      const defenderPos = onBallDefender.getPosition();
+      const distance = Vector3.Distance(
+        new Vector3(offensePos.x, 0, offensePos.z),
+        new Vector3(defenderPos.x, 0, defenderPos.z)
+      );
+      const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+      wasInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
+    }
+
+    // オフェンス側の移動を試行
     let offenseCollided = false;
     if (onBallPlayer) {
-      offenseCollided = onBallPlayer.applyAIMovementWithCollision(deltaTime, allCharacters);
+      if (wasInContact && ONE_ON_ONE_BATTLE.OFFENSE_MOVE_DURING_CONTACT) {
+        // 接触中は衝突判定をスキップして移動（衝突判定なしで前進）
+        onBallPlayer.applyAIMovementWithoutCollision(deltaTime);
+      } else {
+        // 通常の衝突判定付き移動
+        offenseCollided = onBallPlayer.applyAIMovementWithCollision(deltaTime, allCharacters);
+      }
     }
 
     // ディフェンス側の移動を試行（通常の衝突判定）
-    if (onBallDefender) {
+    if (onBallDefender && !wasInContact) {
       onBallDefender.applyAIMovementWithCollision(deltaTime, allCharacters);
     }
 
-    // サークルが接触しているかチェック
+    // 移動後に再度接触状態をチェック
     this.circlesInContact = false;
     if (onBallPlayer && onBallDefender) {
       const offensePos = onBallPlayer.getPosition();
@@ -139,9 +158,19 @@ export class OneOnOneBattleController {
       // 接触中の処理
       if (this.circlesInContact) {
         if (ONE_ON_ONE_BATTLE.OFFENSE_MOVE_DURING_CONTACT) {
-          // オフェンスが動く設定の場合は移動を許可（perform1on1Battleで設定された移動を使用）
-          // ディフェンダーのみ移動をクリア（オフェンスに追従するため）
+          // ディフェンダーの移動をクリア（オフェンスに追従するため）
           onBallDefender.clearAIMovement();
+
+          // 接触中はノックバック（押し返し）を適用
+          // オフェンス/ディフェンス能力値に基づいてディフェンダーを押し下げる
+          const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);
+
+          // ノックバックを適用（calculatePushbackは毎フレーム適用を想定した値を返す）
+          const newOffensePos = offensePos.add(selfPush);
+          const newDefenderPos = defenderPos.add(otherPush);
+
+          onBallPlayer.setPosition(newOffensePos);
+          onBallDefender.setPosition(newDefenderPos);
         } else {
           // 従来動作：両者の移動を停止
           onBallPlayer.clearAIMovement();
@@ -739,6 +768,23 @@ export class OneOnOneBattleController {
       onBallPlayer.getRotation(),
       { x: defenderPos.x, z: defenderPos.z }
     );
+  }
+
+  /**
+   * 状態をリセット（センターサークル再開等で使用）
+   */
+  public forceReset(): void {
+    this.was1on1 = false;
+    this.in1on1Battle = false;
+    this.circlesInContact = false;
+    this.lastDiceRollTime = 0;
+    this.lastCollisionRedirectTime = 0;
+    this.oneononeResult = null;
+    this.advantageStatus = {
+      state: 'neutral',
+      difference: 0,
+      multiplier: 0,
+    };
   }
 
   /**

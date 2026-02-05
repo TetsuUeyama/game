@@ -504,7 +504,7 @@ export class OffBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * フォーメーション位置への移動処理（ヒートマップ方式）
+   * フォーメーション位置への移動処理（ポジション別）
    */
   private handleFormationPosition(deltaTime: number, onBallPlayer: Character | null): void {
     const playerPosition = this.character.playerPosition as PlayerPosition;
@@ -516,18 +516,53 @@ export class OffBallOffenseAI extends BaseStateAI {
       return;
     }
 
+    // ポジションごとに異なる行動ロジック
+    switch (playerPosition) {
+      case 'PG':
+      case 'SG':
+        // PG/SG: オンボールプレイヤーの近くでパスコース導線を確保
+        this.handleGuardPosition(deltaTime, onBallPlayer);
+        break;
+      case 'C':
+        // C: ゴール下付近に移動
+        this.handleCenterPosition(deltaTime, onBallPlayer);
+        break;
+      case 'PF':
+      case 'SF':
+      default:
+        // PF/SF: 中間的な動き（フォーメーションベース）
+        this.handleForwardPosition(deltaTime, onBallPlayer, playerPosition);
+        break;
+    }
+  }
+
+  /**
+   * PG/SG: オンボールプレイヤーの近くでパスコース導線を確保
+   */
+  private handleGuardPosition(deltaTime: number, onBallPlayer: Character | null): void {
     // 位置の再評価タイマーを更新
     this.positionReevaluateTimer += deltaTime;
 
+    if (!onBallPlayer) {
+      // オンボールプレイヤーがいない場合は待機
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 自分がオンボールプレイヤーの場合は何もしない（OffBallOffenseAIが呼ばれないはずだが念のため）
+    if (onBallPlayer === this.character) {
+      return;
+    }
+
     // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
-    const isAllyTeam = this.character.team === 'ally';
     if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
-      this.selectNewTargetPosition(playerPosition, isAllyTeam);
+      this.selectGuardTargetPosition(onBallPlayer);
       this.positionReevaluateTimer = 0;
     }
 
     if (!this.currentTargetPosition) {
-      // 目標位置がない場合は待機
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -540,11 +575,226 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.currentTargetPosition.z
     );
 
-    // 目標位置に向かって移動
+    this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
+  }
+
+  /**
+   * PG/SG用: オンボールプレイヤーの近くでパスレーンが確保できる位置を選択
+   */
+  private selectGuardTargetPosition(onBallPlayer: Character): void {
+    const onBallPos = onBallPlayer.getPosition();
+    const myPosition = this.character.getPosition();
+
+    // オンボールプレイヤーから3-6mの範囲でパスレーンが確保できる位置を探す
+    const minDistance = 3.0;
+    const maxDistance = 6.0;
+
+    let bestPosition: { x: number; z: number } | null = null;
+    let bestRisk = 1.0;
+
+    // 8方向 x 3距離で探索
+    for (let angleStep = 0; angleStep < 8; angleStep++) {
+      const angle = (angleStep * Math.PI) / 4; // 0, 45, 90, ... 度
+
+      for (let distStep = 0; distStep < 3; distStep++) {
+        const distance = minDistance + (maxDistance - minDistance) * (distStep / 2);
+
+        const candidateX = onBallPos.x + Math.cos(angle) * distance;
+        const candidateZ = onBallPos.z + Math.sin(angle) * distance;
+
+        // コート境界チェック
+        if (Math.abs(candidateX) > 6.0 || Math.abs(candidateZ) > 13.5) {
+          continue;
+        }
+
+        const candidate = { x: candidateX, z: candidateZ };
+
+        // チームメイトに近すぎる場合はスキップ
+        if (this.isTooCloseToTeammates(candidate)) {
+          continue;
+        }
+
+        // パスレーンリスクを計算
+        const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
+
+        if (risk < bestRisk) {
+          bestRisk = risk;
+          bestPosition = candidate;
+
+          // 十分に安全な位置が見つかったら終了
+          if (risk <= this.maxPassLaneRisk) {
+            break;
+          }
+        }
+      }
+
+      if (bestPosition && bestRisk <= this.maxPassLaneRisk) {
+        break;
+      }
+    }
+
+    // 見つからなければ現在位置に近い場所
+    if (bestPosition) {
+      this.currentTargetPosition = bestPosition;
+    } else {
+      // フォールバック: 現在位置からオンボールプレイヤー方向に少し移動
+      const toOnBall = new Vector3(
+        onBallPos.x - myPosition.x,
+        0,
+        onBallPos.z - myPosition.z
+      );
+      const dist = toOnBall.length();
+      if (dist > maxDistance) {
+        toOnBall.normalize();
+        this.currentTargetPosition = {
+          x: onBallPos.x - toOnBall.x * minDistance,
+          z: onBallPos.z - toOnBall.z * minDistance
+        };
+      } else if (dist < minDistance) {
+        toOnBall.normalize();
+        this.currentTargetPosition = {
+          x: onBallPos.x - toOnBall.x * minDistance,
+          z: onBallPos.z - toOnBall.z * minDistance
+        };
+      } else {
+        this.currentTargetPosition = { x: myPosition.x, z: myPosition.z };
+      }
+    }
+  }
+
+  /**
+   * C: ゴール下付近に移動
+   */
+  private handleCenterPosition(deltaTime: number, onBallPlayer: Character | null): void {
+    // 位置の再評価タイマーを更新
+    this.positionReevaluateTimer += deltaTime;
+
+    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
+    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
+      this.selectCenterTargetPosition();
+      this.positionReevaluateTimer = 0;
+    }
+
+    if (!this.currentTargetPosition) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    const targetPosition = new Vector3(
+      this.currentTargetPosition.x,
+      this.character.getPosition().y,
+      this.currentTargetPosition.z
+    );
+
     if (onBallPlayer) {
       this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
     } else {
       this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
+    }
+  }
+
+  /**
+   * C用: ゴール下付近の位置を選択
+   */
+  private selectCenterTargetPosition(): void {
+    // 攻撃側のゴール位置を取得
+    const isAllyTeam = this.character.team === 'ally';
+    const goalZ = isAllyTeam ? 13.5 : -13.5; // ally: +Z方向（goal1）、enemy: -Z方向（goal2）
+
+    // ゴール下付近（ゴールから2-3m手前）
+    const targetZ = isAllyTeam ? goalZ - 2.5 : goalZ + 2.5;
+
+    // X方向は中央付近でランダムに少しずらす（-1.5〜1.5m）
+    const targetX = (Math.random() - 0.5) * 3.0;
+
+    const candidate = { x: targetX, z: targetZ };
+
+    // チームメイトに近すぎる場合は少しずらす
+    if (this.isTooCloseToTeammates(candidate)) {
+      const adjustedPosition = this.findPositionAvoidingTeammates(candidate);
+      this.currentTargetPosition = adjustedPosition || candidate;
+    } else {
+      this.currentTargetPosition = candidate;
+    }
+  }
+
+  /**
+   * PF/SF: 中間的な動き（フォーメーションベース）
+   */
+  private handleForwardPosition(deltaTime: number, onBallPlayer: Character | null, playerPosition: PlayerPosition): void {
+    // 位置の再評価タイマーを更新
+    this.positionReevaluateTimer += deltaTime;
+
+    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
+    const isAllyTeam = this.character.team === 'ally';
+    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
+      this.selectForwardTargetPosition(playerPosition, isAllyTeam, onBallPlayer);
+      this.positionReevaluateTimer = 0;
+    }
+
+    if (!this.currentTargetPosition) {
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    const targetPosition = new Vector3(
+      this.currentTargetPosition.x,
+      this.character.getPosition().y,
+      this.currentTargetPosition.z
+    );
+
+    if (onBallPlayer) {
+      this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
+    } else {
+      this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
+    }
+  }
+
+  /**
+   * PF/SF用: フォーメーションベースの位置を選択（ガードとセンターの中間的な動き）
+   * ゴールとオンボールプレイヤーの間くらいの位置を取る
+   */
+  private selectForwardTargetPosition(playerPosition: PlayerPosition, isAllyTeam: boolean, onBallPlayer: Character | null): void {
+    // 攻撃側のゴール位置を取得
+    const goalZ = isAllyTeam ? 13.5 : -13.5;
+
+    if (onBallPlayer) {
+      const onBallPos = onBallPlayer.getPosition();
+
+      // オンボールプレイヤーとゴールの中間あたり
+      const midZ = (onBallPos.z + goalZ) / 2;
+
+      // X方向はポジションに応じて左右に分ける
+      // PF: やや右側、SF: やや左側（allyチーム基準）
+      let xOffset = 0;
+      if (playerPosition === 'PF') {
+        xOffset = isAllyTeam ? 3.0 : -3.0;
+      } else if (playerPosition === 'SF') {
+        xOffset = isAllyTeam ? -3.0 : 3.0;
+      }
+
+      const candidate = { x: onBallPos.x + xOffset, z: midZ };
+
+      // コート境界チェック
+      const clampedCandidate = {
+        x: Math.max(-6.0, Math.min(6.0, candidate.x)),
+        z: Math.max(-13.5, Math.min(13.5, candidate.z))
+      };
+
+      // チームメイトに近すぎる場合は調整
+      if (this.isTooCloseToTeammates(clampedCandidate)) {
+        const adjustedPosition = this.findSaferPositionAvoidingTeammates(clampedCandidate, onBallPlayer, 1.0);
+        this.currentTargetPosition = adjustedPosition || clampedCandidate;
+      } else {
+        this.currentTargetPosition = clampedCandidate;
+      }
+    } else {
+      // オンボールプレイヤーがいない場合はフォーメーションベース
+      this.selectNewTargetPosition(playerPosition, isAllyTeam);
     }
   }
 
