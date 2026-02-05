@@ -5,7 +5,7 @@
 /**
  * シュートタイプ
  */
-export type ShootType = '3pt' | 'midrange' | 'layup' | 'out_of_range';
+export type ShootType = '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range';
 
 /**
  * シュートタイプごとの設定
@@ -47,6 +47,13 @@ export const SHOOT_TYPE_CONFIGS: Record<Exclude<ShootType, 'out_of_range'>, Shoo
     maxDistance: 2.0,
     arcHeight: 0.8,
     label: 'レイアップ',
+  },
+  'dunk': {
+    color: { r: 1.0, g: 0.0, b: 0.0 },  // 赤
+    minDistance: 0.0,
+    maxDistance: 1.5,
+    arcHeight: 0.3,
+    label: 'ダンク',
   },
 };
 

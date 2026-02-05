@@ -74,7 +74,7 @@ export type ShootCheckState =
 /**
  * シュートタイプフィルター
  */
-export type ShotTypeFilter = 'all' | '3pt' | 'midrange' | 'layup';
+export type ShotTypeFilter = 'all' | '3pt' | 'midrange' | 'layup' | 'dunk';
 
 /**
  * シュートチェックの設定

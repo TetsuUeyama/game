@@ -427,6 +427,25 @@ export class Character {
   }
 
   /**
+   * ビジュアル位置を取得（モーションオフセットを含む実際の位置）
+   * ジャンプ中の実際の高さを取得したい場合に使用
+   */
+  public getVisualPosition(): Vector3 {
+    return new Vector3(
+      this.position.x,
+      this.position.y + this.motionOffsetY,
+      this.position.z
+    );
+  }
+
+  /**
+   * 現在のモーションオフセットYを取得
+   */
+  public getMotionOffsetY(): number {
+    return this.motionOffsetY;
+  }
+
+  /**
    * 位置を設定
    * @param position 設定する位置
    * @param skipBoundaryClamp trueの場合、フィールド境界へのクランプをスキップ（スローイン時など）

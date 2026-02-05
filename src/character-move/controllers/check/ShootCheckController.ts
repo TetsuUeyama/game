@@ -64,6 +64,20 @@ export class ShootCheckController {
   // ゴール判定用
   private goalScored: boolean = false;
 
+  // ダンク用: 踏切位置からゴールエリアへの移動
+  private originalPosition: Vector3 | null = null;
+  private dunkTargetPosition: Vector3 | null = null;
+  private dunkStartTime: number = 0;
+  private isDunking: boolean = false;
+  private isReturningToStart: boolean = false;  // ダンク後に踏切位置へ歩いて戻る状態
+
+  // ダンクモーションのタイミング設定（ShootMotion.tsと同期）
+  private static readonly DUNK_DURATION = 0.85;        // モーション全体の長さ（秒）
+  private static readonly DUNK_PEAK_TIME = 0.35;       // ジャンプピーク到達時間（秒）
+  private static readonly DUNK_SLAM_TIME = 0.55;       // 叩きつけ完了時間（秒）
+  private static readonly WALK_SPEED = 3.0;            // 歩いて戻る速度（m/s）
+  private static readonly ARRIVAL_THRESHOLD = 0.1;     // 到着判定の閾値（m）
+
   constructor(
     character: Character,
     ball: Ball,
@@ -192,8 +206,9 @@ export class ShootCheckController {
     this.currentShotCount = 0;
     this.currentCellSuccessCount = 0;
 
-    // シュートレンジをチェック
-    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+    // シュートレンジをチェック（ダンクフィルター時はforceDunk=true）
+    const forceDunk = this.config.shotTypeFilter === 'dunk';
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character, forceDunk);
 
     if (!rangeInfo || !rangeInfo.inRange || !rangeInfo.facingGoal) {
       // レンジ外の場合、即終了
@@ -283,6 +298,15 @@ export class ShootCheckController {
     this.state = 'aborted';
     this.waitingForShot = false;
     this.waitingForBallRelease = false;
+    this.isDunking = false;
+    this.isReturningToStart = false;
+    this.dunkTargetPosition = null;
+
+    // ダンク中または戻り中に中断した場合、元の位置に戻す
+    if (this.originalPosition) {
+      this.character.setPosition(this.originalPosition);
+      this.originalPosition = null;
+    }
 
     // 完了コールバックを呼び出し（途中結果）
     if (this.onCompleteCallback) {
@@ -330,8 +354,9 @@ export class ShootCheckController {
     this.currentShotCount = 0;
     this.currentCellSuccessCount = 0;
 
-    // シュートレンジをチェック
-    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+    // シュートレンジをチェック（ダンクフィルター時はforceDunk=true）
+    const forceDunk = this.config.shotTypeFilter === 'dunk';
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character, forceDunk);
 
     if (!rangeInfo || !rangeInfo.inRange || !rangeInfo.facingGoal) {
       // レンジ外の場合、結果を記録して次の升目へ
@@ -417,8 +442,46 @@ export class ShootCheckController {
       this.ball.setHolder(this.character);
     }
 
+    // シュートを実行（ダンクモーションはジャンプを含むので特別処理不要）
+    this.executeShot();
+  }
+
+  /**
+   * シュートを実行（共通処理）
+   */
+  private executeShot(): void {
+    const forceDunk = this.config.shotTypeFilter === 'dunk';
+
+    // ダンクの場合、踏切位置とゴールエリア（目標位置）を設定
+    if (forceDunk) {
+      this.originalPosition = this.character.getPosition().clone();
+
+      // ゴールエリアの位置を計算（H29またはH2のマス）
+      const goalZ = this.config.targetGoal === 'goal1'
+        ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+        : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
+
+      // ゴール直下に移動（X座標は現在位置を維持、リムの真下あたり）
+      // リムの手前0.3mくらいの位置が叩きつけ位置
+      const dunkOffset = this.config.targetGoal === 'goal1' ? -0.3 : 0.3;
+      const characterHeight = this.character.config?.physical?.height ?? 1.9;
+
+      // X座標: 踏切位置のX座標をある程度維持しつつ、リムに近づく
+      // （完全にX=0にすると斜めダンクの味がなくなる）
+      const targetX = this.originalPosition.x * 0.3; // リムに向かいつつ少し横を維持
+
+      this.dunkTargetPosition = new Vector3(
+        targetX,
+        characterHeight / 2,
+        goalZ + dunkOffset
+      );
+
+      this.isDunking = true;
+      this.dunkStartTime = Date.now();
+    }
+
     // シュートアクションを開始（アニメーション付き）
-    const result = this.shootingController.startShootAction(this.character);
+    const result = this.shootingController.startShootAction(this.character, forceDunk);
 
     if (result.success) {
       // アニメーション開始成功 → ボールが発射されるのを待つ
@@ -426,7 +489,10 @@ export class ShootCheckController {
       this.waitingForBallRelease = true;
       this.shotStartTime = Date.now();
     } else {
-      // シュート開始失敗 → 少し待ってリトライ（アクション中の可能性）
+      // シュート開始失敗 → リセットしてリトライ
+      this.originalPosition = null;
+      this.dunkTargetPosition = null;
+      this.isDunking = false;
       setTimeout(() => {
         if (this.state === 'running') {
           this.shootNextShot();
@@ -444,7 +510,8 @@ export class ShootCheckController {
       ? this.singleCell!
       : this.allCells[this.currentCellIndex];
     const worldPos = FieldGridUtils.cellToWorld(cell.col, cell.row);
-    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+    const forceDunk = this.config.shotTypeFilter === 'dunk';
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character, forceDunk);
 
     const cellName = `${cell.col}${cell.row}`;
     const result: CellShootResult = {
@@ -486,13 +553,136 @@ export class ShootCheckController {
   /**
    * 更新処理（毎フレーム呼び出し）
    */
-  public update(_deltaTime: number): void {
+  public update(deltaTime: number): void {
     if (this.state !== 'running') return;
+
+    // ダンク中の位置補間
+    if (this.isDunking) {
+      this.updateDunkPosition();
+      // ダンク中は他の処理をスキップ（着地完了まで待つ）
+      return;
+    }
+
+    // ダンク後、踏切位置へ歩いて戻る（ダンクモーション完了後のみ）
+    if (this.isReturningToStart) {
+      this.updateReturnToStart(deltaTime);
+      return; // 戻っている間は他の処理をスキップ
+    }
 
     if (this.waitingForShot) {
       // シュート結果を待機中
       this.checkShotResult();
     }
+  }
+
+  /**
+   * ダンク中のキャラクター位置を補間
+   * 踏切位置からゴールエリアへスムーズに移動し、叩きつけ後はその位置に留まる
+   */
+  private updateDunkPosition(): void {
+    if (!this.originalPosition || !this.dunkTargetPosition) {
+      this.isDunking = false;
+      return;
+    }
+
+    const elapsed = (Date.now() - this.dunkStartTime) / 1000; // 秒に変換
+
+    // 叩きつけ時点（DUNK_SLAM_TIME）までは踏切位置→ゴールエリアへ移動
+    // 叩きつけ後はゴールエリアに留まって垂直に着地
+    const currentPos = this.character.getPosition();
+
+    if (elapsed < ShootCheckController.DUNK_SLAM_TIME) {
+      // 叩きつけまで：踏切位置からゴールエリアへ移動
+      const progress = elapsed / ShootCheckController.DUNK_SLAM_TIME;
+      // イージング関数（ease-out）でスムーズな移動
+      const easedProgress = 1 - Math.pow(1 - progress, 2);
+
+      const currentX = this.originalPosition.x + (this.dunkTargetPosition.x - this.originalPosition.x) * easedProgress;
+      const currentZ = this.originalPosition.z + (this.dunkTargetPosition.z - this.originalPosition.z) * easedProgress;
+
+      this.character.setPosition(new Vector3(currentX, currentPos.y, currentZ));
+    } else {
+      // 叩きつけ後：ゴールエリアに留まる（Y座標のみモーションで制御、XZは固定）
+      this.character.setPosition(new Vector3(
+        this.dunkTargetPosition.x,
+        currentPos.y,
+        this.dunkTargetPosition.z
+      ));
+    }
+
+    // ダンクモーション終了後はフラグをリセット
+    if (elapsed >= ShootCheckController.DUNK_DURATION) {
+      this.isDunking = false;
+    }
+  }
+
+  /**
+   * ダンク後、踏切位置へ歩いて戻る
+   */
+  private updateReturnToStart(deltaTime: number): void {
+    if (!this.originalPosition) {
+      this.isReturningToStart = false;
+      this.proceedToNextShot();
+      return;
+    }
+
+    const currentPos = this.character.getPosition();
+    const targetPos = this.originalPosition;
+
+    // 目標位置への方向を計算
+    const dx = targetPos.x - currentPos.x;
+    const dz = targetPos.z - currentPos.z;
+    const distance = Math.sqrt(dx * dx + dz * dz);
+
+    // 到着判定
+    if (distance < ShootCheckController.ARRIVAL_THRESHOLD) {
+      // 踏切位置に到着
+      this.character.setPosition(new Vector3(targetPos.x, currentPos.y, targetPos.z));
+      this.isReturningToStart = false;
+      this.originalPosition = null;
+      this.dunkTargetPosition = null;
+
+      // ゴール方向を向く
+      const goalZ = this.config.targetGoal === 'goal1'
+        ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+        : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
+      const goalPosition = new Vector3(0, 0, goalZ);
+      this.character.lookAt(goalPosition);
+
+      // 次のシュートへ
+      this.proceedToNextShot();
+      return;
+    }
+
+    // 移動方向を向く
+    const angle = Math.atan2(dx, dz);
+    this.character.setRotation(angle);
+
+    // 歩いて移動
+    const moveDistance = ShootCheckController.WALK_SPEED * deltaTime;
+    const moveX = (dx / distance) * Math.min(moveDistance, distance);
+    const moveZ = (dz / distance) * Math.min(moveDistance, distance);
+
+    this.character.setPosition(new Vector3(
+      currentPos.x + moveX,
+      currentPos.y,
+      currentPos.z + moveZ
+    ));
+
+    // 歩行モーションを再生（キャラクターに歩行メソッドがあれば）
+    // this.character.playWalkMotion() など
+  }
+
+  /**
+   * 次のシュートへ進む（遅延付き）
+   */
+  private proceedToNextShot(): void {
+    setTimeout(() => {
+      if (this.state === 'running') {
+        this.ball.setHolder(this.character);
+        this.shootNextShot();
+      }
+    }, SHOOT_CHECK_TIMING.SHOT_INTERVAL_DELAY_MS);
   }
 
   /**
@@ -576,20 +766,39 @@ export class ShootCheckController {
 
     this.reportProgress();
 
-    // ボールをリセットしてキャラクターに持たせる
+    // ボールをリセット
     this.ball.endFlight();
 
-    // キャラクターのバランスをリセット（ジャンプ後のロック状態を解除）
-    // resetBalance() は内部で actionController.cancelAction() も呼び出す
-    this.character.resetBalance();
+    // ダンクの場合、モーション完了（着地）を待ってから歩いて戻る
+    if (this.originalPosition && this.isDunking) {
+      // ダンクモーション完了まで待ってから歩き始める
+      const elapsed = (Date.now() - this.dunkStartTime) / 1000;
+      const remainingTime = Math.max(0, ShootCheckController.DUNK_DURATION - elapsed);
 
-    // 少し遅延を入れて次のシュートへ
-    setTimeout(() => {
-      if (this.state === 'running') {
-        this.ball.setHolder(this.character);
-        this.shootNextShot();
-      }
-    }, SHOOT_CHECK_TIMING.SHOT_INTERVAL_DELAY_MS);
+      setTimeout(() => {
+        if (this.state !== 'running') return;
+
+        // モーション完了後にリセット
+        this.character.resetBalance();
+        this.isDunking = false;
+        // 歩いて戻る状態を開始（着地位置から）
+        this.isReturningToStart = true;
+      }, remainingTime * 1000);
+      return;
+    }
+
+    // ダンク中でない場合（通常のダンク着地後や他のシュート）
+    if (this.originalPosition) {
+      // ダンク着地済みの場合
+      this.character.resetBalance();
+      this.isDunking = false;
+      this.isReturningToStart = true;
+      return;
+    }
+
+    // 通常のシュート（ダンク以外）の場合
+    this.character.resetBalance();
+    this.proceedToNextShot();
   }
 
   /**
@@ -654,6 +863,10 @@ export class ShootCheckController {
   public dispose(): void {
     this.state = 'idle';
     this.waitingForShot = false;
+    this.isDunking = false;
+    this.isReturningToStart = false;
+    this.originalPosition = null;
+    this.dunkTargetPosition = null;
     this.results.clear();
   }
 }

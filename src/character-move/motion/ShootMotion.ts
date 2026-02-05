@@ -305,6 +305,126 @@ export const SHOOT_LAYUP_MOTION_CONFIG: MotionConfig = {
 };
 
 // ==============================
+// ダンク
+// ==============================
+
+/**
+ * ダンクモーション
+ *
+ * 前進しながらジャンプしてゴールに叩き込む迫力のあるダンク
+ * しゃがみ→前方ジャンプ→空中で前進→叩きつけ→着地
+ *
+ * タイミング（ActionConfigより）:
+ * - startupTime: 350ms = 0.35秒（しゃがみ〜ジャンプピーク）
+ * - activeTime: 200ms = 0.2秒（叩きつけ動作）
+ *
+ * キーフレーム構成：
+ * - T0: 構え
+ * - T1: しゃがみ完了、ジャンプ直前
+ * - T2: ジャンプピーク、ボール振り上げ（startupTime）、前方移動中
+ * - T3: 叩きつけ、ボールリリース、最大前方位置
+ * - T4: 下降中
+ * - T5: 着地
+ */
+const SHOOT_DUNK_T0 = 0.0;
+const SHOOT_DUNK_T1 = 0.15;  // しゃがみ完了
+const SHOOT_DUNK_T2 = 0.35;  // startupTime = ジャンプピーク
+const SHOOT_DUNK_T3 = 0.55;  // 叩きつけ完了
+const SHOOT_DUNK_T4 = 0.7;   // 下降中
+const SHOOT_DUNK_T5 = 0.85;  // 着地
+
+const SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身：しゃがみで前傾→ジャンプで後傾→叩きつけで大きく前傾
+  upperBodyX: {[SHOOT_DUNK_T0]: 5, [SHOOT_DUNK_T1]: 20, [SHOOT_DUNK_T2]: -15, [SHOOT_DUNK_T3]: 40, [SHOOT_DUNK_T4]: 20, [SHOOT_DUNK_T5]: 5},
+  upperBodyY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  upperBodyZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 下半身：固定
+  lowerBodyX: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  lowerBodyY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  lowerBodyZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 頭：リムを見つめる→叩きつけ時に下を見る
+  headX: {[SHOOT_DUNK_T0]: -5, [SHOOT_DUNK_T1]: 5, [SHOOT_DUNK_T2]: -25, [SHOOT_DUNK_T3]: 25, [SHOOT_DUNK_T4]: 10, [SHOOT_DUNK_T5]: 0},
+  headY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  headZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 右腕：構え→大きく振り上げ→力強く叩きつけ
+  rightShoulderX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -70, [SHOOT_DUNK_T2]: -180, [SHOOT_DUNK_T3]: -70, [SHOOT_DUNK_T4]: -50, [SHOOT_DUNK_T5]: -45},
+  rightShoulderY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  rightShoulderZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: -15, [SHOOT_DUNK_T3]: 10, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  rightElbowX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -80, [SHOOT_DUNK_T2]: -20, [SHOOT_DUNK_T3]: -40, [SHOOT_DUNK_T4]: -45, [SHOOT_DUNK_T5]: -45},
+  rightElbowY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  rightElbowZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 左腕：補助→叩きつけ後は下ろす
+  leftShoulderX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -65, [SHOOT_DUNK_T2]: -170, [SHOOT_DUNK_T3]: -60, [SHOOT_DUNK_T4]: -50, [SHOOT_DUNK_T5]: -45},
+  leftShoulderY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  leftShoulderZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 15, [SHOOT_DUNK_T3]: -10, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  leftElbowX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -75, [SHOOT_DUNK_T2]: -25, [SHOOT_DUNK_T3]: -35, [SHOOT_DUNK_T4]: -45, [SHOOT_DUNK_T5]: -45},
+  leftElbowY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  leftElbowZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 脚：力強いジャンプ→空中で膝を上げる（ダイナミックな姿勢）
+  leftHipX: {[SHOOT_DUNK_T0]: -30, [SHOOT_DUNK_T1]: -80, [SHOOT_DUNK_T2]: -40, [SHOOT_DUNK_T3]: -20, [SHOOT_DUNK_T4]: -50, [SHOOT_DUNK_T5]: -30},
+  leftHipY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  leftHipZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 右脚：ジャンプ時に膝を高く上げる（片足ジャンプ風）
+  rightHipX: {[SHOOT_DUNK_T0]: -30, [SHOOT_DUNK_T1]: -75, [SHOOT_DUNK_T2]: -70, [SHOOT_DUNK_T3]: -50, [SHOOT_DUNK_T4]: -55, [SHOOT_DUNK_T5]: -30},
+  rightHipY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  rightHipZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  leftKneeX: {[SHOOT_DUNK_T0]: 50, [SHOOT_DUNK_T1]: 110, [SHOOT_DUNK_T2]: 50, [SHOOT_DUNK_T3]: 30, [SHOOT_DUNK_T4]: 70, [SHOOT_DUNK_T5]: 50},
+  leftKneeY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  leftKneeZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+
+  // 右膝：空中で高く曲げる
+  rightKneeX: {[SHOOT_DUNK_T0]: 50, [SHOOT_DUNK_T1]: 105, [SHOOT_DUNK_T2]: 90, [SHOOT_DUNK_T3]: 70, [SHOOT_DUNK_T4]: 80, [SHOOT_DUNK_T5]: 50},
+  rightKneeY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  rightKneeZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+};
+
+// ダンクモーション位置アニメーション
+// XZ方向の実際の移動はShootCheckControllerで制御するため、ここではわずかな微調整のみ
+const SHOOT_DUNK_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+  // 高くジャンプ（リム高さ3.05mに届くように）
+  y: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: -0.3, [SHOOT_DUNK_T2]: 1.5, [SHOOT_DUNK_T3]: 1.2, [SHOOT_DUNK_T4]: 0.5, [SHOOT_DUNK_T5]: 0},
+  // Z方向は実際のキャラクター移動で制御、モーションでは微調整のみ
+  z: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
+};
+
+export const SHOOT_DUNK_MOTION: MotionData = {
+  name: "shoot_dunk",
+  duration: SHOOT_DUNK_T5,
+  loop: false,
+  keyframes: buildKeyframes(SHOOT_DUNK_JOINT_ANIMATIONS, SHOOT_DUNK_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 10 },
+    { jointName: "leftShoulder", priority: 10 },
+    { jointName: "leftElbow", priority: 10 },
+    { jointName: "leftHip", priority: 9 },
+    { jointName: "rightHip", priority: 9 },
+    { jointName: "leftKnee", priority: 9 },
+    { jointName: "rightKnee", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+    { jointName: "head", priority: 7 },
+  ],
+};
+
+export const SHOOT_DUNK_MOTION_CONFIG: MotionConfig = {
+  motionData: SHOOT_DUNK_MOTION,
+  isDefault: false,
+  blendDuration: 0.1,
+  priority: 45,          // 他のシュートより高い優先度
+  interruptible: false,
+};
+
+// ==============================
 // シュートフェイント
 // ==============================
 
@@ -415,6 +535,7 @@ export const SHOOT_MOTIONS = {
   shoot_3pt: SHOOT_3PT_MOTION,
   shoot_midrange: SHOOT_MIDRANGE_MOTION,
   shoot_layup: SHOOT_LAYUP_MOTION,
+  shoot_dunk: SHOOT_DUNK_MOTION,
   shoot_feint: SHOOT_FEINT_MOTION,
 };
 
@@ -425,4 +546,5 @@ export const SHOOT_MOTION_CONFIGS = {
   shoot_3pt: SHOOT_3PT_MOTION_CONFIG,
   shoot_midrange: SHOOT_MIDRANGE_MOTION_CONFIG,
   shoot_layup: SHOOT_LAYUP_MOTION_CONFIG,
+  shoot_dunk: SHOOT_DUNK_MOTION_CONFIG,
 };
