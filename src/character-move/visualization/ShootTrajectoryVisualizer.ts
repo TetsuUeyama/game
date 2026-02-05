@@ -141,8 +141,11 @@ export class ShootTrajectoryVisualizer {
     // ゴールまでの距離
     const distance = this.getDistanceToGoal(shooterPos, targetGoal.position);
 
+    // ジャンプ状態を確認
+    const isJumping = this.isCharacterJumping(holder);
+
     // シュートタイプを判定
-    const shootType = this.getShootType(distance);
+    const shootType = this.getShootType(distance, isJumping);
 
     // レンジ外の場合は表示しない
     if (shootType === 'out_of_range') {
@@ -200,9 +203,21 @@ export class ShootTrajectoryVisualizer {
   }
 
   /**
+   * キャラクターがジャンプ中かどうかを判定
+   */
+  private isCharacterJumping(character: Character): boolean {
+    const pos = character.getPosition();
+    return pos.y > 0.5;
+  }
+
+  /**
    * シュートタイプを判定
    */
-  private getShootType(distance: number): ShootType {
+  private getShootType(distance: number, isJumping: boolean = false): ShootType {
+    // ジャンプ中でダンクレンジ内ならダンク
+    if (isJumping && distance >= (SHOOT_RANGE as { DUNK_MIN?: number }).DUNK_MIN! && distance <= (SHOOT_RANGE as { DUNK_MAX?: number }).DUNK_MAX!) {
+      return 'dunk';
+    }
     if (distance >= SHOOT_RANGE.THREE_POINT_LINE && distance <= SHOOT_RANGE.THREE_POINT_MAX) {
       return '3pt';
     } else if (distance >= SHOOT_RANGE.MIDRANGE_MIN && distance < SHOOT_RANGE.THREE_POINT_LINE) {
@@ -245,6 +260,9 @@ export class ShootTrajectoryVisualizer {
       case 'layup':
         allowedAngle = SHOOT_ANGLE.LAYUP;
         break;
+      case 'dunk':
+        allowedAngle = (SHOOT_ANGLE as { DUNK?: number }).DUNK ?? SHOOT_ANGLE.LAYUP;
+        break;
       default:
         allowedAngle = SHOOT_ANGLE.DEFAULT;
     }
@@ -280,6 +298,9 @@ export class ShootTrajectoryVisualizer {
         // レイアップは通常のシュート精度を使用（高めに設定）
         baseAccuracy = Math.min(100, (stats.shootccuracy ?? 50) + 20);
         break;
+      case 'dunk':
+        // ダンクは100%成功（ボールを直接リムに置く）
+        return 100;
       default:
         baseAccuracy = 50;
     }

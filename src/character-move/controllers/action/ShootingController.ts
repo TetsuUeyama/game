@@ -25,7 +25,7 @@ import { ActionType, ActionConfigUtils } from "../../config/action/ActionConfig"
 /**
  * シュートの種類
  */
-export type ShootType = '3pt' | 'midrange' | 'layup' | 'out_of_range';
+export type ShootType = '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range';
 
 /**
  * シュート結果
@@ -254,6 +254,8 @@ export class ShootingController {
         return 'shoot_midrange';
       case 'layup':
         return 'shoot_layup';
+      case 'dunk':
+        return 'shoot_dunk';
       default:
         return null;
     }
@@ -262,8 +264,10 @@ export class ShootingController {
   /**
    * ActionControllerを使用したシュート開始
    * startup時間中はブロック可能
+   * @param shooter シューター
+   * @param forceDunk ダンクレンジ内で強制的にダンクを実行（シュートチェックモード用）
    */
-  public startShootAction(shooter: Character): ShootResult {
+  public startShootAction(shooter: Character, forceDunk: boolean = false): ShootResult {
     if (this.ball.getHolder() !== shooter) {
       return {
         success: false,
@@ -284,7 +288,7 @@ export class ShootingController {
 
     const shootDirection = this.getShootDirection(shooter);
     const targetGoal = this.getTargetGoal(shooter);
-    const { shootType, distance, inRange } = this.checkShootRange(shooter, targetGoal, shootDirection);
+    const { shootType, distance, inRange } = this.checkShootRange(shooter, targetGoal, shootDirection, forceDunk);
 
     if (!inRange) {
       return {
@@ -389,7 +393,10 @@ export class ShootingController {
 
     // シュート実行
     const baseTargetPosition = targetGoal.position;
-    const shooterPos = shooter.getPosition();
+    // ダンク時はジャンプ中の実際の高さを使用
+    const shooterPos = shootType === 'dunk'
+      ? shooter.getVisualPosition()
+      : shooter.getPosition();
 
     // シューターの頭上前方からボールを発射
     // 前方オフセットは体・手の物理体との衝突を避けるため十分な距離が必要
@@ -459,9 +466,15 @@ export class ShootingController {
     const radiusAdjust = (statValue - 42) / 3000;
 
     // 最小アーチ高さを保証（シュートタイプごとに設定）
-    // 低すぎるとボールがリムに届かない
-    const minArcHeight = shootType === 'layup' ? 0.6 : 0.8;
-    const arcHeight = Math.max(minArcHeight, baseArcHeight + arcHeightAdjust);
+    // 低すぎるとボールがリムに届かない（ダンクは例外：叩き込むので低い軌道）
+    let arcHeight: number;
+    if (shootType === 'dunk') {
+      // ダンクは叩き込むので最小アーチ高さ制限なし
+      arcHeight = baseArcHeight;
+    } else {
+      const minArcHeight = shootType === 'layup' ? 0.6 : 0.8;
+      arcHeight = Math.max(minArcHeight, baseArcHeight + arcHeightAdjust);
+    }
 
     const curveValue = shooter.playerData?.stats.curve ?? 50;
     const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue, radiusAdjust);
@@ -554,14 +567,29 @@ export class ShootingController {
     };
   }
 
+  /**
+   * シューターがジャンプ中かどうかを判定
+   */
+  /**
+   * シューターがジャンプ中かどうかを判定
+   * モーションオフセット（ジャンプ高さ）を含むビジュアル位置を使用
+   */
+  private isShooterJumping(shooter: Character): boolean {
+    const pos = shooter.getVisualPosition();
+    return pos.y > 0.5;
+  }
+
   private checkShootRange(
     shooter: Character,
     targetGoal: GoalInfo,
-    shootDirection: Vector3
+    shootDirection: Vector3,
+    forceDunk: boolean = false
   ): { shootType: ShootType; distance: number; inRange: boolean } {
     const shooterPos = shooter.getPosition();
     const distance = getDistance2D(shooterPos, targetGoal.position);
-    const shootType = ShootingUtils.getShootTypeByDistance(distance);
+    const isJumping = this.isShooterJumping(shooter);
+    const jumpStat = shooter.playerData?.stats.jump ?? 50;
+    const shootType = ShootingUtils.getShootTypeByDistance(distance, isJumping, forceDunk, jumpStat);
     let inRange = shootType !== 'out_of_range';
 
     const isInFrontOfGoal = this.isShooterInFrontOfGoal(shooter, targetGoal);
@@ -662,11 +690,13 @@ export class ShootingController {
 
   /**
    * 現在のシュートレンジ情報を取得
+   * @param shooter シューター
+   * @param forceDunk ダンクレンジ内で強制的にダンクを返す（シュートチェックモード用）
    */
-  public getShootRangeInfo(shooter: Character): { shootType: ShootType; distance: number; inRange: boolean; facingGoal: boolean } {
+  public getShootRangeInfo(shooter: Character, forceDunk: boolean = false): { shootType: ShootType; distance: number; inRange: boolean; facingGoal: boolean } {
     const shootDirection = this.getShootDirection(shooter);
     const targetGoal = this.getTargetGoal(shooter);
-    const { shootType, distance, inRange } = this.checkShootRange(shooter, targetGoal, shootDirection);
+    const { shootType, distance, inRange } = this.checkShootRange(shooter, targetGoal, shootDirection, forceDunk);
     const facingGoal = this.isFacingGoal(shooter, targetGoal, shootDirection);
 
     return { shootType, distance, inRange, facingGoal };

@@ -14,7 +14,7 @@
 /**
  * シュートタイプ
  */
-export type ShootType = '3pt' | 'midrange' | 'layup' | 'out_of_range';
+export type ShootType = '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range';
 
 /**
  * シュートアーチ高さ設定（メートル）
@@ -25,6 +25,7 @@ export const SHOOT_ARC_HEIGHT = {
   MIDRANGE: 1.5,              // ミドルレンジ：1.5m
   LAYUP: 0.8,                 // レイアップ：0.8m（低めのアーチ）
   LAYUP_CLOSE: 0.6,           // レイアップ（近距離）：0.6m（リムに確実に届く最小値）
+  DUNK: 0.01,                 // ダンク：0.01m（ほぼ直線、上から叩き込む）
   DEFAULT: 1.2,               // デフォルト：1.2m
   LAYUP_CLOSE_DISTANCE: 1.2,  // レイアップ近距離判定閾値（m）
 } as const;
@@ -72,6 +73,9 @@ export class ParabolaUtils {
           return SHOOT_ARC_HEIGHT.LAYUP_CLOSE;
         }
         return SHOOT_ARC_HEIGHT.LAYUP;
+      case 'dunk':
+        // ダンクはほぼ直線（上から叩き込む低い軌道）
+        return SHOOT_ARC_HEIGHT.DUNK;
       default:
         return SHOOT_ARC_HEIGHT.DEFAULT;
     }

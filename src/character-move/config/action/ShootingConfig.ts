@@ -23,6 +23,13 @@ export const SHOOT_RANGE = {
   // レイアップ
   LAYUP_MIN: 0.0,                  // レイアップ最小距離（ゴール直下でも打てる）
   LAYUP_MAX: 2.0,                  // レイアップ最大距離
+
+  // ダンク（ジャンプ中のみ）
+  DUNK_MIN: 0.0,                   // ダンク最小距離
+  DUNK_MAX: 1.5,                   // ダンク最大距離（リムに届く範囲）- 基準値（jump=50時）
+  DUNK_MAX_EXTENDED: 3.5,         // ダンク最大距離（jump=100時）
+  DUNK_JUMP_BASE: 50,              // ジャンプ基準値（この値でDUNK_MAX）
+  DUNK_JUMP_MAX: 100,              // ジャンプ最大値（この値でDUNK_MAX_EXTENDED）
 } as const;
 
 /**
@@ -33,6 +40,7 @@ export const SHOOT_ANGLE = {
   THREE_POINT: Math.PI * 5 / 180,   // 3Pシュート：±5度（合計10度）
   MIDRANGE: Math.PI * 20 / 180,     // ミドルシュート：±20度（合計40度）
   LAYUP: Math.PI * 90 / 180,        // レイアップ：±90度（合計180度）
+  DUNK: Math.PI * 60 / 180,         // ダンク：±60度（合計120度）
   FACING_GOAL: Math.PI / 4,         // ゴール方向判定：±45度
   DEFAULT: Math.PI / 6,             // デフォルト：±30度
 } as const;
@@ -48,6 +56,7 @@ export const SHOOT_ACCURACY = {
   // 固定精度
   MIDRANGE: 0.01,                   // ミドルレンジ：±0.01m
   LAYUP: 0.01,                      // レイアップ：±0.01m（高精度）
+  DUNK: 0,                          // ダンク：誤差なし（ボールを直接リムに置く）
   DEFAULT: 0.3,                     // デフォルト：±0.3m
 } as const;
 
@@ -79,11 +88,48 @@ export const SHOOT_START_OFFSET = {
  */
 export class ShootingUtils {
   /**
+   * ジャンプステータスに応じたダンク最大距離を計算
+   * @param jumpStat ジャンプステータス値（0-100）
+   * @returns ダンク最大距離（メートル）
+   */
+  public static getDunkMaxRange(jumpStat: number): number {
+    // ジャンプ値を0-100の範囲にクランプ
+    const clampedJump = Math.max(0, Math.min(100, jumpStat));
+
+    // 線形補間: jump=50 → 1.5m, jump=100 → 3.5m
+    // jump < 50 の場合も対応（ただしDUNK_MINより小さくはしない）
+    const jumpRange = SHOOT_RANGE.DUNK_JUMP_MAX - SHOOT_RANGE.DUNK_JUMP_BASE;
+    const distanceRange = SHOOT_RANGE.DUNK_MAX_EXTENDED - SHOOT_RANGE.DUNK_MAX;
+
+    // jump=50を基準に線形補間
+    const jumpOffset = clampedJump - SHOOT_RANGE.DUNK_JUMP_BASE;
+    const maxRange = SHOOT_RANGE.DUNK_MAX + (distanceRange * jumpOffset / jumpRange);
+
+    // 最小値を保証
+    return Math.max(SHOOT_RANGE.DUNK_MIN, maxRange);
+  }
+
+  /**
    * シュートタイプを距離から判定
    * @param distance ゴールまでの距離（メートル）
+   * @param isJumping ジャンプ中かどうか（通常のダンク判定用）
+   * @param forceDunk ダンクレンジ内で強制的にダンクを返す（シュートチェックモード用）
+   * @param jumpStat ジャンプステータス値（ダンク距離計算用、省略時は50）
    * @returns シュートタイプ
    */
-  public static getShootTypeByDistance(distance: number): '3pt' | 'midrange' | 'layup' | 'out_of_range' {
+  public static getShootTypeByDistance(
+    distance: number,
+    isJumping: boolean = false,
+    forceDunk: boolean = false,
+    jumpStat: number = 50
+  ): '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range' {
+    // ダンクレンジ内でダンクを返す条件:
+    // - forceDunk=true（シュートチェックモード）の場合: ジャンプ不要（モーションにジャンプ含む）
+    // - 通常: ジャンプ中のみ
+    const dunkMaxRange = this.getDunkMaxRange(jumpStat);
+    if ((forceDunk || isJumping) && distance >= SHOOT_RANGE.DUNK_MIN && distance <= dunkMaxRange) {
+      return 'dunk';
+    }
     if (distance >= SHOOT_RANGE.THREE_POINT_LINE && distance <= SHOOT_RANGE.THREE_POINT_MAX) {
       return '3pt';
     } else if (distance >= SHOOT_RANGE.MIDRANGE_MIN && distance < SHOOT_RANGE.THREE_POINT_LINE) {
@@ -108,7 +154,7 @@ export class ShootingUtils {
    * @param shootType シュートタイプ
    * @returns 角度範囲（ラジアン）
    */
-  public static getAngleRangeByShootType(shootType: '3pt' | 'midrange' | 'layup' | 'out_of_range'): number {
+  public static getAngleRangeByShootType(shootType: '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range'): number {
     switch (shootType) {
       case '3pt':
         return SHOOT_ANGLE.THREE_POINT;
@@ -116,6 +162,8 @@ export class ShootingUtils {
         return SHOOT_ANGLE.MIDRANGE;
       case 'layup':
         return SHOOT_ANGLE.LAYUP;
+      case 'dunk':
+        return SHOOT_ANGLE.DUNK;
       default:
         return SHOOT_ANGLE.DEFAULT;
     }
@@ -137,7 +185,7 @@ export class ShootingUtils {
    * @returns 最大誤差（メートル）
    */
   public static getAccuracyByShootType(
-    shootType: '3pt' | 'midrange' | 'layup' | 'out_of_range',
+    shootType: '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range',
     accuracy3p?: number
   ): number {
     switch (shootType) {
@@ -147,6 +195,8 @@ export class ShootingUtils {
         return SHOOT_ACCURACY.MIDRANGE;
       case 'layup':
         return SHOOT_ACCURACY.LAYUP;
+      case 'dunk':
+        return SHOOT_ACCURACY.DUNK;
       default:
         return SHOOT_ACCURACY.DEFAULT;
     }
@@ -169,7 +219,7 @@ export class ShootingUtils {
    * @param shootType シュートタイプ
    * @returns 日本語名
    */
-  public static getShootTypeName(shootType: '3pt' | 'midrange' | 'layup' | 'out_of_range'): string {
+  public static getShootTypeName(shootType: '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range'): string {
     switch (shootType) {
       case '3pt':
         return '3ポイント';
@@ -177,6 +227,8 @@ export class ShootingUtils {
         return 'ミドルレンジ';
       case 'layup':
         return 'レイアップ';
+      case 'dunk':
+        return 'ダンク';
       default:
         return '不明';
     }

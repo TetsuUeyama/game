@@ -22,6 +22,7 @@ export type ActionType =
   | 'shoot_3pt'
   | 'shoot_midrange'
   | 'shoot_layup'
+  | 'shoot_dunk'      // ダンク（ジャンプ中のみ）
   | 'pass_chest'
   | 'pass_bounce'
   | 'pass_overhead'
@@ -140,6 +141,18 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     priority: 10,
     interruptible: true,
     // 重心: 前への勢い + ジャンプ
+  },
+
+  // ダンク（ジャンプ含む）
+  shoot_dunk: {
+    type: 'shoot_dunk',
+    category: 'offense',
+    motion: 'shoot_dunk',
+    startupTime: 350,      // 0.35秒（しゃがみ〜ジャンプピーク）
+    activeTime: 200,       // 0.2秒（叩きつけ動作）
+    priority: 12,          // レイアップより高優先度
+    interruptible: false,  // ダンク中はキャンセル不可
+    // 重心: しゃがみ→ジャンプ→叩きつけ
   },
 
   // チェストパス
@@ -397,6 +410,7 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
   shoot_3pt: SHOOT_MOTIONS.shoot_3pt,
   shoot_midrange: SHOOT_MOTIONS.shoot_midrange,
   shoot_layup: SHOOT_MOTIONS.shoot_layup,
+  shoot_dunk: SHOOT_MOTIONS.shoot_dunk,
 
   // パスモーション
   pass_chest: PASS_MOTIONS.pass_chest,

@@ -446,6 +446,7 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
                     { value: '3pt', label: '3Pのみ' },
                     { value: 'midrange', label: 'ミドルのみ' },
                     { value: 'layup', label: 'レイアップのみ' },
+                    { value: 'dunk', label: 'ダンクのみ' },
                   ] as const).map(({ value, label }) => (
                     <button
                       key={value}
@@ -626,6 +627,8 @@ function getShootTypeName(shootType: string): string {
       return 'ミドルレンジ';
     case 'layup':
       return 'レイアップ';
+    case 'dunk':
+      return 'ダンク';
     case 'out_of_range':
       return 'レンジ外';
     default:
@@ -646,6 +649,8 @@ function getShotTypeFilterLabel(filter: ShotTypeFilter): string {
       return 'ミドルのみ';
     case 'layup':
       return 'レイアップのみ';
+    case 'dunk':
+      return 'ダンクのみ';
     default:
       return filter;
   }
