@@ -28,6 +28,64 @@ const THREE_POINT_LINE_CONFIG = {
   arcSegments: 48,         // アークのセグメント数
 };
 
+/**
+ * NBA ペイントエリア（キー／レーン）設定
+ * すべての寸法はNBA公式規格に基づく
+ *
+ * 【座標系】
+ * - 原点 (0,0,0) = コート中央
+ * - X軸：左右（コート幅方向）
+ * - Z軸：ゴール方向（コート長さ方向）
+ *
+ * 【幾何関係】
+ * ```
+ *                    ベースライン
+ *     ─────────────────────────────────
+ *           │                   │
+ *           │   ペイントエリア   │  ← レーン幅: 4.88m
+ *           │                   │
+ *           │       ●          │  ← ゴール中心
+ *           │                   │
+ *           ├───────────────────┤  ← レーン底線
+ *           │                   │     （ゴール中心から backboardOffset + laneBottomOffset）
+ *           │                   │
+ *           │                   │  ← レーン長: 5.79m
+ *           │                   │
+ *           ├───────────────────┤  ← フリースローライン
+ *          ╱                     ╲    （ゴール中心から freeThrowDistance）
+ *         (    フリースローサークル )  ← 半径: 1.80m（上半円）
+ *          ╲                     ╱
+ * ```
+ */
+const PAINT_AREA_CONFIG = {
+  /** レーン幅 (m) - NBA: 16フィート = 4.88m */
+  laneWidth: 4.88,
+
+  /** レーン長 (m) - NBA: ベースライン→フリースローライン = 19フィート = 5.79m */
+  laneLength: 5.79,
+
+  /** ゴール中心→フリースローライン距離 (m) - NBA: 約15フィート = 4.57m */
+  freeThrowDistance: 4.57,
+
+  /** フリースローサークル半径 (m) - NBA: 6フィート = 1.83m（近似1.80m使用） */
+  freeThrowCircleRadius: 1.80,
+
+  /** ゴール中心→バックボード距離 (m) - rimOffset に相当 */
+  backboardOffset: 0.4,
+
+  /** バックボード→レーン底（ベースライン側）距離 (m) */
+  laneBottomOffset: 0.0,  // レーン底はバックボード位置とほぼ一致
+
+  /** ライン色（白） */
+  lineColor: '#FFFFFF',
+
+  /** 地面からの高さ (m) */
+  lineY: 0.02,
+
+  /** フリースローサークルのセグメント数 */
+  circleSegments: 32,
+} as const;
+
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
@@ -41,6 +99,7 @@ export class Field {
   private goal2TargetMarker: Mesh; // ゴール2のシュート目標マーカー
   private centerCircle: Mesh; // センターサークル
   private threePointLines: Mesh[] = []; // 3ポイントライン
+  private paintAreaLines: Mesh[] = []; // ペイントエリア（キー）ライン
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
   private outerAreaMeshes: Mesh[] = []; // 外側マスエリア
@@ -72,6 +131,9 @@ export class Field {
 
     // 3ポイントラインを作成
     this.createThreePointLines();
+
+    // ペイントエリア（キー）を作成
+    this.createPaintAreas();
 
     // 座標ラベルを作成
     this.createGridLabels();
@@ -640,6 +702,170 @@ export class Field {
   }
 
   /**
+   * ペイントエリア（キー／レーン）を作成（両ゴール用）
+   *
+   * 【幾何計算】
+   * ゴール中心座標を基準に、以下を算出:
+   * - フリースローライン: goalZ - zSign * freeThrowDistance
+   * - レーン左右境界: X = ±(laneWidth / 2)
+   * - レーン底（ベースライン側）: goalZ + zSign * (backboardOffset + laneBottomOffset)
+   * - フリースローサークル: フリースローライン上に中心、上半円（コート中央向き）
+   */
+  private createPaintAreas(): void {
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+
+    // goal1（+Z側）のバスケット中心位置
+    const basket1Z = fieldHalfLength - GOAL_CONFIG.backboardDistance - GOAL_CONFIG.rimOffset;
+    // goal2（-Z側）のバスケット中心位置
+    const basket2Z = -basket1Z;
+
+    // goal1のペイントエリア
+    this.createPaintAreaForGoal(basket1Z, 1);
+
+    // goal2のペイントエリア
+    this.createPaintAreaForGoal(basket2Z, 2);
+  }
+
+  /**
+   * 1つのゴール用のペイントエリアを作成
+   *
+   * @param goalCenterZ ゴール中心のZ座標
+   * @param goalNumber ゴール番号（1 = +Z側、2 = -Z側）
+   *
+   * 【構成要素】
+   * 1. レーン左境界線: (-halfWidth, freeThrowZ) → (-halfWidth, laneBottomZ)
+   * 2. レーン右境界線: (+halfWidth, freeThrowZ) → (+halfWidth, laneBottomZ)
+   * 3. フリースローライン: (-halfWidth, freeThrowZ) → (+halfWidth, freeThrowZ)
+   * 4. レーン底線: (-halfWidth, laneBottomZ) → (+halfWidth, laneBottomZ)
+   * 5. フリースローサークル上半円: 中心 (0, freeThrowZ)、半径 1.80m
+   */
+  private createPaintAreaForGoal(goalCenterZ: number, goalNumber: number): void {
+    const {
+      laneWidth,
+      freeThrowDistance,
+      freeThrowCircleRadius,
+      lineColor,
+      lineY,
+      circleSegments,
+    } = PAINT_AREA_CONFIG;
+
+    const color = Color3.FromHexString(lineColor);
+    const halfWidth = laneWidth / 2;
+
+    // goal1は+Z側（ベースラインが+Z方向）、goal2は-Z側
+    const zSign = goalNumber === 1 ? 1 : -1;
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+
+    // フリースローライン Z座標
+    // = ゴール中心から freeThrowDistance だけコート中央方向（-zSign方向）
+    const freeThrowZ = goalCenterZ - zSign * freeThrowDistance;
+
+    // レーン底 Z座標 = ベースラインと一致
+    const laneBottomZ = zSign * fieldHalfLength;
+
+    // ========================================
+    // 1. レーン左境界線
+    // ========================================
+    const leftBoundaryPoints = [
+      new Vector3(-halfWidth, lineY, freeThrowZ),
+      new Vector3(-halfWidth, lineY, laneBottomZ),
+    ];
+    const leftBoundaryLine = MeshBuilder.CreateLines(
+      `paint-left-boundary-${goalNumber}`,
+      { points: leftBoundaryPoints },
+      this.scene
+    );
+    leftBoundaryLine.color = color;
+    this.paintAreaLines.push(leftBoundaryLine);
+
+    // ========================================
+    // 2. レーン右境界線
+    // ========================================
+    const rightBoundaryPoints = [
+      new Vector3(halfWidth, lineY, freeThrowZ),
+      new Vector3(halfWidth, lineY, laneBottomZ),
+    ];
+    const rightBoundaryLine = MeshBuilder.CreateLines(
+      `paint-right-boundary-${goalNumber}`,
+      { points: rightBoundaryPoints },
+      this.scene
+    );
+    rightBoundaryLine.color = color;
+    this.paintAreaLines.push(rightBoundaryLine);
+
+    // ========================================
+    // 3. フリースローライン
+    // ========================================
+    const freeThrowLinePoints = [
+      new Vector3(-halfWidth, lineY, freeThrowZ),
+      new Vector3(halfWidth, lineY, freeThrowZ),
+    ];
+    const freeThrowLine = MeshBuilder.CreateLines(
+      `paint-free-throw-line-${goalNumber}`,
+      { points: freeThrowLinePoints },
+      this.scene
+    );
+    freeThrowLine.color = color;
+    this.paintAreaLines.push(freeThrowLine);
+
+    // ========================================
+    // 4. レーン底線（ベースライン側）
+    // ========================================
+    const laneBottomLinePoints = [
+      new Vector3(-halfWidth, lineY, laneBottomZ),
+      new Vector3(halfWidth, lineY, laneBottomZ),
+    ];
+    const laneBottomLine = MeshBuilder.CreateLines(
+      `paint-lane-bottom-${goalNumber}`,
+      { points: laneBottomLinePoints },
+      this.scene
+    );
+    laneBottomLine.color = color;
+    this.paintAreaLines.push(laneBottomLine);
+
+    // ========================================
+    // 5. フリースローサークル（上半円 = コート中央向き）
+    // ========================================
+    // goal1: 上半円は -Z 方向に膨らむ（角度: π → 2π）
+    // goal2: 上半円は +Z 方向に膨らむ（角度: 0 → π）
+    const circlePoints: Vector3[] = [];
+
+    let startAngle: number;
+    let endAngle: number;
+
+    if (goalNumber === 1) {
+      // goal1: 半円は -Z 方向（コート中央向き）
+      // 左端 (-radius, 0) から右端 (+radius, 0) へ、下側を通る
+      // atan2 で考えると、左端は角度 π、右端は角度 0（または 2π）
+      // 下側を通るので π → 2π
+      startAngle = Math.PI;
+      endAngle = 2 * Math.PI;
+    } else {
+      // goal2: 半円は +Z 方向（コート中央向き）
+      // 左端 (-radius, 0) から右端 (+radius, 0) へ、上側を通る
+      // 上側を通るので π → 0
+      startAngle = Math.PI;
+      endAngle = 0;
+    }
+
+    for (let i = 0; i <= circleSegments; i++) {
+      const t = i / circleSegments;
+      const angle = startAngle + (endAngle - startAngle) * t;
+      const x = Math.cos(angle) * freeThrowCircleRadius;
+      const z = freeThrowZ + Math.sin(angle) * freeThrowCircleRadius;
+      circlePoints.push(new Vector3(x, lineY, z));
+    }
+
+    const freeThrowCircle = MeshBuilder.CreateLines(
+      `paint-free-throw-circle-${goalNumber}`,
+      { points: circlePoints },
+      this.scene
+    );
+    freeThrowCircle.color = color;
+    this.paintAreaLines.push(freeThrowCircle);
+  }
+
+  /**
    * バスケットゴールを作成
    * @param goalNumber ゴール番号（1または2）
    */
@@ -978,6 +1204,11 @@ export class Field {
       line.dispose();
     }
     this.threePointLines = [];
+    // ペイントエリアラインを破棄
+    for (const line of this.paintAreaLines) {
+      line.dispose();
+    }
+    this.paintAreaLines = [];
     this.goal1Backboard.dispose();
     this.goal1Rim.dispose();
     this.goal1Net.dispose();
