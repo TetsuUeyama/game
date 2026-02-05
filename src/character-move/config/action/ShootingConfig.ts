@@ -21,7 +21,7 @@ export const SHOOT_RANGE = {
   MIDRANGE_MAX: 6.75,              // ミドルレンジ最大距離（= 3Pライン）
 
   // レイアップ
-  LAYUP_MIN: 0.5,                  // レイアップ最小距離（ゴール直下は打てない）
+  LAYUP_MIN: 0.0,                  // レイアップ最小距離（ゴール直下でも打てる）
   LAYUP_MAX: 2.0,                  // レイアップ最大距離
 } as const;
 

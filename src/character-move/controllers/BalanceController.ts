@@ -223,11 +223,17 @@ export class BalanceController {
   /**
    * 指定したアクションが実行可能かどうか判定
    * 重心が安定していて、ロック中でなければ実行可能
+   * ただしシュートアクションは重心チェックを緩和（キャッチ&シュート対応）
    */
-  canPerformAction(_actionType: ActionType): boolean {
+  canPerformAction(actionType: ActionType): boolean {
     // ロック中は不可
     if (this.state.isLocked) {
       return false;
+    }
+
+    // シュートアクションは重心チェックをスキップ（レイアップは走りながら、他は止まった瞬間に打てる）
+    if (actionType === 'shoot_layup' || actionType === 'shoot_3pt' || actionType === 'shoot_midrange') {
+      return true;
     }
 
     // 重心が安定しているか

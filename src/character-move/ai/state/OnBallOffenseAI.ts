@@ -116,11 +116,23 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.passLaneAdjustmentTarget = null;
     this.passLaneAdjustmentTimer = 0;
 
+    // クールダウンをリセット
+    this.resetCooldowns();
+
     // 周囲確認フェーズを開始（ボールを受け取った直後）
     this.surveyPhase = "look_left";
     this.surveyTimer = 0;
     this.surveyTotalTimer = 0;
     this.surveyStartRotation = this.character.getRotation();
+  }
+
+  /**
+   * 全クールダウンをリセット
+   */
+  public resetCooldowns(): void {
+    this.shootCooldown = 0;
+    this.feintCooldown = 0;
+    this.passCooldown = 0;
   }
 
   /**
@@ -366,23 +378,23 @@ export class OnBallOffenseAI extends BaseStateAI {
     const actionChoice = Math.random();
 
     if (inShootRange) {
-      // シュートレンジ内：シュート優先（50%）
-      if (actionChoice < 0.5) {
+      // シュートレンジ内：シュート優先（80%）
+      if (actionChoice < 0.8) {
         if (!this.targetPositionOverride && this.tryShoot()) {
           return;
         }
-      } else if (actionChoice < 0.7) {
-        // 20%: フェイント
+      } else if (actionChoice < 0.9) {
+        // 10%: フェイント
         if (this.tryFeint()) {
           return;
         }
-      } else if (actionChoice < 0.85) {
-        // 15%: ドリブル突破
+      } else if (actionChoice < 0.95) {
+        // 5%: ドリブル突破
         if (this.tryDribbleMove()) {
           return;
         }
       }
-      // 15%: 様子見
+      // 5%: 様子見
     } else {
       // シュートレンジ外：移動優先
       if (actionChoice < 0.2) {

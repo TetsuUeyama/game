@@ -171,6 +171,44 @@ export class CharacterAI {
   }
 
   /**
+   * AIとキャラクター状態を強制的に初期化
+   * リセット処理（センターサークル再開、ゴール後再開等）で使用
+   * 前回の行動や状態を完全にクリアして新しい状態で開始
+   */
+  public forceInitialize(): void {
+    const state = this.character.getState();
+
+    // 追跡変数をリセット（次のupdateで状態遷移を検出しないようにする）
+    this.previousState = state;
+    this.wasBallHolder = this.ball.getHolder() === this.character;
+    this.stateTransitionReactionTimer = 0;
+
+    // アクションを強制リセット
+    const actionController = this.character.getActionController();
+    actionController.forceResetAction();
+
+    // AI移動をクリア
+    this.character.clearAIMovement();
+
+    // 移動を停止
+    this.character.stopMovement();
+
+    // モーションをアイドルに
+    this.character.playMotion(IDLE_MOTION);
+
+    // 状態に応じた初期化を実行
+    if (state === CharacterState.ON_BALL_PLAYER) {
+      this.onBallOffenseAI.onEnterState();
+    } else if (state === CharacterState.OFF_BALL_PLAYER) {
+      // OFF_BALL_PLAYERは特別な初期化不要
+    } else if (state === CharacterState.ON_BALL_DEFENDER) {
+      // ON_BALL_DEFENDERは特別な初期化不要
+    } else if (state === CharacterState.OFF_BALL_DEFENDER) {
+      // OFF_BALL_DEFENDERは特別な初期化不要
+    }
+  }
+
+  /**
    * AIの更新処理
    */
   public update(deltaTime: number): void {
