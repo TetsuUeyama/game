@@ -9,15 +9,18 @@ import {
   SHOOT_CHECK_TIMING,
   SHOOT_CHECK_DETECTION,
   SHOOT_CHECK_GOAL_POSITION,
+  SHOOT_CHECK_DEFENDER,
+  DUNK_BLOCK_COLLISION,
   CellShootResult,
   ShootCheckState,
   ShotTypeFilter,
   ShootCheckConfig,
   ShootCheckProgress,
+  DefenderConfig,
 } from "../../config/check/ShootCheckConfig";
 
 // 型をre-export
-export type { CellShootResult, ShootCheckState, ShotTypeFilter, ShootCheckConfig, ShootCheckProgress };
+export type { CellShootResult, ShootCheckState, ShotTypeFilter, ShootCheckConfig, ShootCheckProgress, DefenderConfig };
 
 /**
  * シュートチェックコントローラー
@@ -73,10 +76,19 @@ export class ShootCheckController {
 
   // ダンクモーションのタイミング設定（ShootMotion.tsと同期）
   private static readonly DUNK_DURATION = 0.85;        // モーション全体の長さ（秒）
-  private static readonly DUNK_PEAK_TIME = 0.35;       // ジャンプピーク到達時間（秒）
+  // 参照用: DUNK_PEAK_TIME = 0.35（ジャンプピーク到達時間）
   private static readonly DUNK_SLAM_TIME = 0.55;       // 叩きつけ完了時間（秒）
   private static readonly WALK_SPEED = 3.0;            // 歩いて戻る速度（m/s）
   private static readonly ARRIVAL_THRESHOLD = 0.1;     // 到着判定の閾値（m）
+
+  // ディフェンダー関連
+  private defender: Character | null = null;
+  private defenderOriginalPosition: Vector3 | null = null;
+  private isDefenderBlocking: boolean = false;
+
+  // ダンクブロック衝突関連
+  private dunkCollisionChecked: boolean = false;  // このダンクで衝突判定済みか
+  private dunkBlocked: boolean = false;           // ダンクがブロックされたか
 
   constructor(
     character: Character,
@@ -96,6 +108,270 @@ export class ShootCheckController {
 
     // 全升目リストを生成
     this.generateAllCells();
+  }
+
+  /**
+   * ディフェンダーを設定
+   * @param defender ディフェンダーキャラクター（nullで解除）
+   */
+  public setDefender(defender: Character | null): void {
+    this.defender = defender;
+    if (defender) {
+      // ディフェンダーのチームをシューターと逆に設定
+      defender.team = this.character.team === 'ally' ? 'enemy' : 'ally';
+    }
+  }
+
+  /**
+   * ディフェンダーを配置
+   */
+  private positionDefender(): void {
+    if (!this.defender || !this.config.defender?.enabled) return;
+
+    const defenderConfig = this.config.defender;
+    const shooterPos = this.character.getPosition();
+    const goalZ = this.config.targetGoal === 'goal1'
+      ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+      : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
+
+    let defenderX: number;
+    let defenderZ: number;
+
+    if (defenderConfig.position === 'goal_front') {
+      // ゴール前に配置
+      const distance = defenderConfig.distanceFromGoal ?? SHOOT_CHECK_DEFENDER.DEFAULT_DISTANCE_FROM_GOAL;
+      defenderX = 0; // ゴール中央
+      defenderZ = this.config.targetGoal === 'goal1'
+        ? goalZ - distance
+        : goalZ + distance;
+    } else {
+      // シューター前に配置
+      const distance = defenderConfig.distanceFromShooter ?? SHOOT_CHECK_DEFENDER.DEFAULT_DISTANCE_FROM_SHOOTER;
+      // シューターとゴールの間の線上に配置
+      const dirToGoal = new Vector3(0 - shooterPos.x, 0, goalZ - shooterPos.z).normalize();
+      defenderX = shooterPos.x + dirToGoal.x * distance;
+      defenderZ = shooterPos.z + dirToGoal.z * distance;
+    }
+
+    const characterHeight = this.defender.config?.physical?.height ?? 1.9;
+    const defenderPos = new Vector3(defenderX, characterHeight / 2, defenderZ);
+
+    this.defender.setPosition(defenderPos);
+    this.defenderOriginalPosition = defenderPos.clone();
+
+    // シューター方向を向く
+    this.defender.lookAt(shooterPos);
+  }
+
+  /**
+   * ダンク時のディフェンダー配置
+   * シューターの踏切位置とゴールの間に配置
+   */
+  private positionDefenderForDunk(): void {
+    if (!this.defender || !this.config.defender?.enabled) return;
+
+    const shooterPos = this.character.getPosition();
+    const goalZ = this.config.targetGoal === 'goal1'
+      ? SHOOT_CHECK_GOAL_POSITION.GOAL1_Z
+      : SHOOT_CHECK_GOAL_POSITION.GOAL2_Z;
+
+    // シューターからゴールへの方向ベクトル
+    const goalX = 0; // ゴールのX座標は中央
+    const dirX = goalX - shooterPos.x;
+    const dirZ = goalZ - shooterPos.z;
+    const distance = Math.sqrt(dirX * dirX + dirZ * dirZ);
+
+    // ゴールから1.0m手前（シューター側）に配置
+    // シューターとゴールの間の線上
+    const defenderDistanceFromGoal = 1.0;
+    const ratio = (distance - defenderDistanceFromGoal) / distance;
+
+    const defenderX = shooterPos.x + dirX * ratio;
+    const defenderZ = shooterPos.z + dirZ * ratio;
+
+    const characterHeight = this.defender.config?.physical?.height ?? 1.9;
+    const defenderPos = new Vector3(defenderX, characterHeight / 2, defenderZ);
+
+    this.defender.setPosition(defenderPos);
+    this.defenderOriginalPosition = defenderPos.clone();
+
+    // シューター方向を向く
+    this.defender.lookAt(shooterPos);
+  }
+
+  /**
+   * ディフェンダーにブロックジャンプさせる
+   */
+  private triggerDefenderBlock(): void {
+    if (!this.defender || !this.config.defender?.enabled) return;
+    if (this.isDefenderBlocking) return;
+
+    this.isDefenderBlocking = true;
+
+    // ブロック対象を設定
+    this.defender.setBlockJumpTarget(this.character);
+
+    // ブロックアクションを開始
+    const actionController = this.defender.getActionController();
+    actionController.startAction('block_shot');
+  }
+
+  /**
+   * ディフェンダーのブロック状態をリセット
+   */
+  private resetDefenderBlock(): void {
+    if (!this.defender) return;
+
+    this.isDefenderBlocking = false;
+    this.defender.setBlockJumpTarget(null);
+
+    // ダンクブロック衝突状態をリセット
+    this.dunkCollisionChecked = false;
+    this.dunkBlocked = false;
+
+    // 元の位置に戻す
+    if (this.defenderOriginalPosition) {
+      this.defender.setPosition(this.defenderOriginalPosition);
+      // シューター方向を向く
+      this.defender.lookAt(this.character.getPosition());
+    }
+
+    // バランスをリセット
+    this.defender.resetBalance();
+  }
+
+  /**
+   * ダンク時の衝突判定（ダンカーとブロッカーの接触）
+   * @returns 衝突が発生したか
+   */
+  private checkDunkBlockCollision(): boolean {
+    if (!this.defender || !this.isDunking || this.dunkCollisionChecked) {
+      return false;
+    }
+
+    // ダンクモーションの進行率を計算
+    const elapsed = (Date.now() - this.dunkStartTime) / 1000;
+    const progress = elapsed / ShootCheckController.DUNK_DURATION;
+
+    // 衝突判定を行うタイミングかチェック
+    if (progress < DUNK_BLOCK_COLLISION.COLLISION_START_RATIO ||
+        progress > DUNK_BLOCK_COLLISION.COLLISION_END_RATIO) {
+      return false;
+    }
+
+    const dunkerPos = this.character.getPosition();
+    const defenderPos = this.defender.getPosition();
+
+    // 高さが衝突範囲内かチェック
+    const dunkerHeight = dunkerPos.y;
+    const defenderHeight = defenderPos.y;
+    const avgHeight = (dunkerHeight + defenderHeight) / 2;
+
+    if (avgHeight < DUNK_BLOCK_COLLISION.MIN_COLLISION_HEIGHT ||
+        avgHeight > DUNK_BLOCK_COLLISION.MAX_COLLISION_HEIGHT) {
+      return false;
+    }
+
+    // 水平距離を計算
+    const dx = dunkerPos.x - defenderPos.x;
+    const dz = dunkerPos.z - defenderPos.z;
+    const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+
+    // 衝突判定
+    if (horizontalDistance <= DUNK_BLOCK_COLLISION.COLLISION_RADIUS) {
+      this.dunkCollisionChecked = true;
+      this.resolveDunkBlockCollision();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * ダンクブロック衝突を解決（POWER比較と吹き飛ばし）
+   */
+  private resolveDunkBlockCollision(): void {
+    if (!this.defender) return;
+
+    // POWER値を取得
+    const dunkerPower = this.character.playerData?.stats.power ?? 50;
+    const defenderPower = this.defender.playerData?.stats.power ?? 50;
+    const powerDiff = defenderPower - dunkerPower;
+
+    // 吹き飛ばし距離を計算
+    const knockbackDistance = Math.min(
+      DUNK_BLOCK_COLLISION.MAX_KNOCKBACK_DISTANCE,
+      Math.max(
+        DUNK_BLOCK_COLLISION.MIN_KNOCKBACK_DISTANCE,
+        Math.abs(powerDiff) * DUNK_BLOCK_COLLISION.KNOCKBACK_MULTIPLIER
+      )
+    );
+
+    const dunkerPos = this.character.getPosition();
+    const defenderPos = this.defender.getPosition();
+
+    // 吹き飛ばし方向を計算（相手から自分への方向）
+    const dirFromDefenderToDunker = new Vector3(
+      dunkerPos.x - defenderPos.x,
+      0,
+      dunkerPos.z - defenderPos.z
+    ).normalize();
+
+    if (powerDiff > DUNK_BLOCK_COLLISION.BLOCK_SUCCESS_POWER_THRESHOLD) {
+      // ディフェンダーのPOWERが高い → ダンクをブロック、ダンカーを吹き飛ばす
+      this.dunkBlocked = true;
+
+      // ダンカーを後方に吹き飛ばす
+      const knockbackPos = new Vector3(
+        dunkerPos.x + dirFromDefenderToDunker.x * knockbackDistance,
+        dunkerPos.y,
+        dunkerPos.z + dirFromDefenderToDunker.z * knockbackDistance
+      );
+      this.character.setPosition(knockbackPos);
+
+      // ダンクを中断（ボールを落とす）
+      this.cancelDunk();
+
+      console.log(`[DunkBlock] ブロック成功! DEF:${defenderPower} > ATK:${dunkerPower}, 吹き飛ばし:${knockbackDistance.toFixed(2)}m`);
+    } else {
+      // ダンカーのPOWERが高いか同等 → ダンク成功、ディフェンダーを吹き飛ばす
+      this.dunkBlocked = false;
+
+      // ディフェンダーを吹き飛ばす（ダンカーの進行方向）
+      const knockbackPos = new Vector3(
+        defenderPos.x - dirFromDefenderToDunker.x * knockbackDistance,
+        defenderPos.y,
+        defenderPos.z - dirFromDefenderToDunker.z * knockbackDistance
+      );
+      this.defender.setPosition(knockbackPos);
+
+      console.log(`[DunkBlock] ダンク成功! ATK:${dunkerPower} >= DEF:${defenderPower}, ディフェンダー吹き飛ばし:${knockbackDistance.toFixed(2)}m`);
+    }
+  }
+
+  /**
+   * ダンクを中断（ブロックされた場合）
+   */
+  private cancelDunk(): void {
+    // ダンク状態を解除
+    this.isDunking = false;
+
+    // ボールを落とす（保持を解除してルーズボールに）
+    if (this.ball.getHolder() === this.character) {
+      this.ball.setHolder(null);
+      // ボールを少し上に弾く
+      const ballPos = this.ball.getPosition();
+      this.ball.setPosition(new Vector3(ballPos.x, ballPos.y + 0.5, ballPos.z));
+    }
+
+    // シュート判定を失敗として処理
+    this.waitingForShot = false;
+    this.waitingForBallRelease = false;
+
+    // 少し待ってから次のシュートへ
+    setTimeout(() => {
+      this.onShotComplete(false);
+    }, 500);
   }
 
   /**
@@ -201,6 +477,9 @@ export class ShootCheckController {
 
     // ボールをキャラクターに持たせる
     this.ball.setHolder(this.character);
+
+    // ディフェンダーを配置
+    this.positionDefender();
 
     // シュートカウントをリセット
     this.currentShotCount = 0;
@@ -308,6 +587,9 @@ export class ShootCheckController {
       this.originalPosition = null;
     }
 
+    // ディフェンダーをリセット
+    this.resetDefenderBlock();
+
     // 完了コールバックを呼び出し（途中結果）
     if (this.onCompleteCallback) {
       this.onCompleteCallback(Array.from(this.results.values()));
@@ -349,6 +631,9 @@ export class ShootCheckController {
 
     // ボールをキャラクターに持たせる
     this.ball.setHolder(this.character);
+
+    // ディフェンダーを配置
+    this.positionDefender();
 
     // シュートカウントをリセット
     this.currentShotCount = 0;
@@ -452,6 +737,10 @@ export class ShootCheckController {
   private executeShot(): void {
     const forceDunk = this.config.shotTypeFilter === 'dunk';
 
+    // ダンクブロック衝突状態をリセット
+    this.dunkCollisionChecked = false;
+    this.dunkBlocked = false;
+
     // ダンクの場合、踏切位置とゴールエリア（目標位置）を設定
     if (forceDunk) {
       this.originalPosition = this.character.getPosition().clone();
@@ -478,6 +767,11 @@ export class ShootCheckController {
 
       this.isDunking = true;
       this.dunkStartTime = Date.now();
+
+      // ダンク時はディフェンダーをシューターとゴールの間に配置
+      if (this.config.defender?.enabled) {
+        this.positionDefenderForDunk();
+      }
     }
 
     // シュートアクションを開始（アニメーション付き）
@@ -488,6 +782,17 @@ export class ShootCheckController {
       this.waitingForShot = true;
       this.waitingForBallRelease = true;
       this.shotStartTime = Date.now();
+
+      // ダンク時はディフェンダーも同時にジャンプ（シューターと同時）
+      if (forceDunk && this.config.defender?.enabled) {
+        // ダンク時は即座にブロックジャンプ（シューターと同時にジャンプ）
+        this.triggerDefenderBlock();
+      } else if (this.config.defender?.enabled && this.config.defender.blockTiming === 'on_shot') {
+        // 通常シュート時は設定に従う
+        setTimeout(() => {
+          this.triggerDefenderBlock();
+        }, SHOOT_CHECK_DEFENDER.BLOCK_REACTION_DELAY_MS);
+      }
     } else {
       // シュート開始失敗 → リセットしてリトライ
       this.originalPosition = null;
@@ -558,6 +863,15 @@ export class ShootCheckController {
 
     // ダンク中の位置補間
     if (this.isDunking) {
+      // ダンクブロック衝突判定（ディフェンダーがいる場合）
+      if (this.defender && this.config.defender?.enabled) {
+        this.checkDunkBlockCollision();
+        // ブロックされた場合はダンク処理を中断（cancelDunkで処理済み）
+        if (this.dunkBlocked) {
+          return;
+        }
+      }
+
       this.updateDunkPosition();
       // ダンク中は他の処理をスキップ（着地完了まで待つ）
       return;
@@ -677,6 +991,9 @@ export class ShootCheckController {
    * 次のシュートへ進む（遅延付き）
    */
   private proceedToNextShot(): void {
+    // ディフェンダーをリセット
+    this.resetDefenderBlock();
+
     setTimeout(() => {
       if (this.state === 'running') {
         this.ball.setHolder(this.character);
@@ -706,6 +1023,15 @@ export class ShootCheckController {
         this.ballReachedPeak = false;
         const ballPos = this.ball.getPosition();
         this.lastBallY = ballPos.y;
+
+        // ディフェンダーのブロック（on_release タイミング）
+        // ダンク時は既にシュート開始時にブロックしているのでスキップ
+        const forceDunk = this.config.shotTypeFilter === 'dunk';
+        if (!forceDunk && this.config.defender?.enabled && this.config.defender.blockTiming === 'on_release') {
+          setTimeout(() => {
+            this.triggerDefenderBlock();
+          }, SHOOT_CHECK_DEFENDER.BLOCK_REACTION_DELAY_MS);
+        }
       }
       return;
     }
@@ -867,6 +1193,8 @@ export class ShootCheckController {
     this.isReturningToStart = false;
     this.originalPosition = null;
     this.dunkTargetPosition = null;
+    this.isDefenderBlocking = false;
+    this.defenderOriginalPosition = null;
     this.results.clear();
   }
 }

@@ -132,7 +132,6 @@ export class GameScene {
   private pendingShotClockViolationReset: boolean = false;
   private shotClockViolationResetTimer: number = 0;
   private shotClockViolatingTeam: 'ally' | 'enemy' | null = null;
-  private shotClockViolationBallPosition: Vector3 | null = null;
   private readonly shotClockViolationResetDelay: number = 1.5;
 
   // アウトオブバウンズ時のボール位置
@@ -2048,7 +2047,6 @@ export class GameScene {
     this.pendingShotClockViolationReset = true;
     this.shotClockViolationResetTimer = this.shotClockViolationResetDelay;
     this.shotClockViolatingTeam = actualOffendingTeam;
-    this.shotClockViolationBallPosition = ballPosition.clone();
   }
 
   /**
@@ -2153,7 +2151,6 @@ export class GameScene {
 
     const offendingTeam = this.shotClockViolatingTeam;
     this.shotClockViolatingTeam = null;
-    this.shotClockViolationBallPosition = null;
 
     // センターサークル内で相手ボール保持状態で再開
     this.executeCenterCircleReset(offendingTeam);
@@ -2660,8 +2657,7 @@ export class GameScene {
     this.pendingShotClockViolationReset = false;
     this.shotClockViolationResetTimer = 0;
     this.shotClockViolatingTeam = null;
-    this.shotClockViolationBallPosition = null;
-    this.clearThrowInState();
+        this.clearThrowInState();
 
     // ボールの飛行を停止
     this.ball.endFlight();
@@ -2974,8 +2970,7 @@ export class GameScene {
     this.pendingShotClockViolationReset = false;
     this.shotClockViolationResetTimer = 0;
     this.shotClockViolatingTeam = null;
-    this.shotClockViolationBallPosition = null;
-    this.clearThrowInState();
+        this.clearThrowInState();
 
     // ボールをリセット
     this.ball.endFlight();
@@ -3309,6 +3304,64 @@ export class GameScene {
     }
 
     return shooter;
+  }
+
+  /**
+   * シュートチェックモード用のディフェンダーを追加
+   * @param defenderPlayerId ディフェンダーの選手ID
+   * @param defenderPosition ディフェンダーの配置位置
+   * @param playerData 選手データ（外部から渡す場合）
+   * @returns 作成されたディフェンダー、または失敗時はnull
+   */
+  public addShootCheckDefender(
+    defenderPlayerId: string,
+    defenderPosition: { x: number; z: number },
+    playerData?: Record<string, PlayerData>
+  ): Character | null {
+    // 使用する選手データを取得
+    const data = playerData || this.savedPlayerData;
+    if (!data) {
+      console.error('[GameScene] 選手データがありません');
+      return null;
+    }
+
+    const defenderData = data[defenderPlayerId];
+    if (!defenderData) {
+      console.error('[GameScene] 指定された選手IDのデータが見つかりません:', defenderPlayerId);
+      return null;
+    }
+
+    // ディフェンダーを作成
+    const defender = this.createCheckModeCharacter('enemy', defenderPosition, defenderData, 'PG');
+    this.enemyCharacters.push(defender);
+
+    // シューターを取得
+    const shooter = this.allyCharacters[0];
+    if (shooter) {
+      // ディフェンダーはシューター方向を向く
+      defender.lookAt(shooter.getPosition());
+    }
+
+    // 状態を設定
+    defender.setState(CharacterState.ON_BALL_DEFENDER);
+
+    // 衝突判定を更新
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    this.updateCollisionHandlerForCheckMode(allCharacters);
+
+    // 可視化を更新
+    if (this.shootTrajectoryVisualizer) {
+      this.shootTrajectoryVisualizer.dispose();
+      this.shootTrajectoryVisualizer = new ShootTrajectoryVisualizer(
+        this.scene,
+        this.ball,
+        this.field,
+        allCharacters
+      );
+      this.shootTrajectoryVisualizer.setEnabled(true);
+    }
+
+    return defender;
   }
 
   /**

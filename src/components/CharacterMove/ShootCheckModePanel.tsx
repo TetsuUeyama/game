@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
-import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter } from '@/character-move/controllers/check/ShootCheckController';
+import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/character-move/controllers/check/ShootCheckController';
 import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
 import { PlayerData } from '@/character-move/types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
@@ -46,6 +46,12 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
   const [checkMode, setCheckMode] = useState<CheckMode>('all');
   const [selectedCol, setSelectedCol] = useState<string>('H');
   const [selectedRow, setSelectedRow] = useState<number>(25);
+
+  // ディフェンダー設定
+  const [defenderEnabled, setDefenderEnabled] = useState<boolean>(false);
+  const [defenderPlayerId, setDefenderPlayerId] = useState<string>('');
+  const [defenderPosition, setDefenderPosition] = useState<'goal_front' | 'shooter_front'>('goal_front');
+  const [defenderBlockTiming, setDefenderBlockTiming] = useState<'on_shot' | 'on_release'>('on_shot');
 
   // 進捗
   const [progress, setProgress] = useState<ShootCheckProgress | null>(null);
@@ -108,11 +114,21 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
     // シューターのバランスをリセット（クリーンな状態から開始）
     shooter.resetBalance();
 
+    // ディフェンダー設定
+    const defenderConfig: DefenderConfig | undefined = defenderEnabled && defenderPlayerId
+      ? {
+          enabled: true,
+          position: defenderPosition,
+          blockTiming: defenderBlockTiming,
+        }
+      : undefined;
+
     // シュートチェック設定
     const config: ShootCheckConfig = {
       shotsPerCell,
       targetGoal,
       shotTypeFilter,
+      defender: defenderConfig,
     };
 
     // ShootingController を取得
@@ -130,6 +146,16 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
       shootingController,
       config
     );
+
+    // ディフェンダーを作成（有効な場合）
+    if (defenderEnabled && defenderPlayerId) {
+      // ディフェンダーの初期位置（シュートチェックコントローラーが後で配置し直す）
+      const defenderInitialPos = { x: 0, z: 0 };
+      const defender = gameScene.addShootCheckDefender(defenderPlayerId, defenderInitialPos, players);
+      if (defender) {
+        shootCheckControllerRef.current.setDefender(defender);
+      }
+    }
 
     // シュートレンジ表示を有効化
     shootingController.showShootRange();
@@ -173,6 +199,10 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
     shotsPerCell,
     targetGoal,
     shotTypeFilter,
+    defenderEnabled,
+    defenderPlayerId,
+    defenderPosition,
+    defenderBlockTiming,
   ]);
 
   // フェーズが running に変わったらシュートチェックを開始
@@ -212,10 +242,16 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
       // ボールの更新
       gameScene.getBall().update(deltaTime);
 
-      // シューターのみを更新（他のキャラクターは非表示なので更新不要）
+      // シューターを更新
       const shooter = gameScene.getAllyCharacters()[0];
       if (shooter) {
         shooter.update(deltaTime);
+      }
+
+      // ディフェンダーを更新（存在する場合）
+      const defenders = gameScene.getEnemyCharacters();
+      for (const defender of defenders) {
+        defender.update(deltaTime);
       }
 
       // フィールドの更新
@@ -465,13 +501,115 @@ export function ShootCheckModePanel({ gameScene, onClose }: ShootCheckModePanelP
             )}
 
             {/* シュート数表示 */}
-            <div className="mb-8">
+            <div className="mb-6">
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 {checkMode === 'single' ? '指定マスでのシュート数' : '1升目あたりのシュート数'}
               </label>
               <div className="px-4 py-3 bg-gray-700 text-white rounded-lg text-center text-lg font-bold">
                 {shotsPerCell}本
               </div>
+            </div>
+
+            {/* ディフェンダー設定 */}
+            <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-medium text-gray-300">
+                  ディフェンダー設定
+                </label>
+                <button
+                  onClick={() => setDefenderEnabled(!defenderEnabled)}
+                  className={`px-3 py-1 rounded-lg text-sm font-semibold transition-all ${
+                    defenderEnabled
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                  }`}
+                >
+                  {defenderEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              {defenderEnabled && (
+                <div className="space-y-3">
+                  {/* ディフェンダー選手選択 */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      ディフェンダー
+                    </label>
+                    <select
+                      value={defenderPlayerId}
+                      onChange={(e) => setDefenderPlayerId(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-600 text-white rounded-lg border border-gray-500 focus:border-orange-500 focus:outline-none text-sm"
+                    >
+                      <option value="">選手を選択...</option>
+                      {Object.entries(players)
+                        .filter(([id]) => id !== selectedPlayerId)
+                        .map(([id, player]) => (
+                          <option key={id} value={id}>
+                            {player.basic.NAME} ({player.basic.PositionMain}) - DEF:{player.stats.defense}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* 配置位置 */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      配置位置
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setDefenderPosition('goal_front')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          defenderPosition === 'goal_front'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                        }`}
+                      >
+                        ゴール前
+                      </button>
+                      <button
+                        onClick={() => setDefenderPosition('shooter_front')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          defenderPosition === 'shooter_front'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                        }`}
+                      >
+                        シューター前
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ブロックタイミング */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      ブロックタイミング
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setDefenderBlockTiming('on_shot')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          defenderBlockTiming === 'on_shot'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                        }`}
+                      >
+                        シュート開始時
+                      </button>
+                      <button
+                        onClick={() => setDefenderBlockTiming('on_release')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          defenderBlockTiming === 'on_release'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-600 text-gray-400 hover:bg-gray-500'
+                        }`}
+                      >
+                        ボールリリース時
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 開始ボタン */}
