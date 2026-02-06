@@ -159,6 +159,9 @@ export class GameScene {
   // 一時停止状態（シュートチェックモードなど他のモードが動作中）
   private isPaused: boolean = false;
 
+  // 初期化完了フラグ（物理エンジン・ジャンプボール設定完了まで更新をスキップ）
+  private isInitialized: boolean = false;
+
   // チーム設定とプレイヤーデータ（キャラクター再作成用）
   private savedTeamConfig: GameTeamConfig | null = null;
   private savedPlayerData: Record<string, PlayerData> | null = null;
@@ -191,6 +194,10 @@ export class GameScene {
   private jumpBallAllyJumper: Character | null = null;
   private jumpBallEnemyJumper: Character | null = null;
   private jumpBallTimer: number = 0;
+
+  // ルーズボール関連（誰もボールを保持していない状態のタイマー）
+  private looseBallTimer: number = 0;
+  private readonly LOOSE_BALL_JUMP_BALL_THRESHOLD: number = 10.0; // 10秒でジャンプボール
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -585,6 +592,9 @@ export class GameScene {
       if (this.gameMode === 'game' && this.allyCharacters.length > 0 && this.enemyCharacters.length > 0) {
         this.setupJumpBall();
       }
+
+      // 初期化完了フラグを設定
+      this.isInitialized = true;
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");
@@ -651,6 +661,11 @@ export class GameScene {
    * 更新処理（毎フレーム）
    */
   private update(deltaTime: number): void {
+    // 初期化完了前はゲームロジックをスキップ（物理エンジン・ジャンプボール設定待ち）
+    if (!this.isInitialized) {
+      return;
+    }
+
     // 一時停止中はゲームロジックをすべてスキップ（レンダリングのみ継続）
     if (this.isPaused) {
       return;
@@ -865,13 +880,15 @@ export class GameScene {
       }
     }
 
-    // アウトオブバウンズ判定（ゴール後・アウトオブバウンズのリセット待機中・スローイン中は判定しない）
+    // アウトオブバウンズ判定（ゴール後・アウトオブバウンズのリセット待機中・スローイン中・ジャンプボール中は判定しない）
     // スローイン中はボールが外側マスから投げられるため、判定をスキップ
+    // ジャンプボール中はボールがセンターで上下するため、判定をスキップ
     // ただし、ボールが投げられて着地した後（飛行中でなく、誰も保持していない）は判定を有効にする
     const ballHolder = this.ball.getHolder();
     const ballInFlight = this.ball.isInFlight();
     const isThrowInBeforeThrow = this.isThrowInPending || (this.throwInThrower !== null && (ballHolder === this.throwInThrower || ballInFlight));
-    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !isThrowInBeforeThrow && this.checkOutOfBounds()) {
+    const isJumpBallInProgress = this.isJumpBallActive();
+    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !isThrowInBeforeThrow && !isJumpBallInProgress && this.checkOutOfBounds()) {
       // リセットを予約（遅延実行）
       this.pendingOutOfBoundsReset = true;
       this.outOfBoundsResetTimer = this.outOfBoundsResetDelay;
@@ -891,6 +908,28 @@ export class GameScene {
     // シュートクロック更新
     if (this.shotClockController) {
       this.shotClockController.update(deltaTime);
+    }
+
+    // ルーズボールタイマー更新（誰もボールを保持していない状態を追跡）
+    // ゴールリセット待機中、アウトオブバウンズ待機中、スローイン中は追跡しない
+    if (!this.pendingGoalReset && !this.pendingOutOfBoundsReset && !this.isThrowInPending && !this.throwInThrower) {
+      if (!currentBallHolder && !this.ball.isInFlight()) {
+        // ルーズボール状態
+        this.looseBallTimer += deltaTime;
+
+        // 10秒経過したらジャンプボールで再開
+        if (this.looseBallTimer >= this.LOOSE_BALL_JUMP_BALL_THRESHOLD) {
+          this.looseBallTimer = 0;
+          this.setupJumpBall();
+          return; // ジャンプボール開始のため、以降の処理をスキップ
+        }
+      } else {
+        // ボールが保持されているか飛行中の場合、タイマーをリセット
+        this.looseBallTimer = 0;
+      }
+    } else {
+      // 特殊状態中はタイマーをリセット
+      this.looseBallTimer = 0;
     }
 
     // シュートクロック違反リセット待機処理
@@ -1154,7 +1193,7 @@ export class GameScene {
     // ボールをセンターサークル上空に配置（審判位置）
     const ballStartPos = new Vector3(
       CENTER_CIRCLE.CENTER_X,
-      1.5, // 審判の手の高さ
+      JUMP_BALL_POSITIONS.BALL_START_HEIGHT, // 300cmの高さから開始
       CENTER_CIRCLE.CENTER_Z
     );
     this.ball.setPosition(ballStartPos, true);
@@ -1200,36 +1239,58 @@ export class GameScene {
 
   /**
    * ジャンプボール時に他の選手を配置
+   * - 各チーム1人だけサークル付近に配置
+   * - それ以外は自陣のランダムな位置に配置
    */
   private positionOtherPlayersForJumpBall(): void {
     const minDistance = JUMP_BALL_POSITIONS.OTHER_PLAYER_MIN_DISTANCE;
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 14m
 
-    // 味方チームの配置（センターサークルの左側）
-    let allyIndex = 0;
+    // 味方チームの配置
+    let allyCirclePlayerPlaced = false;
     for (const char of this.allyCharacters) {
       if (char === this.jumpBallAllyJumper) continue;
 
-      const angle = -Math.PI / 2 + (allyIndex * Math.PI / 4); // 左側に配置
-      const x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
-      const z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+      let x: number, z: number;
+
+      if (!allyCirclePlayerPlaced) {
+        // 最初の1人はサークル付近（左側）に配置
+        const angle = -Math.PI / 2; // 左側
+        x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
+        z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+        allyCirclePlayerPlaced = true;
+      } else {
+        // それ以外は自陣（-Z側）のランダムな位置に配置
+        x = (Math.random() - 0.5) * (halfWidth * 1.5); // -5.6 ~ 5.6m
+        z = -halfLength * 0.3 - Math.random() * (halfLength * 0.5); // -4.2 ~ -11.2m
+      }
 
       char.setPosition(new Vector3(x, char.config.physical.height / 2, z));
       char.lookAt(new Vector3(CENTER_CIRCLE.CENTER_X, 0, CENTER_CIRCLE.CENTER_Z));
-      allyIndex++;
     }
 
-    // 敵チームの配置（センターサークルの右側）
-    let enemyIndex = 0;
+    // 敵チームの配置
+    let enemyCirclePlayerPlaced = false;
     for (const char of this.enemyCharacters) {
       if (char === this.jumpBallEnemyJumper) continue;
 
-      const angle = Math.PI / 2 + (enemyIndex * Math.PI / 4); // 右側に配置
-      const x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
-      const z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+      let x: number, z: number;
+
+      if (!enemyCirclePlayerPlaced) {
+        // 最初の1人はサークル付近（右側）に配置
+        const angle = Math.PI / 2; // 右側
+        x = CENTER_CIRCLE.CENTER_X + minDistance * Math.cos(angle);
+        z = CENTER_CIRCLE.CENTER_Z + minDistance * Math.sin(angle);
+        enemyCirclePlayerPlaced = true;
+      } else {
+        // それ以外は自陣（+Z側）のランダムな位置に配置
+        x = (Math.random() - 0.5) * (halfWidth * 1.5); // -5.6 ~ 5.6m
+        z = halfLength * 0.3 + Math.random() * (halfLength * 0.5); // 4.2 ~ 11.2m
+      }
 
       char.setPosition(new Vector3(x, char.config.physical.height / 2, z));
       char.lookAt(new Vector3(CENTER_CIRCLE.CENTER_X, 0, CENTER_CIRCLE.CENTER_Z));
-      enemyIndex++;
     }
   }
 
@@ -1283,6 +1344,8 @@ export class GameScene {
         break;
 
       case 'tossing':
+        // ボールの水平速度をゼロに強制（垂直落下を保証）
+        this.enforceVerticalBallMotion();
         // ボールが適切な高さに達したらジャンプフェーズへ
         const ballHeight = this.ball.getPosition().y;
         if (ballHeight >= JUMP_BALL_TIMING.TIP_ENABLED_MIN_HEIGHT) {
@@ -1292,8 +1355,11 @@ export class GameScene {
         break;
 
       case 'jumping':
-        // ボールがチップされていない場合、チップ処理を試行
+        // ボールがチップされていない場合
         if (!this.jumpBallInfo.ballTipped) {
+          // 垂直運動を強制（チップされるまで）
+          this.enforceVerticalBallMotion();
+          // チップ処理を試行
           this.tryTipBall();
         }
         // ボールが誰かに保持されたら完了
@@ -1313,14 +1379,33 @@ export class GameScene {
   }
 
   /**
+   * ジャンプボール中のボールを垂直運動に強制
+   * 水平方向の速度を0に、位置もセンターに固定
+   */
+  private enforceVerticalBallMotion(): void {
+    const ballPos = this.ball.getPosition();
+    const ballVel = this.ball.getVelocity();
+
+    // 水平位置がセンターからずれていたら補正
+    if (Math.abs(ballPos.x) > 0.01 || Math.abs(ballPos.z) > 0.01) {
+      this.ball.setPosition(new Vector3(0, ballPos.y, 0), false);
+    }
+
+    // 水平速度があれば除去（垂直速度のみ維持）
+    if (Math.abs(ballVel.x) > 0.01 || Math.abs(ballVel.z) > 0.01) {
+      this.ball.setVelocity(new Vector3(0, ballVel.y, 0));
+    }
+  }
+
+  /**
    * ジャンプボールのボール投げ上げを実行
    */
   private executeJumpBallToss(): void {
 
-    // ボールを投げ上げる
+    // ボールを投げ上げる（300cmの高さから上に投げ上げる）
     const tossPosition = new Vector3(
       CENTER_CIRCLE.CENTER_X,
-      1.5, // 審判の手の高さ
+      JUMP_BALL_POSITIONS.BALL_START_HEIGHT, // 300cmの高さから開始
       CENTER_CIRCLE.CENTER_Z
     );
     this.ball.tossForJumpBall(tossPosition, JUMP_BALL_POSITIONS.BALL_TOSS_HEIGHT);
@@ -1379,8 +1464,8 @@ export class GameScene {
     const allyHorizontalDist = getDistance2D(ballPos, allyPos);
     const enemyHorizontalDist = getDistance2D(ballPos, enemyPos);
 
-    // リーチ範囲（ジャンプ時に手が届く範囲）
-    const reachRange = 1.2;
+    // リーチ範囲（ジャンプ時に手が届く範囲）- 余裕を持たせる
+    const reachRange = 1.5;
 
     // どちらかがリーチ範囲内にいるかチェック
     const allyCanReach = allyHorizontalDist <= reachRange;
@@ -1927,9 +2012,12 @@ export class GameScene {
     const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
     const halfLength = FIELD_CONFIG.length / 2; // 14m
 
-    // 現在のボール位置がコート外かチェック
-    const isCurrentlyOutX = Math.abs(ballPosition.x) > halfWidth;
-    const isCurrentlyOutZ = Math.abs(ballPosition.z) > halfLength;
+    // アウトオブバウンズ判定のマージン（ギリギリでもセーフにする）
+    const outOfBoundsMargin = 0.5; // 50cmのマージン
+
+    // 現在のボール位置がコート外かチェック（マージン込み）
+    const isCurrentlyOutX = Math.abs(ballPosition.x) > halfWidth + outOfBoundsMargin;
+    const isCurrentlyOutZ = Math.abs(ballPosition.z) > halfLength + outOfBoundsMargin;
     const isCurrentlyOut = isCurrentlyOutX || isCurrentlyOutZ;
 
     // 現在コート内ならアウトオブバウンズではない
@@ -1942,9 +2030,9 @@ export class GameScene {
       return false;
     }
 
-    // 前フレームの位置がコート内だったかチェック
-    const wasPreviouslyInX = Math.abs(this.previousBallPosition.x) <= halfWidth;
-    const wasPreviouslyInZ = Math.abs(this.previousBallPosition.z) <= halfLength;
+    // 前フレームの位置がコート内だったかチェック（マージンなしで判定）
+    const wasPreviouslyInX = Math.abs(this.previousBallPosition.x) <= halfWidth + outOfBoundsMargin;
+    const wasPreviouslyInZ = Math.abs(this.previousBallPosition.z) <= halfLength + outOfBoundsMargin;
     const wasPreviouslyIn = wasPreviouslyInX && wasPreviouslyInZ;
 
     // 内側から外側に出た場合のみアウトオブバウンズ
@@ -2026,9 +2114,9 @@ export class GameScene {
   /**
    * シュートクロック違反時の処理
    * @param offendingTeam 違反したチーム
-   * @param ballPosition 違反時のボール位置
+   * @param _ballPosition 違反時のボール位置（将来のスローイン実装用に保持）
    */
-  private handleShotClockViolation(offendingTeam: 'ally' | 'enemy', ballPosition: Vector3): void {
+  private handleShotClockViolation(offendingTeam: 'ally' | 'enemy', _ballPosition: Vector3): void {
     // 既にリセット待機中の場合は何もしない
     if (this.pendingShotClockViolationReset || this.pendingGoalReset || this.pendingOutOfBoundsReset) {
       return;

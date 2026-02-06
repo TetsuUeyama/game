@@ -9,6 +9,7 @@ import {
   PhysicsAggregate,
   PhysicsShapeType,
   PhysicsMaterialCombineMode,
+  VertexData,
 } from "@babylonjs/core";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../config/gameConfig";
 import { GRID_CONFIG, OUTER_GRID_CONFIG } from "../config/FieldGridConfig";
@@ -86,6 +87,142 @@ const PAINT_AREA_CONFIG = {
   circleSegments: 32,
 } as const;
 
+/**
+ * 戦術概念ゾーン設定
+ *
+ * 【標準オフボールムーブ図に基づく配置】（goal1側、+Z方向がベースライン）
+ *
+ * ```
+ *                           ベースライン (Z=15)
+ *     ┌───────────────────────────────────────────────────┐
+ *     │                                                   │
+ *     │  [コーナー左]                       [コーナー右]  │
+ *     │       │                                 │        │
+ *     │       │   [ショート        [ショート    │        │
+ *     │       │    コーナー左]      コーナー右]  │        │
+ *     │       │      ┌─────────────────┐       │        │
+ *     │       │      │[ローポスト左]●[ローポスト右]│       │ ← ゴール (Z≈13.4)
+ *     │       │      │                 │       │        │
+ *     │       │      │  [ミッドポスト]  │       │        │
+ *     │       │      │                 │       │        │
+ *     │[ウィング左]   │[エルボー左][エルボー右]│   [ウィング右]│ ← FTライン延長
+ *     │       │      └─────────────────┘       │        │
+ *     │       │          [ハイポスト]           │        │ ← FTライン (Z≈8.8)
+ *     │        ╲           ( ◯ )              ╱         │
+ *     │         ╲                            ╱          │
+ *     │          ╲        [トップ]          ╱           │ ← 3Pアーク頂点
+ *     │           ╲                        ╱            │
+ *     └───────────────────────────────────────────────────┘
+ *                         コート中央方向
+ * ```
+ *
+ * 【ゾーン位置の幾何定義】
+ * - ウィング: FTライン延長線上、3Pアーク付近（ベースラインから約70°）
+ * - コーナー: 3P直線部（X = ±6.71m）
+ * - ショートコーナー: コーナーとローポストの間、ペイント外
+ * - ハイポスト: FTライン中央
+ * - エルボー: FTラインとペイント側線の交点
+ * - ミッドポスト: ペイント内、ゴールとFTラインの中間
+ * - ローポスト: ゴール横、ペイント端（ブロック位置）
+ * - トップ: 3Pアーク頂点（キーの上）
+ */
+const TACTICAL_ZONE_CONFIG = {
+  /** 地面からの高さ（ラインより低く） */
+  zoneY: 0.005,
+
+  /** ゾーンの透明度 */
+  zoneAlpha: 0.25,
+
+  /** 各ゾーンの定義（ゴール中心からの相対座標） */
+  zones: {
+    /**
+     * ウィング（左右）: トップの左右、3Pアーク上に楕円配置
+     * - 3Pアーク上、トップから左右に約45°の位置
+     * - 楕円形状で表現
+     */
+    wing: {
+      angleFromTop: 45,       // 度（トップからの角度）
+      radiusOnArc: 7.24,      // 3Pアーク半径上に配置
+      ellipseRadiusX: 1.5,    // 楕円のX方向半径
+      ellipseRadiusZ: 1.0,    // 楕円のZ方向半径
+      color: '#FF6B6B',       // 赤系
+    },
+
+    /**
+     * コーナー（左右）: 3P直線部、ベースライン付近
+     * - X: コーナー距離（6.71m）付近
+     * - Z: ベースラインから3Pアーク交点まで
+     */
+    corner: {
+      width: 1.8,             // X方向の幅
+      color: '#4ECDC4',       // ティール
+    },
+
+    /**
+     * ショートコーナー（左右）: ペイント外側、ベースライン〜ローポスト間
+     * - X: ペイント端〜コーナー3Pの間
+     * - Z: ベースライン付近、深さ2.5m程度
+     */
+    shortCorner: {
+      depthFromBaseline: 2.5, // ベースラインからの深さ
+      color: '#45B7D1',       // 水色
+    },
+
+    /**
+     * ハイポスト: FTライン中央、ペイント上端
+     * - 中心: FTライン中央
+     */
+    highPost: {
+      width: 2.5,             // X方向
+      depth: 1.8,             // Z方向（FTライン前後）
+      color: '#96CEB4',       // 薄緑
+    },
+
+    /**
+     * エルボー（左右）: FTラインとペイント側線の交点
+     * - X: ペイント幅の端（±2.44m）
+     * - Z: FTライン位置
+     */
+    elbow: {
+      radius: 1.0,            // エルボーの半径
+      color: '#FFEAA7',       // 黄色
+    },
+
+    /**
+     * ミッドポスト: ペイント中央、ゴールとFTラインの中間点
+     * - ペイント内の中央エリア
+     */
+    midPost: {
+      width: 2.0,
+      depth: 1.5,
+      color: '#DDA0DD',       // プラム
+    },
+
+    /**
+     * ローポスト（左右）: ブロック位置、ゴール横
+     * - X: ペイント端（±2.44m付近）
+     * - Z: ゴール中心より少しベースライン寄り
+     */
+    lowPost: {
+      width: 1.5,
+      depth: 1.8,
+      offsetFromGoal: 0.8,    // ゴール中心からベースライン方向へのオフセット
+      color: '#FF8C42',       // オレンジ
+    },
+
+    /**
+     * トップ（ポイント）: 3Pアーク頂点、キーの上
+     * - 3Pアークの最も遠い点
+     * - ポイントガードの基本位置
+     */
+    top: {
+      width: 3.0,
+      depth: 2.0,
+      color: '#9B59B6',       // 紫
+    },
+  },
+} as const;
+
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
@@ -100,6 +237,7 @@ export class Field {
   private centerCircle: Mesh; // センターサークル
   private threePointLines: Mesh[] = []; // 3ポイントライン
   private paintAreaLines: Mesh[] = []; // ペイントエリア（キー）ライン
+  private tacticalZones: Mesh[] = []; // 戦術概念ゾーン
   private gridLines: Mesh[] = []; // カスタムグリッド線
   private gridLabels: Mesh[] = []; // 座標ラベル
   private outerAreaMeshes: Mesh[] = []; // 外側マスエリア
@@ -134,6 +272,9 @@ export class Field {
 
     // ペイントエリア（キー）を作成
     this.createPaintAreas();
+
+    // 戦術概念ゾーンを作成
+    this.createTacticalZones();
 
     // 座標ラベルを作成
     this.createGridLabels();
@@ -866,6 +1007,350 @@ export class Field {
   }
 
   /**
+   * 戦術概念ゾーンを作成（両ゴール用）
+   *
+   * 各ゾーンはファジー領域として半透明で表示
+   * ゾーン同士の重なりを許容
+   */
+  private createTacticalZones(): void {
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+
+    // goal1（+Z側）のバスケット中心位置
+    const basket1Z = fieldHalfLength - GOAL_CONFIG.backboardDistance - GOAL_CONFIG.rimOffset;
+    // goal2（-Z側）のバスケット中心位置
+    const basket2Z = -basket1Z;
+
+    // goal1のゾーン
+    this.createTacticalZonesForGoal(basket1Z, 1);
+
+    // goal2のゾーン
+    this.createTacticalZonesForGoal(basket2Z, 2);
+  }
+
+  /**
+   * 1つのゴール用の戦術ゾーンを作成
+   */
+  private createTacticalZonesForGoal(goalCenterZ: number, goalNumber: number): void {
+    const zSign = goalNumber === 1 ? 1 : -1;
+    const fieldHalfLength = FIELD_CONFIG.length / 2;
+    const baselineZ = zSign * fieldHalfLength;
+
+    const { zoneY, zoneAlpha, zones } = TACTICAL_ZONE_CONFIG;
+    const { arcRadius, cornerDistance } = THREE_POINT_LINE_CONFIG;
+    const { laneWidth, freeThrowDistance } = PAINT_AREA_CONFIG;
+    const halfLaneWidth = laneWidth / 2;
+
+    // フリースローライン Z座標
+    const freeThrowZ = goalCenterZ - zSign * freeThrowDistance;
+
+    // 3Pアークとコーナーラインの交点Z
+    const arcCornerDeltaZ = Math.sqrt(arcRadius * arcRadius - cornerDistance * cornerDistance);
+    const arcCornerZ = goalCenterZ - zSign * arcCornerDeltaZ;
+
+    // ========================================
+    // 1. ウィング（左右）- トップの左右、3Pアーク上に楕円配置
+    // ========================================
+    const wingAngleFromTop = zones.wing.angleFromTop * Math.PI / 180;
+
+    // 3Pアーク上の位置を計算
+    // goal1: アークはゴールから-Z方向に伸びる（コート中央向き）
+    // goal2: アークはゴールから+Z方向に伸びる（コート中央向き）
+    // トップ位置: ゴール中心から真っ直ぐコート中央方向（角度 = -zSign * π/2）
+    const topAngle = -zSign * Math.PI / 2;
+
+    // 左ウィング: トップから反時計回りに wingAngleFromTop
+    const leftWingAngle = topAngle - wingAngleFromTop;
+    const leftWingX = Math.cos(leftWingAngle) * arcRadius;
+    const leftWingZ = goalCenterZ + Math.sin(leftWingAngle) * arcRadius;
+    // 楕円の回転角度 = アークの接線方向（法線 + 90°）
+    const leftWingRotation = leftWingAngle + Math.PI / 2;
+
+    this.createRotatedEllipseZone(
+      leftWingX, leftWingZ,
+      zones.wing.ellipseRadiusX, zones.wing.ellipseRadiusZ,
+      leftWingRotation,
+      zones.wing.color, zoneY, zoneAlpha,
+      `wing-left-${goalNumber}`
+    );
+
+    // 右ウィング: トップから時計回りに wingAngleFromTop
+    const rightWingAngle = topAngle + wingAngleFromTop;
+    const rightWingX = Math.cos(rightWingAngle) * arcRadius;
+    const rightWingZ = goalCenterZ + Math.sin(rightWingAngle) * arcRadius;
+    const rightWingRotation = rightWingAngle + Math.PI / 2;
+
+    this.createRotatedEllipseZone(
+      rightWingX, rightWingZ,
+      zones.wing.ellipseRadiusX, zones.wing.ellipseRadiusZ,
+      rightWingRotation,
+      zones.wing.color, zoneY, zoneAlpha,
+      `wing-right-${goalNumber}`
+    );
+
+    // ========================================
+    // 2. コーナー（左右）- 3P直線部
+    // ========================================
+    const cornerWidth = zones.corner.width;
+
+    // 左コーナー
+    this.createRectZone(
+      -cornerDistance - cornerWidth / 2, cornerWidth,
+      baselineZ, arcCornerZ,
+      zones.corner.color, zoneY, zoneAlpha,
+      `corner-left-${goalNumber}`
+    );
+
+    // 右コーナー
+    this.createRectZone(
+      cornerDistance - cornerWidth / 2, cornerWidth,
+      baselineZ, arcCornerZ,
+      zones.corner.color, zoneY, zoneAlpha,
+      `corner-right-${goalNumber}`
+    );
+
+    // ========================================
+    // 3. ショートコーナー（左右）- ペイント外側、ベースライン寄り
+    // ========================================
+    const shortCornerDepth = zones.shortCorner.depthFromBaseline;
+    const shortCornerEndZ = baselineZ - zSign * shortCornerDepth;
+
+    // 左ショートコーナー
+    this.createRectZone(
+      -cornerDistance, cornerDistance - halfLaneWidth,
+      baselineZ, shortCornerEndZ,
+      zones.shortCorner.color, zoneY, zoneAlpha,
+      `short-corner-left-${goalNumber}`
+    );
+
+    // 右ショートコーナー
+    this.createRectZone(
+      halfLaneWidth, cornerDistance - halfLaneWidth,
+      baselineZ, shortCornerEndZ,
+      zones.shortCorner.color, zoneY, zoneAlpha,
+      `short-corner-right-${goalNumber}`
+    );
+
+    // ========================================
+    // 4. ハイポスト - FTライン周辺
+    // ========================================
+    const highPostHalfWidth = zones.highPost.width / 2;
+    const highPostHalfDepth = zones.highPost.depth / 2;
+
+    this.createRectZone(
+      -highPostHalfWidth, zones.highPost.width,
+      freeThrowZ - zSign * highPostHalfDepth,
+      freeThrowZ + zSign * highPostHalfDepth,
+      zones.highPost.color, zoneY, zoneAlpha,
+      `high-post-${goalNumber}`
+    );
+
+    // ========================================
+    // 5. エルボー（左右）- FTライン左右端
+    // ========================================
+    // 左エルボー
+    this.createCircleZone(
+      -halfLaneWidth, freeThrowZ,
+      zones.elbow.radius,
+      zones.elbow.color, zoneY, zoneAlpha,
+      `elbow-left-${goalNumber}`
+    );
+
+    // 右エルボー
+    this.createCircleZone(
+      halfLaneWidth, freeThrowZ,
+      zones.elbow.radius,
+      zones.elbow.color, zoneY, zoneAlpha,
+      `elbow-right-${goalNumber}`
+    );
+
+    // ========================================
+    // 6. ミッドポスト - ペイント中央
+    // ========================================
+    const midPostZ = (goalCenterZ + freeThrowZ) / 2; // ゴールとFTラインの中間
+    const midPostHalfWidth = zones.midPost.width / 2;
+    const midPostHalfDepth = zones.midPost.depth / 2;
+
+    this.createRectZone(
+      -midPostHalfWidth, zones.midPost.width,
+      midPostZ - zSign * midPostHalfDepth,
+      midPostZ + zSign * midPostHalfDepth,
+      zones.midPost.color, zoneY, zoneAlpha,
+      `mid-post-${goalNumber}`
+    );
+
+    // ========================================
+    // 7. ローポスト（左右）- ゴール横
+    // ========================================
+    const lowPostOffset = zones.lowPost.offsetFromGoal;
+    const lowPostHalfWidth = zones.lowPost.width / 2;
+    const lowPostHalfDepth = zones.lowPost.depth / 2;
+    const lowPostCenterZ = goalCenterZ + zSign * lowPostOffset;
+
+    // 左ローポスト
+    this.createRectZone(
+      -halfLaneWidth - lowPostHalfWidth, zones.lowPost.width,
+      lowPostCenterZ - zSign * lowPostHalfDepth,
+      lowPostCenterZ + zSign * lowPostHalfDepth,
+      zones.lowPost.color, zoneY, zoneAlpha,
+      `low-post-left-${goalNumber}`
+    );
+
+    // 右ローポスト
+    this.createRectZone(
+      halfLaneWidth - lowPostHalfWidth, zones.lowPost.width,
+      lowPostCenterZ - zSign * lowPostHalfDepth,
+      lowPostCenterZ + zSign * lowPostHalfDepth,
+      zones.lowPost.color, zoneY, zoneAlpha,
+      `low-post-right-${goalNumber}`
+    );
+
+    // ========================================
+    // 8. トップ（ポイント）- 3Pアーク頂点
+    // ========================================
+    // 3Pアークの最も遠い点（ゴール中心から arcRadius 離れた位置）
+    const topCenterZ = goalCenterZ - zSign * arcRadius;
+    const topHalfWidth = zones.top.width / 2;
+    const topHalfDepth = zones.top.depth / 2;
+
+    this.createRectZone(
+      -topHalfWidth, zones.top.width,
+      topCenterZ - zSign * topHalfDepth,
+      topCenterZ + zSign * topHalfDepth,
+      zones.top.color, zoneY, zoneAlpha,
+      `top-${goalNumber}`
+    );
+  }
+
+  /**
+   * 回転付き楕円ゾーンを作成
+   * @param centerX 中心X座標
+   * @param centerZ 中心Z座標
+   * @param radiusX 楕円のX方向半径（回転前）
+   * @param radiusZ 楕円のZ方向半径（回転前）
+   * @param rotation 回転角度（ラジアン）- Y軸周りの回転
+   */
+  private createRotatedEllipseZone(
+    centerX: number,
+    centerZ: number,
+    radiusX: number,
+    radiusZ: number,
+    rotation: number,
+    color: string,
+    y: number,
+    alpha: number,
+    name: string
+  ): void {
+    const segments = 32;
+    const positions: number[] = [];
+    const indices: number[] = [];
+
+    // 中心点
+    positions.push(centerX, y, centerZ);
+
+    // 楕円の周囲の点（回転適用）
+    const cosR = Math.cos(rotation);
+    const sinR = Math.sin(rotation);
+
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      // ローカル座標での楕円点
+      const localX = Math.cos(angle) * radiusX;
+      const localZ = Math.sin(angle) * radiusZ;
+      // 回転を適用してワールド座標へ
+      const worldX = centerX + localX * cosR - localZ * sinR;
+      const worldZ = centerZ + localX * sinR + localZ * cosR;
+      positions.push(worldX, y, worldZ);
+    }
+
+    // 三角形ファン（中心から各エッジへ）
+    for (let i = 1; i <= segments; i++) {
+      indices.push(0, i, i + 1);
+    }
+
+    const mesh = new Mesh(`zone-${name}`, this.scene);
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.applyToMesh(mesh);
+
+    const material = new StandardMaterial(`zone-mat-${name}`, this.scene);
+    const colorValue = Color3.FromHexString(color);
+    material.diffuseColor = colorValue;
+    material.emissiveColor = colorValue.scale(0.4); // 発光を追加して視認性向上
+    material.alpha = alpha;
+    material.backFaceCulling = false;
+    mesh.material = material;
+
+    this.tacticalZones.push(mesh);
+  }
+
+  /**
+   * 矩形ゾーンを作成
+   */
+  private createRectZone(
+    x: number,
+    width: number,
+    z1: number,
+    z2: number,
+    color: string,
+    y: number,
+    alpha: number,
+    name: string
+  ): void {
+    const minZ = Math.min(z1, z2);
+    const maxZ = Math.max(z1, z2);
+    const depth = maxZ - minZ;
+
+    const mesh = MeshBuilder.CreateGround(
+      `zone-${name}`,
+      { width, height: depth },
+      this.scene
+    );
+    mesh.position = new Vector3(x + width / 2, y, (minZ + maxZ) / 2);
+
+    const material = new StandardMaterial(`zone-mat-${name}`, this.scene);
+    const colorValue = Color3.FromHexString(color);
+    material.diffuseColor = colorValue;
+    material.emissiveColor = colorValue.scale(0.4); // 発光を追加して視認性向上
+    material.alpha = alpha;
+    material.backFaceCulling = false;
+    mesh.material = material;
+
+    this.tacticalZones.push(mesh);
+  }
+
+  /**
+   * 円形ゾーンを作成
+   */
+  private createCircleZone(
+    x: number,
+    z: number,
+    radius: number,
+    color: string,
+    y: number,
+    alpha: number,
+    name: string
+  ): void {
+    const mesh = MeshBuilder.CreateDisc(
+      `zone-${name}`,
+      { radius, tessellation: 24 },
+      this.scene
+    );
+    mesh.position = new Vector3(x, y, z);
+    mesh.rotation.x = Math.PI / 2; // 水平に
+
+    const material = new StandardMaterial(`zone-mat-${name}`, this.scene);
+    const colorValue = Color3.FromHexString(color);
+    material.diffuseColor = colorValue;
+    material.emissiveColor = colorValue.scale(0.4); // 発光を追加して視認性向上
+    material.alpha = alpha;
+    material.backFaceCulling = false;
+    mesh.material = material;
+
+    this.tacticalZones.push(mesh);
+  }
+
+  /**
    * バスケットゴールを作成
    * @param goalNumber ゴール番号（1または2）
    */
@@ -1209,6 +1694,11 @@ export class Field {
       line.dispose();
     }
     this.paintAreaLines = [];
+    // 戦術ゾーンを破棄
+    for (const zone of this.tacticalZones) {
+      zone.dispose();
+    }
+    this.tacticalZones = [];
     this.goal1Backboard.dispose();
     this.goal1Rim.dispose();
     this.goal1Net.dispose();

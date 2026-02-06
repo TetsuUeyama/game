@@ -21,9 +21,11 @@ export const CENTER_CIRCLE = {
  */
 export const JUMP_BALL_POSITIONS = {
   /** ジャンパー初期位置のZ軸オフセット（センターからの距離） */
-  JUMPER_OFFSET_Z: 0.5,
-  /** ボール投げ上げ高さ（m） */
-  BALL_TOSS_HEIGHT: 3.5,
+  JUMPER_OFFSET_Z: 0.3, // より近くに配置してボールに届きやすくする
+  /** ボール開始高さ（m）- 審判がボールを持つ位置 */
+  BALL_START_HEIGHT: 3.0, // 300cmからスタート
+  /** ボール投げ上げ高さ（m）- 開始位置からの上昇分 */
+  BALL_TOSS_HEIGHT: 1.5, // 3.0m + 1.5m = 4.5mまで上昇
   /** 待機選手の最小距離（センターからの距離、m） */
   OTHER_PLAYER_MIN_DISTANCE: 3.0,
 } as const;
@@ -36,10 +38,10 @@ export const JUMP_BALL_TIMING = {
   TOSS_TO_JUMP_DELAY: 0.3,
   /** ジャンプボール開始までの準備時間（秒） */
   PREPARATION_TIME: 1.5,
-  /** ボールがチップ可能になる高さ（ジャンパーのリーチ付近） */
-  TIP_ENABLED_MIN_HEIGHT: 2.0,
+  /** ボールがチップ可能になる高さ（ジャンパーのリーチ付近、落下中に競る） */
+  TIP_ENABLED_MIN_HEIGHT: 2.8, // ジャンパーが手を伸ばして届く最低高さ
   /** ボールがチップ可能な最大高さ */
-  TIP_ENABLED_MAX_HEIGHT: 3.8,
+  TIP_ENABLED_MAX_HEIGHT: 4.5, // 最高到達点付近
 } as const;
 
 /**

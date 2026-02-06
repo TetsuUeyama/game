@@ -131,4 +131,7 @@ export const LOOSE_BALL_PICKUP = {
 
   /** 高さ判定の追加マージン（m）- 身長に加算 */
   HEIGHT_MARGIN: 0.5,
+
+  /** 即時保持判定の相手チームプレイヤー不在距離（m） */
+  NO_OPPONENT_RADIUS: 1.0,
 } as const;

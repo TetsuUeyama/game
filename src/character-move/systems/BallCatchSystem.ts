@@ -290,6 +290,30 @@ export class BallCatchSystem {
   }
 
   /**
+   * 指定したキャラクターの周囲に相手チームの選手がいるかチェック
+   * @param character チェック対象のキャラクター
+   * @param radius チェック半径（m）
+   * @returns 相手チームの選手がいる場合true
+   */
+  private hasOpponentWithinRadius(character: Character, radius: number): boolean {
+    const characterPos = character.getPosition();
+    const opponentTeam = character.team === 'ally' ? 'enemy' : 'ally';
+
+    for (const other of this.allCharacters) {
+      if (other.team !== opponentTeam) continue;
+
+      const otherPos = other.getPosition();
+      const distance = getDistance2D(characterPos, otherPos);
+
+      if (distance < radius) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * シナリオ判定
    * キャラクターの状態からキャッチシナリオを決定
    */
@@ -369,6 +393,27 @@ export class BallCatchSystem {
     // ルーズボールの場合: サークル内滞在時間チェック
     // 滞在時間が満たされたら即座に保持状態に移行
     if (config.scenario === CatchScenario.LOOSE_BALL) {
+      // まずボールが円柱と重なっているかチェック
+      const cylinderState = this.checkBallCylinderState(character, ballPosition);
+
+      if (cylinderState === 'outside') {
+        // サークル外の場合はスキップ
+        return null;
+      }
+
+      // 周囲1m以内に相手チームの選手がいないかチェック
+      const hasNearbyOpponent = this.hasOpponentWithinRadius(
+        character,
+        LOOSE_BALL_PICKUP.NO_OPPONENT_RADIUS
+      );
+
+      // 相手がいない + ボールがサークルと重なっている → 即保持
+      if (!hasNearbyOpponent && (cylinderState === 'inside' || cylinderState === 'touching')) {
+        console.log(`[TryCatch] ${character.playerPosition} CATCH (no opponent, cylinder overlap): state=${cylinderState}`);
+        return this.executeCatch(character, config.scenario, ballPosition);
+      }
+
+      // 相手がいる場合は従来の滞在時間チェック
       const dwellTime = this.looseBallDwellTimes.get(character) || 0;
       const isCompletelyInside = this.ballCompletelyInside.get(character) || false;
 
@@ -383,8 +428,7 @@ export class BallCatchSystem {
         return this.executeCatch(character, config.scenario, ballPosition);
       }
       // 滞在時間が足りない場合は他の条件もチェックせずスキップ
-      // （サークル外の場合はdwellTime=0なのでここに来る）
-      console.log(`[TryCatch] ${character.playerPosition} WAIT dwell time: ${dwellTime.toFixed(2)}s < ${requiredTime}s (inside=${isCompletelyInside})`);
+      console.log(`[TryCatch] ${character.playerPosition} WAIT dwell time: ${dwellTime.toFixed(2)}s < ${requiredTime}s (inside=${isCompletelyInside}, hasOpponent=${hasNearbyOpponent})`);
       return null;
     }
 

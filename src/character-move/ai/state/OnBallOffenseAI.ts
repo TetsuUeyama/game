@@ -17,6 +17,7 @@ import {InterceptionAnalyzer} from "../analysis/InterceptionAnalyzer";
 import {PassType, PASS_TYPE_CONFIGS} from "../../config/PassTrajectoryConfig";
 import { normalizeAngle, getDistance2D, getDistance2DSimple } from "../../utils/CollisionUtils";
 import { getTeammates, getOpponents } from "../../utils/TeamUtils";
+import { isInPaintArea } from "../../config/TacticalZoneConfig";
 
 /**
  * パス実行時のコールバック型
@@ -330,10 +331,21 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.throwInSurveyCompleted = false;
     }
 
+    // シュート後、ボールが飛行中の場合はその場でボールを見守る
+    if (this.ball.isInFlight()) {
+      this.handleWatchShot();
+      return;
+    }
+
     // 周囲確認フェーズの処理（ボールを受け取った直後）
     if (this.surveyPhase !== "none") {
       this.updateSurveyPhase(deltaTime);
       return; // 周囲確認中は他の行動をしない
+    }
+
+    // ペイントエリア内の場合、レイアップ/ダンクを最優先
+    if (!this.targetPositionOverride && this.tryPaintAreaShot(deltaTime)) {
+      return;
     }
 
     // アイドル時間追跡の更新
@@ -373,11 +385,11 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
     }
 
-    // 目の前にディフェンダーがいるかチェック
-    const onBallDefender = this.findOnBallDefender();
+    // ゴール方向にディフェンダーがいるかチェック
+    const defenderInPath = this.findDefenderInPathToGoal(targetPosition);
 
-    if (onBallDefender) {
-      const defenderPosition = onBallDefender.getPosition();
+    if (defenderInPath) {
+      const defenderPosition = defenderInPath.getPosition();
 
       // 視野ベースで1on1状態を判定
       // オフェンスプレイヤーの視野内にディフェンダーがいるかどうか
@@ -399,7 +411,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
     }
 
-    // ディフェンダーがいない場合 → 積極的に前進
+    // ディフェンダーがゴール方向にいない場合 → 積極的にゴールへドライブ
 
     // まずシュートを試みる（ディフェンダーなしでシュートレンジ内なら打つ）
     // 目標位置オーバーライド時はシュートしない
@@ -415,7 +427,7 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     // ディフェンダーがいないので、積極的に前進（衝突チェックなしで移動）
     const distanceToTarget = toGoal.length();
-    const stopDistance = this.targetPositionOverride ? 0.5 : 2.0;
+    const stopDistance = this.targetPositionOverride ? 0.5 : 1.0; // ゴールにより近づく
 
     if (distanceToTarget > stopDistance) {
       // ダッシュモーションで前進
@@ -427,12 +439,15 @@ export class OnBallOffenseAI extends BaseStateAI {
       const direction = toGoal.normalize();
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
 
-      if (boundaryAdjusted) {
-        // 全速力でダッシュ
-        this.character.move(boundaryAdjusted, deltaTime);
-      }
+      // 境界調整後の方向で移動、調整できなくても元の方向で移動を試みる
+      const moveDirection = boundaryAdjusted || direction;
+      this.character.move(moveDirection, deltaTime);
     } else {
-      // 目標に近い場合はアイドル
+      // 目標に非常に近い場合、再度シュートを試みる
+      if (!this.targetPositionOverride && this.tryShoot()) {
+        return;
+      }
+      // それでもシュートできない場合はアイドル
       if (this.character.getCurrentMotionName() !== "idle") {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -527,6 +542,9 @@ export class OnBallOffenseAI extends BaseStateAI {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
+        } else {
+          // 衝突調整が失敗しても境界調整された方向で移動
+          moveDirection = boundaryAdjusted;
         }
       }
       // シュートレンジ内外で速度を変える
@@ -535,6 +553,10 @@ export class OnBallOffenseAI extends BaseStateAI {
       const moveSpeed = inShootRange ? 0.6 : 0.9;
       this.character.move(moveDirection.scale(moveSpeed), deltaTime);
     } else {
+      // 目標に非常に近い場合、シュートを試みる
+      if (!this.targetPositionOverride && this.tryShoot()) {
+        return;
+      }
     }
   }
 
@@ -570,12 +592,19 @@ export class OnBallOffenseAI extends BaseStateAI {
         const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
         if (adjustedDirection) {
           moveDirection = adjustedDirection;
+        } else {
+          // 衝突調整が失敗しても境界調整された方向で移動
+          moveDirection = boundaryAdjusted;
         }
       }
       // 全速力でダッシュ
       this.character.move(moveDirection, deltaTime);
     } else {
-      // 目標に近い場合はアイドル
+      // 目標に非常に近い場合、シュートを試みる
+      if (!this.targetPositionOverride && this.tryShoot()) {
+        return;
+      }
+      // それでもシュートできない場合はアイドル
       if (this.character.getCurrentMotionName() !== "idle") {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -590,6 +619,107 @@ export class OnBallOffenseAI extends BaseStateAI {
       return this.targetPositionOverride;
     }
     return this.field.getAttackingBackboard(this.character.team);
+  }
+
+  /**
+   * シュート後にボールを見守る
+   * シュート結果が出るまでその場で待機
+   */
+  private handleWatchShot(): void {
+    const myPosition = this.character.getPosition();
+    const ballPosition = this.ball.getPosition();
+
+    // ボールの方を向く
+    const toBall = new Vector3(
+      ballPosition.x - myPosition.x,
+      0,
+      ballPosition.z - myPosition.z
+    );
+
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // 停止してボールを見守る
+    this.character.velocity = Vector3.Zero();
+    this.character.stopMovement();
+
+    // アイドルモーション
+    if (this.character.getCurrentMotionName() !== "idle") {
+      this.character.playMotion(IDLE_MOTION);
+    }
+  }
+
+  /**
+   * ゴール方向の経路上にディフェンダーがいるかチェック
+   * ボールハンドラーとゴールの間にいるディフェンダーのみを検出
+   * @param targetPosition ゴール位置
+   * @returns 経路上のディフェンダー（いなければnull）
+   */
+  private findDefenderInPathToGoal(targetPosition: Vector3): Character | null {
+    const myPosition = this.character.getPosition();
+    const toGoal = new Vector3(
+      targetPosition.x - myPosition.x,
+      0,
+      targetPosition.z - myPosition.z
+    );
+    const distanceToGoal = toGoal.length();
+
+    if (distanceToGoal < 0.1) {
+      return null;
+    }
+
+    const goalDirection = toGoal.normalize();
+
+    // 相手チームの選手を取得
+    const opponents = getOpponents(this.allCharacters, this.character);
+
+    let closestDefender: Character | null = null;
+    let closestDistance = Infinity;
+
+    // 経路の幅（この範囲内にいるディフェンダーをチェック）
+    const pathWidth = 2.5; // メートル
+
+    for (const opponent of opponents) {
+      const opponentPos = opponent.getPosition();
+      const toOpponent = new Vector3(
+        opponentPos.x - myPosition.x,
+        0,
+        opponentPos.z - myPosition.z
+      );
+
+      // ゴール方向への射影距離（前方にいるかどうか）
+      const forwardDistance = Vector3.Dot(toOpponent, goalDirection);
+
+      // 前方にいない（後ろにいる）ならスキップ
+      if (forwardDistance < 0.5) {
+        continue;
+      }
+
+      // ゴールより遠くにいるならスキップ
+      if (forwardDistance > distanceToGoal) {
+        continue;
+      }
+
+      // 経路からの横方向の距離を計算
+      const lateralDistance = Math.abs(
+        toOpponent.x * (-goalDirection.z) + toOpponent.z * goalDirection.x
+      );
+
+      // 経路幅の範囲内にいるかチェック
+      if (lateralDistance > pathWidth) {
+        continue;
+      }
+
+      // 最も近いディフェンダーを記録
+      if (forwardDistance < closestDistance) {
+        closestDistance = forwardDistance;
+        closestDefender = opponent;
+      }
+    }
+
+    return closestDefender;
   }
 
   /**
@@ -622,8 +752,11 @@ export class OnBallOffenseAI extends BaseStateAI {
     const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
     this.character.setRotation(angle);
 
-    // 向きを変えた後、正式にチェック
-    const rangeInfo = this.shootingController.getShootRangeInfo(this.character);
+    // ダンクレンジ内かどうかを確認（forceDunk=true で確認）
+    const isDunkRange = distanceToGoal <= 3.5; // DUNK_MAX_EXTENDED
+
+    // 向きを変えた後、正式にチェック（ダンクレンジ内ならforceDunk=true）
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character, isDunkRange);
 
     if (!rangeInfo.inRange || !rangeInfo.facingGoal) {
       return false;
@@ -636,18 +769,93 @@ export class OnBallOffenseAI extends BaseStateAI {
       case "3pt":
       case "midrange":
       case "layup":
+      case "dunk":
         shouldShoot = true;
         break;
     }
 
     if (shouldShoot) {
-      // シュート実行（ActionController経由でアニメーション付き）
-      const result = this.shootingController.startShootAction(this.character);
+      // シュート実行（ダンクレンジ内ならforceDunk=true）
+      const result = this.shootingController.startShootAction(this.character, isDunkRange);
       if (result.success) {
         // SHOOT_COOLDOWN.AFTER_SHOTを使用してクールダウンを設定
         this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
         return true;
       }
+    }
+
+    return false;
+  }
+
+  /**
+   * ペイントエリア内でのシュート（レイアップ/ダンク）を試みる
+   * ペイントエリアに侵入したら積極的にシュートを狙う
+   * @param deltaTime フレーム経過時間
+   * @returns シュートを打った場合true
+   */
+  private tryPaintAreaShot(deltaTime: number): boolean {
+    // ShootingControllerがない場合はスキップ
+    if (!this.shootingController) {
+      return false;
+    }
+
+    // クールダウン中はスキップ
+    if (this.shootCooldown > 0) {
+      return false;
+    }
+
+    // 自分の位置を取得
+    const myPos = this.character.getPosition();
+
+    // 攻めるべきゴールの方向を確認（allyは+Z側を攻める）
+    const isAttackingPositiveZ = this.character.team === "ally";
+
+    // ペイントエリア内かチェック（攻めている側のペイントエリア）
+    if (!isInPaintArea({ x: myPos.x, z: myPos.z }, isAttackingPositiveZ)) {
+      return false;
+    }
+
+    // ペイントエリア内にいる - レイアップ/ダンクを狙う
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
+
+    // ゴール方向を向く
+    const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
+    this.character.setRotation(angle);
+
+    // シュート情報を取得（forceDunk=true でダンクも検出）
+    const rangeInfo = this.shootingController.getShootRangeInfo(this.character, true);
+
+    // レイアップ/ダンクレンジ内ならシュート
+    if (rangeInfo.inRange && rangeInfo.facingGoal) {
+      // forceDunk=true でダンクモーションを含めて実行
+      const result = this.shootingController.startShootAction(this.character, true);
+      if (result.success) {
+        this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
+        return true;
+      }
+    }
+
+    // シュートレンジ内でなくても、ペイントエリア内ならゴールに向かって突進
+    // （ゴールに近づいてレイアップレンジに入る）
+    const toGoal = new Vector3(goalPosition.x - myPos.x, 0, goalPosition.z - myPos.z);
+    const distanceToGoal = toGoal.length();
+
+    if (distanceToGoal > 0.5) {
+      // ダッシュモーションで突進
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      // 境界チェックのみ行い、全速力でゴールへ
+      const direction = toGoal.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        this.character.move(boundaryAdjusted, deltaTime);
+      } else {
+        this.character.move(direction, deltaTime);
+      }
+      return true;
     }
 
     return false;
