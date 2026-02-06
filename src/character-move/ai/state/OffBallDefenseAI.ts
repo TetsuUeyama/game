@@ -15,6 +15,8 @@ import { Formation, FormationUtils, PlayerPosition } from "../../config/Formatio
  */
 export class OffBallDefenseAI extends BaseStateAI {
   private currentFormation: Formation;
+  private decisionTimer: number = 0;
+  private cachedTargetPosition: { x: number; z: number; markTarget: Character | null } | null = null;
 
   constructor(
     character: Character,
@@ -46,15 +48,27 @@ export class OffBallDefenseAI extends BaseStateAI {
   }
 
   /**
+   * 判断間隔を取得（選手のalignmentに基づく）
+   * 計算式: 1 - (alignment / 50) 秒
+   * alignment=50 → 0秒（毎フレーム判断）
+   * alignment=0 → 1秒
+   */
+  private getDecisionInterval(): number {
+    const alignment = this.character.playerData?.stats.alignment ?? 50;
+    return Math.max(0, 1 - alignment / 50);
+  }
+
+  /**
    * AIの更新処理
    * 同じポジションのオフェンスプレイヤーをマンマークする
    * シュート時はリバウンドポジションへ移動
    * スローイン時は外側マスを避ける
    */
   public update(deltaTime: number): void {
-    // ボールが飛行中（シュート中）の場合はリバウンドポジションへ
+    // ボールが飛行中（シュート中）の場合はその場でボールを見守る
+    // シュート結果が出るまで動かない
     if (this.ball.isInFlight()) {
-      this.handleReboundPosition(deltaTime, false); // false = ディフェンス側
+      this.handleWatchShot();
       return;
     }
 
@@ -72,7 +86,8 @@ export class OffBallDefenseAI extends BaseStateAI {
       const actionController = onBallPlayer.getActionController();
       const currentAction = actionController.getCurrentAction();
       if (currentAction && currentAction.startsWith('shoot_')) {
-        this.handleReboundPosition(deltaTime, false);
+        // シュートモーション中もボールを見守る
+        this.handleWatchShot();
         return;
       }
     }
@@ -86,18 +101,46 @@ export class OffBallDefenseAI extends BaseStateAI {
    * 外側マスに入らないようにしながらマンマークする
    */
   private handleThrowInDefense(deltaTime: number): void {
+    // 判断タイマーを更新
+    this.decisionTimer += deltaTime;
+
+    // 判断間隔に達したら目標位置を再計算
+    if (this.decisionTimer >= this.getDecisionInterval() || this.cachedTargetPosition === null) {
+      this.decisionTimer = 0;
+      this.recalculateThrowInMarkPosition();
+    }
+
+    // キャッシュされた目標がない場合はフォーメーション位置へ
+    if (!this.cachedTargetPosition || !this.cachedTargetPosition.markTarget) {
+      this.handleFormationPositionAvoidingEdge(deltaTime);
+      return;
+    }
+
+    const myPosition = this.character.getPosition();
+    const idealPosition = new Vector3(
+      this.cachedTargetPosition.x,
+      myPosition.y,
+      this.cachedTargetPosition.z
+    );
+
+    // 理想位置に向かって移動
+    this.moveTowardsMarkPosition(idealPosition, this.cachedTargetPosition.markTarget, deltaTime);
+  }
+
+  /**
+   * スローイン時のマーク位置を再計算してキャッシュ
+   */
+  private recalculateThrowInMarkPosition(): void {
     // マークする相手を探す
     const markTarget = this.findMarkTarget();
 
     if (!markTarget) {
-      // マーク対象がいない場合はフォーメーション位置へ（外側を避ける）
-      this.handleFormationPositionAvoidingEdge(deltaTime);
+      this.cachedTargetPosition = null;
       return;
     }
 
     // マーク対象の位置を取得
     const targetPosition = markTarget.getPosition();
-    const myPosition = this.character.getPosition();
 
     // 守るべきゴールの位置を取得
     const defendingGoal = this.getDefendingGoalPosition();
@@ -127,10 +170,11 @@ export class OffBallDefenseAI extends BaseStateAI {
     idealX = Math.max(safeMinX, Math.min(safeMaxX, idealX));
     idealZ = Math.max(safeMinZ, Math.min(safeMaxZ, idealZ));
 
-    const idealPosition = new Vector3(idealX, myPosition.y, idealZ);
-
-    // 理想位置に向かって移動
-    this.moveTowardsMarkPosition(idealPosition, markTarget, deltaTime);
+    this.cachedTargetPosition = {
+      x: idealX,
+      z: idealZ,
+      markTarget: markTarget,
+    };
   }
 
   /**
@@ -183,18 +227,46 @@ export class OffBallDefenseAI extends BaseStateAI {
    * 同じポジションのオフェンスプレイヤーをマークする
    */
   private handleManToManDefense(deltaTime: number): void {
+    // 判断タイマーを更新
+    this.decisionTimer += deltaTime;
+
+    // 判断間隔に達したら目標位置を再計算
+    if (this.decisionTimer >= this.getDecisionInterval() || this.cachedTargetPosition === null) {
+      this.decisionTimer = 0;
+      this.recalculateMarkPosition();
+    }
+
+    // キャッシュされた目標がない場合はフォーメーション位置へ
+    if (!this.cachedTargetPosition || !this.cachedTargetPosition.markTarget) {
+      this.handleFormationPosition(deltaTime);
+      return;
+    }
+
+    const myPosition = this.character.getPosition();
+    const idealPosition = new Vector3(
+      this.cachedTargetPosition.x,
+      myPosition.y,
+      this.cachedTargetPosition.z
+    );
+
+    // 理想位置に向かって移動
+    this.moveTowardsMarkPosition(idealPosition, this.cachedTargetPosition.markTarget, deltaTime);
+  }
+
+  /**
+   * マーク位置を再計算してキャッシュ
+   */
+  private recalculateMarkPosition(): void {
     // マークする相手を探す
     const markTarget = this.findMarkTarget();
 
     if (!markTarget) {
-      // マーク対象がいない場合はフォーメーション位置へ
-      this.handleFormationPosition(deltaTime);
+      this.cachedTargetPosition = null;
       return;
     }
 
     // マーク対象の位置を取得
     const targetPosition = markTarget.getPosition();
-    const myPosition = this.character.getPosition();
 
     // 守るべきゴールの位置を取得
     const defendingGoal = this.getDefendingGoalPosition();
@@ -212,14 +284,11 @@ export class OffBallDefenseAI extends BaseStateAI {
 
     // マーク対象から1.5m程度ゴール側に位置取り
     const markDistance = 1.5;
-    const idealPosition = new Vector3(
-      targetPosition.x + targetToGoal.x * markDistance,
-      myPosition.y,
-      targetPosition.z + targetToGoal.z * markDistance
-    );
-
-    // 理想位置に向かって移動
-    this.moveTowardsMarkPosition(idealPosition, markTarget, deltaTime);
+    this.cachedTargetPosition = {
+      x: targetPosition.x + targetToGoal.x * markDistance,
+      z: targetPosition.z + targetToGoal.z * markDistance,
+      markTarget: markTarget,
+    };
   }
 
   /**
@@ -415,79 +484,31 @@ export class OffBallDefenseAI extends BaseStateAI {
   }
 
   /**
-   * リバウンドポジションへ移動（シュート時）
-   * @param deltaTime 経過時間
-   * @param isOffense オフェンス側かどうか
+   * シュート中にボールを見守る
+   * シュート結果が出るまでその場で待機
    */
-  private handleReboundPosition(deltaTime: number, isOffense: boolean): void {
-    // ボールの速度からシュートが打たれたゴールを判定
-    const ballVelocity = this.ball.getVelocity();
-    const isGoal1 = ballVelocity.z > 0; // +Z方向ならgoal1
-
-    // シュートが打たれたゴールに向かう
-    const targetGoal = isGoal1 ? this.field.getGoal1Rim() : this.field.getGoal2Rim();
-
-    const goalPosition = targetGoal.position;
+  private handleWatchShot(): void {
     const myPosition = this.character.getPosition();
+    const ballPosition = this.ball.getPosition();
 
-    // リバウンドポジション（ゴールから2〜3m手前、少し左右にずらす）
-    const zOffset = isGoal1 ? -2.5 : 2.5;
-    // オフェンスとディフェンスで左右にずらす
-    const xOffset = isOffense ? -1.0 : 1.0;
-
-    const reboundPosition = new Vector3(
-      goalPosition.x + xOffset,
-      myPosition.y,
-      goalPosition.z + zOffset
+    // ボールの方を向く
+    const toBall = new Vector3(
+      ballPosition.x - myPosition.x,
+      0,
+      ballPosition.z - myPosition.z
     );
 
-    const distanceToRebound = Vector3.Distance(myPosition, reboundPosition);
-
-    // リバウンドポジションに近い場合はボールを見て待機
-    if (distanceToRebound < 0.5) {
-      // ボールの方を向く
-      const ballPosition = this.ball.getPosition();
-      const toBall = new Vector3(
-        ballPosition.x - myPosition.x,
-        0,
-        ballPosition.z - myPosition.z
-      );
-      if (toBall.length() > 0.01) {
-        const angle = Math.atan2(toBall.x, toBall.z);
-        this.character.setRotation(angle);
-      }
-
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
     }
 
-    // リバウンドポジションに向かってダッシュ
-    const direction = new Vector3(
-      reboundPosition.x - myPosition.x,
-      0,
-      reboundPosition.z - myPosition.z
-    );
-    direction.normalize();
+    // 停止してボールを見守る
+    this.character.velocity = Vector3.Zero();
 
-    const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
-
-    if (adjustedDirection) {
-      // 移動方向を向く
-      const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
-      this.character.setRotation(angle);
-
-      this.character.move(adjustedDirection, deltaTime);
-
-      // ダッシュで移動
-      if (this.character.getCurrentMotionName() !== 'dash_forward') {
-        this.character.playMotion(DASH_FORWARD_MOTION);
-      }
-    } else {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
+    // アイドルモーション
+    if (this.character.getCurrentMotionName() !== 'idle') {
+      this.character.playMotion(IDLE_MOTION);
     }
   }
 }

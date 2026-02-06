@@ -1362,8 +1362,9 @@ export class Ball {
 
   /**
    * ジャンプボール用にボールを投げ上げる
+   * ボールはセンターサークル中心から真上に投げ上げられる
    *
-   * @param position ボール開始位置
+   * @param position ボール開始位置（センターサークル中心）
    * @param height 投げ上げる高さ（m）
    */
   public tossForJumpBall(position: Vector3, height: number): void {
@@ -1372,47 +1373,45 @@ export class Ball {
       return;
     }
 
-    // ボールの位置を設定
-    this.mesh.position = position.clone();
+    // ホルダーをクリア（setPositionが動作するように先にクリア）
+    this.holder = null;
 
-    // 物理ボディを再作成
-    this.physicsAggregate.dispose();
-    this.physicsAggregate = new PhysicsAggregate(
-      this.mesh,
-      PhysicsShapeType.SPHERE,
-      {
-        mass: PhysicsConstants.BALL.MASS,
-        restitution: PhysicsConstants.BALL.RESTITUTION,
-        friction: PhysicsConstants.BALL.FRICTION,
-      },
-      this.scene
-    );
+    // ボールの位置を正確にセンターに設定（X=0, Z=0）
+    const centerPosition = new Vector3(0, position.y, 0);
 
-    // マテリアル設定
-    this.physicsAggregate.shape.material = {
-      restitution: PhysicsConstants.BALL.RESTITUTION,
-      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-      friction: PhysicsConstants.BALL.FRICTION,
-      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-    };
+    // まずキネマティックモードにして位置を確実に設定
+    this.setKinematic(true);
+    this.physicsAggregate.body.setLinearVelocity(Vector3.Zero());
+    this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
 
-    // ダンピングを設定
-    this.physicsAggregate.body.setLinearDamping(PhysicsConstants.BALL.LINEAR_DAMPING);
+    // メッシュ位置を設定
+    this.mesh.position = centerPosition.clone();
+
+    // 物理ボディの位置を同期（disablePreStep = false で次のステップでメッシュに追従）
+    this.physicsAggregate.body.disablePreStep = false;
+
+    // ダンピングを設定（空気抵抗による減速を最小化）
+    this.physicsAggregate.body.setLinearDamping(0); // ジャンプボール中は減衰なし
     this.physicsAggregate.body.setAngularDamping(PhysicsConstants.BALL.ANGULAR_DAMPING);
 
-    // 投げ上げる速度を計算（v = sqrt(2gh)より少し大きめに）
-    const tossVelocity = Math.sqrt(2 * PhysicsConstants.GRAVITY_MAGNITUDE * height) * 1.1;
+    // DYNAMICモードに切り替え
+    this.physicsAggregate.body.setMotionType(PhysicsMotionType.DYNAMIC);
+    this.isKinematicMode = false;
+
+    // 投げ上げる速度を計算（v = sqrt(2gh)）
+    // 純粋に垂直方向のみ（水平成分なし）
+    const tossVelocity = Math.sqrt(2 * PhysicsConstants.GRAVITY_MAGNITUDE * height) * 1.05;
+
+    // 速度を設定（純粋に垂直のみ）
     this.physicsAggregate.body.setLinearVelocity(new Vector3(0, tossVelocity, 0));
+    this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
+
+    // 物理エンジンが位置を制御するようにする
+    this.physicsAggregate.body.disablePreStep = true;
 
     // 飛行状態にする
     this.inFlight = true;
     this.flightTime = 0;
-    this.setKinematic(false);
-    this.physicsAggregate.body.disablePreStep = true;
-    this.isKinematicMode = false;
-
-    // ホルダーをクリア
-    this.holder = null;
   }
 
   /**

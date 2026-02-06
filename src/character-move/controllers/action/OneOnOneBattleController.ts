@@ -697,6 +697,9 @@ export class OneOnOneBattleController {
       if (breakthroughEnded) {
         onBallPlayer.endDribbleBreakthrough();
 
+        // アクションを強制終了（次のアクションを実行可能にする）
+        onBallPlayer.getActionController().forceResetAction();
+
         // 衝突判定を行い、衝突している場合はpowerによる押し返しを計算
         if (onBallDefender) {
           const offensePos = onBallPlayer.getPosition();

@@ -196,8 +196,8 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     type: 'dribble_breakthrough',
     category: 'offense',
     motion: 'dribble_breakthrough',
-    startupTime: 100,      // 0.1秒（素早い開始）
-    activeTime: 1500,      // 1.5秒（突破時間）
+    startupTime: 50,       // 0.05秒（素早い開始）
+    activeTime: 150,       // 0.15秒（DRIBBLE_CONFIG.BREAKTHROUGH_DURATIONと一致）
     priority: 9,
     interruptible: false,  // 一度始まるとキャンセル不可
     // 重心: 強い前方加速 → 長い回復

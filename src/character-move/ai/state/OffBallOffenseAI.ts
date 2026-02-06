@@ -6,26 +6,34 @@ import { BaseStateAI } from "./BaseStateAI";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
-import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
+import { Formation, PlayerPosition } from "../../config/FormationConfig";
 import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
 import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 import { getTeammates } from "../../utils/TeamUtils";
 import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import {
+  TacticalZoneType,
+  getZonePosition,
+  isZonePairOccupied,
+  getZonesWithPriority,
+} from "../../config/TacticalZoneConfig";
 
 /**
  * オフボールオフェンス時のAI
  * ボールを持っていないオフェンスプレイヤーの動きを制御
- * フォーメーションに従って指定位置に移動する（ヒートマップ方式）
+ *
+ * 戦術ゾーンベースのポジショニング:
+ * - PG, SG, SF: トップ、左右ウィング、左右コーナー、左右ショートコーナー
+ * - PF, C: ハイポスト、左右エルボー、左右ローポスト、ミッドポスト
  */
 export class OffBallOffenseAI extends BaseStateAI {
-  private currentFormation: Formation;
-
-  // ヒートマップ式ポジショニング用
+  // 戦術ゾーンベースのポジショニング用
   private currentTargetPosition: { x: number; z: number } | null = null;
+  private currentZoneType: TacticalZoneType | null = null; // 現在のゾーンタイプ
+  private zoneCenter: { x: number; z: number } | null = null; // ゾーンの中心座標
   private positionReevaluateTimer: number = 0;
-  private readonly positionReevaluateInterval: number = 1.0; // 1秒ごとに再評価
-  private readonly centerWeight: number = 0.55; // 中心セルに55%の確率
+  private readonly zoneMovementRadius: number = 2.0; // ゾーン内移動の半径（m）
 
   // パスレーン分析用
   private trajectoryCalculator: PassTrajectoryCalculator;
@@ -36,8 +44,8 @@ export class OffBallOffenseAI extends BaseStateAI {
   private throwInTargetPosition: Vector3 | null = null;
   private throwInPassType: 'short' | 'long' = 'short'; // short = chest/bounce, long = long pass
 
-  // チームメイト重複回避用（セルサイズ1m）
-  private readonly minTeammateDistance: number = 2.5; // チームメイトからの最小距離（隣接セルを避ける）
+  // チームメイト重複回避用
+  private readonly minTeammateDistance: number = 2.5; // チームメイトからの最小距離
 
   constructor(
     character: Character,
@@ -46,32 +54,36 @@ export class OffBallOffenseAI extends BaseStateAI {
     field: Field
   ) {
     super(character, ball, allCharacters, field);
-    this.currentFormation = FormationUtils.getDefaultOffenseFormation();
     this.trajectoryCalculator = new PassTrajectoryCalculator();
     this.interceptionAnalyzer = new InterceptionAnalyzer();
   }
 
   /**
-   * フォーメーションを設定
+   * 判断間隔を取得（選手のalignmentに基づく）
+   * 計算式: 1 - (alignment / 50) 秒
+   * alignment=50 → 0秒（毎フレーム判断）
+   * alignment=0 → 1秒
    */
-  public setFormation(formation: Formation): void {
-    this.currentFormation = formation;
+  private getDecisionInterval(): number {
+    const alignment = this.character.playerData?.stats.alignment ?? 50;
+    return Math.max(0, 1 - alignment / 50);
+  }
+
+  /**
+   * フォーメーションを設定（戦術ゾーンベースに移行したためリセットのみ）
+   */
+  public setFormation(_formation: Formation): void {
     // フォーメーション変更時は目標位置をリセット
     this.resetTargetPosition();
   }
 
   /**
-   * フォーメーション名でフォーメーションを設定
+   * フォーメーション名でフォーメーションを設定（戦術ゾーンベースに移行）
    */
-  public setFormationByName(name: string): boolean {
-    const formation = FormationUtils.getOffenseFormation(name);
-    if (formation) {
-      this.currentFormation = formation;
-      // フォーメーション変更時は目標位置をリセット
-      this.resetTargetPosition();
-      return true;
-    }
-    return false;
+  public setFormationByName(_name: string): boolean {
+    // フォーメーション変更時は目標位置をリセット
+    this.resetTargetPosition();
+    return true;
   }
 
   /**
@@ -79,7 +91,9 @@ export class OffBallOffenseAI extends BaseStateAI {
    */
   public resetTargetPosition(): void {
     this.currentTargetPosition = null;
-    this.positionReevaluateTimer = this.positionReevaluateInterval; // 即座に再評価
+    this.currentZoneType = null;
+    this.zoneCenter = null;
+    this.positionReevaluateTimer = this.getDecisionInterval(); // 即座に再評価
   }
 
   /**
@@ -108,6 +122,8 @@ export class OffBallOffenseAI extends BaseStateAI {
   public onExitState(): void {
     // 目標位置をリセット
     this.currentTargetPosition = null;
+    this.currentZoneType = null;
+    this.zoneCenter = null;
     this.positionReevaluateTimer = 0;
     // スローイン用の位置もリセット
     this.throwInTargetPosition = null;
@@ -128,10 +144,16 @@ export class OffBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // ボールが飛行中（シュート中）の場合はリバウンドポジションへ
-    // パスターゲットではない選手のみ
+    // ボールが飛行中（シュート中）の場合
     if (this.ball.isInFlight()) {
-      this.handleReboundPosition(deltaTime, true); // true = オフェンス側
+      // インサイドプレイヤー（PF, C）はリバウンドに備える
+      const playerPos = this.character.playerPosition;
+      if (playerPos === 'PF' || playerPos === 'C') {
+        this.handleReboundPosition(deltaTime);
+      } else {
+        // ペリメータープレイヤーはその場でボールを見守る
+        this.handleWatchShot();
+      }
       return;
     }
 
@@ -154,7 +176,13 @@ export class OffBallOffenseAI extends BaseStateAI {
       const actionController = onBallPlayer.getActionController();
       const currentAction = actionController.getCurrentAction();
       if (currentAction && currentAction.startsWith('shoot_')) {
-        this.handleReboundPosition(deltaTime, true);
+        // シュートモーション中：インサイドはリバウンド、ペリメーターは見守る
+        const playerPos = this.character.playerPosition;
+        if (playerPos === 'PF' || playerPos === 'C') {
+          this.handleReboundPosition(deltaTime);
+        } else {
+          this.handleWatchShot();
+        }
         return;
       }
     }
@@ -261,7 +289,7 @@ export class OffBallOffenseAI extends BaseStateAI {
 
       // 定期的に位置を再評価（パスレーンが良くなったか）
       this.positionReevaluateTimer += deltaTime;
-      if (this.positionReevaluateTimer >= this.positionReevaluateInterval) {
+      if (this.positionReevaluateTimer >= this.getDecisionInterval()) {
         this.positionReevaluateTimer = 0;
         // パスレーンリスクが高い場合は新しい位置を計算
         const risk = this.calculatePassLaneRisk(
@@ -505,6 +533,10 @@ export class OffBallOffenseAI extends BaseStateAI {
 
   /**
    * フォーメーション位置への移動処理（ポジション別）
+   *
+   * 戦術ゾーンに基づく配置:
+   * - PG, SG, SF: トップ、左右ウィング、左右コーナー、左右ショートコーナー
+   * - PF, C: ハイポスト、左右エルボー、左右ローポスト、ミッドポスト
    */
   private handleFormationPosition(deltaTime: number, onBallPlayer: Character | null): void {
     const playerPosition = this.character.playerPosition as PlayerPosition;
@@ -516,49 +548,33 @@ export class OffBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // ポジションごとに異なる行動ロジック
-    switch (playerPosition) {
-      case 'PG':
-      case 'SG':
-        // PG/SG: オンボールプレイヤーの近くでパスコース導線を確保
-        this.handleGuardPosition(deltaTime, onBallPlayer);
-        break;
-      case 'C':
-        // C: ゴール下付近に移動
-        this.handleCenterPosition(deltaTime, onBallPlayer);
-        break;
-      case 'PF':
-      case 'SF':
-      default:
-        // PF/SF: 中間的な動き（フォーメーションベース）
-        this.handleForwardPosition(deltaTime, onBallPlayer, playerPosition);
-        break;
-    }
+    // 戦術ゾーンベースの配置
+    this.handleTacticalZonePosition(deltaTime, onBallPlayer, playerPosition);
   }
 
   /**
-   * PG/SG: オンボールプレイヤーの近くでパスコース導線を確保
+   * 戦術ゾーンベースのポジショニング
+   * ポジションに応じたゾーンリストから空いているゾーンを選択
+   * 一度ゾーンを取ったら、そのゾーン内で動き回ってパスコースを作る
    */
-  private handleGuardPosition(deltaTime: number, onBallPlayer: Character | null): void {
+  private handleTacticalZonePosition(
+    deltaTime: number,
+    onBallPlayer: Character | null,
+    playerPosition: PlayerPosition
+  ): void {
     // 位置の再評価タイマーを更新
     this.positionReevaluateTimer += deltaTime;
 
-    if (!onBallPlayer) {
-      // オンボールプレイヤーがいない場合は待機
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
-    }
+    const isAllyTeam = this.character.team === 'ally';
 
-    // 自分がオンボールプレイヤーの場合は何もしない（OffBallOffenseAIが呼ばれないはずだが念のため）
-    if (onBallPlayer === this.character) {
-      return;
+    // まだゾーンが選択されていない場合のみ、新しいゾーンを選択
+    if (!this.currentZoneType || !this.zoneCenter) {
+      this.selectTacticalZonePosition(playerPosition, isAllyTeam, onBallPlayer);
+      this.positionReevaluateTimer = 0;
     }
-
-    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
-    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
-      this.selectGuardTargetPosition(onBallPlayer);
+    // ゾーンが選択済みの場合は、ゾーン内で動き回ってパスコースを作る
+    else if (this.positionReevaluateTimer >= this.getDecisionInterval()) {
+      this.adjustPositionWithinZone(onBallPlayer);
       this.positionReevaluateTimer = 0;
     }
 
@@ -575,291 +591,130 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.currentTargetPosition.z
     );
 
-    this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
+    if (onBallPlayer) {
+      this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
+    } else {
+      this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
+    }
   }
 
   /**
-   * PG/SG用: オンボールプレイヤーの近くでパスレーンが確保できる位置を選択
+   * 戦術ゾーンから目標位置を選択
+   *
+   * PG/SG/SF: ペリメーターゾーン（トップ、ウィング、コーナー、ショートコーナー）
+   * PF/C: インサイドゾーン（ハイポスト、エルボー、ローポスト、ミッドポスト）
+   *
+   * 選択ルール:
+   * - ポジションごとに優先ゾーンが決まっている（PG→トップ優先、SG→左ウィング優先等）
+   * - 左右ペアのゾーン（wing_left/right等）は片方が占有されていたら両方とも選択不可
+   * - コーナー/ショートコーナーは全て相互排他（1人のみ）
    */
-  private selectGuardTargetPosition(onBallPlayer: Character): void {
-    const onBallPos = onBallPlayer.getPosition();
+  private selectTacticalZonePosition(
+    playerPosition: PlayerPosition,
+    isAllyTeam: boolean,
+    _onBallPlayer: Character | null
+  ): void {
+    // ポジションに応じた優先順位付きゾーンリストを取得
+    const prioritizedZones = getZonesWithPriority(playerPosition);
+
+    // 同じチームのプレイヤーを取得
+    const teammates = getTeammates(this.allCharacters, this.character);
+
+    // 優先順位に従って、空いている最初のゾーンを選択
+    for (const zoneType of prioritizedZones) {
+      // 左右ペアの排他チェック：片方に選手がいたら両方とも選択不可
+      if (isZonePairOccupied(zoneType, isAllyTeam, teammates, this.character, 2.5)) {
+        continue;
+      }
+
+      // このゾーンを選択
+      const zonePos = getZonePosition(zoneType, isAllyTeam);
+      this.currentTargetPosition = zonePos;
+      this.currentZoneType = zoneType;
+      this.zoneCenter = { x: zonePos.x, z: zonePos.z };
+      return;
+    }
+
+    // すべて占有されている場合は、優先リストの最初を選択（仕方なく）
+    const fallbackZone = prioritizedZones[0];
+    const zonePos = getZonePosition(fallbackZone, isAllyTeam);
+    this.currentTargetPosition = zonePos;
+    this.currentZoneType = fallbackZone;
+    this.zoneCenter = { x: zonePos.x, z: zonePos.z };
+  }
+
+  /**
+   * ゾーン内で位置を調整してパスコースを作る
+   * ゾーン中心を基点に、パスレーンリスクが低い位置を探す
+   */
+  private adjustPositionWithinZone(onBallPlayer: Character | null): void {
+    if (!this.zoneCenter || !onBallPlayer) {
+      return;
+    }
+
     const myPosition = this.character.getPosition();
+    const teammates = getTeammates(this.allCharacters, this.character);
 
-    // オンボールプレイヤーから3-6mの範囲でパスレーンが確保できる位置を探す
-    const minDistance = 3.0;
-    const maxDistance = 6.0;
+    // ゾーン内の候補位置を生成（8方向 + 中心）
+    const candidates: { x: number; z: number; risk: number }[] = [];
+    const angles = [0, 45, 90, 135, 180, 225, 270, 315];
 
-    let bestPosition: { x: number; z: number } | null = null;
-    let bestRisk = 1.0;
+    // 中心位置も候補に
+    candidates.push({
+      x: this.zoneCenter.x,
+      z: this.zoneCenter.z,
+      risk: this.calculatePassLaneRisk(this.zoneCenter, onBallPlayer),
+    });
 
-    // 8方向 x 3距離で探索
-    for (let angleStep = 0; angleStep < 8; angleStep++) {
-      const angle = (angleStep * Math.PI) / 4; // 0, 45, 90, ... 度
+    // 8方向の位置を候補に
+    for (const angleDeg of angles) {
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const candidateX = this.zoneCenter.x + Math.cos(angleRad) * this.zoneMovementRadius;
+      const candidateZ = this.zoneCenter.z + Math.sin(angleRad) * this.zoneMovementRadius;
 
-      for (let distStep = 0; distStep < 3; distStep++) {
-        const distance = minDistance + (maxDistance - minDistance) * (distStep / 2);
+      const candidate = { x: candidateX, z: candidateZ };
 
-        const candidateX = onBallPos.x + Math.cos(angle) * distance;
-        const candidateZ = onBallPos.z + Math.sin(angle) * distance;
-
-        // コート境界チェック
-        if (Math.abs(candidateX) > 6.0 || Math.abs(candidateZ) > 13.5) {
-          continue;
-        }
-
-        const candidate = { x: candidateX, z: candidateZ };
-
-        // チームメイトに近すぎる場合はスキップ
-        if (this.isTooCloseToTeammates(candidate)) {
-          continue;
-        }
-
-        // パスレーンリスクを計算
-        const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
-
-        if (risk < bestRisk) {
-          bestRisk = risk;
-          bestPosition = candidate;
-
-          // 十分に安全な位置が見つかったら終了
-          if (risk <= this.maxPassLaneRisk) {
-            break;
-          }
+      // チームメイトに近すぎないかチェック
+      let tooClose = false;
+      for (const teammate of teammates) {
+        const teammatePos = teammate.getPosition();
+        const dx = candidate.x - teammatePos.x;
+        const dz = candidate.z - teammatePos.z;
+        if (Math.sqrt(dx * dx + dz * dz) < 1.5) {
+          tooClose = true;
+          break;
         }
       }
 
-      if (bestPosition && bestRisk <= this.maxPassLaneRisk) {
-        break;
-      }
+      if (tooClose) continue;
+
+      const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
+      candidates.push({ x: candidateX, z: candidateZ, risk });
     }
 
-    // 見つからなければ現在位置に近い場所
-    if (bestPosition) {
-      this.currentTargetPosition = bestPosition;
-    } else {
-      // フォールバック: 現在位置からオンボールプレイヤー方向に少し移動
-      const toOnBall = new Vector3(
-        onBallPos.x - myPosition.x,
-        0,
-        onBallPos.z - myPosition.z
-      );
-      const dist = toOnBall.length();
-      if (dist > maxDistance) {
-        toOnBall.normalize();
-        this.currentTargetPosition = {
-          x: onBallPos.x - toOnBall.x * minDistance,
-          z: onBallPos.z - toOnBall.z * minDistance
-        };
-      } else if (dist < minDistance) {
-        toOnBall.normalize();
-        this.currentTargetPosition = {
-          x: onBallPos.x - toOnBall.x * minDistance,
-          z: onBallPos.z - toOnBall.z * minDistance
-        };
-      } else {
-        this.currentTargetPosition = { x: myPosition.x, z: myPosition.z };
-      }
-    }
-  }
-
-  /**
-   * C: ゴール下付近に移動
-   */
-  private handleCenterPosition(deltaTime: number, onBallPlayer: Character | null): void {
-    // 位置の再評価タイマーを更新
-    this.positionReevaluateTimer += deltaTime;
-
-    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
-    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
-      this.selectCenterTargetPosition();
-      this.positionReevaluateTimer = 0;
-    }
-
-    if (!this.currentTargetPosition) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
+    if (candidates.length === 0) {
       return;
     }
 
-    const targetPosition = new Vector3(
-      this.currentTargetPosition.x,
-      this.character.getPosition().y,
-      this.currentTargetPosition.z
+    // リスクが低い順にソート
+    candidates.sort((a, b) => a.risk - b.risk);
+
+    // 現在位置のリスク
+    const currentRisk = this.calculatePassLaneRisk(
+      { x: myPosition.x, z: myPosition.z },
+      onBallPlayer
     );
 
-    if (onBallPlayer) {
-      this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
-    } else {
-      this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
+    // 現在より明らかにリスクが低い位置があれば移動
+    // 小さな差では動かない（0.1以上の改善がある場合のみ）
+    if (candidates[0].risk < currentRisk - 0.1) {
+      this.currentTargetPosition = { x: candidates[0].x, z: candidates[0].z };
     }
-  }
-
-  /**
-   * C用: ゴール下付近の位置を選択
-   */
-  private selectCenterTargetPosition(): void {
-    // 攻撃側のゴール位置を取得
-    const isAllyTeam = this.character.team === 'ally';
-    const goalZ = isAllyTeam ? 13.5 : -13.5; // ally: +Z方向（goal1）、enemy: -Z方向（goal2）
-
-    // ゴール下付近（ゴールから2-3m手前）
-    const targetZ = isAllyTeam ? goalZ - 2.5 : goalZ + 2.5;
-
-    // X方向は中央付近でランダムに少しずらす（-1.5〜1.5m）
-    const targetX = (Math.random() - 0.5) * 3.0;
-
-    const candidate = { x: targetX, z: targetZ };
-
-    // チームメイトに近すぎる場合は少しずらす
-    if (this.isTooCloseToTeammates(candidate)) {
-      const adjustedPosition = this.findPositionAvoidingTeammates(candidate);
-      this.currentTargetPosition = adjustedPosition || candidate;
-    } else {
-      this.currentTargetPosition = candidate;
+    // リスクがほぼ同じなら、たまにランダムに動く（30%）
+    else if (Math.random() < 0.3 && candidates.length > 1) {
+      const randomIndex = Math.floor(Math.random() * Math.min(3, candidates.length));
+      this.currentTargetPosition = { x: candidates[randomIndex].x, z: candidates[randomIndex].z };
     }
-  }
-
-  /**
-   * PF/SF: 中間的な動き（フォーメーションベース）
-   */
-  private handleForwardPosition(deltaTime: number, onBallPlayer: Character | null, playerPosition: PlayerPosition): void {
-    // 位置の再評価タイマーを更新
-    this.positionReevaluateTimer += deltaTime;
-
-    // 目標位置がないか、再評価間隔を超えた場合は新しい位置を選択
-    const isAllyTeam = this.character.team === 'ally';
-    if (!this.currentTargetPosition || this.positionReevaluateTimer >= this.positionReevaluateInterval) {
-      this.selectForwardTargetPosition(playerPosition, isAllyTeam, onBallPlayer);
-      this.positionReevaluateTimer = 0;
-    }
-
-    if (!this.currentTargetPosition) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
-    }
-
-    const targetPosition = new Vector3(
-      this.currentTargetPosition.x,
-      this.character.getPosition().y,
-      this.currentTargetPosition.z
-    );
-
-    if (onBallPlayer) {
-      this.moveTowardsPosition(targetPosition, onBallPlayer, deltaTime);
-    } else {
-      this.moveTowardsPositionWithoutLookAt(targetPosition, deltaTime);
-    }
-  }
-
-  /**
-   * PF/SF用: フォーメーションベースの位置を選択（ガードとセンターの中間的な動き）
-   * ゴールとオンボールプレイヤーの間くらいの位置を取る
-   */
-  private selectForwardTargetPosition(playerPosition: PlayerPosition, isAllyTeam: boolean, onBallPlayer: Character | null): void {
-    // 攻撃側のゴール位置を取得
-    const goalZ = isAllyTeam ? 13.5 : -13.5;
-
-    if (onBallPlayer) {
-      const onBallPos = onBallPlayer.getPosition();
-
-      // オンボールプレイヤーとゴールの中間あたり
-      const midZ = (onBallPos.z + goalZ) / 2;
-
-      // X方向はポジションに応じて左右に分ける
-      // PF: やや右側、SF: やや左側（allyチーム基準）
-      let xOffset = 0;
-      if (playerPosition === 'PF') {
-        xOffset = isAllyTeam ? 3.0 : -3.0;
-      } else if (playerPosition === 'SF') {
-        xOffset = isAllyTeam ? -3.0 : 3.0;
-      }
-
-      const candidate = { x: onBallPos.x + xOffset, z: midZ };
-
-      // コート境界チェック
-      const clampedCandidate = {
-        x: Math.max(-6.0, Math.min(6.0, candidate.x)),
-        z: Math.max(-13.5, Math.min(13.5, candidate.z))
-      };
-
-      // チームメイトに近すぎる場合は調整
-      if (this.isTooCloseToTeammates(clampedCandidate)) {
-        const adjustedPosition = this.findSaferPositionAvoidingTeammates(clampedCandidate, onBallPlayer, 1.0);
-        this.currentTargetPosition = adjustedPosition || clampedCandidate;
-      } else {
-        this.currentTargetPosition = clampedCandidate;
-      }
-    } else {
-      // オンボールプレイヤーがいない場合はフォーメーションベース
-      this.selectNewTargetPosition(playerPosition, isAllyTeam);
-    }
-  }
-
-  /**
-   * ヒートマップ方式で新しい目標位置を選択（パスレーンを考慮）
-   */
-  private selectNewTargetPosition(playerPosition: PlayerPosition, isAllyTeam: boolean): void {
-    // まずヒートマップから基本位置を取得
-    const heatmapResult = FormationUtils.getHeatmapTargetPosition(
-      this.currentFormation,
-      playerPosition,
-      isAllyTeam,
-      this.centerWeight
-    );
-
-    let basePosition: { x: number; z: number } | null = null;
-
-    if (heatmapResult) {
-      basePosition = { x: heatmapResult.x, z: heatmapResult.z };
-    } else {
-      // フォールバック: 通常の目標位置を使用
-      const targetPos = FormationUtils.getTargetPosition(
-        this.currentFormation,
-        playerPosition,
-        isAllyTeam
-      );
-      if (targetPos) {
-        basePosition = targetPos;
-      }
-    }
-
-    if (!basePosition) {
-      this.currentTargetPosition = null;
-      return;
-    }
-
-    // チームメイトに近すぎる場合は調整
-    let adjustedBasePosition = basePosition;
-    if (this.isTooCloseToTeammates(basePosition)) {
-      const avoidedPosition = this.findPositionAvoidingTeammates(basePosition);
-      if (avoidedPosition) {
-        adjustedBasePosition = avoidedPosition;
-      }
-    }
-
-    // オンボールプレイヤーを取得
-    const onBallPlayer = this.findOnBallPlayer();
-    if (!onBallPlayer) {
-      // オンボールプレイヤーがいない場合は調整後の位置を使用
-      this.currentTargetPosition = adjustedBasePosition;
-      return;
-    }
-
-    // 基本位置でのパスレーンリスクを計算
-    const baseRisk = this.calculatePassLaneRisk(adjustedBasePosition, onBallPlayer);
-
-    // リスクが許容範囲内なら基本位置を使用
-    if (baseRisk <= this.maxPassLaneRisk && !this.isTooCloseToTeammates(adjustedBasePosition)) {
-      this.currentTargetPosition = adjustedBasePosition;
-      return;
-    }
-
-    // リスクが高い場合は、周囲でより安全な位置を探す（チームメイトも避ける）
-    const betterPosition = this.findSaferPositionAvoidingTeammates(adjustedBasePosition, onBallPlayer, baseRisk);
-    this.currentTargetPosition = betterPosition || adjustedBasePosition;
   }
 
   /**
@@ -942,56 +797,6 @@ export class OffBallOffenseAI extends BaseStateAI {
     }
 
     return minRisk;
-  }
-
-  /**
-   * チームメイトを避けながら、より安全な位置を探す
-   */
-  private findSaferPositionAvoidingTeammates(
-    basePosition: { x: number; z: number },
-    onBallPlayer: Character,
-    baseRisk: number
-  ): { x: number; z: number } | null {
-    const searchAngles = [0, 45, 90, 135, 180, 225, 270, 315]; // 8方向
-    const searchDistances = [1.0, 1.5, 2.0, 2.5, 3.0]; // 探索距離（チームメイト回避のため範囲拡大）
-
-    let bestPosition: { x: number; z: number } | null = null;
-    let bestRisk = baseRisk;
-
-    for (const distance of searchDistances) {
-      for (const angleDeg of searchAngles) {
-        const angleRad = (angleDeg * Math.PI) / 180;
-        const candidateX = basePosition.x + Math.cos(angleRad) * distance;
-        const candidateZ = basePosition.z + Math.sin(angleRad) * distance;
-
-        // コート境界チェック（外側マスを避ける）
-        if (Math.abs(candidateX) > 6 || Math.abs(candidateZ) > 13.5) {
-          continue;
-        }
-
-        const candidate = { x: candidateX, z: candidateZ };
-
-        // チームメイトに近すぎる場合はスキップ
-        if (this.isTooCloseToTeammates(candidate)) {
-          continue;
-        }
-
-        const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
-
-        // より安全で、許容範囲内ならその位置を採用
-        if (risk < bestRisk && risk <= this.maxPassLaneRisk) {
-          bestRisk = risk;
-          bestPosition = candidate;
-        }
-      }
-
-      // 許容範囲内で、チームメイトから離れた位置が見つかったら終了
-      if (bestPosition && bestRisk <= this.maxPassLaneRisk && !this.isTooCloseToTeammates(bestPosition)) {
-        break;
-      }
-    }
-
-    return bestPosition;
   }
 
   /**
@@ -1101,11 +906,9 @@ export class OffBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * リバウンドポジションへ移動（シュート時）
-   * @param deltaTime 経過時間
-   * @param isOffense オフェンス側かどうか
+   * リバウンドポジションへ移動（シュート時、PF/C用）
    */
-  private handleReboundPosition(deltaTime: number, isOffense: boolean): void {
+  private handleReboundPosition(deltaTime: number): void {
     // ボールの速度からシュートが打たれたゴールを判定
     const ballVelocity = this.ball.getVelocity();
     const isGoal1 = ballVelocity.z > 0; // +Z方向ならgoal1
@@ -1116,10 +919,10 @@ export class OffBallOffenseAI extends BaseStateAI {
     const goalPosition = targetGoal.position;
     const myPosition = this.character.getPosition();
 
-    // リバウンドポジション（ゴールから2〜3m手前、少し左右にずらす）
-    const zOffset = isGoal1 ? -2.5 : 2.5;
-    // オフェンスとディフェンスで左右にずらす
-    const xOffset = isOffense ? -1.0 : 1.0;
+    // リバウンドポジション（ゴール下、少しオフセット）
+    const zOffset = isGoal1 ? -1.5 : 1.5;
+    // ポジションに応じて左右にずらす（PFは左、Cは右）
+    const xOffset = this.character.playerPosition === 'PF' ? -1.5 : 1.5;
 
     const reboundPosition = new Vector3(
       goalPosition.x + xOffset,
@@ -1130,7 +933,7 @@ export class OffBallOffenseAI extends BaseStateAI {
     const distanceToRebound = Vector3.Distance(myPosition, reboundPosition);
 
     // リバウンドポジションに近い場合はボールを見て待機
-    if (distanceToRebound < 0.5) {
+    if (distanceToRebound < 1.0) {
       // ボールの方を向く
       const ballPosition = this.ball.getPosition();
       const toBall = new Vector3(
@@ -1157,13 +960,13 @@ export class OffBallOffenseAI extends BaseStateAI {
     );
     direction.normalize();
 
+    // 移動方向を向く
+    const angle = Math.atan2(direction.x, direction.z);
+    this.character.setRotation(angle);
+
     const adjustedDirection = this.adjustDirectionForCollision(direction, deltaTime);
 
     if (adjustedDirection) {
-      // 移動方向を向く
-      const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
-      this.character.setRotation(angle);
-
       this.character.move(adjustedDirection, deltaTime);
 
       // ダッシュで移動
@@ -1174,6 +977,35 @@ export class OffBallOffenseAI extends BaseStateAI {
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
+    }
+  }
+
+  /**
+   * シュート中にボールを見守る
+   * シュート結果が出るまでその場で待機
+   */
+  private handleWatchShot(): void {
+    const myPosition = this.character.getPosition();
+    const ballPosition = this.ball.getPosition();
+
+    // ボールの方を向く
+    const toBall = new Vector3(
+      ballPosition.x - myPosition.x,
+      0,
+      ballPosition.z - myPosition.z
+    );
+
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // 停止してボールを見守る
+    this.character.velocity = Vector3.Zero();
+
+    // アイドルモーション
+    if (this.character.getCurrentMotionName() !== 'idle') {
+      this.character.playMotion(IDLE_MOTION);
     }
   }
 
@@ -1194,41 +1026,5 @@ export class OffBallOffenseAI extends BaseStateAI {
       }
     }
     return false;
-  }
-
-  /**
-   * チームメイトを避けた位置を見つける
-   * @param basePosition 基本位置
-   * @returns 調整後の位置、見つからなければnull
-   */
-  private findPositionAvoidingTeammates(basePosition: { x: number; z: number }): { x: number; z: number } | null {
-    // まず基本位置が問題ないかチェック
-    if (!this.isTooCloseToTeammates(basePosition)) {
-      return basePosition;
-    }
-
-    // 8方向に探索
-    const searchAngles = [0, 45, 90, 135, 180, 225, 270, 315];
-    const searchDistances = [2.0, 3.0, 4.0]; // minTeammateDistance以上の距離で探索
-
-    for (const distance of searchDistances) {
-      for (const angleDeg of searchAngles) {
-        const angleRad = (angleDeg * Math.PI) / 180;
-        const candidateX = basePosition.x + Math.cos(angleRad) * distance;
-        const candidateZ = basePosition.z + Math.sin(angleRad) * distance;
-
-        // コート境界チェック（外側マスを避ける）
-        if (Math.abs(candidateX) > 6 || Math.abs(candidateZ) > 13.5) {
-          continue;
-        }
-
-        const candidate = { x: candidateX, z: candidateZ };
-        if (!this.isTooCloseToTeammates(candidate)) {
-          return candidate;
-        }
-      }
-    }
-
-    return null; // 適切な位置が見つからない
   }
 }
