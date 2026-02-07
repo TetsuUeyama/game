@@ -174,6 +174,10 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.passResetCallback(this.character);
     }
 
+    // スローイン関連をリセット（前回のON_BALL_PLAYER時の残留状態を防ぐ）
+    this.throwInInitialized = false;
+    this.throwInSurveyCompleted = false;
+
     // 周囲確認フェーズを開始（ボールを受け取った直後）
     this.surveyPhase = "look_left";
     this.surveyTimer = 0;
