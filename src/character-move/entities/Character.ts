@@ -111,6 +111,7 @@ export class Character {
   public playerPosition: 'PG' | 'SG' | 'SF' | 'PF' | 'C' | null = null;
   public offenseRole: OffenseRole | null = null;
   public defenseRole: DefenseRole | null = null;
+  public shotPriority: number | null = null;
 
   // 名前表示用
   private nameLabel: Mesh | null = null;
