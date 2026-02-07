@@ -24,6 +24,9 @@ export interface ThrowInContext {
   getAllyCharacters: () => Character[];
   getEnemyCharacters: () => Character[];
 
+  // AI初期化
+  getCharacterAIs: () => { forceInitialize: () => void }[];
+
   // コールバック
   onThrowInComplete?: () => void;
   onThrowInViolation?: (violatingTeam: 'ally' | 'enemy', position: Vector3) => void;
@@ -73,11 +76,6 @@ export class ThrowInManager {
 
     const allyCharacters = this.context.getAllyCharacters();
     const enemyCharacters = this.context.getEnemyCharacters();
-
-    // 全キャラクターのバランスをリセット
-    for (const character of [...allyCharacters, ...enemyCharacters]) {
-      character.resetBalance();
-    }
 
     const throwingTeam = offendingTeam === 'ally' ? enemyCharacters : allyCharacters;
     const defendingTeam = offendingTeam === 'ally' ? allyCharacters : enemyCharacters;
@@ -163,6 +161,11 @@ export class ThrowInManager {
 
     // キャラクター状態を設定
     this.setThrowInStates(thrower, throwingTeam, defendingTeam);
+
+    // 全AIを強制初期化（前回の行動や状態を完全にクリア）
+    for (const ai of this.context.getCharacterAIs()) {
+      ai.forceInitialize();
+    }
 
     // シュートクロックを停止
     if (this.context.shotClockController) {

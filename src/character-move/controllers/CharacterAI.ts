@@ -199,16 +199,20 @@ export class CharacterAI {
    * 前回の行動や状態を完全にクリアして新しい状態で開始
    */
   public forceInitialize(): void {
-    const state = this.character.getState();
-
-    // 追跡変数をリセット（次のupdateで状態遷移を検出しないようにする）
-    this.previousState = state;
-    this.wasBallHolder = this.ball.getHolder() === this.character;
+    // 追跡変数をBALL_LOST状態にリセット
+    // 次のupdate()で実際の状態（ON_BALL_PLAYER等）との差異が検出され、
+    // handleStateTransition() → onEnterState() が呼ばれる
+    // これにより、オンボールプレイヤーのサーベイ等の初期化処理が正しく実行される
+    this.previousState = CharacterState.BALL_LOST;
+    this.wasBallHolder = false;
     this.stateTransitionReactionTimer = 0;
 
+    // キャラクターの物理状態をリセット
+    this.character.resetBalance();
+    this.character.velocity = Vector3.Zero();
+
     // アクションを強制リセット
-    const actionController = this.character.getActionController();
-    actionController.forceResetAction();
+    this.character.getActionController().forceResetAction();
 
     // AI移動をクリア
     this.character.clearAIMovement();
@@ -220,12 +224,9 @@ export class CharacterAI {
     this.character.playMotion(IDLE_MOTION);
 
     // 各状態AIの内部状態をリセット
-    // forceReset()は surveyPhase = "none" に設定するので、サーベイをスキップして即座に行動開始
+    // 次フレームでonEnterState()が呼ばれ、サーベイ等の初期化処理が実行される
     this.onBallOffenseAI.forceReset();
-
-    // 注意: onEnterState()は呼ばない
-    // onEnterState()はサーベイを開始するため、強制リセット時には不要
-    // forceReset()で全ての必要な初期化が完了している
+    this.offBallOffenseAI.forceReset();
   }
 
   /**

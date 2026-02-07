@@ -7,7 +7,6 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { CharacterState } from "../../types/CharacterState";
-import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { JUMP_BALL_MOTION } from "../../motion/JumpMotion";
 import {
   CENTER_CIRCLE,
@@ -39,6 +38,9 @@ export interface JumpBallContext {
   // キャラクター取得
   getAllyCharacters: () => Character[];
   getEnemyCharacters: () => Character[];
+
+  // AI初期化
+  getCharacterAIs: () => { forceInitialize: () => void }[];
 }
 
 /**
@@ -141,6 +143,11 @@ export class JumpBallManager {
     if (this.context.shotClockController) {
       this.context.shotClockController.stop();
     }
+
+    // 全AIを強制初期化（前回の行動や状態を完全にクリア）
+    for (const ai of this.context.getCharacterAIs()) {
+      ai.forceInitialize();
+    }
   }
 
   /**
@@ -221,15 +228,6 @@ export class JumpBallManager {
    * ジャンプボール状態を設定
    */
   private setJumpBallStates(allCharacters: Character[]): void {
-    for (const char of allCharacters) {
-      char.stopMovement();
-      char.playMotion(IDLE_MOTION);
-      const actionController = char.getActionController();
-      if (actionController) {
-        actionController.cancelAction();
-      }
-    }
-
     if (this.jumpBallAllyJumper) {
       this.jumpBallAllyJumper.setState(CharacterState.JUMP_BALL_JUMPER);
     }
@@ -406,6 +404,11 @@ export class JumpBallManager {
     this.jumpBallInfo.ballTipped = true;
 
     this.clearStates();
+
+    // 全AIを強制初期化（ジャンプボール状態から通常状態への移行）
+    for (const ai of this.context.getCharacterAIs()) {
+      ai.forceInitialize();
+    }
 
     const holder = this.context.ball.getHolder();
     if (holder && this.context.shotClockController) {
