@@ -3,6 +3,8 @@
  * teamConfig.jsonからチーム構成と選手割り当てを読み込む
  */
 
+import { OffenseRole, DefenseRole } from "../state/PlayerStateTypes";
+
 export interface PlayerConfig {
   playerId: string;
   position: 'PG' | 'SG' | 'SF' | 'PF' | 'C';
@@ -10,6 +12,10 @@ export interface PlayerConfig {
   z: number;
   /** AIで動くかどうか（省略時はtrue） */
   hasAI?: boolean;
+  /** オフェンス時の役割（省略時はnull） */
+  offenseRole?: OffenseRole;
+  /** ディフェンス時の役割（省略時はnull） */
+  defenseRole?: DefenseRole;
 }
 
 export interface TeamConfig {
