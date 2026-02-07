@@ -94,9 +94,9 @@ export abstract class BaseStateAI {
       return;
     }
 
-    // 移動方向を向く
+    // 移動方向を向く（グラデーション回転）
     const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
-    this.character.setRotation(angle);
+    this.character.rotateTowards(angle, deltaTime);
 
     // 距離に応じた移動速度とモーション
     const isDashing = distance > 5.0;
@@ -172,10 +172,10 @@ export abstract class BaseStateAI {
       return;
     }
 
-    // 移動方向を向く（keepRotationがfalseの場合のみ）
+    // 移動方向を向く（keepRotationがfalseの場合のみ、グラデーション回転）
     if (!keepRotation) {
       const angle = Math.atan2(adjustedDirection.x, adjustedDirection.z);
-      this.character.setRotation(angle);
+      this.character.rotateTowards(angle, deltaTime);
     }
 
     // 距離に応じた移動速度とモーション
@@ -200,7 +200,7 @@ export abstract class BaseStateAI {
   /**
    * 指定したキャラクターの方向を向く
    */
-  protected faceTowards(target: Character): void {
+  protected faceTowards(target: Character, deltaTime: number): void {
     const myPosition = this.character.getPosition();
     const targetPosition = target.getPosition();
 
@@ -211,13 +211,13 @@ export abstract class BaseStateAI {
       targetPosition.z - myPosition.z
     );
 
-    // 方向ベクトルが0でない場合のみ回転
+    // 方向ベクトルが0でない場合のみ回転（グラデーション回転）
     if (direction.length() > 0.01) {
       // Y軸周りの回転角度を計算
       const angle = Math.atan2(direction.x, direction.z);
 
-      // キャラクターの回転を設定（setRotationメソッドを使用してメッシュにも反映）
-      this.character.setRotation(angle);
+      // quicknessベースのスムーズ回転
+      this.character.rotateTowards(angle, deltaTime);
     }
   }
 

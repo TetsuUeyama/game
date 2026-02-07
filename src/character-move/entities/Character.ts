@@ -676,7 +676,9 @@ export class Character {
    * @param deltaTime フレーム時間（秒）
    */
   public rotateTowards(targetRotation: number, deltaTime: number): void {
-    const rotationSpeed = CHARACTER_CONFIG.rotationSpeed;
+    // quicknessベースの回転速度（2〜10 rad/s）
+    const quickness = this.playerData?.stats.quickness ?? 50;
+    const rotationSpeed = 2 + (quickness / 100) * 8;
 
     // 角度差を計算（-π から π の範囲に正規化）
     const diff = normalizeAngle(targetRotation - this.rotation);

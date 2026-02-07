@@ -596,7 +596,7 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     // 目標位置がない場合はオンボールプレイヤーを見て待機
     if (!this.mainHandlerTargetPosition) {
-      this.faceTowards(onBallPlayer);
+      this.faceTowards(onBallPlayer, deltaTime);
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -612,7 +612,7 @@ export class OffBallOffenseAI extends BaseStateAI {
       );
       // パスレーンが安全なら、その場でオンボールプレイヤーの方を向いて待機
       if (currentRisk <= this.maxPassLaneRisk) {
-        this.faceTowards(onBallPlayer);
+        this.faceTowards(onBallPlayer, deltaTime);
         if (this.character.getCurrentMotionName() !== 'idle') {
           this.character.playMotion(IDLE_MOTION);
         }
@@ -741,7 +741,7 @@ export class OffBallOffenseAI extends BaseStateAI {
     }
 
     if (!this.secondHandlerTargetPosition) {
-      this.faceTowards(onBallPlayer);
+      this.faceTowards(onBallPlayer, deltaTime);
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
@@ -756,7 +756,7 @@ export class OffBallOffenseAI extends BaseStateAI {
         onBallPlayer
       );
       if (currentRisk <= this.maxPassLaneRisk) {
-        this.faceTowards(onBallPlayer);
+        this.faceTowards(onBallPlayer, deltaTime);
         if (this.character.getCurrentMotionName() !== 'idle') {
           this.character.playMotion(IDLE_MOTION);
         }
@@ -1215,7 +1215,7 @@ export class OffBallOffenseAI extends BaseStateAI {
       const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
 
       if (adjustedDirection) {
-        this.faceTowards(lookAtTarget);
+        this.faceTowards(lookAtTarget, deltaTime);
         this.character.move(adjustedDirection, deltaTime);
 
         if (distanceToTarget > 3.0) {
@@ -1233,7 +1233,7 @@ export class OffBallOffenseAI extends BaseStateAI {
         }
       }
     } else {
-      this.faceTowards(lookAtTarget);
+      this.faceTowards(lookAtTarget, deltaTime);
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
