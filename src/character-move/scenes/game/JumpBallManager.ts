@@ -7,18 +7,16 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { CharacterState } from "../../types/CharacterState";
-import { JUMP_BALL_MOTION } from "../../motion/JumpMotion";
 import {
   CENTER_CIRCLE,
   JUMP_BALL_POSITIONS,
   JUMP_BALL_TIMING,
-  JUMP_BALL_PHYSICS,
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
 } from "../../config/JumpBallConfig";
 import { FIELD_CONFIG } from "../../config/gameConfig";
-import { getDistance2D } from "../../utils/CollisionUtils";
 import { ShotClockController } from "../../controllers/ShotClockController";
+import { PhysicsConstants } from "../../../physics/PhysicsConfig";
 
 /**
  * ルーズボール設定
@@ -54,6 +52,12 @@ export class JumpBallManager {
   private jumpBallAllyJumper: Character | null = null;
   private jumpBallEnemyJumper: Character | null = null;
   private jumpBallTimer: number = 0;
+
+  // キネマティックトス状態（物理エンジン不使用、手動計算）
+  private tossActive: boolean = false;
+  private tossStartY: number = 0;
+  private tossVelocityY: number = 0;
+  private tossElapsedTime: number = 0;
 
   // ルーズボールタイマー（誰もボールを保持していない状態のタイマー）
   private looseBallTimer: number = 0;
@@ -265,19 +269,19 @@ export class JumpBallManager {
         break;
 
       case 'tossing':
-        this.enforceVerticalBallMotion();
-        const ballHeight = this.context.ball.getPosition().y;
-        if (ballHeight >= JUMP_BALL_TIMING.TIP_ENABLED_MIN_HEIGHT) {
-          this.jumpBallInfo.phase = 'jumping';
-          this.triggerJumperJumps();
+        this.updateKinematicToss(deltaTime);
+        {
+          const ballHeight = this.context.ball.getPosition().y;
+          // ボールが地面付近まで落下したらジャンプボール完了
+          if (ballHeight <= 1.0) {
+            this.jumpBallInfo.phase = 'jumping';
+            this.jumpBallInfo.ballTipped = true;
+            this.complete();
+          }
         }
         break;
 
       case 'jumping':
-        if (!this.jumpBallInfo.ballTipped) {
-          this.enforceVerticalBallMotion();
-          this.tryTipBall();
-        }
         if (this.context.ball.isHeld()) {
           this.complete();
         } else if (this.jumpBallInfo.ballTipped) {
@@ -291,110 +295,57 @@ export class JumpBallManager {
   }
 
   /**
-   * ボールを垂直運動に強制
+   * キネマティックトス更新（物理エンジン不使用）
+   *
+   * 運動方程式 y = y0 + v0*t - 0.5*g*t² でボール位置を手動計算。
+   * Havok物理エンジンのDYNAMICモードを使うと、disablePreStep の問題で
+   * ボールが透明な壁に当たったように見えるため、ANIMATEDモードのまま
+   * 位置を直接制御する。
    */
-  private enforceVerticalBallMotion(): void {
-    const ballPos = this.context.ball.getPosition();
-    const ballVel = this.context.ball.getVelocity();
+  private updateKinematicToss(deltaTime: number): void {
+    if (!this.tossActive) return;
 
-    if (Math.abs(ballPos.x) > 0.01 || Math.abs(ballPos.z) > 0.01) {
-      this.context.ball.setPosition(new Vector3(0, ballPos.y, 0), false);
-    }
+    this.tossElapsedTime += deltaTime;
+    const g = PhysicsConstants.GRAVITY_MAGNITUDE;
+    const y = this.tossStartY
+      + this.tossVelocityY * this.tossElapsedTime
+      - 0.5 * g * this.tossElapsedTime * this.tossElapsedTime;
 
-    if (Math.abs(ballVel.x) > 0.01 || Math.abs(ballVel.z) > 0.01) {
-      this.context.ball.setVelocity(new Vector3(0, ballVel.y, 0));
-    }
+    // ボール位置をセンター(0, y, 0)に設定（ANIMATEDモードなので安全）
+    this.context.ball.setPosition(new Vector3(0, y, 0), false);
   }
 
   /**
    * ボール投げ上げを実行
+   *
+   * 物理エンジンを使わず、キネマティック（手動計算）でトスを実行。
+   * ボールはANIMATEDモードのまま、updateKinematicToss()で位置を制御する。
+   * チップ時に tipBall() がDYNAMICモードに切り替える。
    */
   private executeToss(): void {
-    const tossPosition = new Vector3(
-      CENTER_CIRCLE.CENTER_X,
-      JUMP_BALL_POSITIONS.BALL_START_HEIGHT,
-      CENTER_CIRCLE.CENTER_Z
-    );
-    this.context.ball.tossForJumpBall(tossPosition, JUMP_BALL_POSITIONS.BALL_TOSS_HEIGHT);
+    // ジャンパーの物理ボディを無効化（手の物理球体がボールと衝突するのを防ぐ）
+    this.jumpBallAllyJumper?.setPhysicsEnabled(false);
+    this.jumpBallEnemyJumper?.setPhysicsEnabled(false);
+
+    // ボールをセンターに配置（ANIMATEDモードのまま）
+    const startY = JUMP_BALL_POSITIONS.BALL_START_HEIGHT;
+    this.context.ball.setPosition(new Vector3(0, startY, 0), true);
+    this.context.ball.endFlight();
+
+    // キネマティックトスのパラメータを設定
+    // v0 = sqrt(2*g*h) で目標高さに到達する初速度を計算
+    const g = PhysicsConstants.GRAVITY_MAGNITUDE;
+    const height = JUMP_BALL_POSITIONS.BALL_TOSS_HEIGHT;
+    this.tossStartY = startY;
+    this.tossVelocityY = Math.sqrt(2 * g * height);
+    this.tossElapsedTime = 0;
+    this.tossActive = true;
+
     this.jumpBallInfo.phase = 'tossing';
   }
 
-  /**
-   * ジャンパーにジャンプを指示
-   */
-  private triggerJumperJumps(): void {
-    if (this.jumpBallAllyJumper) {
-      const actionController = this.jumpBallAllyJumper.getActionController();
-      if (actionController) {
-        actionController.startAction('jump_ball');
-      }
-      this.jumpBallAllyJumper.playMotion(JUMP_BALL_MOTION);
-    }
-
-    if (this.jumpBallEnemyJumper) {
-      const actionController = this.jumpBallEnemyJumper.getActionController();
-      if (actionController) {
-        actionController.startAction('jump_ball');
-      }
-      this.jumpBallEnemyJumper.playMotion(JUMP_BALL_MOTION);
-    }
-  }
-
-  /**
-   * ボールをチップできるか試行
-   */
-  private tryTipBall(): void {
-    const ballPos = this.context.ball.getPosition();
-    const ballHeight = ballPos.y;
-
-    if (ballHeight < JUMP_BALL_TIMING.TIP_ENABLED_MIN_HEIGHT ||
-        ballHeight > JUMP_BALL_TIMING.TIP_ENABLED_MAX_HEIGHT) {
-      return;
-    }
-
-    if (!this.jumpBallAllyJumper || !this.jumpBallEnemyJumper) {
-      return;
-    }
-
-    const allyPos = this.jumpBallAllyJumper.getPosition();
-    const enemyPos = this.jumpBallEnemyJumper.getPosition();
-
-    const allyHorizontalDist = getDistance2D(ballPos, allyPos);
-    const enemyHorizontalDist = getDistance2D(ballPos, enemyPos);
-
-    const reachRange = 1.5;
-
-    const allyCanReach = allyHorizontalDist <= reachRange;
-    const enemyCanReach = enemyHorizontalDist <= reachRange;
-
-    if (!allyCanReach && !enemyCanReach) {
-      return;
-    }
-
-    let winner: 'ally' | 'enemy';
-    if (allyCanReach && !enemyCanReach) {
-      winner = 'ally';
-    } else if (!allyCanReach && enemyCanReach) {
-      winner = 'enemy';
-    } else {
-      const allyHeight = this.jumpBallAllyJumper.config.physical.height;
-      const enemyHeight = this.jumpBallEnemyJumper.config.physical.height;
-      const heightAdvantage = (allyHeight - enemyHeight) * 0.1;
-      const randomFactor = Math.random() - 0.5;
-      winner = (heightAdvantage + randomFactor) > 0 ? 'ally' : 'enemy';
-    }
-
-    const tipDirection = new Vector3(
-      (Math.random() - 0.5) * JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO,
-      JUMP_BALL_PHYSICS.TIP_VERTICAL_RATIO,
-      winner === 'ally'
-        ? -JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO
-        : JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO
-    ).normalize();
-
-    this.context.ball.tipBall(tipDirection, JUMP_BALL_PHYSICS.TIP_BALL_SPEED);
-    this.jumpBallInfo.ballTipped = true;
-  }
+  // NOTE: triggerJumperJumps() と tryTipBall() は一時的に削除（デバッグ中）
+  // ジャンプボールのトス・チップ機能を復元する際にgit履歴から復元すること
 
   /**
    * ジャンプボールを完了
@@ -402,6 +353,13 @@ export class JumpBallManager {
   private complete(): void {
     this.jumpBallInfo.phase = 'completed';
     this.jumpBallInfo.ballTipped = true;
+
+    // キネマティックトスを停止
+    this.tossActive = false;
+
+    // ジャンパーの物理ボディを再有効化（executeTossで無効化した分）
+    this.jumpBallAllyJumper?.setPhysicsEnabled(true);
+    this.jumpBallEnemyJumper?.setPhysicsEnabled(true);
 
     this.clearStates();
 
@@ -512,5 +470,6 @@ export class JumpBallManager {
     this.jumpBallAllyJumper = null;
     this.jumpBallEnemyJumper = null;
     this.jumpBallTimer = 0;
+    this.tossActive = false;
   }
 }

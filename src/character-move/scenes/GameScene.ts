@@ -963,7 +963,13 @@ export class GameScene {
           }
         }
 
-        ai.update(deltaTime);
+        try {
+          ai.update(deltaTime);
+        } catch (e) {
+          // HMR時のモジュール一時不整合などでエラーが発生しても
+          // ゲームループ全体が停止しないようにする
+          console.warn(`[GameScene] AI update error for ${character.playerPosition}:`, e);
+        }
       }
 
       // カメラをプレイヤーキャラクターに追従させる
