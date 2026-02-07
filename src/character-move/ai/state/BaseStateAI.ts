@@ -515,4 +515,56 @@ export abstract class BaseStateAI {
       this.character.playMotion(DASH_FORWARD_MOTION);
     }
   }
+
+  /**
+   * 判断間隔を取得（選手のalignmentに基づく）
+   * 計算式: 1 - (alignment / 50) 秒
+   * alignment=50 → 0秒（毎フレーム判断）
+   * alignment=0 → 1秒
+   */
+  protected getDecisionInterval(): number {
+    const alignment = this.character.playerData?.stats.alignment ?? 50;
+    return Math.max(0, 1 - alignment / 50);
+  }
+
+  /**
+   * 守るべきゴールの位置を取得
+   * ディフェンダーのチームに応じて自チームのゴール位置を返す
+   * （攻めるゴールの逆が守るゴール）
+   */
+  protected getDefendingGoalPosition(): Vector3 {
+    // allyチームはgoal1を攻める → goal2を守る
+    // enemyチームはgoal2を攻める → goal1を守る
+    return this.field.getDefendingGoalRim(this.character.team);
+  }
+
+  /**
+   * シュート中にボールを見守る
+   * シュート結果が出るまでその場で待機
+   */
+  protected handleWatchShot(): void {
+    const myPosition = this.character.getPosition();
+    const ballPosition = this.ball.getPosition();
+
+    // ボールの方を向く
+    const toBall = new Vector3(
+      ballPosition.x - myPosition.x,
+      0,
+      ballPosition.z - myPosition.z
+    );
+
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // 停止してボールを見守る
+    this.character.velocity = Vector3.Zero();
+    this.character.stopMovement();
+
+    // アイドルモーション
+    if (this.character.getCurrentMotionName() !== 'idle') {
+      this.character.playMotion(IDLE_MOTION);
+    }
+  }
 }

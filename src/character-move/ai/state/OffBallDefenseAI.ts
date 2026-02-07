@@ -7,6 +7,7 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
+import { SAFE_BOUNDARY_CONFIG } from "../../config/gameConfig";
 
 /**
  * オフボールディフェンダー時のAI
@@ -45,17 +46,6 @@ export class OffBallDefenseAI extends BaseStateAI {
       return true;
     }
     return false;
-  }
-
-  /**
-   * 判断間隔を取得（選手のalignmentに基づく）
-   * 計算式: 1 - (alignment / 50) 秒
-   * alignment=50 → 0秒（毎フレーム判断）
-   * alignment=0 → 1秒
-   */
-  private getDecisionInterval(): number {
-    const alignment = this.character.playerData?.stats.alignment ?? 50;
-    return Math.max(0, 1 - alignment / 50);
   }
 
   /**
@@ -161,14 +151,9 @@ export class OffBallDefenseAI extends BaseStateAI {
     let idealX = targetPosition.x + targetToGoal.x * markDistance;
     let idealZ = targetPosition.z + targetToGoal.z * markDistance;
 
-    // 外側マスを避ける（最外周1.5m以内に入らない）
-    const safeMinX = -6.0;  // -7.5 + 1.5
-    const safeMaxX = 6.0;   // 7.5 - 1.5
-    const safeMinZ = -13.5; // -15 + 1.5
-    const safeMaxZ = 13.5;  // 15 - 1.5
-
-    idealX = Math.max(safeMinX, Math.min(safeMaxX, idealX));
-    idealZ = Math.max(safeMinZ, Math.min(safeMaxZ, idealZ));
+    // 外側マスを避ける（最外周マージン以内に入らない）
+    idealX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, idealX));
+    idealZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, idealZ));
 
     this.cachedTargetPosition = {
       x: idealX,
@@ -205,13 +190,8 @@ export class OffBallDefenseAI extends BaseStateAI {
     }
 
     // 外側マスを避ける
-    const safeMinX = -6.0;
-    const safeMaxX = 6.0;
-    const safeMinZ = -13.5;
-    const safeMaxZ = 13.5;
-
-    const safeX = Math.max(safeMinX, Math.min(safeMaxX, targetPos.x));
-    const safeZ = Math.max(safeMinZ, Math.min(safeMaxZ, targetPos.z));
+    const safeX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, targetPos.x));
+    const safeZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, targetPos.z));
 
     const targetPosition = new Vector3(
       safeX,
@@ -289,15 +269,6 @@ export class OffBallDefenseAI extends BaseStateAI {
       z: targetPosition.z + targetToGoal.z * markDistance,
       markTarget: markTarget,
     };
-  }
-
-  /**
-   * 守るべきゴールの位置を取得
-   */
-  private getDefendingGoalPosition(): Vector3 {
-    // allyチームはgoal1を攻める → goal2を守る
-    // enemyチームはgoal2を攻める → goal1を守る
-    return this.field.getDefendingGoalRim(this.character.team);
   }
 
   /**
@@ -481,34 +452,5 @@ export class OffBallDefenseAI extends BaseStateAI {
 
     // 同ポジションが見つからなければオフボールプレイヤーを探す
     return this.findOffBallPlayer();
-  }
-
-  /**
-   * シュート中にボールを見守る
-   * シュート結果が出るまでその場で待機
-   */
-  private handleWatchShot(): void {
-    const myPosition = this.character.getPosition();
-    const ballPosition = this.ball.getPosition();
-
-    // ボールの方を向く
-    const toBall = new Vector3(
-      ballPosition.x - myPosition.x,
-      0,
-      ballPosition.z - myPosition.z
-    );
-
-    if (toBall.length() > 0.01) {
-      const angle = Math.atan2(toBall.x, toBall.z);
-      this.character.setRotation(angle);
-    }
-
-    // 停止してボールを見守る
-    this.character.velocity = Vector3.Zero();
-
-    // アイドルモーション
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
-    }
   }
 }

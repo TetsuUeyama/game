@@ -52,6 +52,10 @@ import {
   GameResetContext,
   CameraManager,
   CameraManagerContext,
+  VisualizationManager,
+  VisualizationManagerContext,
+  PlayerActionFacade,
+  PlayerActionFacadeContext,
 } from "./game";
 import type { GameMode } from "./game";
 
@@ -88,6 +92,12 @@ export class GameScene {
 
   // カメラマネージャー
   private _cameraManager?: CameraManager;
+
+  // 可視化マネージャー
+  private _visualizationManager?: VisualizationManager;
+
+  // プレイヤーアクションファサード
+  private _playerActionFacade?: PlayerActionFacade;
 
   // キャラクター（5対5）
   private allyCharacters: Character[] = []; // 味方チーム5人
@@ -143,19 +153,6 @@ export class GameScene {
   // チーム設定とプレイヤーデータ（キャラクター再作成用）
   private savedTeamConfig: GameTeamConfig | null = null;
   private savedPlayerData: Record<string, PlayerData> | null = null;
-
-  // スコア管理
-  private allyScore: number = 0;
-  private enemyScore: number = 0;
-  private readonly winningScore: number = 5; // 勝利に必要な得点
-  private winner: 'ally' | 'enemy' | null = null; // 勝者
-
-  // ボールの前フレーム位置（アウトオブバウンズの方向判定用）
-  private previousBallPosition: Vector3 | null = null;
-
-  // ルーズボール関連（誰もボールを保持していない状態のタイマー）
-  private looseBallTimer: number = 0;
-  private readonly LOOSE_BALL_JUMP_BALL_THRESHOLD: number = 10.0; // 10秒でジャンプボール
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -377,6 +374,12 @@ export class GameScene {
 
     // カメラマネージャーの初期化
     this._cameraManager = new CameraManager(this.createCameraManagerContext());
+
+    // 可視化マネージャーの初期化
+    this._visualizationManager = new VisualizationManager(this.createVisualizationManagerContext());
+
+    // プレイヤーアクションファサードの初期化
+    this._playerActionFacade = new PlayerActionFacade(this.createPlayerActionFacadeContext());
 
     // 3Dモデルのロード（オプション）
     // this.loadCharacterModel(); // 一旦無効化
@@ -648,39 +651,13 @@ export class GameScene {
         this.updateCollisionHandlerForCheckMode(characters);
       },
       recreateDribblePathVisualizer: (characters: Character[]) => {
-        if (this.dribblePathVisualizer) {
-          this.dribblePathVisualizer.dispose();
-          this.dribblePathVisualizer = new DribblePathVisualizer(
-            this.scene,
-            this.ball,
-            this.field,
-            characters
-          );
-          this.dribblePathVisualizer.setEnabled(true);
-        }
+        this.recreateDribblePathVisualizerInternal(characters);
       },
       recreateShootTrajectoryVisualizer: (characters: Character[]) => {
-        if (this.shootTrajectoryVisualizer) {
-          this.shootTrajectoryVisualizer.dispose();
-          this.shootTrajectoryVisualizer = new ShootTrajectoryVisualizer(
-            this.scene,
-            this.ball,
-            this.field,
-            characters
-          );
-          this.shootTrajectoryVisualizer.setEnabled(true);
-        }
+        this.recreateShootTrajectoryVisualizerInternal(characters);
       },
       recreatePassTrajectoryVisualizer: (characters: Character[]) => {
-        if (this.passTrajectoryVisualizer) {
-          this.passTrajectoryVisualizer.dispose();
-          this.passTrajectoryVisualizer = new PassTrajectoryVisualizer(
-            this.scene,
-            this.ball,
-            characters
-          );
-          this.passTrajectoryVisualizer.setEnabled(true);
-        }
+        this.recreatePassTrajectoryVisualizerInternal(characters);
       },
       updatePassTrajectoryVisualizer: () => {
         if (this.passTrajectoryVisualizer) {
@@ -743,6 +720,31 @@ export class GameScene {
   }
 
   /**
+   * 可視化マネージャーコンテキストを作成
+   */
+  private createVisualizationManagerContext(): VisualizationManagerContext {
+    return {
+      passTrajectoryVisualizer: this.passTrajectoryVisualizer,
+      shootTrajectoryVisualizer: this.shootTrajectoryVisualizer,
+      dribblePathVisualizer: this.dribblePathVisualizer,
+    };
+  }
+
+  /**
+   * プレイヤーアクションファサードコンテキストを作成
+   */
+  private createPlayerActionFacadeContext(): PlayerActionFacadeContext {
+    return {
+      ball: this.ball,
+      oneOnOneBattleController: this.oneOnOneBattleController,
+      shootingController: this.shootingController,
+      feintController: this.feintController,
+      getAllyCharacters: () => this.allyCharacters,
+      getEnemyCharacters: () => this.enemyCharacters,
+    };
+  }
+
+  /**
    * ゲームリセットコンテキストを作成
    */
   private createGameResetContext(): GameResetContext {
@@ -753,13 +755,7 @@ export class GameScene {
       getAllyCharacters: () => this.allyCharacters,
       getEnemyCharacters: () => this.enemyCharacters,
       getCharacterAIs: () => this.characterAIs,
-      onScoreUpdate: (allyScore: number, enemyScore: number) => {
-        this.allyScore = allyScore;
-        this.enemyScore = enemyScore;
-      },
-      onWinner: (winner: 'ally' | 'enemy') => {
-        this.winner = winner;
-      },
+      // onScoreUpdate と onWinner は GameResetManager が状態を保持するため不要
       onRequestJumpBall: () => {
         this._jumpBallManager?.setup();
       },
@@ -1001,7 +997,7 @@ export class GameScene {
     const isThrowInBeforeThrow = isThrowInActive && (ballHolder === throwInThrower || ballInFlight);
     const isJumpBallInProgress = this.isJumpBallActive();
 
-    if (!isGoalResetPending && !isOutOfBoundsResetPending && !isThrowInBeforeThrow && !isJumpBallInProgress && this.checkOutOfBounds()) {
+    if (!isGoalResetPending && !isOutOfBoundsResetPending && !isThrowInBeforeThrow && !isJumpBallInProgress && this._gameResetManager?.checkOutOfBounds()) {
       // アウトオブバウンズリセットを開始
       this._gameResetManager?.startOutOfBoundsReset(this.ball.getPosition().clone());
     }
@@ -1014,20 +1010,10 @@ export class GameScene {
       this.shotClockController.update(deltaTime);
     }
 
-    // ルーズボールタイマー更新（マネージャー状態を使用）
-    if (!isGoalResetPending && !isOutOfBoundsResetPending && !isThrowInActive) {
-      if (!currentBallHolder && !this.ball.isInFlight()) {
-        this.looseBallTimer += deltaTime;
-        if (this.looseBallTimer >= this.LOOSE_BALL_JUMP_BALL_THRESHOLD) {
-          this.looseBallTimer = 0;
-          this.setupJumpBall();
-          return;
-        }
-      } else {
-        this.looseBallTimer = 0;
-      }
-    } else {
-      this.looseBallTimer = 0;
+    // ルーズボールタイマー更新（JumpBallManagerに委譲）
+    const isResetPending = isGoalResetPending || isOutOfBoundsResetPending || isThrowInActive;
+    if (this._jumpBallManager?.updateLooseBallTimer(deltaTime, isResetPending)) {
+      return; // ジャンプボールが開始された
     }
 
     // シュートクロック違反リセット待機処理（GameResetManagerに委譲）
@@ -1036,8 +1022,8 @@ export class GameScene {
     // スローイン処理（ThrowInManagerに委譲）
     this._throwInManager?.update(deltaTime);
 
-    // ボールの前フレーム位置を更新（アウトオブバウンズ方向判定用）
-    this.previousBallPosition = this.ball.getPosition().clone();
+    // ボールの前フレーム位置を更新（アウトオブバウンズ方向判定用 - GameResetManagerに委譲）
+    this._gameResetManager?.updatePreviousBallPosition();
   }
 
   /**
@@ -1244,8 +1230,7 @@ export class GameScene {
       const motionController = character.getMotionController();
       motionController.stop();
     }
-
-      }
+  }
 
   /**
    * 8角形の頂点番号を表示（デバッグ用）
@@ -1268,166 +1253,63 @@ export class GameScene {
   }
 
   /**
-   * ドリブル突破を実行
-   * @param direction 突破方向（'left' = 左前、'right' = 右前）
-   * @returns 突破を開始できた場合はtrue
+   * ドリブル突破を実行（PlayerActionFacadeに委譲）
    */
   public performDribbleBreakthrough(direction: 'left' | 'right'): boolean {
-    return this.oneOnOneBattleController?.performDribbleBreakthrough(direction) ?? false;
+    return this._playerActionFacade?.performDribbleBreakthrough(direction) ?? false;
   }
 
   /**
-   * ドリブル突破可能かどうかをチェック
-   * @returns 突破可能な場合はtrue
+   * ドリブル突破可能かどうかをチェック（PlayerActionFacadeに委譲）
    */
   public canPerformDribbleBreakthrough(): boolean {
-    return this.oneOnOneBattleController?.canPerformDribbleBreakthrough() ?? false;
+    return this._playerActionFacade?.canPerformDribbleBreakthrough() ?? false;
   }
 
   /**
-   * シュートを実行（アクションシステム経由）
-   * @param shooter シュートを打つキャラクター（省略時はオンボールプレイヤー）
-   * @returns シュート結果
+   * シュートを実行（PlayerActionFacadeに委譲）
    */
   public performShoot(shooter?: Character): { success: boolean; shootType: string; distance: number; message: string } | null {
-    if (!this.shootingController) {
-      return null;
-    }
-
-    // シューターが指定されていない場合、オンボールプレイヤーを取得
-    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
-    if (!targetShooter) {
-      return {
-        success: false,
-        shootType: 'none',
-        distance: 0,
-        message: 'シューターが見つかりません',
-      };
-    }
-
-    // ActionController経由でシュートを開始（アニメーション付き）
-    return this.shootingController.startShootAction(targetShooter);
+    return this._playerActionFacade?.performShoot(shooter) ?? null;
   }
 
   /**
-   * シュート可能かどうかをチェック
-   * @param shooter チェック対象のキャラクター（省略時はオンボールプレイヤー）
+   * シュート可能かどうかをチェック（PlayerActionFacadeに委譲）
    */
   public canShoot(shooter?: Character): boolean {
-    if (!this.shootingController) {
-      return false;
-    }
-
-    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
-    if (!targetShooter) {
-      return false;
-    }
-
-    return this.shootingController.canShoot(targetShooter);
+    return this._playerActionFacade?.canShoot(shooter) ?? false;
   }
 
   /**
-   * 現在のシュートレンジ情報を取得
-   * @param shooter 対象キャラクター（省略時はオンボールプレイヤー）
+   * 現在のシュートレンジ情報を取得（PlayerActionFacadeに委譲）
    */
   public getShootRangeInfo(shooter?: Character): { shootType: string; distance: number; inRange: boolean; facingGoal: boolean } | null {
-    if (!this.shootingController) {
-      return null;
-    }
-
-    const targetShooter = shooter ?? this.shootingController.findOnBallPlayer();
-    if (!targetShooter) {
-      return null;
-    }
-
-    return this.shootingController.getShootRangeInfo(targetShooter);
+    return this._playerActionFacade?.getShootRangeInfo(shooter) ?? null;
   }
 
   /**
-   * パスを実行（ActionController経由）
-   * @param passer パスを出すキャラクター
-   * @param passType パスの種類
-   * @param target パス先のキャラクター（省略時はチームメイトの最初の一人）
-   * @returns 成功/失敗
+   * パスを実行（PlayerActionFacadeに委譲）
    */
   public performPass(
     passer: Character,
     passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest',
     target?: Character
   ): { success: boolean; message: string } {
-    // ボールを持っているか確認
-    if (this.ball.getHolder() !== passer) {
-      return { success: false, message: 'ボールを持っていません' };
-    }
-
-    // ActionControllerでパスアクションを開始
-    const actionController = passer.getActionController();
-    const actionResult = actionController.startAction(passType);
-
-    if (!actionResult.success) {
-      return { success: false, message: actionResult.message };
-    }
-
-    // activeフェーズに入ったらボールを投げるコールバックを設定
-    actionController.setCallbacks({
-      onActive: (action) => {
-        // ボールを持っていない場合はパスしない
-        if (this.ball.getHolder() !== passer) {
-          return;
-        }
-
-        if (action.startsWith('pass_')) {
-          // パス先のキャラクターを決定
-          let passTarget = target;
-          if (!passTarget) {
-            const teammates = passer.team === 'ally' ? this.allyCharacters : this.enemyCharacters;
-            passTarget = teammates.find(c => c !== passer);
-          }
-
-          if (passTarget) {
-            const targetPosition = passTarget.getPosition();
-            this.ball.pass(targetPosition, passTarget);
-          }
-        }
-      },
-    });
-
-    return { success: true, message: `${passType}開始` };
+    return this._playerActionFacade?.performPass(passer, passType, target) ?? { success: false, message: 'PlayerActionFacadeが初期化されていません' };
   }
 
   /**
-   * ディフェンスアクションを実行（ActionController経由）
-   * @param defender ディフェンスするキャラクター
-   * @param actionType ディフェンスアクションの種類
-   * @returns 成功/失敗
+   * ディフェンスアクションを実行（PlayerActionFacadeに委譲）
    */
   public performDefenseAction(
     defender: Character,
     actionType: 'block_shot' | 'steal_attempt' | 'pass_intercept' | 'defense_stance'
   ): { success: boolean; message: string } {
-    // ActionControllerでディフェンスアクションを開始
-    const actionController = defender.getActionController();
-    const actionResult = actionController.startAction(actionType);
-
-    if (!actionResult.success) {
-      return { success: false, message: actionResult.message };
-    }
-
-    // activeフェーズに入ったらディフェンス判定を行うコールバックを設定
-    actionController.setCallbacks({
-      onActive: (_action) => {
-        // ここでブロック判定やスティール判定を行う
-        // 実際の判定処理は後で追加
-      },
-    });
-
-    return { success: true, message: `${actionType}開始` };
+    return this._playerActionFacade?.performDefenseAction(defender, actionType) ?? { success: false, message: 'PlayerActionFacadeが初期化されていません' };
   }
 
   /**
-   * シュートフェイントを実行
-   * @param feinter フェイントを行うキャラクター（省略時はボール保持者）
-   * @returns フェイント結果
+   * シュートフェイントを実行（PlayerActionFacadeに委譲）
    */
   public performShootFeint(feinter?: Character): {
     success: boolean;
@@ -1435,99 +1317,24 @@ export class GameScene {
     defender: Character | null;
     message: string;
   } | null {
-    if (!this.feintController) {
-      return null;
-    }
-
-    // フェイントするキャラクターを特定
-    const targetFeinter = feinter ?? this.ball.getHolder();
-    if (!targetFeinter) {
-      return {
-        success: false,
-        defenderReacted: false,
-        defender: null,
-        message: 'フェイントを行うキャラクターが見つかりません',
-      };
-    }
-
-    return this.feintController.performShootFeint(targetFeinter);
+    return this._playerActionFacade?.performShootFeint(feinter) ?? null;
   }
 
   /**
-   * フェイント成功後のドリブル突破を実行
-   * @param character ドリブル突破を行うキャラクター（省略時はボール保持者）
-   * @param direction 突破方向（'left' | 'right' | 'forward'）
-   * @returns 成功した場合true
+   * フェイント成功後のドリブル突破を実行（PlayerActionFacadeに委譲）
    */
   public performBreakthroughAfterFeint(
     character?: Character,
     direction: 'left' | 'right' | 'forward' = 'forward'
   ): boolean {
-    if (!this.feintController) {
-      return false;
-    }
-
-    const targetCharacter = character ?? this.ball.getHolder();
-    if (!targetCharacter) {
-      return false;
-    }
-
-    return this.feintController.performBreakthroughAfterFeint(targetCharacter, direction);
+    return this._playerActionFacade?.performBreakthroughAfterFeint(character, direction) ?? false;
   }
 
   /**
-   * フェイント成功後のドリブル突破ウィンドウ内かどうか
-   * @param character チェックするキャラクター（省略時はボール保持者）
+   * フェイント成功後のドリブル突破ウィンドウ内かどうか（PlayerActionFacadeに委譲）
    */
   public isInBreakthroughWindow(character?: Character): boolean {
-    if (!this.feintController) {
-      return false;
-    }
-
-    const targetCharacter = character ?? this.ball.getHolder();
-    if (!targetCharacter) {
-      return false;
-    }
-
-    return this.feintController.isInBreakthroughWindow(targetCharacter);
-  }
-
-  /**
-   * ボールがコート外に出たか判定
-   * ボールが保持されている場合も判定する（プレイヤーがボールを持ったままコート外に出た場合）
-   * @returns コート外に出た場合true
-   */
-  private checkOutOfBounds(): boolean {
-    const ballPosition = this.ball.getPosition();
-    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
-    const halfLength = FIELD_CONFIG.length / 2; // 14m
-
-    // アウトオブバウンズ判定のマージン（ギリギリでもセーフにする）
-    const outOfBoundsMargin = 0.5; // 50cmのマージン
-
-    // 現在のボール位置がコート外かチェック（マージン込み）
-    const isCurrentlyOutX = Math.abs(ballPosition.x) > halfWidth + outOfBoundsMargin;
-    const isCurrentlyOutZ = Math.abs(ballPosition.z) > halfLength + outOfBoundsMargin;
-    const isCurrentlyOut = isCurrentlyOutX || isCurrentlyOutZ;
-
-    // 現在コート内ならアウトオブバウンズではない
-    if (!isCurrentlyOut) {
-      return false;
-    }
-
-    // 前フレームの位置がない場合（初回）はアウトオブバウンズとしない
-    if (!this.previousBallPosition) {
-      return false;
-    }
-
-    // 前フレームの位置がコート内だったかチェック（マージンなしで判定）
-    const wasPreviouslyInX = Math.abs(this.previousBallPosition.x) <= halfWidth + outOfBoundsMargin;
-    const wasPreviouslyInZ = Math.abs(this.previousBallPosition.z) <= halfLength + outOfBoundsMargin;
-    const wasPreviouslyIn = wasPreviouslyInX && wasPreviouslyInZ;
-
-    // 内側から外側に出た場合のみアウトオブバウンズ
-    // （外側から内側に入る場合はアウトオブバウンズにならない）
-    return wasPreviouslyIn && isCurrentlyOut;
+    return this._playerActionFacade?.isInBreakthroughWindow(character) ?? false;
   }
 
   /**
@@ -1561,7 +1368,7 @@ export class GameScene {
    * スコアを取得
    */
   public getScore(): { ally: number; enemy: number } {
-    return { ally: this.allyScore, enemy: this.enemyScore };
+    return this._gameResetManager?.getScores() ?? { ally: 0, enemy: 0 };
   }
 
   /**
@@ -1572,28 +1379,24 @@ export class GameScene {
   }
 
   /**
-   * 勝者を取得
+   * 勝者を取得（GameResetManagerに委譲）
    */
   public getWinner(): 'ally' | 'enemy' | null {
-    return this.winner;
+    return this._gameResetManager?.getWinner() ?? null;
   }
 
   /**
    * 勝利に必要な得点を取得
    */
   public getWinningScore(): number {
-    return this.winningScore;
+    return 5; // GameResetManagerのwinningScoreと同じ値
   }
 
   /**
    * ゲームをリセット
    */
   public resetGame(): void {
-    this.allyScore = 0;
-    this.enemyScore = 0;
-    this.winner = null;
-
-    // 待機状態をリセット（マネージャーに委譲）
+    // 待機状態をリセット（マネージャーに委譲、スコアもリセットされる）
     this._gameResetManager?.resetForCheckMode();
     this.clearThrowInState();
 
@@ -1823,87 +1626,73 @@ export class GameScene {
   }
 
   /**
-   * パス軌道可視化の表示/非表示を設定
+   * パス軌道可視化の表示/非表示を設定（VisualizationManagerに委譲）
    */
   public setPassTrajectoryVisible(visible: boolean): void {
-    if (this.passTrajectoryVisualizer) {
-      this.passTrajectoryVisualizer.setEnabled(visible);
-    }
+    this._visualizationManager?.setPassTrajectoryVisible(visible);
   }
 
   /**
-   * パス軌道可視化の表示状態を取得
+   * パス軌道可視化の表示状態を取得（VisualizationManagerに委譲）
    */
   public isPassTrajectoryVisible(): boolean {
-    return this.passTrajectoryVisualizer?.getEnabled() ?? false;
+    return this._visualizationManager?.isPassTrajectoryVisible() ?? false;
   }
 
   /**
-   * パス軌道可視化の表示/非表示を切り替え
+   * パス軌道可視化の表示/非表示を切り替え（VisualizationManagerに委譲）
    */
   public togglePassTrajectoryVisible(): void {
-    if (this.passTrajectoryVisualizer) {
-      this.passTrajectoryVisualizer.setEnabled(!this.passTrajectoryVisualizer.getEnabled());
-    }
+    this._visualizationManager?.togglePassTrajectoryVisible();
   }
 
   /**
-   * パス軌道可視化の移動先予測を設定
+   * パス軌道可視化の移動先予測を設定（VisualizationManagerに委譲）
    */
   public setPassTrajectoryDestinationPrediction(use: boolean): void {
-    if (this.passTrajectoryVisualizer) {
-      this.passTrajectoryVisualizer.setUseDestinationPrediction(use);
-    }
+    this._visualizationManager?.setPassTrajectoryDestinationPrediction(use);
   }
 
   /**
-   * シュート軌道可視化の表示/非表示を設定
+   * シュート軌道可視化の表示/非表示を設定（VisualizationManagerに委譲）
    */
   public setShootTrajectoryVisible(visible: boolean): void {
-    if (this.shootTrajectoryVisualizer) {
-      this.shootTrajectoryVisualizer.setEnabled(visible);
-    }
+    this._visualizationManager?.setShootTrajectoryVisible(visible);
   }
 
   /**
-   * シュート軌道可視化の表示状態を取得
+   * シュート軌道可視化の表示状態を取得（VisualizationManagerに委譲）
    */
   public isShootTrajectoryVisible(): boolean {
-    return this.shootTrajectoryVisualizer?.getEnabled() ?? false;
+    return this._visualizationManager?.isShootTrajectoryVisible() ?? false;
   }
 
   /**
-   * シュート軌道可視化の表示/非表示を切り替え
+   * シュート軌道可視化の表示/非表示を切り替え（VisualizationManagerに委譲）
    */
   public toggleShootTrajectoryVisible(): void {
-    if (this.shootTrajectoryVisualizer) {
-      this.shootTrajectoryVisualizer.setEnabled(!this.shootTrajectoryVisualizer.getEnabled());
-    }
+    this._visualizationManager?.toggleShootTrajectoryVisible();
   }
 
   /**
-   * ドリブル導線可視化の表示/非表示を設定
+   * ドリブル導線可視化の表示/非表示を設定（VisualizationManagerに委譲）
    */
   public setDribblePathVisible(visible: boolean): void {
-    if (this.dribblePathVisualizer) {
-      this.dribblePathVisualizer.setEnabled(visible);
-    }
+    this._visualizationManager?.setDribblePathVisible(visible);
   }
 
   /**
-   * ドリブル導線可視化の表示状態を取得
+   * ドリブル導線可視化の表示状態を取得（VisualizationManagerに委譲）
    */
   public isDribblePathVisible(): boolean {
-    return this.dribblePathVisualizer?.getEnabled() ?? false;
+    return this._visualizationManager?.isDribblePathVisible() ?? false;
   }
 
   /**
-   * ドリブル導線可視化の表示/非表示を切り替え
+   * ドリブル導線可視化の表示/非表示を切り替え（VisualizationManagerに委譲）
    */
   public toggleDribblePathVisible(): void {
-    if (this.dribblePathVisualizer) {
-      this.dribblePathVisualizer.setEnabled(!this.dribblePathVisualizer.getEnabled());
-    }
+    this._visualizationManager?.toggleDribblePathVisible();
   }
 
   /**
@@ -1994,17 +1783,30 @@ export class GameScene {
       }
     }
 
-    // パス軌道可視化を再作成
+    // 可視化を再作成（ヘルパーメソッド使用）
+    this.recreatePassTrajectoryVisualizerInternal(allCharacters);
+    this.recreateShootTrajectoryVisualizerInternal(allCharacters);
+  }
+
+  /**
+   * パス軌道可視化を再作成（内部ヘルパー）
+   */
+  private recreatePassTrajectoryVisualizerInternal(characters: Character[]): void {
     if (this.passTrajectoryVisualizer) {
       this.passTrajectoryVisualizer.dispose();
     }
     this.passTrajectoryVisualizer = new PassTrajectoryVisualizer(
       this.scene,
       this.ball,
-      allCharacters
+      characters
     );
+    this.passTrajectoryVisualizer.setEnabled(true);
+  }
 
-    // シュート軌道可視化を再作成
+  /**
+   * シュート軌道可視化を再作成（内部ヘルパー）
+   */
+  private recreateShootTrajectoryVisualizerInternal(characters: Character[]): void {
     if (this.shootTrajectoryVisualizer) {
       this.shootTrajectoryVisualizer.dispose();
     }
@@ -2012,8 +1814,25 @@ export class GameScene {
       this.scene,
       this.ball,
       this.field,
-      allCharacters
+      characters
     );
+    this.shootTrajectoryVisualizer.setEnabled(true);
+  }
+
+  /**
+   * ドリブル導線可視化を再作成（内部ヘルパー）
+   */
+  private recreateDribblePathVisualizerInternal(characters: Character[]): void {
+    if (this.dribblePathVisualizer) {
+      this.dribblePathVisualizer.dispose();
+    }
+    this.dribblePathVisualizer = new DribblePathVisualizer(
+      this.scene,
+      this.ball,
+      this.field,
+      characters
+    );
+    this.dribblePathVisualizer.setEnabled(true);
   }
 
   /**

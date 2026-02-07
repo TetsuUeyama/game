@@ -22,6 +22,14 @@ import { getDistance2D } from "../../utils/CollisionUtils";
 import { ShotClockController } from "../../controllers/ShotClockController";
 
 /**
+ * ルーズボール設定
+ */
+const LOOSE_BALL_CONFIG = {
+  /** ルーズボール状態が続くとジャンプボールになる閾値（秒） */
+  JUMP_BALL_THRESHOLD: 10.0,
+} as const;
+
+/**
  * ジャンプボール用コンテキスト
  */
 export interface JumpBallContext {
@@ -44,6 +52,9 @@ export class JumpBallManager {
   private jumpBallAllyJumper: Character | null = null;
   private jumpBallEnemyJumper: Character | null = null;
   private jumpBallTimer: number = 0;
+
+  // ルーズボールタイマー（誰もボールを保持していない状態のタイマー）
+  private looseBallTimer: number = 0;
 
   constructor(context: JumpBallContext) {
     this.context = context;
@@ -421,6 +432,55 @@ export class JumpBallManager {
         char.setState(CharacterState.BALL_LOST);
       }
     }
+  }
+
+  // =============================================================================
+  // ルーズボール管理
+  // =============================================================================
+
+  /**
+   * ルーズボールタイマーを更新
+   * 誰もボールを保持していない状態が続くとジャンプボールを開始する
+   * @param deltaTime 経過時間
+   * @param isResetPending リセット待機中かどうか（ゴール後、アウトオブバウンズ後など）
+   * @returns ジャンプボールを開始した場合true
+   */
+  public updateLooseBallTimer(deltaTime: number, isResetPending: boolean): boolean {
+    // ジャンプボール中は更新しない
+    if (this.isActive()) {
+      this.looseBallTimer = 0;
+      return false;
+    }
+
+    // リセット待機中はタイマーをリセット
+    if (isResetPending) {
+      this.looseBallTimer = 0;
+      return false;
+    }
+
+    const ball = this.context.ball;
+    const currentBallHolder = ball.getHolder();
+
+    // ボールを誰も持っておらず、飛行中でもない場合
+    if (!currentBallHolder && !ball.isInFlight()) {
+      this.looseBallTimer += deltaTime;
+      if (this.looseBallTimer >= LOOSE_BALL_CONFIG.JUMP_BALL_THRESHOLD) {
+        this.looseBallTimer = 0;
+        this.setup();
+        return true;
+      }
+    } else {
+      this.looseBallTimer = 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * ルーズボールタイマーをリセット
+   */
+  public resetLooseBallTimer(): void {
+    this.looseBallTimer = 0;
   }
 
   // =============================================================================

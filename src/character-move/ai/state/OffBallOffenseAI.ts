@@ -12,6 +12,7 @@ import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 import { getTeammates } from "../../utils/TeamUtils";
 import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import { SAFE_BOUNDARY_CONFIG } from "../../config/gameConfig";
 import {
   TacticalZoneType,
   getZonePosition,
@@ -56,17 +57,6 @@ export class OffBallOffenseAI extends BaseStateAI {
     super(character, ball, allCharacters, field);
     this.trajectoryCalculator = new PassTrajectoryCalculator();
     this.interceptionAnalyzer = new InterceptionAnalyzer();
-  }
-
-  /**
-   * 判断間隔を取得（選手のalignmentに基づく）
-   * 計算式: 1 - (alignment / 50) 秒
-   * alignment=50 → 0秒（毎フレーム判断）
-   * alignment=0 → 1秒
-   */
-  private getDecisionInterval(): number {
-    const alignment = this.character.playerData?.stats.alignment ?? 50;
-    return Math.max(0, 1 - alignment / 50);
   }
 
   /**
@@ -353,14 +343,12 @@ export class OffBallOffenseAI extends BaseStateAI {
     const throwerPos = thrower.getPosition();
     const myPosition = this.character.getPosition();
 
-    // フィールド内の安全な境界（最外周マスを避ける）
-    const safeMinX = -6.0;  // -7.5 + 1.5
-    const safeMaxX = 6.0;   // 7.5 - 1.5
-    const safeMinZ = -13.5; // -15 + 1.5
-    const safeMaxZ = 13.5;  // 15 - 1.5
-
     // 優先1: スロワー周囲7m以内のフリースペースを探す
-    const freeSpacePosition = this.findFreeSpaceNearThrower(thrower, 7.0, 2.0, safeMinX, safeMaxX, safeMinZ, safeMaxZ);
+    const freeSpacePosition = this.findFreeSpaceNearThrower(
+      thrower, 7.0, 2.0,
+      SAFE_BOUNDARY_CONFIG.minX, SAFE_BOUNDARY_CONFIG.maxX,
+      SAFE_BOUNDARY_CONFIG.minZ, SAFE_BOUNDARY_CONFIG.maxZ
+    );
     if (freeSpacePosition) {
       this.throwInTargetPosition = new Vector3(freeSpacePosition.x, myPosition.y, freeSpacePosition.z);
       this.throwInPassType = 'short';
@@ -399,8 +387,8 @@ export class OffBallOffenseAI extends BaseStateAI {
       let candidateZ = throwerPos.z + Math.sin(angle) * distance;
 
       // 安全な境界内にクランプ
-      candidateX = Math.max(safeMinX, Math.min(safeMaxX, candidateX));
-      candidateZ = Math.max(safeMinZ, Math.min(safeMaxZ, candidateZ));
+      candidateX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, candidateX));
+      candidateZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, candidateZ));
 
       // スロワーからの実際の距離をチェック
       const actualDist = Math.sqrt(
@@ -678,9 +666,7 @@ export class OffBallOffenseAI extends BaseStateAI {
       let tooClose = false;
       for (const teammate of teammates) {
         const teammatePos = teammate.getPosition();
-        const dx = candidate.x - teammatePos.x;
-        const dz = candidate.z - teammatePos.z;
-        if (Math.sqrt(dx * dx + dz * dz) < 1.5) {
+        if (getDistance2DSimple(candidate, teammatePos) < 1.5) {
           tooClose = true;
           break;
         }
@@ -977,35 +963,6 @@ export class OffBallOffenseAI extends BaseStateAI {
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }
-    }
-  }
-
-  /**
-   * シュート中にボールを見守る
-   * シュート結果が出るまでその場で待機
-   */
-  private handleWatchShot(): void {
-    const myPosition = this.character.getPosition();
-    const ballPosition = this.ball.getPosition();
-
-    // ボールの方を向く
-    const toBall = new Vector3(
-      ballPosition.x - myPosition.x,
-      0,
-      ballPosition.z - myPosition.z
-    );
-
-    if (toBall.length() > 0.01) {
-      const angle = Math.atan2(toBall.x, toBall.z);
-      this.character.setRotation(angle);
-    }
-
-    // 停止してボールを見守る
-    this.character.velocity = Vector3.Zero();
-
-    // アイドルモーション
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
     }
   }
 
