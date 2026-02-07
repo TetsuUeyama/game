@@ -12,6 +12,7 @@ import {
   SHOOT_ANGLE,
   SHOOT_PHYSICS,
   SHOOT_START_OFFSET,
+  SHOOT_COOLDOWN,
   ShootingUtils,
 } from "../../config/action/ShootingConfig";
 import { ParabolaUtils } from "../../utils/parabolaUtils";
@@ -80,6 +81,9 @@ export class ShootingController {
 
   // シュート試行時のコールバック（ショットクロック用）
   private onShotAttemptCallback: (() => void) | null = null;
+
+  // シュートクールダウン管理（キャラクター別）
+  private lastShootTime: Map<Character, number> = new Map();
 
   constructor(scene: Scene, ball: Ball, field: Field, _getAllCharacters: () => Character[]) {
     this.scene = scene;
@@ -338,6 +342,9 @@ export class ShootingController {
       },
       onInterrupt: () => {},
     });
+
+    // シュートクールダウンを記録
+    this.lastShootTime.set(shooter, Date.now() / 1000);
 
     return {
       success: true,
@@ -670,9 +677,16 @@ export class ShootingController {
   }
 
   /**
-   * シュート可能かどうかをチェック
+   * シュート可能かどうかをチェック（クールダウン含む）
    */
   public canShoot(shooter: Character): boolean {
+    // クールダウンチェック
+    const now = Date.now() / 1000;
+    const lastShoot = this.lastShootTime.get(shooter) ?? 0;
+    if (now - lastShoot < SHOOT_COOLDOWN.AFTER_SHOT) {
+      return false;
+    }
+
     if (this.ball.getHolder() !== shooter) {
       return false;
     }
@@ -686,6 +700,13 @@ export class ShootingController {
     const { inRange } = this.checkShootRange(shooter, targetGoal, shootDirection);
 
     return inRange;
+  }
+
+  /**
+   * シュートクールダウンをリセット（状態遷移時に使用）
+   */
+  public resetCooldown(character: Character): void {
+    this.lastShootTime.delete(character);
   }
 
   /**
@@ -726,5 +747,6 @@ export class ShootingController {
       this.layupRangeMesh.dispose();
       this.layupRangeMesh = null;
     }
+    this.lastShootTime.clear();
   }
 }

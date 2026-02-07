@@ -8,6 +8,7 @@ import { Ball } from "../../entities/Ball";
 import { OneOnOneBattleController } from "../../controllers/action/OneOnOneBattleController";
 import { ShootingController } from "../../controllers/action/ShootingController";
 import { FeintController } from "../../controllers/action/FeintController";
+import { PASS_COOLDOWN } from "../../config/PassConfig";
 
 /**
  * プレイヤーアクションファサード用コンテキスト
@@ -28,6 +29,9 @@ export interface PlayerActionFacadeContext {
  */
 export class PlayerActionFacade {
   private context: PlayerActionFacadeContext;
+
+  // パスクールダウン管理（キャラクター別）
+  private lastPassTime: Map<Character, number> = new Map();
 
   constructor(context: PlayerActionFacadeContext) {
     this.context = context;
@@ -129,6 +133,24 @@ export class PlayerActionFacade {
   // =============================================================================
 
   /**
+   * パスクールダウンが終了しているかチェック
+   * @param passer チェック対象のキャラクター
+   * @returns パス可能な場合true
+   */
+  public canPass(passer: Character): boolean {
+    const now = Date.now() / 1000;
+    const lastPass = this.lastPassTime.get(passer) ?? 0;
+    return now - lastPass >= PASS_COOLDOWN.AFTER_PASS;
+  }
+
+  /**
+   * パスクールダウンをリセット（状態遷移時に使用）
+   */
+  public resetPassCooldown(character: Character): void {
+    this.lastPassTime.delete(character);
+  }
+
+  /**
    * パスを実行（ActionController経由）
    * @param passer パスを出すキャラクター
    * @param passType パスの種類
@@ -181,6 +203,9 @@ export class PlayerActionFacade {
         }
       },
     });
+
+    // パスクールダウンを記録
+    this.lastPassTime.set(passer, Date.now() / 1000);
 
     return { success: true, message: `${passType}開始` };
   }

@@ -108,6 +108,20 @@ export class CharacterAI {
   }
 
   /**
+   * パスクールダウンチェック用コールバックを設定
+   */
+  public setPassCanCheckCallback(callback: (passer: Character) => boolean): void {
+    this.onBallOffenseAI.setPassCanCheckCallback(callback);
+  }
+
+  /**
+   * パスクールダウンリセット用コールバックを設定
+   */
+  public setPassResetCallback(callback: (character: Character) => void): void {
+    this.onBallOffenseAI.setPassResetCallback(callback);
+  }
+
+  /**
    * 目標位置オーバーライドを設定
    * 設定するとゴールではなくこの位置に向かい、シュート・パスは行わない
    */
@@ -218,9 +232,6 @@ export class CharacterAI {
    * AIの更新処理
    */
   public update(deltaTime: number): void {
-    // オンボールオフェンスAIのクールダウンを更新
-    this.onBallOffenseAI.updateCooldowns(deltaTime);
-
     const state = this.character.getState();
 
     // 状態遷移を検出してリセット処理を実行（アクション実行中でも行う）
