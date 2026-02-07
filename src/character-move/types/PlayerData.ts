@@ -3,6 +3,8 @@
  * playerData.csv から読み込むデータの構造
  */
 
+import { FaceConfig } from "./FaceConfig";
+
 /**
  * 選手の基本情報
  */
@@ -103,6 +105,26 @@ export interface PlayerData {
   basic: PlayerBasicInfo;
   stats: PlayerStats;
   specialAbilities: PlayerSpecialAbilities;
+  faceConfig?: FaceConfig;
+}
+
+/**
+ * JSON上の顔設定（色は [r, g, b] 配列形式）
+ */
+export interface FaceConfigJSON {
+  skinColor?: number[];
+  eyeColor?: number[];
+  eyeStyle?: number;
+  eyeSize?: number;
+  eyePositionY?: number;
+  mouthColor?: number[];
+  mouthStyle?: number;
+  mouthWidth?: number;
+  mouthPositionY?: number;
+  hairStyle?: number;
+  hairColor?: number[];
+  beardStyle?: number;
+  beardColor?: number[];
 }
 
 /**
@@ -169,4 +191,5 @@ export interface PlayerDataJSON {
   specialabilitiy19?: string;
   specialabilitiy20?: string;
   specialabilitiy22?: string;
+  faceConfig?: FaceConfigJSON;
 }

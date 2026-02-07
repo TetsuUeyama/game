@@ -1,6 +1,7 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh } from "@babylonjs/core";
 import { CHARACTER_CONFIG } from "../config/gameConfig";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
+import { FaceConfig, DEFAULT_FACE_CONFIG, HairStyle, BeardStyle, EyeStyle, MouthStyle } from "../types/FaceConfig";
 
 /**
  * キャラクターの身体パーツを作成するクラス
@@ -11,17 +12,27 @@ export class CharacterBodyParts {
   private state: CharacterState;
   private visionAngle: number;
   private visionRange: number;
+  private faceConfig: FaceConfig;
 
   constructor(
     scene: Scene,
     config: { physical: { height: number }; vision: { visionAngle: number; visionRange: number } },
-    state: CharacterState
+    state: CharacterState,
+    faceConfig?: FaceConfig
   ) {
     this.scene = scene;
     this.config = config;
     this.state = state;
     this.visionAngle = config.vision.visionAngle;
     this.visionRange = config.vision.visionRange;
+    this.faceConfig = faceConfig ?? DEFAULT_FACE_CONFIG;
+  }
+
+  /**
+   * FaceConfig を更新する（applyFaceConfig から呼ばれる）
+   */
+  public setFaceConfig(faceConfig: FaceConfig): void {
+    this.faceConfig = faceConfig;
   }
 
   /**
@@ -59,7 +70,8 @@ export class CharacterBodyParts {
     head.position = new Vector3(0, upperBodyHeight / 2 + headSize / 2, 0);
 
     const material = new StandardMaterial("head-material", this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7);
+    const sc = this.faceConfig.skinColor;
+    material.diffuseColor = new Color3(sc.r, sc.g, sc.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     head.material = material;
 
@@ -67,26 +79,80 @@ export class CharacterBodyParts {
   }
 
   /**
-   * 目を作成
+   * 目を作成（EyeStyleに応じた形状）
    */
   public createEye(side: "left" | "right"): Mesh {
-    const eyeRadius = 0.03;
+    const baseEyeRadius = 0.03;
+    const eyeRadius = baseEyeRadius * this.faceConfig.eyeSize;
     const headSize = 0.20;
+    const style = this.faceConfig.eyeStyle;
 
-    const eye = MeshBuilder.CreateSphere(
-      `character-eye-${side}`,
-      { diameter: eyeRadius * 2, segments: 8 },
-      this.scene
-    );
+    let eye: Mesh;
+
+    switch (style) {
+      case EyeStyle.NARROW: {
+        // 切れ長：横に潰した楕円形（X方向に伸ばしたスフィア）
+        eye = MeshBuilder.CreateSphere(
+          `character-eye-${side}`,
+          { diameter: eyeRadius * 2, segments: 8 },
+          this.scene
+        );
+        eye.scaling = new Vector3(1.6, 0.5, 1.0);
+        break;
+      }
+      case EyeStyle.WIDE: {
+        // 大きい丸目：1.4倍の球
+        eye = MeshBuilder.CreateSphere(
+          `character-eye-${side}`,
+          { diameter: eyeRadius * 2 * 1.4, segments: 12 },
+          this.scene
+        );
+        break;
+      }
+      case EyeStyle.SHARP: {
+        // つり目：菱形に近い形（Y回転+スケール）
+        eye = MeshBuilder.CreateSphere(
+          `character-eye-${side}`,
+          { diameter: eyeRadius * 2, segments: 8 },
+          this.scene
+        );
+        eye.scaling = new Vector3(1.4, 0.6, 1.0);
+        // つり目の傾き（左右対称）
+        eye.rotation.z = side === "left" ? -0.3 : 0.3;
+        break;
+      }
+      case EyeStyle.DROOPY: {
+        // たれ目：外側が下がった形
+        eye = MeshBuilder.CreateSphere(
+          `character-eye-${side}`,
+          { diameter: eyeRadius * 2, segments: 8 },
+          this.scene
+        );
+        eye.scaling = new Vector3(1.3, 0.7, 1.0);
+        // たれ目の傾き（左右対称で外側が下がる）
+        eye.rotation.z = side === "left" ? 0.3 : -0.3;
+        break;
+      }
+      default: {
+        // ROUND: デフォルトの丸い目
+        eye = MeshBuilder.CreateSphere(
+          `character-eye-${side}`,
+          { diameter: eyeRadius * 2, segments: 8 },
+          this.scene
+        );
+        break;
+      }
+    }
 
     const eyeX = side === "left" ? -0.04 : 0.04;
-    const eyeY = 0.03;
+    const eyeY = this.faceConfig.eyePositionY;
     const eyeZ = headSize / 2 - 0.01;
 
     eye.position = new Vector3(eyeX, eyeY, eyeZ);
 
     const material = new StandardMaterial(`eye-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(0.1, 0.1, 0.1);
+    const ec = this.faceConfig.eyeColor;
+    material.diffuseColor = new Color3(ec.r, ec.g, ec.b);
     material.specularColor = new Color3(0.5, 0.5, 0.5);
     eye.material = material;
 
@@ -94,27 +160,74 @@ export class CharacterBodyParts {
   }
 
   /**
-   * 口を作成
+   * 口を作成（MouthStyleに応じた形状）
    */
   public createMouth(): Mesh {
-    const mouthWidth = 0.06;
-    const mouthHeight = 0.02;
-    const mouthDepth = 0.02;
+    const mouthWidth = this.faceConfig.mouthWidth;
     const headSize = 0.25;
+    const style = this.faceConfig.mouthStyle;
 
-    const mouth = MeshBuilder.CreateBox(
-      "character-mouth",
-      { width: mouthWidth, height: mouthHeight, depth: mouthDepth },
-      this.scene
-    );
+    let mouth: Mesh;
 
-    const mouthY = -0.04;
+    switch (style) {
+      case MouthStyle.WIDE: {
+        // 横に広い薄い口
+        mouth = MeshBuilder.CreateBox(
+          "character-mouth",
+          { width: mouthWidth * 1.5, height: 0.015, depth: 0.02 },
+          this.scene
+        );
+        break;
+      }
+      case MouthStyle.SMALL: {
+        // 小さい丸口
+        mouth = MeshBuilder.CreateSphere(
+          "character-mouth",
+          { diameter: mouthWidth * 0.5, segments: 8 },
+          this.scene
+        );
+        break;
+      }
+      case MouthStyle.SMILE: {
+        // 笑顔：トーラスの一部で上向きカーブ
+        mouth = MeshBuilder.CreateTorus(
+          "character-mouth",
+          { diameter: mouthWidth * 1.2, thickness: 0.012, tessellation: 16 },
+          this.scene
+        );
+        // 上半分だけ見せる（下に配置+スケール調整）
+        mouth.scaling = new Vector3(1.0, 0.5, 0.4);
+        mouth.rotation.x = 0.2;
+        break;
+      }
+      case MouthStyle.SERIOUS: {
+        // 真一文字：横に細長い板
+        mouth = MeshBuilder.CreateBox(
+          "character-mouth",
+          { width: mouthWidth * 1.2, height: 0.008, depth: 0.02 },
+          this.scene
+        );
+        break;
+      }
+      default: {
+        // NORMAL: デフォルト
+        mouth = MeshBuilder.CreateBox(
+          "character-mouth",
+          { width: mouthWidth, height: 0.02, depth: 0.02 },
+          this.scene
+        );
+        break;
+      }
+    }
+
+    const mouthY = this.faceConfig.mouthPositionY;
     const mouthZ = headSize / 2 - 0.01;
 
     mouth.position = new Vector3(0, mouthY, mouthZ);
 
     const material = new StandardMaterial("mouth-material", this.scene);
-    material.diffuseColor = new Color3(0.8, 0.2, 0.2);
+    const mc = this.faceConfig.mouthColor;
+    material.diffuseColor = new Color3(mc.r, mc.g, mc.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     mouth.material = material;
 
@@ -262,7 +375,8 @@ export class CharacterBodyParts {
     upperArm.position = new Vector3(0, -height / 2, 0);
 
     const material = new StandardMaterial(`upper-arm-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7);
+    const scUA = this.faceConfig.skinColor;
+    material.diffuseColor = new Color3(scUA.r, scUA.g, scUA.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     upperArm.material = material;
 
@@ -285,7 +399,8 @@ export class CharacterBodyParts {
     elbow.position = new Vector3(0, -upperArmHeight, 0);
 
     const material = new StandardMaterial(`elbow-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7);
+    const scEl = this.faceConfig.skinColor;
+    material.diffuseColor = new Color3(scEl.r, scEl.g, scEl.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     elbow.material = material;
 
@@ -308,7 +423,8 @@ export class CharacterBodyParts {
     forearm.position = new Vector3(0, -height / 2, 0);
 
     const material = new StandardMaterial(`forearm-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7);
+    const scFA = this.faceConfig.skinColor;
+    material.diffuseColor = new Color3(scFA.r, scFA.g, scFA.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     forearm.material = material;
 
@@ -331,7 +447,8 @@ export class CharacterBodyParts {
     hand.position = new Vector3(0, -forearmHeight / 2, 0);
 
     const material = new StandardMaterial(`hand-${side}-material`, this.scene);
-    material.diffuseColor = new Color3(1.0, 0.8, 0.7);
+    const scHd = this.faceConfig.skinColor;
+    material.diffuseColor = new Color3(scHd.r, scHd.g, scHd.b);
     material.specularColor = new Color3(0.2, 0.2, 0.2);
     hand.material = material;
 
@@ -456,6 +573,136 @@ export class CharacterBodyParts {
     foot.material = material;
 
     return foot;
+  }
+
+  /**
+   * 髪を作成（hairStyleに応じたメッシュ）
+   * @returns 髪メッシュ（NONE の場合は null）
+   */
+  public createHair(): Mesh | null {
+    const style = this.faceConfig.hairStyle;
+    if (style === HairStyle.NONE) return null;
+
+    const hc = this.faceConfig.hairColor;
+    const headRadius = 0.125; // 頭直径0.25の半分
+    let hair: Mesh;
+
+    switch (style) {
+      case HairStyle.SHORT: {
+        // 頭頂部にフィットする薄い半球
+        hair = MeshBuilder.CreateSphere(
+          "character-hair",
+          { diameter: headRadius * 2.1, segments: 16, slice: 0.5 },
+          this.scene
+        );
+        hair.position = new Vector3(0, 0.02, 0);
+        break;
+      }
+      case HairStyle.MEDIUM: {
+        // やや大きめの半球
+        hair = MeshBuilder.CreateSphere(
+          "character-hair",
+          { diameter: headRadius * 2.3, segments: 16, slice: 0.5 },
+          this.scene
+        );
+        hair.position = new Vector3(0, 0.02, -0.01);
+        break;
+      }
+      case HairStyle.LONG: {
+        // 後頭部に垂れるカプセル
+        hair = MeshBuilder.CreateCapsule(
+          "character-hair",
+          { radius: headRadius * 0.9, height: headRadius * 3.5, tessellation: 12 },
+          this.scene
+        );
+        hair.position = new Vector3(0, -0.02, -0.04);
+        break;
+      }
+      case HairStyle.MOHAWK: {
+        // 中央の細長いボックス
+        hair = MeshBuilder.CreateBox(
+          "character-hair",
+          { width: 0.04, height: 0.1, depth: headRadius * 1.8 },
+          this.scene
+        );
+        hair.position = new Vector3(0, headRadius * 0.7, 0);
+        break;
+      }
+      case HairStyle.BUZZ: {
+        // 頭にぴったりの薄い球
+        hair = MeshBuilder.CreateSphere(
+          "character-hair",
+          { diameter: headRadius * 2.05, segments: 16, slice: 0.55 },
+          this.scene
+        );
+        hair.position = new Vector3(0, 0.01, 0);
+        break;
+      }
+      default:
+        return null;
+    }
+
+    const material = new StandardMaterial("hair-material", this.scene);
+    material.diffuseColor = new Color3(hc.r, hc.g, hc.b);
+    material.specularColor = new Color3(0.1, 0.1, 0.1);
+    hair.material = material;
+
+    return hair;
+  }
+
+  /**
+   * 髭を作成（beardStyleに応じたメッシュ）
+   * @returns 髭メッシュ（NONE の場合は null）
+   */
+  public createBeard(): Mesh | null {
+    const style = this.faceConfig.beardStyle;
+    if (style === BeardStyle.NONE) return null;
+
+    const bc = this.faceConfig.beardColor;
+    const headSize = 0.25;
+    let beard: Mesh;
+
+    switch (style) {
+      case BeardStyle.STUBBLE: {
+        // 薄い板（口の下に配置）
+        beard = MeshBuilder.CreateBox(
+          "character-beard",
+          { width: 0.08, height: 0.03, depth: 0.02 },
+          this.scene
+        );
+        beard.position = new Vector3(0, -0.07, headSize / 2 - 0.02);
+        break;
+      }
+      case BeardStyle.FULL: {
+        // 大きめの顎全体を覆うボックス
+        beard = MeshBuilder.CreateBox(
+          "character-beard",
+          { width: 0.12, height: 0.06, depth: 0.04 },
+          this.scene
+        );
+        beard.position = new Vector3(0, -0.07, headSize / 2 - 0.03);
+        break;
+      }
+      case BeardStyle.GOATEE: {
+        // 口の下の小さい縦長ボックス
+        beard = MeshBuilder.CreateBox(
+          "character-beard",
+          { width: 0.04, height: 0.05, depth: 0.02 },
+          this.scene
+        );
+        beard.position = new Vector3(0, -0.08, headSize / 2 - 0.02);
+        break;
+      }
+      default:
+        return null;
+    }
+
+    const material = new StandardMaterial("beard-material", this.scene);
+    material.diffuseColor = new Color3(bc.r, bc.g, bc.b);
+    material.specularColor = new Color3(0.1, 0.1, 0.1);
+    beard.material = material;
+
+    return beard;
   }
 
   /**

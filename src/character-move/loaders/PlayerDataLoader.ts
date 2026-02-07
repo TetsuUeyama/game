@@ -1,4 +1,5 @@
-import { PlayerData, PlayerDataJSON } from "../types/PlayerData";
+import { PlayerData, PlayerDataJSON, FaceConfigJSON } from "../types/PlayerData";
+import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "../types/FaceConfig";
 
 /**
  * 選手データローダー
@@ -79,7 +80,43 @@ export class PlayerDataLoader {
         specialabilitiy20: data.specialabilitiy20,
         specialabilitiy22: data.specialabilitiy22,
       },
+      faceConfig: data.faceConfig
+        ? this.convertFaceConfig(data.faceConfig)
+        : undefined,
     };
+  }
+
+  /**
+   * JSON上の顔設定を FaceConfig に変換
+   * 未指定のフィールドはデフォルト値で埋める
+   */
+  private static convertFaceConfig(json: FaceConfigJSON): FaceConfig {
+    const d = DEFAULT_FACE_CONFIG;
+    return {
+      skinColor: this.toColorRGB(json.skinColor, d.skinColor),
+      eyeColor: this.toColorRGB(json.eyeColor, d.eyeColor),
+      eyeStyle: json.eyeStyle ?? d.eyeStyle,
+      eyeSize: json.eyeSize ?? d.eyeSize,
+      eyePositionY: json.eyePositionY ?? d.eyePositionY,
+      mouthColor: this.toColorRGB(json.mouthColor, d.mouthColor),
+      mouthStyle: json.mouthStyle ?? d.mouthStyle,
+      mouthWidth: json.mouthWidth ?? d.mouthWidth,
+      mouthPositionY: json.mouthPositionY ?? d.mouthPositionY,
+      hairStyle: json.hairStyle ?? d.hairStyle,
+      hairColor: this.toColorRGB(json.hairColor, d.hairColor),
+      beardStyle: json.beardStyle ?? d.beardStyle,
+      beardColor: this.toColorRGB(json.beardColor, d.beardColor),
+    };
+  }
+
+  /**
+   * [r, g, b] 配列を ColorRGB に変換（未指定ならデフォルト値）
+   */
+  private static toColorRGB(arr: number[] | undefined, fallback: ColorRGB): ColorRGB {
+    if (arr && arr.length >= 3) {
+      return { r: arr[0], g: arr[1], b: arr[2] };
+    }
+    return fallback;
   }
 
   /**

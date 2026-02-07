@@ -47,7 +47,42 @@
     "specialabilitiy11": "〇",
     "specialabilitiy15": "☆",
     "specialabilitiy16": "〇",
-    "specialabilitiy22": "〇"
+    "specialabilitiy22": "〇",
+    "faceConfig": {
+      "hairStyle": 1,
+      "hairColor": [
+        0.12,
+        0.08,
+        0.04
+      ],
+      "beardStyle": 0,
+      "beardColor": [
+        0.12,
+        0.08,
+        0.04
+      ],
+      "skinColor": [
+        0.85,
+        0.65,
+        0.5
+      ],
+      "eyeColor": [
+        0.2,
+        0.15,
+        0.1
+      ],
+      "eyeSize": 1,
+      "eyePositionY": 0.035,
+      "mouthColor": [
+        0.75,
+        0.25,
+        0.25
+      ],
+      "mouthWidth": 0.06,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 3,
+      "mouthStyle": 4
+    }
   },
   {
     "ID": "2",
@@ -101,7 +136,42 @@
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
     "specialabilitiy16": "〇",
-    "specialabilitiy17": "☆"
+    "specialabilitiy17": "☆",
+    "faceConfig": {
+      "hairStyle": 5,
+      "hairColor": [
+        0.35,
+        0.25,
+        0.15
+      ],
+      "beardStyle": 1,
+      "beardColor": [
+        0.35,
+        0.25,
+        0.15
+      ],
+      "skinColor": [
+        0.95,
+        0.8,
+        0.7
+      ],
+      "eyeColor": [
+        0.25,
+        0.35,
+        0.2
+      ],
+      "eyeSize": 0.9,
+      "eyePositionY": 0.025,
+      "mouthColor": [
+        0.8,
+        0.3,
+        0.3
+      ],
+      "mouthWidth": 0.065,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 1,
+      "mouthStyle": 1
+    }
   },
   {
     "ID": "3",
@@ -152,7 +222,42 @@
     "specialabilitiy11": "〇",
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
-    "specialabilitiy16": "〇"
+    "specialabilitiy16": "〇",
+    "faceConfig": {
+      "hairStyle": 2,
+      "hairColor": [
+        0.1,
+        0.06,
+        0.03
+      ],
+      "beardStyle": 0,
+      "beardColor": [
+        0.1,
+        0.06,
+        0.03
+      ],
+      "skinColor": [
+        0.8,
+        0.6,
+        0.45
+      ],
+      "eyeColor": [
+        0.18,
+        0.12,
+        0.08
+      ],
+      "eyeSize": 1.05,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.7,
+        0.22,
+        0.22
+      ],
+      "mouthWidth": 0.055,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 0,
+      "mouthStyle": 3
+    }
   },
   {
     "ID": "4",
@@ -198,7 +303,42 @@
     "specialabilitiy11": "〇",
     "specialabilitiy13": "〇",
     "specialabilitiy14": "〇",
-    "specialabilitiy15": "☆"
+    "specialabilitiy15": "☆",
+    "faceConfig": {
+      "hairStyle": 3,
+      "hairColor": [
+        0.08,
+        0.05,
+        0.02
+      ],
+      "beardStyle": 1,
+      "beardColor": [
+        0.08,
+        0.05,
+        0.02
+      ],
+      "skinColor": [
+        0.65,
+        0.45,
+        0.3
+      ],
+      "eyeColor": [
+        0.15,
+        0.1,
+        0.06
+      ],
+      "eyeSize": 1.1,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.65,
+        0.2,
+        0.2
+      ],
+      "mouthWidth": 0.07,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 4,
+      "mouthStyle": 3
+    }
   },
   {
     "ID": "5",
@@ -247,7 +387,42 @@
     "specialabilitiy11": "☆",
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
-    "specialabilitiy16": "〇"
+    "specialabilitiy16": "〇",
+    "faceConfig": {
+      "hairStyle": 1,
+      "hairColor": [
+        0.3,
+        0.2,
+        0.12
+      ],
+      "beardStyle": 0,
+      "beardColor": [
+        0.3,
+        0.2,
+        0.12
+      ],
+      "skinColor": [
+        0.95,
+        0.82,
+        0.72
+      ],
+      "eyeColor": [
+        0.3,
+        0.4,
+        0.55
+      ],
+      "eyeSize": 1,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.8,
+        0.28,
+        0.28
+      ],
+      "mouthWidth": 0.06,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 3,
+      "mouthStyle": 4
+    }
   },
   {
     "ID": "6",
@@ -296,7 +471,42 @@
     "specialabilitiy11": "〇",
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
-    "specialabilitiy17": "☆"
+    "specialabilitiy17": "☆",
+    "faceConfig": {
+      "hairStyle": 5,
+      "hairColor": [
+        0.05,
+        0.03,
+        0.02
+      ],
+      "beardStyle": 0,
+      "beardColor": [
+        0.05,
+        0.03,
+        0.02
+      ],
+      "skinColor": [
+        0.4,
+        0.28,
+        0.18
+      ],
+      "eyeColor": [
+        0.12,
+        0.08,
+        0.05
+      ],
+      "eyeSize": 1,
+      "eyePositionY": 0.035,
+      "mouthColor": [
+        0.55,
+        0.18,
+        0.18
+      ],
+      "mouthWidth": 0.065,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 3,
+      "mouthStyle": 0
+    }
   },
   {
     "ID": "7",
@@ -345,7 +555,42 @@
     "specialabilitiy13": "☆",
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
-    "specialabilitiy16": "〇"
+    "specialabilitiy16": "〇",
+    "faceConfig": {
+      "hairStyle": 2,
+      "hairColor": [
+        0.25,
+        0.18,
+        0.1
+      ],
+      "beardStyle": 1,
+      "beardColor": [
+        0.25,
+        0.18,
+        0.1
+      ],
+      "skinColor": [
+        0.92,
+        0.78,
+        0.65
+      ],
+      "eyeColor": [
+        0.25,
+        0.35,
+        0.2
+      ],
+      "eyeSize": 0.95,
+      "eyePositionY": 0.025,
+      "mouthColor": [
+        0.78,
+        0.25,
+        0.25
+      ],
+      "mouthWidth": 0.06,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 1,
+      "mouthStyle": 3
+    }
   },
   {
     "ID": "8",
@@ -390,7 +635,42 @@
     "specialabilitiy11": "〇",
     "specialabilitiy13": "〇",
     "specialabilitiy14": "〇",
-    "specialabilitiy15": "〇"
+    "specialabilitiy15": "〇",
+    "faceConfig": {
+      "hairStyle": 1,
+      "hairColor": [
+        0.05,
+        0.03,
+        0.02
+      ],
+      "beardStyle": 3,
+      "beardColor": [
+        0.05,
+        0.03,
+        0.02
+      ],
+      "skinColor": [
+        0.38,
+        0.25,
+        0.15
+      ],
+      "eyeColor": [
+        0.12,
+        0.08,
+        0.05
+      ],
+      "eyeSize": 1.05,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.5,
+        0.16,
+        0.16
+      ],
+      "mouthWidth": 0.065,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 2,
+      "mouthStyle": 4
+    }
   },
   {
     "ID": "9",
@@ -439,7 +719,42 @@
     "specialabilitiy12": "☆",
     "specialabilitiy14": "〇",
     "specialabilitiy15": "〇",
-    "specialabilitiy16": "〇"
+    "specialabilitiy16": "〇",
+    "faceConfig": {
+      "hairStyle": 4,
+      "hairColor": [
+        0.08,
+        0.05,
+        0.02
+      ],
+      "beardStyle": 2,
+      "beardColor": [
+        0.08,
+        0.05,
+        0.02
+      ],
+      "skinColor": [
+        0.7,
+        0.5,
+        0.35
+      ],
+      "eyeColor": [
+        0.18,
+        0.12,
+        0.06
+      ],
+      "eyeSize": 1,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.6,
+        0.2,
+        0.2
+      ],
+      "mouthWidth": 0.06,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 0,
+      "mouthStyle": 1
+    }
   },
   {
     "ID": "10",
@@ -158144,6 +158459,41 @@
     "alignment": 67,
     "condition": 3,
     "oppositeaccuracy": 5,
-    "oppositefrequency": 5
+    "oppositefrequency": 5,
+    "faceConfig": {
+      "hairStyle": 1,
+      "hairColor": [
+        0.4,
+        0.3,
+        0.18
+      ],
+      "beardStyle": 0,
+      "beardColor": [
+        0.4,
+        0.3,
+        0.18
+      ],
+      "skinColor": [
+        0.95,
+        0.82,
+        0.72
+      ],
+      "eyeColor": [
+        0.3,
+        0.35,
+        0.5
+      ],
+      "eyeSize": 1,
+      "eyePositionY": 0.03,
+      "mouthColor": [
+        0.8,
+        0.28,
+        0.28
+      ],
+      "mouthWidth": 0.06,
+      "mouthPositionY": -0.04,
+      "eyeStyle": 0,
+      "mouthStyle": 0
+    }
   }
 ]
