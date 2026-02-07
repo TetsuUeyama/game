@@ -8,7 +8,9 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
+import { DefenseRole, OffenseRole } from "../../state/PlayerStateTypes";
 import { SAFE_BOUNDARY_CONFIG } from "../../config/gameConfig";
+import { TacticalZoneType, getZonePosition } from "../../config/TacticalZoneConfig";
 
 /**
  * オフボールディフェンダー時のAI
@@ -19,6 +21,14 @@ export class OffBallDefenseAI extends BaseStateAI {
   private currentFormation: Formation;
   private decisionTimer: number = 0;
   private cachedTargetPosition: { x: number; z: number; markTarget: Character | null } | null = null;
+
+  // ゾーンディフェンス用
+  private zoneDefensePosition: { x: number; z: number } | null = null;
+  private zoneDefenseType: TacticalZoneType | null = null;
+  /** ゾーン侵入検知半径 */
+  private readonly ZONE_INTRUDER_DETECTION_RADIUS: number = 4.0;
+  /** マーク時の距離（相手とゴールの間にポジション） */
+  private readonly ZONE_MARK_DISTANCE: number = 1.5;
 
   constructor(
     character: Character,
@@ -84,8 +94,19 @@ export class OffBallDefenseAI extends BaseStateAI {
       }
     }
 
-    // 同じポジションのオフェンスプレイヤーをマンマーク
-    this.handleManToManDefense(deltaTime);
+    // DefenseRoleに基づくディフェンス
+    const defenseRole = this.character.defenseRole;
+
+    if (defenseRole === DefenseRole.POA) {
+      // POA: メインハンドラーを直接マンマーク
+      this.handleManToManDefense(deltaTime);
+    } else if (defenseRole) {
+      // NAIL/LOW_MAN/CLOSEOUT/SCRAMBLER: ゾーンディフェンス
+      this.handleZoneDefense(deltaTime);
+    } else {
+      // ロール未設定: 同ポジションマンマーク（フォールバック）
+      this.handleManToManDefense(deltaTime);
+    }
   }
 
   /**
@@ -435,15 +456,198 @@ export class OffBallDefenseAI extends BaseStateAI {
     }
   }
 
+  // ============================================
+  // ゾーンディフェンス（NAIL, LOW_MAN, CLOSEOUT, SCRAMBLER用）
+  // ============================================
+
   /**
-   * マークする相手を探す（同ポジションマッチアップ）
-   * マンツーマン時に使用
+   * ゾーンディフェンス処理
+   * 担当ゾーンにポジションを取り、侵入者をマークする
+   */
+  private handleZoneDefense(deltaTime: number): void {
+    // 守備側のゴール方向を基準にゾーン位置を計算
+    // 攻撃側のチームに対する守備なので、相手の攻撃方向で計算
+    const isDefendingAllyGoal = this.character.team === 'ally';
+
+    // ゾーンが未選択の場合は選択
+    if (!this.zoneDefensePosition || !this.zoneDefenseType) {
+      this.selectDefenseZone(isDefendingAllyGoal);
+    }
+
+    if (!this.zoneDefensePosition) {
+      // ゾーン選択に失敗した場合はフォーメーション位置へ
+      this.handleFormationPosition(deltaTime);
+      return;
+    }
+
+    // ゾーン付近に侵入した相手を検出
+    const intruder = this.findIntruderInZone();
+
+    if (intruder) {
+      // 侵入者をマーク（侵入者とゴールの間にポジション）
+      this.handleZoneMarkIntruder(deltaTime, intruder);
+      return;
+    }
+
+    // 侵入者がいない場合: ゾーン位置にポジション取り
+    const myPosition = this.character.getPosition();
+    const targetPosition = new Vector3(
+      this.zoneDefensePosition.x,
+      myPosition.y,
+      this.zoneDefensePosition.z
+    );
+
+    this.moveTowardsFormationPosition(targetPosition, deltaTime);
+  }
+
+  /**
+   * DefenseRoleに対応する担当ゾーンリストを取得
+   */
+  private getZonesForRole(): TacticalZoneType[] {
+    switch (this.character.defenseRole) {
+      case DefenseRole.NAIL:
+        return ['elbow_left', 'elbow_right', 'high_post'];
+      case DefenseRole.LOW_MAN:
+        return ['low_post_left', 'low_post_right', 'mid_post'];
+      case DefenseRole.CLOSEOUT:
+        return ['wing_left', 'wing_right', 'corner_left', 'corner_right'];
+      case DefenseRole.SCRAMBLER:
+        return ['top', 'high_post'];
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * 担当ゾーンから最適なゾーンを選択
+   * 自分の現在位置に最も近いゾーンを選び、チームメイトとの重複を回避
+   */
+  private selectDefenseZone(isDefendingAllyGoal: boolean): void {
+    const zones = this.getZonesForRole();
+    if (zones.length === 0) return;
+
+    // 守備時のゾーン位置は、相手の攻撃ゴール方向で計算
+    // ally守備 → enemyが+Z方向を攻める → isAllyTeam=false でゾーン計算
+    const isAllyTeamForZone = !isDefendingAllyGoal;
+    const myPosition = this.character.getPosition();
+
+    // チームメイトのゾーンディフェンス位置を取得（重複回避）
+    const teammates = this.allCharacters.filter(
+      c => c !== this.character && c.team === this.character.team
+    );
+
+    let bestZone: TacticalZoneType | null = null;
+    let bestDistSq = Infinity;
+
+    for (const zone of zones) {
+      const zonePos = getZonePosition(zone, isAllyTeamForZone);
+
+      // チームメイトが既にこのゾーン付近にいるかチェック
+      const occupied = teammates.some(t => {
+        const pos = t.getPosition();
+        return Math.pow(pos.x - zonePos.x, 2) + Math.pow(pos.z - zonePos.z, 2) < 2.5 * 2.5;
+      });
+      if (occupied) continue;
+
+      const distSq = Math.pow(myPosition.x - zonePos.x, 2) + Math.pow(myPosition.z - zonePos.z, 2);
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestZone = zone;
+      }
+    }
+
+    // 全て占有されている場合は最初のゾーンを選択
+    if (!bestZone) {
+      bestZone = zones[0];
+    }
+
+    const isAllyForZone = !isDefendingAllyGoal;
+    const zonePos = getZonePosition(bestZone, isAllyForZone);
+    this.zoneDefensePosition = { x: zonePos.x, z: zonePos.z };
+    this.zoneDefenseType = bestZone;
+  }
+
+  /**
+   * 担当ゾーン付近に侵入した相手を検出
+   */
+  private findIntruderInZone(): Character | null {
+    if (!this.zoneDefensePosition) return null;
+
+    const opponentTeam = this.character.team === 'ally' ? 'enemy' : 'ally';
+    let closestIntruder: Character | null = null;
+    let closestDistance = this.ZONE_INTRUDER_DETECTION_RADIUS;
+
+    for (const character of this.allCharacters) {
+      if (character.team !== opponentTeam) continue;
+
+      const pos = character.getPosition();
+      const dist = Math.sqrt(
+        Math.pow(pos.x - this.zoneDefensePosition.x, 2) +
+        Math.pow(pos.z - this.zoneDefensePosition.z, 2)
+      );
+
+      if (dist < closestDistance) {
+        closestDistance = dist;
+        closestIntruder = character;
+      }
+    }
+
+    return closestIntruder;
+  }
+
+  /**
+   * ゾーン侵入者をマーク（侵入者とゴールの間にポジション）
+   */
+  private handleZoneMarkIntruder(deltaTime: number, intruder: Character): void {
+    const myPosition = this.character.getPosition();
+    const intruderPos = intruder.getPosition();
+
+    // 守るべきゴール方向
+    const defendingGoal = this.getDefendingGoalPosition();
+    const toGoal = new Vector3(
+      defendingGoal.x - intruderPos.x,
+      0,
+      defendingGoal.z - intruderPos.z
+    );
+    if (toGoal.length() > 0.01) {
+      toGoal.normalize();
+    }
+
+    // 侵入者とゴールの間にポジション
+    const markPosition = new Vector3(
+      intruderPos.x + toGoal.x * this.ZONE_MARK_DISTANCE,
+      myPosition.y,
+      intruderPos.z + toGoal.z * this.ZONE_MARK_DISTANCE
+    );
+
+    this.moveTowardsMarkPosition(markPosition, intruder, deltaTime);
+  }
+
+  // ============================================
+  // マンツーマンマーク（POA、ロール未設定用）
+  // ============================================
+
+  /**
+   * マークする相手を探す
+   * 優先順位: 1. DefenseRoleに対応するOffenseRole → 2. 同ポジション → 3. 最寄りのオフボールプレイヤー
    */
   private findMarkTarget(): Character | null {
     const opponentTeam = this.character.team === 'ally' ? 'enemy' : 'ally';
-    const myPosition = this.character.playerPosition;
 
-    // 同ポジションの相手を探す
+    // 1. DefenseRoleに対応するOffenseRoleの相手を探す（最優先）
+    const targetOffenseRoles = this.getTargetOffenseRoles();
+    if (targetOffenseRoles) {
+      for (const targetRole of targetOffenseRoles) {
+        for (const char of this.allCharacters) {
+          if (char.team === opponentTeam && char.offenseRole === targetRole) {
+            return char;
+          }
+        }
+      }
+    }
+
+    // 2. 同ポジションの相手を探す（フォールバック）
+    const myPosition = this.character.playerPosition;
     if (myPosition) {
       for (const char of this.allCharacters) {
         if (char.team === opponentTeam && char.playerPosition === myPosition) {
@@ -452,7 +656,30 @@ export class OffBallDefenseAI extends BaseStateAI {
       }
     }
 
-    // 同ポジションが見つからなければオフボールプレイヤーを探す
+    // 3. オフボールプレイヤーを探す（最終フォールバック）
     return this.findOffBallPlayer();
+  }
+
+  /**
+   * DefenseRoleから対応するOffenseRoleのリストを取得
+   * POA → MAIN_HANDLER
+   * NAIL → SECOND_HANDLER, SLASHER
+   * LOW_MAN → DUNKER
+   * CLOSEOUT → SPACER
+   * SCRAMBLER → null（ロール指定なし）
+   */
+  private getTargetOffenseRoles(): OffenseRole[] | null {
+    switch (this.character.defenseRole) {
+      case DefenseRole.POA:
+        return [OffenseRole.MAIN_HANDLER];
+      case DefenseRole.NAIL:
+        return [OffenseRole.SECOND_HANDLER, OffenseRole.SLASHER];
+      case DefenseRole.LOW_MAN:
+        return [OffenseRole.DUNKER];
+      case DefenseRole.CLOSEOUT:
+        return [OffenseRole.SPACER];
+      default:
+        return null;
+    }
   }
 }
