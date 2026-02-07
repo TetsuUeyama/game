@@ -7,7 +7,7 @@ import {PlayerStateManager} from "../../state";
 import {ShootingController} from "../../controllers/action/ShootingController";
 import {FeintController} from "../../controllers/action/FeintController";
 import {ShotClockController} from "../../controllers/ShotClockController";
-import {ShootingUtils} from "../../config/action/ShootingConfig";
+import {ShootingUtils, SHOOT_RANGE} from "../../config/action/ShootingConfig";
 import {DefenseUtils} from "../../config/DefenseConfig";
 import {PassUtils} from "../../config/PassConfig";
 import {IDLE_MOTION} from "../../motion/IdleMotion";
@@ -26,6 +26,7 @@ import {
   get1on1ActionProbabilities,
 } from "../config/PositionBehaviorConfig";
 import { PlayerPosition } from "../../config/FormationConfig";
+import { OffenseRole } from "../../state/PlayerStateTypes";
 
 /**
  * パス実行時のコールバック型
@@ -371,6 +372,12 @@ export class OnBallOffenseAI extends BaseStateAI {
     if (this.surveyPhase !== "none") {
       this.updateSurveyPhase(deltaTime);
       return; // 周囲確認中は他の行動をしない
+    }
+
+    // 【ロール別行動】メインハンドラー以外が3Pライン外でボールを持った場合、
+    // 高確率でメインハンドラーにパスを返す
+    if (!this.targetPositionOverride && this.tryRoleBasedPassToMainHandler()) {
+      return;
     }
 
     // ペイントエリア内の場合、レイアップ/ダンクを最優先
@@ -811,6 +818,98 @@ export class OnBallOffenseAI extends BaseStateAI {
       const result = this.shootingController.startShootAction(this.character, isDunkRange);
       if (result.success) {
         return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * ロール別行動: メインハンドラー以外が3Pライン外でボールを持った場合、
+   * 高確率でメインハンドラーにパスを返す
+   * @returns パスを実行した場合true
+   */
+  private tryRoleBasedPassToMainHandler(): boolean {
+    // メインハンドラー自身は対象外
+    if (this.character.offenseRole === OffenseRole.MAIN_HANDLER) {
+      return false;
+    }
+
+    // パスコールバックがない場合は実行不可
+    if (!this.passCallback) {
+      return false;
+    }
+
+    // パスクールダウン中は実行不可
+    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
+      return false;
+    }
+
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    // 3Pライン外かチェック（ゴールからの距離）
+    const myPos = this.character.getPosition();
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
+    const distanceToGoal = getDistance2D(myPos, goalPosition);
+
+    if (distanceToGoal <= SHOOT_RANGE.THREE_POINT_LINE) {
+      return false; // 3Pライン内なので通常行動
+    }
+
+    // 90%の確率でメインハンドラーにパスを返す
+    if (Math.random() > 0.9) {
+      return false; // 10%は通常行動へ
+    }
+
+    // PlayerStateManagerからメインハンドラーを探す
+    if (this.playerState) {
+      const mainHandler = this.playerState.getMainHandler(this.character.team);
+      if (mainHandler && mainHandler.character !== this.character) {
+        // パスレーンの安全性チェック
+        const teammatePos = mainHandler.character.getPosition();
+        const distance = Vector3.Distance(myPos, teammatePos);
+
+        if (PassUtils.isPassableDistance(distance)) {
+          // メインハンドラーの方を向く
+          const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
+          if (toTarget.length() > 0.01) {
+            const angle = Math.atan2(toTarget.x, toTarget.z);
+            this.character.setRotation(angle);
+          }
+
+          const result = this.passCallback(this.character, mainHandler.character, "pass_chest");
+          if (result.success) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // PlayerStateManagerがない場合やメインハンドラーが見つからない場合、
+    // allCharactersからメインハンドラーを探す
+    const teammates = getTeammates(this.allCharacters, this.character);
+    for (const teammate of teammates) {
+      if (teammate.offenseRole === OffenseRole.MAIN_HANDLER) {
+        const teammatePos = teammate.getPosition();
+        const distance = Vector3.Distance(myPos, teammatePos);
+
+        if (PassUtils.isPassableDistance(distance)) {
+          // メインハンドラーの方を向く
+          const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
+          if (toTarget.length() > 0.01) {
+            const angle = Math.atan2(toTarget.x, toTarget.z);
+            this.character.setRotation(angle);
+          }
+
+          const result = this.passCallback(this.character, teammate, "pass_chest");
+          if (result.success) {
+            return true;
+          }
+        }
+        break; // メインハンドラーは1人なので見つかったら終了
       }
     }
 

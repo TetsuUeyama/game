@@ -729,6 +729,7 @@ export class GameScene {
       shotClockController: this.shotClockController,
       getAllyCharacters: () => this.allyCharacters,
       getEnemyCharacters: () => this.enemyCharacters,
+      getCharacterAIs: () => this.characterAIs,
     };
   }
 
@@ -741,6 +742,7 @@ export class GameScene {
       shotClockController: this.shotClockController,
       getAllyCharacters: () => this.allyCharacters,
       getEnemyCharacters: () => this.enemyCharacters,
+      getCharacterAIs: () => this.characterAIs,
       onThrowInComplete: () => {
         // シュートクロックを開始
         const holder = this.ball.getHolder();
@@ -799,7 +801,6 @@ export class GameScene {
     return {
       ball: this.ball,
       shotClockController: this.shotClockController,
-      collisionHandler: this.collisionHandler,
       getAllyCharacters: () => this.allyCharacters,
       getEnemyCharacters: () => this.enemyCharacters,
       getCharacterAIs: () => this.characterAIs,

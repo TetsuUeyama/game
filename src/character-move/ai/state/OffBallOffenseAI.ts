@@ -8,6 +8,7 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, PlayerPosition } from "../../config/FormationConfig";
+import { OffenseRole } from "../../state/PlayerStateTypes";
 import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
 import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
@@ -97,6 +98,18 @@ export class OffBallOffenseAI extends BaseStateAI {
   }
 
   /**
+   * 強制リセット（ゲーム再開時に全内部状態をクリア）
+   */
+  public forceReset(): void {
+    this.resetTargetPosition();
+    this.throwInTargetPosition = null;
+    this.mainHandlerTargetPosition = null;
+    this.mainHandlerReevaluateTimer = 0;
+    this.secondHandlerTargetPosition = null;
+    this.secondHandlerReevaluateTimer = 0;
+  }
+
+  /**
    * 状態遷移時のリセット処理
    * OFF_BALL_PLAYERになった時に呼ばれる
    */
@@ -105,6 +118,12 @@ export class OffBallOffenseAI extends BaseStateAI {
     this.resetTargetPosition();
     // スローイン用の位置もリセット
     this.throwInTargetPosition = null;
+    // メインハンドラー用の位置もリセット
+    this.mainHandlerTargetPosition = null;
+    this.mainHandlerReevaluateTimer = 0;
+    // セカンドハンドラー用の位置もリセット
+    this.secondHandlerTargetPosition = null;
+    this.secondHandlerReevaluateTimer = 0;
   }
 
   /**
@@ -119,6 +138,12 @@ export class OffBallOffenseAI extends BaseStateAI {
     this.positionReevaluateTimer = 0;
     // スローイン用の位置もリセット
     this.throwInTargetPosition = null;
+    // メインハンドラー用の位置もリセット
+    this.mainHandlerTargetPosition = null;
+    this.mainHandlerReevaluateTimer = 0;
+    // セカンドハンドラー用の位置もリセット
+    this.secondHandlerTargetPosition = null;
+    this.secondHandlerReevaluateTimer = 0;
   }
 
   /**
@@ -177,6 +202,19 @@ export class OffBallOffenseAI extends BaseStateAI {
         }
         return;
       }
+    }
+
+    // 【ロール別行動】メインハンドラーはオンボールプレイヤーに近づきパスコールを確保
+    if (this.character.offenseRole === OffenseRole.MAIN_HANDLER && onBallPlayer) {
+      this.handleMainHandlerPosition(deltaTime, onBallPlayer);
+      return;
+    }
+
+    // 【ロール別行動】セカンドハンドラーはオンボールがメインハンドラーの時、近くでパスを受ける
+    if (this.character.offenseRole === OffenseRole.SECOND_HANDLER && onBallPlayer &&
+        onBallPlayer.offenseRole === OffenseRole.MAIN_HANDLER) {
+      this.handleSecondHandlerPosition(deltaTime, onBallPlayer);
+      return;
     }
 
     // フォーメーションに従って移動
@@ -520,6 +558,315 @@ export class OffBallOffenseAI extends BaseStateAI {
     }
     return true;
   }
+
+  // ============================================
+  // メインハンドラー専用ポジショニング
+  // ============================================
+
+  /** メインハンドラーの理想的な距離（オンボールプレイヤーからの距離） */
+  private readonly MAIN_HANDLER_IDEAL_DISTANCE: number = 4.0;
+  /** メインハンドラーの最小距離（近すぎるとスペースがなくなる） */
+  private readonly MAIN_HANDLER_MIN_DISTANCE: number = 2.5;
+  /** メインハンドラーの最大距離（遠すぎるとパスが通りにくい） */
+  private readonly MAIN_HANDLER_MAX_DISTANCE: number = 6.0;
+  /** メインハンドラーの位置再評価タイマー */
+  private mainHandlerReevaluateTimer: number = 0;
+  /** メインハンドラーの目標位置 */
+  private mainHandlerTargetPosition: Vector3 | null = null;
+
+  /**
+   * メインハンドラーのオフボール行動
+   * オンボールプレイヤーに近づき、パスコール（パスを受けやすい位置）を確保する
+   * - ボール保持者から4m前後の距離を維持
+   * - パスレーンリスクが低い位置を選択
+   * - チームメイトと重ならない
+   */
+  private handleMainHandlerPosition(deltaTime: number, onBallPlayer: Character): void {
+    this.mainHandlerReevaluateTimer += deltaTime;
+
+    const myPosition = this.character.getPosition();
+    const onBallPos = onBallPlayer.getPosition();
+    const distanceToOnBall = Vector3.Distance(myPosition, onBallPos);
+
+    // 目標位置が未設定、または定期的に再評価
+    if (!this.mainHandlerTargetPosition || this.mainHandlerReevaluateTimer >= this.getDecisionInterval()) {
+      this.mainHandlerReevaluateTimer = 0;
+      this.calculateMainHandlerTargetPosition(onBallPlayer);
+    }
+
+    // 目標位置がない場合はオンボールプレイヤーを見て待機
+    if (!this.mainHandlerTargetPosition) {
+      this.faceTowards(onBallPlayer);
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 理想距離範囲内で、パスレーンが良好なら待機して呼び込む
+    if (distanceToOnBall >= this.MAIN_HANDLER_MIN_DISTANCE &&
+        distanceToOnBall <= this.MAIN_HANDLER_MAX_DISTANCE) {
+      const currentRisk = this.calculatePassLaneRisk(
+        { x: myPosition.x, z: myPosition.z },
+        onBallPlayer
+      );
+      // パスレーンが安全なら、その場でオンボールプレイヤーの方を向いて待機
+      if (currentRisk <= this.maxPassLaneRisk) {
+        this.faceTowards(onBallPlayer);
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
+        return;
+      }
+    }
+
+    // 目標位置に向かって移動
+    this.moveTowardsPosition(this.mainHandlerTargetPosition, onBallPlayer, deltaTime);
+  }
+
+  /**
+   * メインハンドラーの目標位置を計算
+   * オンボールプレイヤーの周囲でパスレーンリスクが最も低い位置を選択
+   */
+  private calculateMainHandlerTargetPosition(onBallPlayer: Character): void {
+    const myPosition = this.character.getPosition();
+    const onBallPos = onBallPlayer.getPosition();
+
+    // ゴール方向（攻める側）
+    const goalPos = this.field.getAttackingGoalRim(this.character.team);
+
+    // オンボールプレイヤーからゴールへの方向
+    const toGoal = new Vector3(goalPos.x - onBallPos.x, 0, goalPos.z - onBallPos.z);
+    if (toGoal.length() > 0.01) {
+      toGoal.normalize();
+    }
+
+    // 候補位置を生成: オンボールプレイヤー周囲を12方向で探索
+    const candidates: { pos: Vector3; risk: number; score: number }[] = [];
+    const angleSteps = 12;
+
+    for (let i = 0; i < angleSteps; i++) {
+      const angle = (i / angleSteps) * Math.PI * 2;
+      const candidateX = onBallPos.x + Math.cos(angle) * this.MAIN_HANDLER_IDEAL_DISTANCE;
+      const candidateZ = onBallPos.z + Math.sin(angle) * this.MAIN_HANDLER_IDEAL_DISTANCE;
+
+      // 安全な境界内かチェック
+      if (candidateX < SAFE_BOUNDARY_CONFIG.minX || candidateX > SAFE_BOUNDARY_CONFIG.maxX ||
+          candidateZ < SAFE_BOUNDARY_CONFIG.minZ || candidateZ > SAFE_BOUNDARY_CONFIG.maxZ) {
+        continue;
+      }
+
+      const candidate = { x: candidateX, z: candidateZ };
+
+      // チームメイトに近すぎないかチェック
+      if (this.isTooCloseToTeammates(candidate)) {
+        continue;
+      }
+
+      // パスレーンリスクを計算
+      const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
+
+      // ゴールの反対側（後方）を優先するスコア
+      // メインハンドラーはボール保持者の後方に位置してパスを受ける
+      const candidateDir = new Vector3(candidateX - onBallPos.x, 0, candidateZ - onBallPos.z).normalize();
+      const behindScore = -Vector3.Dot(candidateDir, toGoal); // ゴール反対方向ほど高スコア
+
+      // 自分からの移動距離も考慮（近い方が良い）
+      const moveDistance = Math.sqrt(
+        Math.pow(candidateX - myPosition.x, 2) + Math.pow(candidateZ - myPosition.z, 2)
+      );
+      const distancePenalty = moveDistance * 0.05; // 移動距離が長いほどペナルティ
+
+      // 総合スコア: リスクが低い＋後方＋近い ほど良い
+      const score = risk * 2.0 - behindScore * 0.5 + distancePenalty;
+
+      candidates.push({
+        pos: new Vector3(candidateX, myPosition.y, candidateZ),
+        risk,
+        score,
+      });
+    }
+
+    if (candidates.length === 0) {
+      // 候補がない場合はオンボールプレイヤーの後方に移動
+      const fallbackX = onBallPos.x - toGoal.x * this.MAIN_HANDLER_IDEAL_DISTANCE;
+      const fallbackZ = onBallPos.z - toGoal.z * this.MAIN_HANDLER_IDEAL_DISTANCE;
+      this.mainHandlerTargetPosition = new Vector3(
+        Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, fallbackX)),
+        myPosition.y,
+        Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, fallbackZ))
+      );
+      return;
+    }
+
+    // スコアが低い順にソート（低い = 良い）
+    candidates.sort((a, b) => a.score - b.score);
+    this.mainHandlerTargetPosition = candidates[0].pos;
+  }
+
+  // ============================================
+  // セカンドハンドラー専用ポジショニング
+  // ============================================
+
+  /** セカンドハンドラーの理想的な距離 */
+  private readonly SECOND_HANDLER_IDEAL_DISTANCE: number = 5.0;
+  /** セカンドハンドラーの最小距離 */
+  private readonly SECOND_HANDLER_MIN_DISTANCE: number = 3.0;
+  /** セカンドハンドラーの最大距離 */
+  private readonly SECOND_HANDLER_MAX_DISTANCE: number = 7.0;
+  /** セカンドハンドラーの位置再評価タイマー */
+  private secondHandlerReevaluateTimer: number = 0;
+  /** セカンドハンドラーの目標位置 */
+  private secondHandlerTargetPosition: Vector3 | null = null;
+
+  /**
+   * セカンドハンドラーのオフボール行動
+   * オンボールがメインハンドラーの時、メインハンドラーとは反対側のウィング寄りで
+   * パスを受けられる位置を確保する
+   * - ボール保持者から5m前後の距離を維持
+   * - メインハンドラーの後方ではなく横〜斜め前に位置
+   * - パスレーンリスクが低い位置を選択
+   */
+  private handleSecondHandlerPosition(deltaTime: number, onBallPlayer: Character): void {
+    this.secondHandlerReevaluateTimer += deltaTime;
+
+    const myPosition = this.character.getPosition();
+    const onBallPos = onBallPlayer.getPosition();
+    const distanceToOnBall = Vector3.Distance(myPosition, onBallPos);
+
+    // 目標位置が未設定、または定期的に再評価
+    if (!this.secondHandlerTargetPosition || this.secondHandlerReevaluateTimer >= this.getDecisionInterval()) {
+      this.secondHandlerReevaluateTimer = 0;
+      this.calculateSecondHandlerTargetPosition(onBallPlayer);
+    }
+
+    if (!this.secondHandlerTargetPosition) {
+      this.faceTowards(onBallPlayer);
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // 理想距離範囲内で、パスレーンが良好なら待機
+    if (distanceToOnBall >= this.SECOND_HANDLER_MIN_DISTANCE &&
+        distanceToOnBall <= this.SECOND_HANDLER_MAX_DISTANCE) {
+      const currentRisk = this.calculatePassLaneRisk(
+        { x: myPosition.x, z: myPosition.z },
+        onBallPlayer
+      );
+      if (currentRisk <= this.maxPassLaneRisk) {
+        this.faceTowards(onBallPlayer);
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
+        return;
+      }
+    }
+
+    // 目標位置に向かって移動
+    this.moveTowardsPosition(this.secondHandlerTargetPosition, onBallPlayer, deltaTime);
+  }
+
+  /**
+   * セカンドハンドラーの目標位置を計算
+   * メインハンドラー（オンボール）の横〜斜め前のウィング側に位置取り
+   * メインハンドラーの後方とは被らないよう、横方向を優先する
+   */
+  private calculateSecondHandlerTargetPosition(onBallPlayer: Character): void {
+    const myPosition = this.character.getPosition();
+    const onBallPos = onBallPlayer.getPosition();
+
+    // ゴール方向
+    const goalPos = this.field.getAttackingGoalRim(this.character.team);
+    const toGoal = new Vector3(goalPos.x - onBallPos.x, 0, goalPos.z - onBallPos.z);
+    if (toGoal.length() > 0.01) {
+      toGoal.normalize();
+    }
+
+    // メインハンドラーのターゲット位置を取得して避ける
+    const mainHandlerPos = this.mainHandlerTargetPosition;
+
+    // 候補位置を生成: オンボールプレイヤー周囲を12方向で探索
+    const candidates: { pos: Vector3; risk: number; score: number }[] = [];
+    const angleSteps = 12;
+
+    for (let i = 0; i < angleSteps; i++) {
+      const angle = (i / angleSteps) * Math.PI * 2;
+      const candidateX = onBallPos.x + Math.cos(angle) * this.SECOND_HANDLER_IDEAL_DISTANCE;
+      const candidateZ = onBallPos.z + Math.sin(angle) * this.SECOND_HANDLER_IDEAL_DISTANCE;
+
+      // 安全な境界内かチェック
+      if (candidateX < SAFE_BOUNDARY_CONFIG.minX || candidateX > SAFE_BOUNDARY_CONFIG.maxX ||
+          candidateZ < SAFE_BOUNDARY_CONFIG.minZ || candidateZ > SAFE_BOUNDARY_CONFIG.maxZ) {
+        continue;
+      }
+
+      const candidate = { x: candidateX, z: candidateZ };
+
+      // チームメイトに近すぎないかチェック
+      if (this.isTooCloseToTeammates(candidate)) {
+        continue;
+      }
+
+      // パスレーンリスクを計算
+      const risk = this.calculatePassLaneRisk(candidate, onBallPlayer);
+
+      // 横方向を優先するスコア（ゴール方向に対する横方向成分）
+      const candidateDir = new Vector3(candidateX - onBallPos.x, 0, candidateZ - onBallPos.z).normalize();
+      const lateralScore = Math.abs(candidateDir.x * (-toGoal.z) + candidateDir.z * toGoal.x);
+
+      // メインハンドラーの位置と被らないよう距離ペナルティ
+      let mainHandlerPenalty = 0;
+      if (mainHandlerPos) {
+        const distToMainHandler = Math.sqrt(
+          Math.pow(candidateX - mainHandlerPos.x, 2) + Math.pow(candidateZ - mainHandlerPos.z, 2)
+        );
+        if (distToMainHandler < 3.0) {
+          mainHandlerPenalty = (3.0 - distToMainHandler) * 0.5;
+        }
+      }
+
+      // 自分からの移動距離も考慮
+      const moveDistance = Math.sqrt(
+        Math.pow(candidateX - myPosition.x, 2) + Math.pow(candidateZ - myPosition.z, 2)
+      );
+      const distancePenalty = moveDistance * 0.05;
+
+      // 総合スコア: リスクが低い＋横方向＋メインハンドラーと被らない＋近い ほど良い
+      const score = risk * 2.0 - lateralScore * 0.6 + mainHandlerPenalty + distancePenalty;
+
+      candidates.push({
+        pos: new Vector3(candidateX, myPosition.y, candidateZ),
+        risk,
+        score,
+      });
+    }
+
+    if (candidates.length === 0) {
+      // 候補がない場合は横方向にフォールバック
+      const sideDir = new Vector3(-toGoal.z, 0, toGoal.x);
+      // 自分が現在いる側の横方向を選ぶ
+      const myDir = new Vector3(myPosition.x - onBallPos.x, 0, myPosition.z - onBallPos.z);
+      const sideSign = Vector3.Dot(myDir, sideDir) >= 0 ? 1 : -1;
+
+      const fallbackX = onBallPos.x + sideDir.x * sideSign * this.SECOND_HANDLER_IDEAL_DISTANCE;
+      const fallbackZ = onBallPos.z + sideDir.z * sideSign * this.SECOND_HANDLER_IDEAL_DISTANCE;
+      this.secondHandlerTargetPosition = new Vector3(
+        Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, fallbackX)),
+        myPosition.y,
+        Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, fallbackZ))
+      );
+      return;
+    }
+
+    candidates.sort((a, b) => a.score - b.score);
+    this.secondHandlerTargetPosition = candidates[0].pos;
+  }
+
+  // ============================================
+  // フォーメーションベースのポジショニング
+  // ============================================
 
   /**
    * フォーメーション位置への移動処理（ポジション別）

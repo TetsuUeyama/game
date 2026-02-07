@@ -7,11 +7,9 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { CharacterState } from "../../types/CharacterState";
-import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { CENTER_CIRCLE, JUMP_BALL_POSITIONS } from "../../config/JumpBallConfig";
 import { FIELD_CONFIG, GOAL_CONFIG } from "../../config/gameConfig";
 import { ShotClockController } from "../../controllers/ShotClockController";
-import { CollisionHandler } from "../../controllers/CollisionHandler";
 import { FormationUtils } from "../../config/FormationConfig";
 
 /**
@@ -20,7 +18,6 @@ import { FormationUtils } from "../../config/FormationConfig";
 export interface GameResetContext {
   ball: Ball;
   shotClockController?: ShotClockController;
-  collisionHandler?: CollisionHandler;
 
   // キャラクター取得
   getAllyCharacters: () => Character[];
@@ -150,14 +147,12 @@ export class GameResetManager {
       return;
     }
 
+    const scoringTeam = this.pendingGoalScoringTeam;
     this.pendingGoalReset = false;
-    // scoringTeamは将来の拡張用に保持
     this.pendingGoalScoringTeam = null;
 
-    // ジャンプボールで再開
-    if (this.context.onRequestJumpBall) {
-      this.context.onRequestJumpBall();
-    }
+    // 得点したチームの自陣ゴール下から再開
+    this.executeGoalUnderReset(scoringTeam);
   }
 
   // =============================================================================
@@ -317,14 +312,6 @@ export class GameResetManager {
     const allyCharacters = this.context.getAllyCharacters();
     const enemyCharacters = this.context.getEnemyCharacters();
 
-    // 全キャラクターをリセット
-    for (const character of [...allyCharacters, ...enemyCharacters]) {
-      character.resetBalance();
-      character.velocity = Vector3.Zero();
-      character.clearAIMovement();
-      character.getActionController().forceResetAction();
-    }
-
     const receivingTeam = offendingTeam === 'ally' ? enemyCharacters : allyCharacters;
     const defendingTeam = offendingTeam === 'ally' ? allyCharacters : enemyCharacters;
 
@@ -380,38 +367,26 @@ export class GameResetManager {
       offsetX += 1.5;
     }
 
-    // モーションリセット
-    for (const char of [...allyCharacters, ...enemyCharacters]) {
-      char.stopMovement();
-      char.playMotion(IDLE_MOTION);
-      const actionController = char.getActionController();
-      if (actionController) {
-        actionController.cancelAction();
-      }
-    }
+    // ボールをリリースして足元に配置（ルーズボール状態で開始）
+    this.context.ball.setHolder(null);
+    this.context.ball.setPosition(new Vector3(
+      ballHandler.getPosition().x,
+      0.15, // BALL_RADIUS相当（地面レベル）
+      ballHandler.getPosition().z
+    ));
 
-    // ボールを渡す
-    this.context.ball.setHolder(ballHandler);
-
-    // 状態を設定
-    ballHandler.setState(CharacterState.ON_BALL_PLAYER);
+    // 全員をBALL_LOST状態に設定
+    // 次フレームでBallCatchSystemがボールを拾い、自然に状態遷移が発生する
     for (const char of receivingTeam) {
-      if (char !== ballHandler) {
-        char.setState(CharacterState.OFF_BALL_PLAYER);
-      }
+      char.setState(CharacterState.BALL_LOST);
     }
     for (const char of defendingTeam) {
-      char.setState(CharacterState.OFF_BALL_DEFENDER);
+      char.setState(CharacterState.BALL_LOST);
     }
 
     // シュートクロックを開始
     if (this.context.shotClockController) {
       this.context.shotClockController.reset(offendingTeam === 'ally' ? 'enemy' : 'ally');
-    }
-
-    // 衝突判定を更新
-    if (this.context.collisionHandler) {
-      this.context.collisionHandler.updateStates();
     }
 
     // AIを初期化
@@ -441,14 +416,6 @@ export class GameResetManager {
     const allyCharacters = this.context.getAllyCharacters();
     const enemyCharacters = this.context.getEnemyCharacters();
 
-    // 全キャラクターのバランス・速度・アクションをリセット
-    for (const character of [...allyCharacters, ...enemyCharacters]) {
-      character.resetBalance();
-      character.velocity = Vector3.Zero();
-      character.clearAIMovement();
-      character.getActionController().forceResetAction();
-    }
-
     // ボールを保持するチーム（offendingTeamの相手）
     const receivingTeam = offendingTeam === 'ally' ? enemyCharacters : allyCharacters;
     const defendingTeam = offendingTeam === 'ally' ? allyCharacters : enemyCharacters;
@@ -472,8 +439,13 @@ export class GameResetManager {
     const ballHandlerPos = new Vector3(0, ballHandler.config.physical.height / 2, goalZ);
     ballHandler.setPosition(ballHandlerPos);
 
-    // ボールをボールハンドラーに渡す
-    this.context.ball.setHolder(ballHandler);
+    // ボールをリリースして足元に配置（ルーズボール状態で開始）
+    this.context.ball.setHolder(null);
+    this.context.ball.setPosition(new Vector3(
+      ballHandlerPos.x,
+      0.15, // BALL_RADIUS相当（地面レベル）
+      ballHandlerPos.z
+    ));
 
     // 他のオフェンス選手をフォーメーション位置に配置
     const offenseFormation = FormationUtils.getDefaultOffenseFormation();
@@ -522,9 +494,13 @@ export class GameResetManager {
       this.context.onResetOneOnOneBattle();
     }
 
-    // キャラクターの状態を更新（ON_BALL_PLAYER、OFF_BALL_PLAYER等）
-    if (this.context.collisionHandler) {
-      this.context.collisionHandler.updateStates();
+    // 全員をBALL_LOST状態に設定
+    // 次フレームでBallCatchSystemがボールを拾い、自然に状態遷移が発生する
+    for (const char of receivingTeam) {
+      char.setState(CharacterState.BALL_LOST);
+    }
+    for (const char of defendingTeam) {
+      char.setState(CharacterState.BALL_LOST);
     }
 
     // 全AIを強制初期化（前回の行動や状態を完全にクリア）
