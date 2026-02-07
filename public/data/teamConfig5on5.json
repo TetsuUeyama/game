@@ -1,6 +1,7 @@
 {
   "allyTeam": {
     "formation": "5on5",
+    "defenseScheme": "DROP",
     "players": [
       {
         "playerId": "4015",
@@ -9,7 +10,8 @@
         "z": -5,
         "hasAI": true,
         "offenseRole": "MAIN_HANDLER",
-        "defenseRole": "POA"
+        "defenseRole": "POA",
+        "shotPriority": 3
       },
       {
         "playerId": "2",
@@ -18,7 +20,8 @@
         "z": 10,
         "hasAI": true,
         "offenseRole": "SCREENER",
-        "defenseRole": "LOW_MAN"
+        "defenseRole": "LOW_MAN",
+        "shotPriority": 4
       },
       {
         "playerId": "3",
@@ -27,7 +30,8 @@
         "z": -3,
         "hasAI": true,
         "offenseRole": "SPACER",
-        "defenseRole": "CLOSEOUT"
+        "defenseRole": "CLOSEOUT",
+        "shotPriority": 1
       },
       {
         "playerId": "4",
@@ -36,7 +40,8 @@
         "z": -3,
         "hasAI": true,
         "offenseRole": "SLASHER",
-        "defenseRole": "NAIL"
+        "defenseRole": "NAIL",
+        "shotPriority": 2
       },
       {
         "playerId": "5",
@@ -45,12 +50,14 @@
         "z": 5,
         "hasAI": true,
         "offenseRole": "SECOND_HANDLER",
-        "defenseRole": "SCRAMBLER"
+        "defenseRole": "SCRAMBLER",
+        "shotPriority": 5
       }
     ]
   },
   "enemyTeam": {
     "formation": "5on5",
+    "defenseScheme": "SWITCH",
     "players": [
       {
         "playerId": "1",
@@ -59,7 +66,8 @@
         "z": 5,
         "hasAI": true,
         "offenseRole": "SLASHER",
-        "defenseRole": "NAIL"
+        "defenseRole": "NAIL",
+        "shotPriority": 2
       },
       {
         "playerId": "6",
@@ -68,7 +76,8 @@
         "z": -10,
         "hasAI": true,
         "offenseRole": "DUNKER",
-        "defenseRole": "LOW_MAN"
+        "defenseRole": "LOW_MAN",
+        "shotPriority": 4
       },
       {
         "playerId": "7",
@@ -77,7 +86,8 @@
         "z": 3,
         "hasAI": true,
         "offenseRole": "SECOND_HANDLER",
-        "defenseRole": "SCRAMBLER"
+        "defenseRole": "SCRAMBLER",
+        "shotPriority": 3
       },
       {
         "playerId": "8",
@@ -86,7 +96,8 @@
         "z": 3,
         "hasAI": true,
         "offenseRole": "SCREENER",
-        "defenseRole": "CLOSEOUT"
+        "defenseRole": "CLOSEOUT",
+        "shotPriority": 5
       },
       {
         "playerId": "9",
@@ -95,7 +106,8 @@
         "z": -5,
         "hasAI": true,
         "offenseRole": "MAIN_HANDLER",
-        "defenseRole": "POA"
+        "defenseRole": "POA",
+        "shotPriority": 1
       }
     ]
   }

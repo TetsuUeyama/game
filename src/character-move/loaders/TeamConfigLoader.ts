@@ -3,7 +3,7 @@
  * teamConfig.jsonからチーム構成と選手割り当てを読み込む
  */
 
-import { OffenseRole, DefenseRole } from "../state/PlayerStateTypes";
+import { OffenseRole, DefenseRole, DefenseScheme } from "../state/PlayerStateTypes";
 
 export interface PlayerConfig {
   playerId: string;
@@ -16,11 +16,15 @@ export interface PlayerConfig {
   offenseRole?: OffenseRole;
   /** ディフェンス時の役割（省略時はnull） */
   defenseRole?: DefenseRole;
+  /** シュート優先度（1=ファーストチョイス〜5=フィフスチョイス） */
+  shotPriority?: number;
 }
 
 export interface TeamConfig {
   formation: string;
   players: PlayerConfig[];
+  /** チーム守備スキーム（省略時はDROP） */
+  defenseScheme?: DefenseScheme;
 }
 
 export interface GameTeamConfig {

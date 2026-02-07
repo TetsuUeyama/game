@@ -23,7 +23,7 @@ import { FeintController } from "../controllers/action/FeintController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
-import { PlayerStateManager } from "../state";
+import { PlayerStateManager, DefenseScheme } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -237,6 +237,18 @@ export class GameScene {
 
     // 全選手一括管理の初期化
     this.playerStateManager = new PlayerStateManager(this.ball);
+
+    // チーム守備スキームを設定
+    if (teamConfig) {
+      this.playerStateManager.setDefenseScheme(
+        'ally',
+        teamConfig.allyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
+      this.playerStateManager.setDefenseScheme(
+        'enemy',
+        teamConfig.enemyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
+    }
 
     // AIコントローラーの初期化（hasAI: trueのキャラクターのみ）
     if (showAdditionalCharacters) {
@@ -482,6 +494,7 @@ export class GameScene {
       character.setPlayerData(player, playerConfig.position);
       character.offenseRole = playerConfig.offenseRole ?? null;
       character.defenseRole = playerConfig.defenseRole ?? null;
+      character.shotPriority = playerConfig.shotPriority ?? null;
 
       // 選手の身長を反映（cm → m）
       const heightInMeters = player.basic.height / 100;
@@ -514,6 +527,7 @@ export class GameScene {
       character.setPlayerData(player, playerConfig.position);
       character.offenseRole = playerConfig.offenseRole ?? null;
       character.defenseRole = playerConfig.defenseRole ?? null;
+      character.shotPriority = playerConfig.shotPriority ?? null;
 
       // 選手の身長を反映（cm → m）
       const heightInMeters = player.basic.height / 100;
@@ -528,6 +542,18 @@ export class GameScene {
       if (playerConfig.hasAI !== false) {
         this.aiCharacterIndices.add(character);
       }
+    }
+
+    // チーム守備スキームを設定
+    if (this.playerStateManager) {
+      this.playerStateManager.setDefenseScheme(
+        'ally',
+        teamConfig.allyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
+      this.playerStateManager.setDefenseScheme(
+        'enemy',
+        teamConfig.enemyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
     }
   }
 
@@ -1825,6 +1851,18 @@ export class GameScene {
 
     // 全選手一括管理を再初期化
     this.playerStateManager = new PlayerStateManager(this.ball);
+
+    // チーム守備スキームを再設定
+    if (this.savedTeamConfig) {
+      this.playerStateManager.setDefenseScheme(
+        'ally',
+        this.savedTeamConfig.allyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
+      this.playerStateManager.setDefenseScheme(
+        'enemy',
+        this.savedTeamConfig.enemyTeam.defenseScheme ?? DefenseScheme.DROP
+      );
+    }
 
     // AIコントローラーを再初期化
     for (const character of allCharacters) {

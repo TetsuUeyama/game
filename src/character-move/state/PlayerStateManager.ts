@@ -4,7 +4,7 @@ import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { PlayerPosition } from "../config/FormationConfig";
 import { getDistance2D } from "../utils/CollisionUtils";
-import { PlayerStateSnapshot, TeamState, RadiusQueryOptions, OffenseRole, DefenseRole } from "./PlayerStateTypes";
+import { PlayerStateSnapshot, TeamState, RadiusQueryOptions, OffenseRole, DefenseRole, DefenseScheme } from "./PlayerStateTypes";
 
 /**
  * 全選手一括管理システム
@@ -38,8 +38,30 @@ export class PlayerStateManager {
   // ボール保持者
   private ballHolderSnapshot: PlayerStateSnapshot | null = null;
 
+  // チーム守備スキーム
+  private allyDefenseScheme: DefenseScheme = DefenseScheme.DROP;
+  private enemyDefenseScheme: DefenseScheme = DefenseScheme.DROP;
+
   constructor(ball: Ball) {
     this.ball = ball;
+  }
+
+  /**
+   * チーム守備スキームを設定
+   */
+  public setDefenseScheme(team: 'ally' | 'enemy', scheme: DefenseScheme): void {
+    if (team === 'ally') {
+      this.allyDefenseScheme = scheme;
+    } else {
+      this.enemyDefenseScheme = scheme;
+    }
+  }
+
+  /**
+   * チーム守備スキームを取得
+   */
+  public getDefenseScheme(team: 'ally' | 'enemy'): DefenseScheme {
+    return team === 'ally' ? this.allyDefenseScheme : this.enemyDefenseScheme;
   }
 
   // ============================================
@@ -74,6 +96,7 @@ export class PlayerStateManager {
         playerPosition: character.playerPosition as PlayerPosition | null,
         offenseRole: character.offenseRole,
         defenseRole: character.defenseRole,
+        shotPriority: character.shotPriority,
         hasBall: character === holder,
         speedStat: character.playerData?.stats.speed ?? 50,
       };
@@ -177,6 +200,7 @@ export class PlayerStateManager {
       isOnOffense: ballHolder !== null,
       ballHolder,
       players,
+      defenseScheme: team === 'ally' ? this.allyDefenseScheme : this.enemyDefenseScheme,
     };
   }
 
@@ -269,6 +293,20 @@ export class PlayerStateManager {
   public getMainHandler(team: 'ally' | 'enemy'): PlayerStateSnapshot | null {
     const handlers = this.getPlayersByTeamAndOffenseRole(team, OffenseRole.MAIN_HANDLER);
     return handlers.length > 0 ? handlers[0] : null;
+  }
+
+  /**
+   * チームのシュート優先度順の選手リストを取得
+   * shotPriorityが小さい順（1=ファーストチョイスが先頭）
+   * shotPriority未設定の選手は末尾に配置
+   */
+  public getShootingPriorityOrder(team: 'ally' | 'enemy'): PlayerStateSnapshot[] {
+    const players = team === 'ally' ? [...this.allyPlayers] : [...this.enemyPlayers];
+    return players.sort((a, b) => {
+      const pa = a.shotPriority ?? 999;
+      const pb = b.shotPriority ?? 999;
+      return pa - pb;
+    });
   }
 
   // ============================================

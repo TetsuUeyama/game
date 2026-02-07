@@ -40,6 +40,19 @@ export enum DefenseRole {
 }
 
 /**
+ * チーム守備スキーム
+ * ピック&ロールやスクリーン対応時のチーム全体の守備方針
+ */
+export enum DefenseScheme {
+  /** ドロップ: ビッグマンがリム付近まで下がり、ペイント内を守る */
+  DROP = 'DROP',
+  /** スイッチ: スクリーン時にマークマンを入れ替える */
+  SWITCH = 'SWITCH',
+  /** ゾーン: エリア担当制（マンツーマンではなく担当区域を守る） */
+  ZONE = 'ZONE',
+}
+
+/**
  * フレームごとの選手スナップショット
  * update()で毎フレーム再構築される
  */
@@ -60,6 +73,8 @@ export interface PlayerStateSnapshot {
   offenseRole: OffenseRole | null;
   /** ディフェンス時の役割 */
   defenseRole: DefenseRole | null;
+  /** シュート優先度（1=ファーストチョイス〜5=フィフスチョイス、未設定時null） */
+  shotPriority: number | null;
   /** ボール保持中か */
   hasBall: boolean;
   /** スピード能力値（キャッシュ） */
@@ -78,6 +93,8 @@ export interface TeamState {
   ballHolder: PlayerStateSnapshot | null;
   /** チーム全選手のスナップショット */
   players: PlayerStateSnapshot[];
+  /** チーム守備スキーム */
+  defenseScheme: DefenseScheme;
 }
 
 /**
