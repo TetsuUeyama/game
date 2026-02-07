@@ -3,6 +3,7 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { Field } from "../entities/Field";
+import { PlayerStateManager } from "../state";
 import { ShootingController } from "./action/ShootingController";
 import { FeintController } from "./action/FeintController";
 import { ShotClockController } from "./ShotClockController";
@@ -53,19 +54,19 @@ export class CharacterAI {
   // reflexesに基づいて計算され、この時間中はアイドル状態でボールを見る
   private stateTransitionReactionTimer: number = 0;
 
-  constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
+  constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field, playerState?: PlayerStateManager) {
     this.character = character;
     this.ball = ball;
 
     // 状態別AIを初期化
-    this.looseBallAI = new LooseBallAI(character, ball, allCharacters, field);
-    this.onBallOffenseAI = new OnBallOffenseAI(character, ball, allCharacters, field);
-    this.onBallDefenseAI = new OnBallDefenseAI(character, ball, allCharacters, field);
-    this.offBallOffenseAI = new OffBallOffenseAI(character, ball, allCharacters, field);
-    this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field);
-    this.throwInThrowerAI = new ThrowInThrowerAI(character, ball, allCharacters, field);
-    this.throwInReceiverAI = new ThrowInReceiverAI(character, ball, allCharacters, field);
-    this.throwInOtherAI = new ThrowInOtherAI(character, ball, allCharacters, field);
+    this.looseBallAI = new LooseBallAI(character, ball, allCharacters, field, playerState);
+    this.onBallOffenseAI = new OnBallOffenseAI(character, ball, allCharacters, field, playerState);
+    this.onBallDefenseAI = new OnBallDefenseAI(character, ball, allCharacters, field, playerState);
+    this.offBallOffenseAI = new OffBallOffenseAI(character, ball, allCharacters, field, playerState);
+    this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field, playerState);
+    this.throwInThrowerAI = new ThrowInThrowerAI(character, ball, allCharacters, field, playerState);
+    this.throwInReceiverAI = new ThrowInReceiverAI(character, ball, allCharacters, field, playerState);
+    this.throwInOtherAI = new ThrowInOtherAI(character, ball, allCharacters, field, playerState);
 
     // オフェンス側のボール保持位置を設定
     this.character.setBallHoldingFaces([...BALL_HOLDING_CONFIG.OFFENSE_HOLDING_FACES]);

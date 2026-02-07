@@ -3,6 +3,7 @@ import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { Field } from "../../entities/Field";
 import { BaseStateAI } from "./BaseStateAI";
+import { PlayerStateManager } from "../../state";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
@@ -23,9 +24,10 @@ export class OffBallDefenseAI extends BaseStateAI {
     character: Character,
     ball: Ball,
     allCharacters: Character[],
-    field: Field
+    field: Field,
+    playerState?: PlayerStateManager
   ) {
-    super(character, ball, allCharacters, field);
+    super(character, ball, allCharacters, field, playerState);
     this.currentFormation = FormationUtils.getDefaultDefenseFormation();
   }
 

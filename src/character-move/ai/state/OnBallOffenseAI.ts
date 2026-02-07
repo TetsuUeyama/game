@@ -3,6 +3,7 @@ import {Character} from "../../entities/Character";
 import {Ball} from "../../entities/Ball";
 import {Field} from "../../entities/Field";
 import {BaseStateAI} from "./BaseStateAI";
+import {PlayerStateManager} from "../../state";
 import {ShootingController} from "../../controllers/action/ShootingController";
 import {FeintController} from "../../controllers/action/FeintController";
 import {ShotClockController} from "../../controllers/ShotClockController";
@@ -18,6 +19,13 @@ import {PassType, PASS_TYPE_CONFIGS} from "../../config/PassTrajectoryConfig";
 import { normalizeAngle, getDistance2D, getDistance2DSimple } from "../../utils/CollisionUtils";
 import { getTeammates, getOpponents } from "../../utils/TeamUtils";
 import { isInPaintArea } from "../../config/TacticalZoneConfig";
+import {
+  PositionBehaviorParams,
+  getPositionBehavior,
+  getShootAggressiveness,
+  get1on1ActionProbabilities,
+} from "../config/PositionBehaviorConfig";
+import { PlayerPosition } from "../../config/FormationConfig";
 
 /**
  * パス実行時のコールバック型
@@ -76,8 +84,12 @@ export class OnBallOffenseAI extends BaseStateAI {
   private readonly IDLE_FORCE_ACTION_THRESHOLD: number = 3.0; // 3秒以上静止で強制行動
   private readonly IDLE_POSITION_THRESHOLD: number = 0.1; // この距離以下の移動は静止とみなす
 
-  constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field) {
-    super(character, ball, allCharacters, field);
+  // ポジション別行動パラメータ（キャッシュ）
+  private cachedPositionBehavior: PositionBehaviorParams | null = null;
+  private cachedPlayerPosition: PlayerPosition | undefined = undefined;
+
+  constructor(character: Character, ball: Ball, allCharacters: Character[], field: Field, playerState?: PlayerStateManager) {
+    super(character, ball, allCharacters, field, playerState);
     this.trajectoryCalculator = new PassTrajectoryCalculator();
     this.interceptionAnalyzer = new InterceptionAnalyzer();
   }
@@ -156,6 +168,23 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.shootCooldown = 0;
     this.feintCooldown = 0;
     this.passCooldown = 0;
+  }
+
+  /**
+   * ポジション別行動パラメータを取得（キャッシュ付き）
+   */
+  private getPositionBehaviorParams(): PositionBehaviorParams {
+    const currentPosition = this.character.playerPosition as PlayerPosition | undefined;
+
+    // ポジションが変わっていなければキャッシュを返す
+    if (this.cachedPositionBehavior && this.cachedPlayerPosition === currentPosition) {
+      return this.cachedPositionBehavior;
+    }
+
+    // 新しいパラメータを取得してキャッシュ
+    this.cachedPlayerPosition = currentPosition;
+    this.cachedPositionBehavior = getPositionBehavior(currentPosition);
+    return this.cachedPositionBehavior;
   }
 
   /**
@@ -488,45 +517,61 @@ export class OnBallOffenseAI extends BaseStateAI {
       return;
     }
 
-    // アクションをランダムに選択
-    // シュートレンジ内かどうかで確率を調整
+    // ポジション別行動パラメータを取得
+    const positionBehavior = this.getPositionBehaviorParams();
+    const actionProbs = get1on1ActionProbabilities(positionBehavior);
+
+    // シュートレンジ情報を取得
     const rangeInfo = this.shootingController?.getShootRangeInfo(this.character);
     const inShootRange = rangeInfo?.inRange ?? false;
+    const shootType = rangeInfo?.shootType;
+
+    // シュートの積極性を取得（シュートタイプに応じて）
+    const shootAggressiveness = shootType
+      ? getShootAggressiveness(positionBehavior, shootType)
+      : positionBehavior.midRangeAggressiveness;
 
     const actionChoice = Math.random();
 
     if (inShootRange) {
-      // シュートレンジ内：シュート優先（80%）
-      if (actionChoice < 0.8) {
+      // シュートレンジ内：ポジション別の積極性に基づいてシュート判断
+      // シュート確率 = shootAggressiveness（ポジション別）
+      if (actionChoice < shootAggressiveness) {
         if (!this.targetPositionOverride && this.tryShoot()) {
           return;
         }
-      } else if (actionChoice < 0.9) {
-        // 10%: フェイント
+      }
+
+      // シュートしなかった場合、残りのアクションを選択
+      const remainingChoice = Math.random();
+      const normalizedProbs = {
+        feint: actionProbs.feint / (actionProbs.feint + actionProbs.drive + actionProbs.wait),
+        drive: actionProbs.drive / (actionProbs.feint + actionProbs.drive + actionProbs.wait),
+      };
+
+      if (remainingChoice < normalizedProbs.feint) {
         if (this.tryFeint()) {
           return;
         }
-      } else if (actionChoice < 0.95) {
-        // 5%: ドリブル突破
+      } else if (remainingChoice < normalizedProbs.feint + normalizedProbs.drive) {
         if (this.tryDribbleMove()) {
           return;
         }
       }
-      // 5%: 様子見
+      // 残り: 様子見
     } else {
-      // シュートレンジ外：積極的に前進
-      if (actionChoice < 0.05) {
-        // 5%: フェイント
-        if (this.tryFeint()) {
-          return;
-        }
-      } else if (actionChoice < 0.15) {
-        // 10%: ドリブル突破
+      // シュートレンジ外：ポジション別のアクション確率に基づいて行動
+      // ドライブ優先のポジション（SF, PF）は積極的に突破
+      if (actionChoice < actionProbs.drive) {
         if (this.tryDribbleMove()) {
           return;
         }
+      } else if (actionChoice < actionProbs.drive + actionProbs.feint) {
+        if (this.tryFeint()) {
+          return;
+        }
       }
-      // 85%: 積極的に前進（相手を押し下げる）
+      // 残り: 積極的に前進（相手を押し下げる）
     }
 
     // 1on1中も積極的に前進（目標方向に向かいながら相手を押し下げる）
@@ -732,15 +777,30 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
+    // ポジション別行動パラメータを取得
+    const positionBehavior = this.getPositionBehaviorParams();
+
+    // シュートタイプに応じたポジション別積極性を取得
+    const shootAggressiveness = rangeInfo.shootType
+      ? getShootAggressiveness(positionBehavior, rangeInfo.shootType)
+      : 0.5;
+
     // シュートタイプに応じた処理（rangeInfo.shootTypeを使用）
+    // ポジション別の積極性に基づいてシュートするかどうかを判断
     let shouldShoot = false;
 
     switch (rangeInfo.shootType) {
       case "3pt":
       case "midrange":
+        // 外からのシュートはポジション別の積極性に基づいて判断
+        // 積極性が低いポジション（C等）は外からは打ちにくい
+        shouldShoot = Math.random() < shootAggressiveness;
+        break;
       case "layup":
       case "dunk":
-        shouldShoot = true;
+        // インサイドシュートは積極性を高めに設定
+        // ゴール下では全ポジションが積極的にシュート
+        shouldShoot = Math.random() < Math.max(shootAggressiveness, 0.8);
         break;
     }
 
@@ -946,6 +1006,19 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
+    // ポジション別行動パラメータを取得
+    const positionBehavior = this.getPositionBehaviorParams();
+
+    // パス優先度に基づいてパスするかどうかを判断
+    // passPriority が低いポジション（SG等）はパスを控える傾向
+    // ただし、良いパスチャンスがあれば実行する
+    const passCheckRoll = Math.random();
+    const shouldAttemptPass = passCheckRoll < positionBehavior.passPriority + 0.3; // +0.3で最低限のチャンス確保
+
+    if (!shouldAttemptPass) {
+      return false;
+    }
+
     const myPos = this.character.getPosition();
 
     // 攻めるべきゴールを取得
@@ -957,6 +1030,9 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
+    // パスリスク許容度を取得
+    const maxRiskTolerance = positionBehavior.maxPassRiskTolerance;
+
     // パス候補を評価
     const passLaneAnalysis = this.analyzeAllPassLanes();
     const passableCandidates: Array<{
@@ -964,6 +1040,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       risk: number;
       distanceToGoal: number;
       isNearGoal: boolean;
+      isInsidePlayer: boolean;
     }> = [];
 
     for (const analysis of passLaneAnalysis) {
@@ -975,19 +1052,24 @@ export class OnBallOffenseAI extends BaseStateAI {
         continue;
       }
 
-      // パスレーンのリスクが高すぎる場合はスキップ
-      if (analysis.risk > 0.7) {
+      // パスレーンのリスクが許容度を超える場合はスキップ
+      if (analysis.risk > maxRiskTolerance + 0.2) {
         continue;
       }
 
       const distanceToGoal = Vector3.Distance(teammatePos, goalPosition);
       const isNearGoal = PassUtils.isNearGoal({x: teammatePos.x, z: teammatePos.z}, {x: goalPosition.x, z: goalPosition.z});
 
+      // インサイドプレイヤー（PF, C）かどうか
+      const teammatePosition = analysis.teammate.playerPosition as PlayerPosition | undefined;
+      const isInsidePlayer = teammatePosition === "PF" || teammatePosition === "C";
+
       passableCandidates.push({
         teammate: analysis.teammate,
         risk: analysis.risk,
         distanceToGoal,
         isNearGoal,
+        isInsidePlayer,
       });
     }
 
@@ -995,7 +1077,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // パス先を選択（優先順位: ゴール下 > 低リスク > ゴールに近い）
+    // パス先を選択（優先順位: ゴール下 > インサイドプレイヤー > 低リスク > ゴールに近い）
     let passTarget: Character | null = null;
 
     // 1. ゴール下にいるチームメイトを優先
@@ -1006,7 +1088,20 @@ export class OnBallOffenseAI extends BaseStateAI {
       passTarget = nearGoalCandidates[0].teammate;
     }
 
-    // 2. ゴール下にいなければ、低リスクでゴールに近いチームメイト
+    // 2. インサイドプレイヤーへのパスを優先（insidePassPriorityに基づく）
+    if (!passTarget && positionBehavior.insidePassPriority > 0.5) {
+      const insideCandidates = passableCandidates.filter((c) => c.isInsidePlayer);
+      if (insideCandidates.length > 0) {
+        // リスクでソート
+        insideCandidates.sort((a, b) => a.risk - b.risk);
+        // insidePassPriority確率でインサイドを選択
+        if (Math.random() < positionBehavior.insidePassPriority) {
+          passTarget = insideCandidates[0].teammate;
+        }
+      }
+    }
+
+    // 3. それでも決まらなければ、低リスクでゴールに近いチームメイト
     if (!passTarget) {
       // リスクでソート、同じならゴールに近い方
       passableCandidates.sort((a, b) => {
