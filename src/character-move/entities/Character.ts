@@ -413,6 +413,34 @@ export class Character {
   }
 
   /**
+   * 顔のメッシュ（頭・目・口）を取得（キャプチャ用）
+   * stateIndicator, visionCone は除外
+   */
+  public getFaceMeshes(): Mesh[] {
+    const meshes: Mesh[] = [this.headMesh];
+    for (const child of this.headMesh.getChildMeshes(false)) {
+      if (child.name.includes('eye') || child.name.includes('mouth')) {
+        meshes.push(child as Mesh);
+      }
+    }
+    return meshes;
+  }
+
+  /**
+   * 頭上の状態インジケーターメッシュを取得
+   */
+  public getStateIndicator(): Mesh {
+    return this.stateIndicator;
+  }
+
+  /**
+   * 視野コーンメッシュを取得
+   */
+  public getVisionCone(): Mesh {
+    return this.visionConeMesh;
+  }
+
+  /**
    * 位置を取得（モーションオフセットを除いた基準位置）
    */
   public getPosition(): Vector3 {
