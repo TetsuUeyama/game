@@ -7,35 +7,45 @@
         "position": "PG",
         "x": 0,
         "z": -5,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "MAIN_HANDLER",
+        "defenseRole": "POA"
       },
       {
         "playerId": "2",
         "position": "C",
         "x": 0,
         "z": 10,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SCREENER",
+        "defenseRole": "LOW_MAN"
       },
       {
         "playerId": "3",
         "position": "SG",
         "x": -5,
         "z": -3,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SPACER",
+        "defenseRole": "CLOSEOUT"
       },
       {
         "playerId": "4",
         "position": "SF",
         "x": 5,
         "z": -3,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SLASHER",
+        "defenseRole": "NAIL"
       },
       {
         "playerId": "5",
         "position": "PF",
         "x": -3,
         "z": 5,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SECOND_HANDLER",
+        "defenseRole": "SCRAMBLER"
       }
     ]
   },
@@ -47,35 +57,45 @@
         "position": "PG",
         "x": 0,
         "z": 5,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SLASHER",
+        "defenseRole": "NAIL"
       },
       {
         "playerId": "6",
         "position": "C",
         "x": 0,
         "z": -10,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "DUNKER",
+        "defenseRole": "LOW_MAN"
       },
       {
         "playerId": "7",
         "position": "SG",
         "x": -5,
         "z": 3,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SECOND_HANDLER",
+        "defenseRole": "SCRAMBLER"
       },
       {
         "playerId": "8",
         "position": "SF",
         "x": 5,
         "z": 3,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "SCREENER",
+        "defenseRole": "CLOSEOUT"
       },
       {
         "playerId": "9",
         "position": "PF",
         "x": 3,
         "z": -5,
-        "hasAI": true
+        "hasAI": true,
+        "offenseRole": "MAIN_HANDLER",
+        "defenseRole": "POA"
       }
     ]
   }

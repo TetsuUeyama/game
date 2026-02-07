@@ -19,6 +19,7 @@ import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState"
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { PlayerData } from "../types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "../types/FaceConfig";
+import { OffenseRole, DefenseRole } from "../state/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "../types/BallAction";
 import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrategy";
 import { CharacterBodyParts } from "./CharacterBodyParts";
@@ -108,6 +109,8 @@ export class Character {
   // 選手データ
   public playerData: PlayerData | null = null;
   public playerPosition: 'PG' | 'SG' | 'SF' | 'PF' | 'C' | null = null;
+  public offenseRole: OffenseRole | null = null;
+  public defenseRole: DefenseRole | null = null;
 
   // 名前表示用
   private nameLabel: Mesh | null = null;

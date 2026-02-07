@@ -4,7 +4,7 @@ import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { PlayerPosition } from "../config/FormationConfig";
 import { getDistance2D } from "../utils/CollisionUtils";
-import { PlayerStateSnapshot, TeamState, RadiusQueryOptions } from "./PlayerStateTypes";
+import { PlayerStateSnapshot, TeamState, RadiusQueryOptions, OffenseRole, DefenseRole } from "./PlayerStateTypes";
 
 /**
  * 全選手一括管理システム
@@ -28,6 +28,12 @@ export class PlayerStateManager {
 
   // インデックス: ポジション別
   private positionIndex: Map<PlayerPosition, PlayerStateSnapshot[]> = new Map();
+
+  // インデックス: オフェンス役割別
+  private offenseRoleIndex: Map<OffenseRole, PlayerStateSnapshot[]> = new Map();
+
+  // インデックス: ディフェンス役割別
+  private defenseRoleIndex: Map<DefenseRole, PlayerStateSnapshot[]> = new Map();
 
   // ボール保持者
   private ballHolderSnapshot: PlayerStateSnapshot | null = null;
@@ -53,6 +59,8 @@ export class PlayerStateManager {
     this.enemyPlayers = [];
     this.stateIndex.clear();
     this.positionIndex.clear();
+    this.offenseRoleIndex.clear();
+    this.defenseRoleIndex.clear();
     this.ballHolderSnapshot = null;
 
     // 全選手のスナップショットを作成
@@ -64,6 +72,8 @@ export class PlayerStateManager {
         team: character.team,
         state: character.getState(),
         playerPosition: character.playerPosition as PlayerPosition | null,
+        offenseRole: character.offenseRole,
+        defenseRole: character.defenseRole,
         hasBall: character === holder,
         speedStat: character.playerData?.stats.speed ?? 50,
       };
@@ -94,6 +104,26 @@ export class PlayerStateManager {
           this.positionIndex.set(snapshot.playerPosition, posList);
         }
         posList.push(snapshot);
+      }
+
+      // オフェンス役割別インデックス
+      if (snapshot.offenseRole) {
+        let offList = this.offenseRoleIndex.get(snapshot.offenseRole);
+        if (!offList) {
+          offList = [];
+          this.offenseRoleIndex.set(snapshot.offenseRole, offList);
+        }
+        offList.push(snapshot);
+      }
+
+      // ディフェンス役割別インデックス
+      if (snapshot.defenseRole) {
+        let defList = this.defenseRoleIndex.get(snapshot.defenseRole);
+        if (!defList) {
+          defList = [];
+          this.defenseRoleIndex.set(snapshot.defenseRole, defList);
+        }
+        defList.push(snapshot);
       }
 
       // ボール保持者
@@ -201,6 +231,44 @@ export class PlayerStateManager {
    */
   public getPlayersByPosition(position: PlayerPosition): readonly PlayerStateSnapshot[] {
     return this.positionIndex.get(position) ?? [];
+  }
+
+  /**
+   * オフェンス役割別の選手を取得
+   */
+  public getPlayersByOffenseRole(role: OffenseRole): readonly PlayerStateSnapshot[] {
+    return this.offenseRoleIndex.get(role) ?? [];
+  }
+
+  /**
+   * ディフェンス役割別の選手を取得
+   */
+  public getPlayersByDefenseRole(role: DefenseRole): readonly PlayerStateSnapshot[] {
+    return this.defenseRoleIndex.get(role) ?? [];
+  }
+
+  /**
+   * 特定チームの特定オフェンス役割の選手を取得
+   */
+  public getPlayersByTeamAndOffenseRole(team: 'ally' | 'enemy', role: OffenseRole): PlayerStateSnapshot[] {
+    const rolePlayers = this.offenseRoleIndex.get(role) ?? [];
+    return rolePlayers.filter(s => s.team === team);
+  }
+
+  /**
+   * 特定チームの特定ディフェンス役割の選手を取得
+   */
+  public getPlayersByTeamAndDefenseRole(team: 'ally' | 'enemy', role: DefenseRole): PlayerStateSnapshot[] {
+    const rolePlayers = this.defenseRoleIndex.get(role) ?? [];
+    return rolePlayers.filter(s => s.team === team);
+  }
+
+  /**
+   * チームのメインハンドラーを取得
+   */
+  public getMainHandler(team: 'ally' | 'enemy'): PlayerStateSnapshot | null {
+    const handlers = this.getPlayersByTeamAndOffenseRole(team, OffenseRole.MAIN_HANDLER);
+    return handlers.length > 0 ? handlers[0] : null;
   }
 
   // ============================================

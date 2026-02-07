@@ -480,6 +480,8 @@ export class GameScene {
       const character = new Character(this.scene, position, config);
       character.team = "ally";
       character.setPlayerData(player, playerConfig.position);
+      character.offenseRole = playerConfig.offenseRole ?? null;
+      character.defenseRole = playerConfig.defenseRole ?? null;
 
       // 選手の身長を反映（cm → m）
       const heightInMeters = player.basic.height / 100;
@@ -510,6 +512,8 @@ export class GameScene {
       const character = new Character(this.scene, position, config);
       character.team = "enemy";
       character.setPlayerData(player, playerConfig.position);
+      character.offenseRole = playerConfig.offenseRole ?? null;
+      character.defenseRole = playerConfig.defenseRole ?? null;
 
       // 選手の身長を反映（cm → m）
       const heightInMeters = player.basic.height / 100;
