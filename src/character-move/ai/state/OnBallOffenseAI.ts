@@ -622,36 +622,6 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * シュート後にボールを見守る
-   * シュート結果が出るまでその場で待機
-   */
-  private handleWatchShot(): void {
-    const myPosition = this.character.getPosition();
-    const ballPosition = this.ball.getPosition();
-
-    // ボールの方を向く
-    const toBall = new Vector3(
-      ballPosition.x - myPosition.x,
-      0,
-      ballPosition.z - myPosition.z
-    );
-
-    if (toBall.length() > 0.01) {
-      const angle = Math.atan2(toBall.x, toBall.z);
-      this.character.setRotation(angle);
-    }
-
-    // 停止してボールを見守る
-    this.character.velocity = Vector3.Zero();
-    this.character.stopMovement();
-
-    // アイドルモーション
-    if (this.character.getCurrentMotionName() !== "idle") {
-      this.character.playMotion(IDLE_MOTION);
-    }
-  }
-
-  /**
    * ゴール方向の経路上にディフェンダーがいるかチェック
    * ボールハンドラーとゴールの間にいるディフェンダーのみを検出
    * @param targetPosition ゴール位置

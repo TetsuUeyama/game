@@ -9,6 +9,7 @@ import {
   JUMP_BALL_TIMING,
   JUMP_BALL_PHYSICS,
 } from "../../config/JumpBallConfig";
+import { getDistance2DSimple } from "../../utils/CollisionUtils";
 
 /**
  * ジャンプボール実行コールバック
@@ -210,10 +211,7 @@ export class JumpBallJumperAI extends BaseStateAI {
     }
 
     // ボールが自分の近くにあるかチェック（水平距離）
-    const horizontalDistance = Math.sqrt(
-      Math.pow(ballPos.x - myPos.x, 2) +
-      Math.pow(ballPos.z - myPos.z, 2)
-    );
+    const horizontalDistance = getDistance2DSimple(ballPos, myPos);
 
     // リーチ範囲内にあるかチェック
     const reachRange = 1.0; // 手の届く範囲

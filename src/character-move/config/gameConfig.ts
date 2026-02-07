@@ -29,6 +29,16 @@ export const FIELD_CONFIG = {
   centerCircleColor: '#FFFFFF', // ラインの色（白）
 };
 
+// 安全境界設定（AI移動時のフィールド端からのマージン）
+export const SAFE_BOUNDARY_CONFIG = {
+  margin: 1.5, // フィールド端からのマージン（m）
+  // 計算済みの安全境界（FIELD_CONFIG.width/2 - margin, FIELD_CONFIG.length/2 - margin）
+  minX: -6.0,  // -7.5 + 1.5
+  maxX: 6.0,   // 7.5 - 1.5
+  minZ: -13.5, // -15 + 1.5
+  maxZ: 13.5,  // 15 - 1.5
+} as const;
+
 // ゴール設定（バスケットゴール）
 export const GOAL_CONFIG = {
   // リム（リング）設定

@@ -66,6 +66,10 @@ export class GameResetManager {
   private shotClockViolatingTeam: 'ally' | 'enemy' | null = null;
   private readonly shotClockViolationResetDelay: number = 1.5;
 
+  // アウトオブバウンズ判定用
+  private previousBallPosition: Vector3 | null = null;
+  private readonly outOfBoundsMargin: number = 0.5; // 50cmのマージン
+
   constructor(context: GameResetContext) {
     this.context = context;
   }
@@ -159,6 +163,54 @@ export class GameResetManager {
   // =============================================================================
   // アウトオブバウンズリセット
   // =============================================================================
+
+  /**
+   * ボールがコート外に出たか判定
+   * 内側から外側に出た場合のみtrueを返す
+   * @returns コート外に出た場合true
+   */
+  public checkOutOfBounds(): boolean {
+    const ballPosition = this.context.ball.getPosition();
+    const halfWidth = FIELD_CONFIG.width / 2;   // 7.5m
+    const halfLength = FIELD_CONFIG.length / 2; // 14m
+
+    // 現在のボール位置がコート外かチェック（マージン込み）
+    const isCurrentlyOutX = Math.abs(ballPosition.x) > halfWidth + this.outOfBoundsMargin;
+    const isCurrentlyOutZ = Math.abs(ballPosition.z) > halfLength + this.outOfBoundsMargin;
+    const isCurrentlyOut = isCurrentlyOutX || isCurrentlyOutZ;
+
+    // 現在コート内ならアウトオブバウンズではない
+    if (!isCurrentlyOut) {
+      return false;
+    }
+
+    // 前フレームの位置がない場合（初回）はアウトオブバウンズとしない
+    if (!this.previousBallPosition) {
+      return false;
+    }
+
+    // 前フレームの位置がコート内だったかチェック（マージンありで判定）
+    const wasPreviouslyInX = Math.abs(this.previousBallPosition.x) <= halfWidth + this.outOfBoundsMargin;
+    const wasPreviouslyInZ = Math.abs(this.previousBallPosition.z) <= halfLength + this.outOfBoundsMargin;
+    const wasPreviouslyIn = wasPreviouslyInX && wasPreviouslyInZ;
+
+    // 内側から外側に出た場合のみアウトオブバウンズ
+    return wasPreviouslyIn && isCurrentlyOut;
+  }
+
+  /**
+   * 前フレームのボール位置を更新（毎フレーム呼び出す）
+   */
+  public updatePreviousBallPosition(): void {
+    this.previousBallPosition = this.context.ball.getPosition().clone();
+  }
+
+  /**
+   * 前フレームのボール位置をクリア
+   */
+  public clearPreviousBallPosition(): void {
+    this.previousBallPosition = null;
+  }
 
   /**
    * アウトオブバウンズリセットを開始

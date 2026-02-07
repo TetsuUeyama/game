@@ -28,17 +28,6 @@ export class OnBallDefenseAI extends BaseStateAI {
   }
 
   /**
-   * 守るべきゴールの位置を取得
-   * ディフェンダーのチームに応じて自チームのゴール位置を返す
-   * （攻めるゴールの逆が守るゴール）
-   */
-  private getDefendingGoalPosition(): Vector3 {
-    // allyチームはgoal1を攻める → goal2を守る
-    // enemyチームはgoal2を攻める → goal1を守る
-    return this.field.getDefendingGoalRim(this.character.team);
-  }
-
-  /**
    * オフェンスとゴールを結ぶ直線上の理想的な守備位置を計算
    * @param offensePosition オフェンスの位置
    * @param goalPosition ゴールの位置
