@@ -18,6 +18,7 @@ import { MotionData } from "../types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { PlayerData } from "../types/PlayerData";
+import { FaceConfig, DEFAULT_FACE_CONFIG } from "../types/FaceConfig";
 import { BallAction, FACE_ACTIONS } from "../types/BallAction";
 import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrategy";
 import { CharacterBodyParts } from "./CharacterBodyParts";
@@ -69,6 +70,8 @@ export class Character {
   private leftEyeMesh: Mesh; // 左目
   private rightEyeMesh: Mesh; // 右目
   private mouthMesh: Mesh; // 口
+  private hairMesh: Mesh | null = null; // 髪
+  private beardMesh: Mesh | null = null; // 髭
 
   // 状態インジケーター（頭上の球体）
   private stateIndicator: Mesh;
@@ -419,7 +422,8 @@ export class Character {
   public getFaceMeshes(): Mesh[] {
     const meshes: Mesh[] = [this.headMesh];
     for (const child of this.headMesh.getChildMeshes(false)) {
-      if (child.name.includes('eye') || child.name.includes('mouth')) {
+      if (child.name.includes('eye') || child.name.includes('mouth') ||
+          child.name.includes('hair') || child.name.includes('beard')) {
         meshes.push(child as Mesh);
       }
     }
@@ -1546,6 +1550,76 @@ export class Character {
 
     // 名前ラベルを作成
     this.createNameLabel();
+
+    // 顔設定を適用
+    const fc = playerData.faceConfig ?? DEFAULT_FACE_CONFIG;
+    this.applyFaceConfig(fc);
+  }
+
+  /**
+   * 顔設定を適用（マテリアル色・位置の更新、髪・髭メッシュの生成）
+   */
+  public applyFaceConfig(fc: FaceConfig): void {
+    // ファクトリーのFaceConfigを更新（createHair/createBeard用）
+    this.bodyPartsFactory.setFaceConfig(fc);
+
+    // 頭の肌色を更新
+    const headMat = this.headMesh.material as StandardMaterial;
+    if (headMat) {
+      headMat.diffuseColor = new Color3(fc.skinColor.r, fc.skinColor.g, fc.skinColor.b);
+    }
+
+    // 目メッシュを再作成（EyeStyleで形状が変わるため）
+    const leftEyeParent = this.leftEyeMesh.parent;
+    const rightEyeParent = this.rightEyeMesh.parent;
+    this.leftEyeMesh.dispose();
+    this.rightEyeMesh.dispose();
+    this.leftEyeMesh = this.bodyPartsFactory.createEye("left");
+    this.rightEyeMesh = this.bodyPartsFactory.createEye("right");
+    this.leftEyeMesh.parent = leftEyeParent;
+    this.rightEyeMesh.parent = rightEyeParent;
+
+    // 口メッシュを再作成（MouthStyleで形状が変わるため）
+    const mouthParent = this.mouthMesh.parent;
+    this.mouthMesh.dispose();
+    this.mouthMesh = this.bodyPartsFactory.createMouth();
+    this.mouthMesh.parent = mouthParent;
+
+    // 腕・手の肌色を更新
+    const skinMeshes = [
+      this.leftUpperArmMesh, this.rightUpperArmMesh,
+      this.leftElbowMesh, this.rightElbowMesh,
+      this.leftForearmMesh, this.rightForearmMesh,
+      this.leftHandMesh, this.rightHandMesh,
+    ];
+    for (const mesh of skinMeshes) {
+      const mat = mesh.material as StandardMaterial;
+      if (mat) {
+        mat.diffuseColor = new Color3(fc.skinColor.r, fc.skinColor.g, fc.skinColor.b);
+      }
+    }
+
+    // 既存の髪メッシュを削除
+    if (this.hairMesh) {
+      this.hairMesh.dispose();
+      this.hairMesh = null;
+    }
+    // 新しい髪メッシュを生成
+    this.hairMesh = this.bodyPartsFactory.createHair();
+    if (this.hairMesh) {
+      this.hairMesh.parent = this.headMesh;
+    }
+
+    // 既存の髭メッシュを削除
+    if (this.beardMesh) {
+      this.beardMesh.dispose();
+      this.beardMesh = null;
+    }
+    // 新しい髭メッシュを生成
+    this.beardMesh = this.bodyPartsFactory.createBeard();
+    if (this.beardMesh) {
+      this.beardMesh.parent = this.headMesh;
+    }
   }
 
   /**
@@ -2132,6 +2206,14 @@ export class Character {
     this.leftEyeMesh.dispose();
     this.rightEyeMesh.dispose();
     this.mouthMesh.dispose();
+    if (this.hairMesh) {
+      this.hairMesh.dispose();
+      this.hairMesh = null;
+    }
+    if (this.beardMesh) {
+      this.beardMesh.dispose();
+      this.beardMesh = null;
+    }
     this.upperBodyMesh.dispose();
     this.lowerBodyMesh.dispose();
     this.waistJointMesh.dispose();
