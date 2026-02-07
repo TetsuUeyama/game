@@ -22,6 +22,7 @@ import { FeintController } from "../controllers/action/FeintController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState } from "../types/CharacterState";
+import { PlayerStateManager } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -108,6 +109,9 @@ export class GameScene {
 
   // AIコントローラー
   private characterAIs: CharacterAI[] = [];
+
+  // 全選手一括管理
+  private playerStateManager?: PlayerStateManager;
 
   private lastFrameTime: number = Date.now();
 
@@ -226,12 +230,15 @@ export class GameScene {
       this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
     }
 
+    // 全選手一括管理の初期化
+    this.playerStateManager = new PlayerStateManager(this.ball);
+
     // AIコントローラーの初期化（hasAI: trueのキャラクターのみ）
     if (showAdditionalCharacters) {
       for (const character of allCharacters) {
         // AIで動くキャラクターのみAIコントローラーを設定
         if (this.aiCharacterIndices.has(character)) {
-          const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
+          const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager);
           this.characterAIs.push(ai);
         }
       }
@@ -833,6 +840,10 @@ export class GameScene {
       if (this.collisionHandler) {
         this.collisionHandler.update(deltaTime);
       }
+      // 全選手スナップショットを更新
+      if (this.playerStateManager) {
+        this.playerStateManager.update(allCharacters);
+      }
       // カメラ更新
       this.updateCamera(deltaTime);
       return;
@@ -882,6 +893,12 @@ export class GameScene {
       // キャラクターの状態を更新（AI更新前に実行して正しい状態でAIが動作するようにする）
       if (this.collisionHandler) {
         this.collisionHandler.updateStates();
+      }
+
+      // 全選手スナップショットを更新（状態更新後、AI更新前）
+      if (this.playerStateManager) {
+        const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+        this.playerStateManager.update(allCharacters);
       }
 
       // 1on1バトルコントローラーの更新（状態更新後に実行して正しい状態で動作）
@@ -1754,10 +1771,13 @@ export class GameScene {
     }
     this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
 
+    // 全選手一括管理を再初期化
+    this.playerStateManager = new PlayerStateManager(this.ball);
+
     // AIコントローラーを再初期化
     for (const character of allCharacters) {
       if (this.aiCharacterIndices.has(character)) {
-        const ai = new CharacterAI(character, this.ball, allCharacters, this.field);
+        const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager);
 
         // ShootingControllerを設定
         if (this.shootingController) {

@@ -7,6 +7,7 @@ import { DEFENSE_PRESSURE, DefenseUtils } from "../../config/DefenseConfig";
 import { ActionConfigUtils } from "../../config/action/ActionConfig";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { DEFENSE_STANCE_MOTION } from "../../motion/DefenseMotion";
+import { PlayerStateManager } from "../../state";
 
 /**
  * オンボールディフェンダー時のAI
@@ -22,9 +23,10 @@ export class OnBallDefenseAI extends BaseStateAI {
     character: Character,
     ball: Ball,
     allCharacters: Character[],
-    field: Field
+    field: Field,
+    playerState?: PlayerStateManager
   ) {
-    super(character, ball, allCharacters, field);
+    super(character, ball, allCharacters, field, playerState);
   }
 
   /**

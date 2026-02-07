@@ -6,6 +6,7 @@ import { BaseStateAI } from "./BaseStateAI";
 import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
+import { PlayerStateManager } from "../../state";
 
 /** ルーズボール追跡者の最大人数 */
 const MAX_CHASERS_PER_TEAM = 2;
@@ -28,9 +29,10 @@ export class LooseBallAI extends BaseStateAI {
     character: Character,
     ball: Ball,
     allCharacters: Character[],
-    field: Field
+    field: Field,
+    playerState?: PlayerStateManager
   ) {
-    super(character, ball, allCharacters, field);
+    super(character, ball, allCharacters, field, playerState);
   }
 
   /**

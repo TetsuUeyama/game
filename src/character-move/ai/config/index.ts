@@ -3,3 +3,4 @@
  */
 
 export * from "./AILayerTypes";
+export * from "./PositionBehaviorConfig";

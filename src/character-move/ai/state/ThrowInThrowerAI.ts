@@ -3,6 +3,7 @@ import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { Field } from "../../entities/Field";
 import { ThrowInBaseAI } from "./ThrowInBaseAI";
+import { PlayerStateManager } from "../../state";
 
 /**
  * スローインを投げる人用のコールバック
@@ -33,9 +34,10 @@ export class ThrowInThrowerAI extends ThrowInBaseAI {
     character: Character,
     ball: Ball,
     allCharacters: Character[],
-    field: Field
+    field: Field,
+    playerState?: PlayerStateManager
   ) {
-    super(character, ball, allCharacters, field);
+    super(character, ball, allCharacters, field, playerState);
   }
 
   /**

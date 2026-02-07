@@ -8,6 +8,7 @@ import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { FIELD_CONFIG } from "../../config/gameConfig";
 import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import { PlayerStateManager } from "../../state";
 
 /**
  * 状態別AIの基底クラス
@@ -18,17 +19,20 @@ export abstract class BaseStateAI {
   protected ball: Ball;
   protected allCharacters: Character[];
   protected field: Field;
+  protected playerState: PlayerStateManager | null;
 
   constructor(
     character: Character,
     ball: Ball,
     allCharacters: Character[],
-    field: Field
+    field: Field,
+    playerState?: PlayerStateManager
   ) {
     this.character = character;
     this.ball = ball;
     this.allCharacters = allCharacters;
     this.field = field;
+    this.playerState = playerState ?? null;
   }
 
   /**
