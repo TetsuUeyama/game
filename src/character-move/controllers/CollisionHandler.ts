@@ -8,6 +8,7 @@ import {
 } from "../utils/CollisionUtils";
 import { CHARACTER_COLLISION_CONFIG } from "../config/CollisionConfig";
 import { BallCatchSystem } from "../systems/BallCatchSystem";
+import { LooseBallScrambleSystem } from "../systems/LooseBallScrambleSystem";
 
 /**
  * 衝突判定コントローラー
@@ -17,11 +18,13 @@ export class CollisionHandler {
   private ball: Ball;
   private allCharacters: Character[];
   private ballCatchSystem: BallCatchSystem;
+  private looseBallScrambleSystem: LooseBallScrambleSystem;
 
   constructor(ball: Ball, characters: Character[]) {
     this.ball = ball;
     this.allCharacters = characters;
     this.ballCatchSystem = new BallCatchSystem(ball, characters);
+    this.looseBallScrambleSystem = new LooseBallScrambleSystem(ball, characters);
   }
 
   /**
@@ -38,6 +41,9 @@ export class CollisionHandler {
    * ここではキャッチ判定とキャラクター同士の衝突のみを処理
    */
   public update(deltaTime: number): void {
+    // ルーズボール確保アクション判定（BallCatchSystemより先に実行）
+    this.looseBallScrambleSystem.update(deltaTime);
+
     // ボールとキャラクターの衝突判定（キャッチ）- BallCatchSystem に委譲
     this.ballCatchSystem.update(deltaTime);
 
@@ -294,5 +300,6 @@ export class CollisionHandler {
    */
   public dispose(): void {
     this.ballCatchSystem.dispose();
+    this.looseBallScrambleSystem.dispose();
   }
 }

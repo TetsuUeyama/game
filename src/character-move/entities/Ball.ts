@@ -67,6 +67,10 @@ export class Ball {
   private bouncePassFinalTarget: Vector3 | null = null;
   private hasBounced: boolean = false;
 
+  // カーブパス用の状態
+  private curveForce: Vector3 = Vector3.Zero();
+  private isCurvePass: boolean = false;
+
   // スローインロック（スローイン中は指定されたパス以外でボールを解放できない）
   private throwInLocked: boolean = false;
   private throwInReceiver: Character | null = null;
@@ -413,6 +417,9 @@ export class Ball {
       this.isBouncePass = false;
       this.bouncePassFinalTarget = null;
       this.hasBounced = false;
+      // カーブパス状態をリセット
+      this.isCurvePass = false;
+      this.curveForce = Vector3.Zero();
       // ボールサイズを元に戻す
       this.mesh.scaling = Vector3.One();
 
@@ -516,6 +523,12 @@ export class Ball {
       return;
     }
 
+    // カーブパスの横力を毎フレーム適用
+    if (this.isCurvePass && this.physicsAggregate) {
+      const center = this.physicsAggregate.body.getObjectCenterWorld();
+      this.physicsAggregate.body.applyForce(this.curveForce, center);
+    }
+
     const velocity = this.physicsAggregate.body.getLinearVelocity();
     const position = this.getPosition();
     const speed = velocity.length();
@@ -577,6 +590,9 @@ export class Ball {
       this.isBouncePass = false;
       this.bouncePassFinalTarget = null;
       this.hasBounced = false;
+      // カーブパス状態をリセット
+      this.isCurvePass = false;
+      this.curveForce = Vector3.Zero();
       // 水平方向の速度は維持（転がり続ける）、垂直方向のみ停止
       if (speed < 0.5) {
         // 完全に停止している場合のみキネマティックモードに
@@ -939,6 +955,9 @@ export class Ball {
     this.isBouncePass = false;
     this.bouncePassFinalTarget = null;
     this.hasBounced = false;
+    // カーブパス状態をリセット
+    this.isCurvePass = false;
+    this.curveForce = Vector3.Zero();
   }
 
   /**
@@ -957,9 +976,9 @@ export class Ball {
    * @param targetCharacter パス先のキャラクター（ログ用）
    * @deprecated passWithArc を使用してください
    */
-  public pass(targetPosition: Vector3, _targetCharacter?: Character): boolean {
+  public pass(targetPosition: Vector3, _targetCharacter?: Character, curveDirection: number = 0): boolean {
     // 新しいpassWithArcにリダイレクト
-    return this.passWithArc(targetPosition, _targetCharacter);
+    return this.passWithArc(targetPosition, _targetCharacter, 'chest', curveDirection);
   }
 
   /**
@@ -973,7 +992,8 @@ export class Ball {
   public passWithArc(
     targetPosition: Vector3,
     targetCharacter?: Character,
-    passType: 'chest' | 'bounce' | 'overhead' = 'chest'
+    passType: 'chest' | 'bounce' | 'overhead' = 'chest',
+    curveDirection: number = 0  // -1=左, 0=直線, +1=右
   ): boolean {
     if (!this.holder) return false;
     if (this.inFlight) return false;
@@ -1090,9 +1110,41 @@ export class Ball {
       damping: PhysicsConstants.BALL.LINEAR_DAMPING,
     });
 
+    // カーブパス設定
+    this.isCurvePass = false;
+    this.curveForce = Vector3.Zero();
+    let curveCompensation = Vector3.Zero();
+
+    if (curveDirection !== 0 && passType !== 'bounce' && previousHolder.playerData) {
+      const curveStat = previousHolder.playerData.stats.curve ?? 50;
+      // カーブ力: 1N (curve=0) 〜 8N (curve=99)
+      const forceMagnitude = curveDirection * (1 + (curveStat / 100) * 7);
+
+      // パス方向の水平ベクトル
+      const passDir = new Vector3(
+        adjustedTargetPosition.x - startPosition.x, 0,
+        adjustedTargetPosition.z - startPosition.z
+      ).normalize();
+
+      // 横方向（右手法則: passDir × Y_up）
+      const lateralDir = new Vector3(passDir.z, 0, -passDir.x);
+
+      this.curveForce = lateralDir.scale(forceMagnitude);
+      this.isCurvePass = true;
+
+      // 到着地点を合わせるための初速補償
+      const T = this.currentTrajectory!.getFlightTime();
+      const compensatingSpeed = -0.5 * (forceMagnitude / PhysicsConstants.BALL.MASS) * T;
+      curveCompensation = lateralDir.scale(compensatingSpeed);
+    }
+
     // 軌道から初速度を取得
     const initialVel = this.currentTrajectory.getInitialVelocity();
-    const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
+    const velocity = new Vector3(
+      initialVel.x + curveCompensation.x,
+      initialVel.y,
+      initialVel.z + curveCompensation.z
+    );
 
     // Havok物理エンジンを設定
     if (this.physicsAggregate) {

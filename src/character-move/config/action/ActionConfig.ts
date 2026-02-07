@@ -5,6 +5,7 @@ import { PASS_MOTIONS } from "../../motion/PassMotion";
 import { DEFENSE_MOTIONS } from "../../motion/DefenseMotion";
 import { DRIBBLE_MOTIONS } from "../../motion/DribbleMotion";
 import { JUMP_BALL_MOTIONS } from "../../motion/JumpMotion";
+import { LOOSE_BALL_MOTIONS } from "../../motion/LooseBallMotion";
 
 /**
  * アクションカテゴリ
@@ -36,7 +37,9 @@ export type ActionType =
   // 移動
   | 'defense_stance'  // ディフェンス構え（移動速度低下、反応速度UP）
   // ジャンプボール
-  | 'jump_ball';      // ジャンプボール（センターで両手を上に伸ばす）
+  | 'jump_ball'       // ジャンプボール（センターで両手を上に伸ばす）
+  // ルーズボール
+  | 'loose_ball_scramble';  // ルーズボール確保
 
 /**
  * アクションフェーズ
@@ -311,6 +314,26 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     },
     // 重心: 大きなジャンプ → 着地後に大きな隙
   },
+
+  // ==============================
+  // ルーズボールアクション
+  // ==============================
+
+  // ルーズボール確保
+  loose_ball_scramble: {
+    type: 'loose_ball_scramble',
+    category: 'movement',
+    motion: 'loose_ball_scramble',
+    startupTime: 100,      // 0.1秒（身を低くする）
+    activeTime: 400,       // 0.4秒（確保判定が有効な時間）
+    priority: 11,
+    interruptible: false,
+    hitbox: {
+      type: 'sphere',
+      radius: 0.8,         // 手を伸ばした確保範囲
+      offset: new Vector3(0, 0.4, 0.6), // 低い姿勢で前方に手を伸ばす
+    },
+  },
 };
 
 /**
@@ -431,4 +454,7 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
 
   // ジャンプボールモーション
   jump_ball: JUMP_BALL_MOTIONS.jump_ball,
+
+  // ルーズボールモーション
+  loose_ball_scramble: LOOSE_BALL_MOTIONS.loose_ball_scramble,
 };

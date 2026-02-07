@@ -9,6 +9,7 @@ import { OneOnOneBattleController } from "../../controllers/action/OneOnOneBattl
 import { ShootingController } from "../../controllers/action/ShootingController";
 import { FeintController } from "../../controllers/action/FeintController";
 import { PASS_COOLDOWN } from "../../config/PassConfig";
+import { determineCurveDirection } from "../../utils/CurvePassUtils";
 
 /**
  * プレイヤーアクションファサード用コンテキスト
@@ -198,7 +199,9 @@ export class PlayerActionFacade {
 
           if (passTarget) {
             const targetPosition = passTarget.getPosition();
-            ball.pass(targetPosition, passTarget);
+            const opponents = passer.team === 'ally' ? enemyCharacters : allyCharacters;
+            const curveDirection = determineCurveDirection(passer, passTarget, opponents);
+            ball.pass(targetPosition, passTarget, curveDirection);
           }
         }
       },
@@ -241,6 +244,32 @@ export class PlayerActionFacade {
     });
 
     return { success: true, message: `${actionType}開始` };
+  }
+
+  // =============================================================================
+  // ルーズボール確保
+  // =============================================================================
+
+  /**
+   * ルーズボール確保アクションを実行
+   * ルーズボール時のみ発動可能
+   * @param character 確保を試みるキャラクター
+   * @returns 成功/失敗
+   */
+  public performLooseBallScramble(
+    character: Character
+  ): { success: boolean; message: string } {
+    // ルーズボール時のみ
+    if (this.context.ball.isHeld()) {
+      return { success: false, message: 'ボールが保持されています' };
+    }
+
+    const actionResult = character.getActionController().startAction('loose_ball_scramble');
+    if (!actionResult.success) {
+      return { success: false, message: actionResult.message };
+    }
+
+    return { success: true, message: 'ルーズボール確保開始' };
   }
 
   // =============================================================================
