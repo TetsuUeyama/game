@@ -11,6 +11,9 @@ import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
 import { ThrowInCheckModePanel } from './ThrowInCheckModePanel';
+import { FaceAvatarData } from '@/character-move/utils/FaceAvatarCapture';
+import { PlayerFaceAvatar } from './PlayerFaceAvatar';
+import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
 
 type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'throw_in_check';
 
@@ -32,6 +35,10 @@ export default function CharacterMove1on1Game() {
   const [isThrowInTimerRunning, setIsThrowInTimerRunning] = useState<boolean>(false);
   const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
   const [currentMode, setCurrentMode] = useState<GameModeType>('game');
+  const [faceAvatars, setFaceAvatars] = useState<FaceAvatarData[]>([]);
+  const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayerInfo | null>(null);
+  const [playerStateColors, setPlayerStateColors] = useState<Record<string, string>>({});
+  const lastCharacterVersionRef = useRef<number>(-1);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -148,11 +155,72 @@ export default function CharacterMove1on1Game() {
         setShotClockOffenseTeam(currentOffenseTeam);
         setThrowInTimer(currentThrowInTimer);
         setIsThrowInTimerRunning(currentIsThrowInRunning);
+        setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
       }
     }, 100); // 100msごとにチェック
 
     return () => clearInterval(checkInterval);
   }, [loading]);
+
+  // フェイスアバターキャプチャ
+  useEffect(() => {
+    if (!gameSceneRef.current || loading) return;
+
+    let cancelled = false;
+
+    const captureAvatars = async () => {
+      if (!gameSceneRef.current || cancelled) return;
+      try {
+        const avatars = await gameSceneRef.current.capturePlayerFaceAvatars();
+        if (!cancelled) {
+          setFaceAvatars(avatars);
+          lastCharacterVersionRef.current = gameSceneRef.current.getCharacterVersion();
+        }
+      } catch {
+        // キャプチャ失敗は無視（ゲーム進行に影響しない）
+      }
+    };
+
+    // 1秒後に初回キャプチャ
+    const initTimer = setTimeout(captureAvatars, 1000);
+
+    // characterVersionの変更を監視（既存のポーリングに便乗）
+    const versionCheck = setInterval(() => {
+      if (!gameSceneRef.current) return;
+      const currentVersion = gameSceneRef.current.getCharacterVersion();
+      if (currentVersion !== lastCharacterVersionRef.current) {
+        captureAvatars();
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(initTimer);
+      clearInterval(versionCheck);
+    };
+  }, [loading]);
+
+  // 顔クリック時の詳細パネル表示
+  const handleFaceClick = useCallback((avatar: FaceAvatarData) => {
+    if (!gameSceneRef.current) return;
+
+    const characters = avatar.team === 'ally'
+      ? gameSceneRef.current.getAllyCharacters()
+      : gameSceneRef.current.getEnemyCharacters();
+
+    const character = characters.find(c => c.playerData?.basic.ID === avatar.characterId);
+    if (!character?.playerData) return;
+
+    setSelectedPlayer({
+      playerName: character.playerData.basic.NAME,
+      position: character.playerPosition ?? '',
+      height: character.playerData.basic.height,
+      dominantHand: character.playerData.basic.dominanthand,
+      stats: character.playerData.stats,
+      team: avatar.team,
+      dataUrl: avatar.dataUrl,
+    });
+  }, []);
 
   // ゲームをリセット
   const handleResetGame = () => {
@@ -249,51 +317,88 @@ export default function CharacterMove1on1Game() {
         style={{ touchAction: 'none' }}
       />
 
-      {/* 画面下部オーバーレイ（スコア・ショットクロック） */}
+      {/* 画面下部オーバーレイ（スコア・ショットクロック + フェイスアバター） */}
       {!loading && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
-          <div className="flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl px-6 py-3">
-            {/* 敵スコア（左側） */}
-            <div className="text-center min-w-[80px]">
-              <p className="text-xs text-red-300 font-bold">{playerNames.enemy}</p>
-              <p className="text-3xl font-black text-red-400">{score.enemy}</p>
+          <div className="flex items-center gap-2">
+            {/* 敵チーム顔（左端） */}
+            <div className="flex flex-row gap-1 items-end bg-white/90 rounded-lg px-2 py-1">
+              {faceAvatars
+                .filter(a => a.team === 'enemy')
+                .map(avatar => (
+                  <PlayerFaceAvatar
+                    key={avatar.characterId}
+                    dataUrl={avatar.dataUrl}
+                    playerName={avatar.playerName}
+                    position={avatar.position}
+                    team="enemy"
+                    stateColor={playerStateColors[avatar.characterId]}
+                    onClick={() => handleFaceClick(avatar)}
+                  />
+                ))}
             </div>
 
-            {/* クロック表示（中央）- スローイン時は5秒タイマー、通常時はショットクロック */}
-            {isThrowInTimerRunning ? (
-              <div className={`px-4 py-2 rounded-lg font-mono ${
-                throwInTimer <= 2
-                  ? 'bg-red-600 text-white animate-pulse'
-                  : throwInTimer <= 3
-                    ? 'bg-yellow-500 text-black'
-                    : 'bg-orange-500 text-white'
-              }`}>
-                <p className="text-xs text-center opacity-80">THROW</p>
-                <p className="text-2xl font-black text-center text-white">
-                  {Math.ceil(throwInTimer)}
-                </p>
+            {/* スコアボード中央 */}
+            <div className="flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl px-6 py-3">
+              {/* 敵スコア（左側） */}
+              <div className="text-center min-w-[80px]">
+                <p className="text-xs text-red-300 font-bold">{playerNames.enemy}</p>
+                <p className="text-3xl font-black text-red-400">{score.enemy}</p>
               </div>
-            ) : (
-              <div className={`px-4 py-2 rounded-lg font-mono ${
-                shotClock <= 5
-                  ? 'bg-red-600 text-white animate-pulse'
-                  : shotClock <= 10
-                    ? 'bg-yellow-500 text-black'
-                    : 'bg-gray-700/80 text-white'
-              }`}>
-                <p className="text-xs text-center opacity-80">SHOT</p>
-                <p className={`text-2xl font-black text-center ${
-                  shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
-                }`}>
-                  {Math.ceil(shotClock)}
-                </p>
-              </div>
-            )}
 
-            {/* 味方スコア（右側） */}
-            <div className="text-center min-w-[80px]">
-              <p className="text-xs text-blue-300 font-bold">{playerNames.ally}</p>
-              <p className="text-3xl font-black text-blue-400">{score.ally}</p>
+              {/* クロック表示（中央）- スローイン時は5秒タイマー、通常時はショットクロック */}
+              {isThrowInTimerRunning ? (
+                <div className={`px-4 py-2 rounded-lg font-mono ${
+                  throwInTimer <= 2
+                    ? 'bg-red-600 text-white animate-pulse'
+                    : throwInTimer <= 3
+                      ? 'bg-yellow-500 text-black'
+                      : 'bg-orange-500 text-white'
+                }`}>
+                  <p className="text-xs text-center opacity-80">THROW</p>
+                  <p className="text-2xl font-black text-center text-white">
+                    {Math.ceil(throwInTimer)}
+                  </p>
+                </div>
+              ) : (
+                <div className={`px-4 py-2 rounded-lg font-mono ${
+                  shotClock <= 5
+                    ? 'bg-red-600 text-white animate-pulse'
+                    : shotClock <= 10
+                      ? 'bg-yellow-500 text-black'
+                      : 'bg-gray-700/80 text-white'
+                }`}>
+                  <p className="text-xs text-center opacity-80">SHOT</p>
+                  <p className={`text-2xl font-black text-center ${
+                    shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
+                  }`}>
+                    {Math.ceil(shotClock)}
+                  </p>
+                </div>
+              )}
+
+              {/* 味方スコア（右側） */}
+              <div className="text-center min-w-[80px]">
+                <p className="text-xs text-blue-300 font-bold">{playerNames.ally}</p>
+                <p className="text-3xl font-black text-blue-400">{score.ally}</p>
+              </div>
+            </div>
+
+            {/* 味方チーム顔（右端） */}
+            <div className="flex flex-row gap-1 items-end bg-white/90 rounded-lg px-2 py-1">
+              {faceAvatars
+                .filter(a => a.team === 'ally')
+                .map(avatar => (
+                  <PlayerFaceAvatar
+                    key={avatar.characterId}
+                    dataUrl={avatar.dataUrl}
+                    playerName={avatar.playerName}
+                    position={avatar.position}
+                    team="ally"
+                    stateColor={playerStateColors[avatar.characterId]}
+                    onClick={() => handleFaceClick(avatar)}
+                  />
+                ))}
             </div>
           </div>
           {/* 先取表示 */}
@@ -388,6 +493,14 @@ export default function CharacterMove1on1Game() {
         <ThrowInCheckModePanel
           gameScene={gameSceneRef.current}
           onClose={handleCloseCheckMode}
+        />
+      )}
+
+      {/* 選手詳細パネル */}
+      {selectedPlayer && (
+        <PlayerDetailPanel
+          player={selectedPlayer}
+          onClose={() => setSelectedPlayer(null)}
         />
       )}
     </div>

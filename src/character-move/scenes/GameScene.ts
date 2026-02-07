@@ -8,6 +8,7 @@ import {
   Color4,
 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
+import { FaceAvatarCapture, FaceAvatarData } from "../utils/FaceAvatarCapture";
 import { Field } from "../entities/Field";
 import { Ball } from "../entities/Ball";
 import { InputController } from "../controllers/InputController";
@@ -21,7 +22,7 @@ import { CircleSizeController } from "../controllers/CircleSizeController";
 import { FeintController } from "../controllers/action/FeintController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
-import { CharacterState } from "../types/CharacterState";
+import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { PlayerStateManager } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -157,6 +158,10 @@ export class GameScene {
   // チーム設定とプレイヤーデータ（キャラクター再作成用）
   private savedTeamConfig: GameTeamConfig | null = null;
   private savedPlayerData: Record<string, PlayerData> | null = null;
+
+  // フェイスアバターキャプチャ
+  private faceAvatarCache: FaceAvatarData[] | null = null;
+  private characterVersion: number = 0;
 
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
@@ -1586,6 +1591,43 @@ export class GameScene {
   }
 
   /**
+   * フェイスアバターをキャプチャ（キャッシュあり）
+   */
+  public async capturePlayerFaceAvatars(): Promise<FaceAvatarData[]> {
+    if (this.faceAvatarCache) {
+      return this.faceAvatarCache;
+    }
+    const data = await FaceAvatarCapture.captureAll(
+      this.scene,
+      this.allyCharacters,
+      this.enemyCharacters
+    );
+    this.faceAvatarCache = data;
+    return data;
+  }
+
+  /**
+   * キャラクターバージョンを取得（再作成検知用）
+   */
+  public getCharacterVersion(): number {
+    return this.characterVersion;
+  }
+
+  /**
+   * 全選手のID→状態色(CSS文字列)マップを返す
+   */
+  public getPlayerStateColors(): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const c of [...this.allyCharacters, ...this.enemyCharacters]) {
+      const id = c.playerData?.basic.ID;
+      if (!id) continue;
+      const rgb = CHARACTER_STATE_COLORS[c.getState()];
+      result[id] = `rgb(${Math.round(rgb.r * 255)},${Math.round(rgb.g * 255)},${Math.round(rgb.b * 255)})`;
+    }
+    return result;
+  }
+
+  /**
    * ボールを取得
    */
   public getBall(): Ball {
@@ -1818,6 +1860,10 @@ export class GameScene {
     // 可視化を再作成（ヘルパーメソッド使用）
     this.recreatePassTrajectoryVisualizerInternal(allCharacters);
     this.recreateShootTrajectoryVisualizerInternal(allCharacters);
+
+    // フェイスアバターキャッシュを無効化
+    this.faceAvatarCache = null;
+    this.characterVersion++;
   }
 
   /**
