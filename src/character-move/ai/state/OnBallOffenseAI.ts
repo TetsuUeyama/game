@@ -7,9 +7,9 @@ import {PlayerStateManager} from "../../state";
 import {ShootingController} from "../../controllers/action/ShootingController";
 import {FeintController} from "../../controllers/action/FeintController";
 import {ShotClockController} from "../../controllers/ShotClockController";
-import {SHOOT_COOLDOWN, ShootingUtils} from "../../config/action/ShootingConfig";
+import {ShootingUtils} from "../../config/action/ShootingConfig";
 import {DefenseUtils} from "../../config/DefenseConfig";
-import {PASS_COOLDOWN, PassUtils} from "../../config/PassConfig";
+import {PassUtils} from "../../config/PassConfig";
 import {IDLE_MOTION} from "../../motion/IdleMotion";
 import {DRIBBLE_STANCE_MOTION} from "../../motion/DribbleMotion";
 import {DASH_FORWARD_MOTION} from "../../motion/DashMotion";
@@ -33,6 +33,16 @@ import { PlayerPosition } from "../../config/FormationConfig";
 export type PassCallback = (passer: Character, target: Character, passType: "pass_chest" | "pass_bounce" | "pass_overhead") => {success: boolean; message: string};
 
 /**
+ * パスクールダウンチェック用コールバック型
+ */
+export type PassCanCheckCallback = (passer: Character) => boolean;
+
+/**
+ * パスクールダウンリセット用コールバック型
+ */
+export type PassResetCallback = (character: Character) => void;
+
+/**
  * オンボールオフェンス時のAI
  * ボール保持者として攻撃を組み立てる
  */
@@ -41,16 +51,11 @@ export class OnBallOffenseAI extends BaseStateAI {
   private feintController: FeintController | null = null;
   private shotClockController: ShotClockController | null = null;
   private passCallback: PassCallback | null = null;
+  private passCanCheckCallback: PassCanCheckCallback | null = null;
+  private passResetCallback: PassResetCallback | null = null;
 
   // シュートクロック残り時間の閾値（この秒数以下でシュート優先）
   private readonly SHOT_CLOCK_URGENT_THRESHOLD: number = 5.0;
-
-  // シュートクールダウン（連続シュート防止）
-  private shootCooldown: number = 0;
-  // フェイントクールダウン（連続フェイント防止）
-  private feintCooldown: number = 0;
-  // パスクールダウン（連続パス防止）
-  private passCooldown: number = 0;
 
   // 目標位置オーバーライド（設定時はゴールではなくこの位置に向かう）
   private targetPositionOverride: Vector3 | null = null;
@@ -123,6 +128,20 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
+   * パスクールダウンチェック用コールバックを設定
+   */
+  public setPassCanCheckCallback(callback: PassCanCheckCallback): void {
+    this.passCanCheckCallback = callback;
+  }
+
+  /**
+   * パスクールダウンリセット用コールバックを設定
+   */
+  public setPassResetCallback(callback: PassResetCallback): void {
+    this.passResetCallback = callback;
+  }
+
+  /**
    * 目標位置オーバーライドを設定
    * 設定するとゴールではなくこの位置に向かい、シュートは行わない
    */
@@ -147,8 +166,12 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.passLaneAdjustmentTarget = null;
     this.passLaneAdjustmentTimer = 0;
 
-    // クールダウンをリセット
-    this.resetCooldowns();
+    // クールダウンをリセット（各Controller側）
+    this.shootingController?.resetCooldown(this.character);
+    this.feintController?.resetCooldown(this.character);
+    if (this.passResetCallback) {
+      this.passResetCallback(this.character);
+    }
 
     // 周囲確認フェーズを開始（ボールを受け取った直後）
     this.surveyPhase = "look_left";
@@ -159,15 +182,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     // アイドル時間追跡をリセット
     this.idleTimer = 0;
     this.lastPosition = null;
-  }
-
-  /**
-   * 全クールダウンをリセット
-   */
-  public resetCooldowns(): void {
-    this.shootCooldown = 0;
-    this.feintCooldown = 0;
-    this.passCooldown = 0;
   }
 
   /**
@@ -192,10 +206,12 @@ export class OnBallOffenseAI extends BaseStateAI {
    * リセット処理（センターサークル再開等）で使用
    */
   public forceReset(): void {
-    // クールダウンをリセット
-    this.shootCooldown = 0;
-    this.feintCooldown = 0;
-    this.passCooldown = 0;
+    // クールダウンをリセット（各Controller側）
+    this.shootingController?.resetCooldown(this.character);
+    this.feintController?.resetCooldown(this.character);
+    if (this.passResetCallback) {
+      this.passResetCallback(this.character);
+    }
 
     // 目標位置オーバーライドをクリア
     this.targetPositionOverride = null;
@@ -328,21 +344,6 @@ export class OnBallOffenseAI extends BaseStateAI {
           }
         }
         break;
-    }
-  }
-
-  /**
-   * クールダウンを更新
-   */
-  public updateCooldowns(deltaTime: number): void {
-    if (this.shootCooldown > 0) {
-      this.shootCooldown -= deltaTime;
-    }
-    if (this.feintCooldown > 0) {
-      this.feintCooldown -= deltaTime;
-    }
-    if (this.passCooldown > 0) {
-      this.passCooldown -= deltaTime;
     }
   }
 
@@ -747,8 +748,8 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // クールダウン中はスキップ
-    if (this.shootCooldown > 0) {
+    // クールダウン中はスキップ（ShootingController側でチェック）
+    if (!this.shootingController.canShoot(this.character)) {
       return false;
     }
 
@@ -806,10 +807,9 @@ export class OnBallOffenseAI extends BaseStateAI {
 
     if (shouldShoot) {
       // シュート実行（ダンクレンジ内ならforceDunk=true）
+      // クールダウンはShootingController.startShootAction内で自動記録
       const result = this.shootingController.startShootAction(this.character, isDunkRange);
       if (result.success) {
-        // SHOOT_COOLDOWN.AFTER_SHOTを使用してクールダウンを設定
-        this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
         return true;
       }
     }
@@ -829,8 +829,8 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // クールダウン中はスキップ
-    if (this.shootCooldown > 0) {
+    // クールダウン中はスキップ（ShootingController側でチェック）
+    if (!this.shootingController.canShoot(this.character)) {
       return false;
     }
 
@@ -858,9 +858,9 @@ export class OnBallOffenseAI extends BaseStateAI {
     // レイアップ/ダンクレンジ内ならシュート
     if (rangeInfo.inRange && rangeInfo.facingGoal) {
       // forceDunk=true でダンクモーションを含めて実行
+      // クールダウンはShootingController.startShootAction内で自動記録
       const result = this.shootingController.startShootAction(this.character, true);
       if (result.success) {
-        this.shootCooldown = SHOOT_COOLDOWN.AFTER_SHOT;
         return true;
       }
     }
@@ -903,10 +903,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // フェイントクールダウン中は実行不可
-    if (this.feintCooldown > 0) {
-      return false;
-    }
+    // フェイントクールダウンはFeintController側でチェック済み
 
     // ボールを持っているか確認
     if (this.ball.getHolder() !== this.character) {
@@ -939,11 +936,9 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false; // フェイントを選択しなかった
     }
 
-    // フェイント実行
+    // フェイント実行（クールダウンはFeintController側で自動管理）
     const result = this.feintController.performShootFeint(this.character);
     if (result && result.success) {
-      // フェイントクールダウンを設定
-      this.feintCooldown = 2.0; // 2秒間フェイント不可
       return true;
     }
 
@@ -996,8 +991,8 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // パスクールダウン中は実行不可
-    if (this.passCooldown > 0) {
+    // パスクールダウン中は実行不可（PlayerActionFacade側でチェック）
+    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
       return false;
     }
 
@@ -1126,9 +1121,9 @@ export class OnBallOffenseAI extends BaseStateAI {
     }
 
     // パス実行（コールバック経由）
+    // クールダウンはPlayerActionFacade.performPass内で自動記録
     const result = this.passCallback(this.character, passTarget, "pass_chest");
     if (result.success) {
-      this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
       return true;
     }
 
@@ -1305,7 +1300,10 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.surveyTimer = 0;
       this.surveyTotalTimer = 0;
       this.surveyStartRotation = this.character.getRotation();
-      this.passCooldown = 0; // パスクールダウンをリセット
+      // パスクールダウンをリセット
+      if (this.passResetCallback) {
+        this.passResetCallback(this.character);
+      }
     }
 
     // 周囲確認フェーズの処理（スロー前に周囲を確認）
@@ -1375,9 +1373,10 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.character.setRotation(angle);
     }
 
-    // パスクールダウンが終わっていればパスを実行
+    // パスクールダウンが終わっていればパスを実行（PlayerActionFacade側でチェック）
+    const canPass = this.passCanCheckCallback ? this.passCanCheckCallback(this.character) : true;
 
-    if (this.passCooldown <= 0 && this.passCallback) {
+    if (canPass && this.passCallback) {
       // スローイン時は重心をリセットしてからパスを実行
       // （立ち止まっていても小さな揺れでパスできないことを防ぐ）
       const balanceController = this.character.getBalanceController();
@@ -1385,9 +1384,9 @@ export class OnBallOffenseAI extends BaseStateAI {
         balanceController.reset();
       }
 
+      // クールダウンはPlayerActionFacade.performPass内で自動記録
       const result = this.passCallback(this.character, bestTarget.teammate, "pass_chest");
       if (result.success) {
-        this.passCooldown = PASS_COOLDOWN.AFTER_PASS;
         // スロワーフラグはCollisionHandlerのupdateCharacterStates()で
         // レシーバーがキャッチした時点で自動的にクリアされる
       }

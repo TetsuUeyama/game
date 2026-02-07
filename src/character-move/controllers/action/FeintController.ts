@@ -182,6 +182,13 @@ export class FeintController {
   }
 
   /**
+   * フェイントクールダウンをリセット（状態遷移時に使用）
+   */
+  public resetCooldown(character: Character): void {
+    this.lastFeintTime.delete(character);
+  }
+
+  /**
    * フェイント成功ウィンドウをクリア
    */
   public clearBreakthroughWindow(character: Character): void {

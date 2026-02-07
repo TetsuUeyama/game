@@ -327,6 +327,12 @@ export class GameScene {
         ai.setPassCallback((passer, target, passType) => {
           return this.performPass(passer, passType, target);
         });
+        ai.setPassCanCheckCallback((passer) => {
+          return this._playerActionFacade?.canPass(passer) ?? true;
+        });
+        ai.setPassResetCallback((character) => {
+          this._playerActionFacade?.resetPassCooldown(character);
+        });
       }
 
       // パス軌道可視化の初期化
@@ -1797,6 +1803,12 @@ export class GameScene {
         // パスコールバックを設定
         ai.setPassCallback((passer, target, passType) => {
           return this.performPass(passer, passType, target);
+        });
+        ai.setPassCanCheckCallback((passer) => {
+          return this._playerActionFacade?.canPass(passer) ?? true;
+        });
+        ai.setPassResetCallback((character) => {
+          this._playerActionFacade?.resetPassCooldown(character);
         });
 
         this.characterAIs.push(ai);
