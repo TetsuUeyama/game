@@ -96,7 +96,13 @@ export class OneOnOneBattleController {
    * @param deltaTime フレーム時間（秒）
    */
   public update1on1Movement(deltaTime: number): void {
-    if (!this.in1on1Battle) return;
+    if (!this.in1on1Battle) {
+      // 1on1バトル外ではcirclesInContactを必ずfalseにリセット
+      // check1on1Battle()がin1on1Battleをfalseにした後、
+      // circlesInContactが古い値のまま残るとAI更新がスキップされ続けるバグを防ぐ
+      this.circlesInContact = false;
+      return;
+    }
 
     const allCharacters = this.getAllCharacters();
 
