@@ -7,12 +7,10 @@ import {
   Mesh,
   AbstractMesh,
   LinesMesh,
-  PhysicsAggregate,
-  PhysicsShapeType,
-  PhysicsMotionType,
 } from "@babylonjs/core";
-import { PhysicsConstants } from "../../physics/PhysicsConfig";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
+import { CharacterPhysicsManager } from "./CharacterPhysicsManager";
+import { CharacterBlockJumpController } from "./CharacterBlockJumpController";
 import { CHARACTER_CONFIG, FIELD_CONFIG } from "../config/gameConfig";
 import { MotionController } from "../controllers/MotionController";
 import { ActionController } from "../controllers/action/ActionController";
@@ -25,7 +23,6 @@ import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "../types/OffenseStrateg
 import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
-import { BASE_CIRCLE_SIZE } from "../config/CircleSizeConfig";
 import { BalanceController } from "../controllers/BalanceController";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
@@ -158,12 +155,8 @@ export class Character {
   private breakthroughDirection: Vector3 | null = null; // 突破方向
   private breakthroughStartTime: number = 0; // 突破開始時刻
 
-  // ブロックジャンプ制御
-  private blockJumpTarget: Character | null = null; // ブロック対象のシューター
-  private blockLateralDirection: Vector3 | null = null; // 横移動方向（ボール軌道への移動）
-  private blockLateralSpeed: number = 3.0; // 横移動速度（m/s）
-  private blockForwardDirection: Vector3 | null = null; // 前方移動方向（サークル縮小分）
-  private blockForwardSpeed: number = 0; // 前方移動速度（m/s）
+  // ブロックジャンプコントローラー
+  private blockJumpController: CharacterBlockJumpController;
 
   // 重心コントローラー
   private balanceController: BalanceController;
@@ -181,14 +174,8 @@ export class Character {
   private isBodyTransparent: boolean = false;
   private originalMaterialAlphas: Map<Mesh, number> = new Map();
 
-  // Havok物理ボディ（ボールとの衝突用）
-  private bodyPhysicsMesh: Mesh | null = null;         // 胴体カプセル（不可視）
-  private leftHandPhysicsMesh: Mesh | null = null;     // 左手球体（不可視）
-  private rightHandPhysicsMesh: Mesh | null = null;    // 右手球体（不可視）
-  private bodyPhysicsAggregate: PhysicsAggregate | null = null;
-  private leftHandPhysicsAggregate: PhysicsAggregate | null = null;
-  private rightHandPhysicsAggregate: PhysicsAggregate | null = null;
-  private physicsInitialized: boolean = false;
+  // Havok物理ボディマネージャー
+  private physicsManager: CharacterPhysicsManager;
 
   // スローインスロワー制御
   // スロワーは外枠の固定位置から移動できないが、向きは変更可能
@@ -333,6 +320,12 @@ export class Character {
 
     // アクションコントローラーに重心コントローラーを設定
     this.actionController.setBalanceController(this.balanceController);
+
+    // 物理マネージャーを初期化
+    this.physicsManager = new CharacterPhysicsManager(scene, this.team, this.config);
+
+    // ブロックジャンプコントローラーを初期化
+    this.blockJumpController = new CharacterBlockJumpController();
   }
 
   /**
@@ -2068,91 +2061,7 @@ export class Character {
    * GameSceneで物理エンジン初期化後に呼び出す
    */
   public initializePhysics(): void {
-    if (this.physicsInitialized) {
-      return;
-    }
-
-    const height = this.config.physical.height;
-    const bodyConfig = PhysicsConstants.CHARACTER;
-
-    // 胴体用カプセルメッシュを作成（不可視）
-    const capsuleHeight = height * bodyConfig.BODY_CAPSULE_HEIGHT_RATIO;
-    this.bodyPhysicsMesh = MeshBuilder.CreateCapsule(
-      `${this.team}_body_physics`,
-      {
-        radius: bodyConfig.BODY_CAPSULE_RADIUS,
-        height: capsuleHeight,
-        tessellation: 8,
-        subdivisions: 1,
-      },
-      this.scene
-    );
-    this.bodyPhysicsMesh.isVisible = false;
-    this.bodyPhysicsMesh.isPickable = false;
-
-    // 左手用球体メッシュを作成（不可視）
-    this.leftHandPhysicsMesh = MeshBuilder.CreateSphere(
-      `${this.team}_leftHand_physics`,
-      { diameter: bodyConfig.HAND_SPHERE_RADIUS * 2, segments: 8 },
-      this.scene
-    );
-    this.leftHandPhysicsMesh.isVisible = false;
-    this.leftHandPhysicsMesh.isPickable = false;
-
-    // 右手用球体メッシュを作成（不可視）
-    this.rightHandPhysicsMesh = MeshBuilder.CreateSphere(
-      `${this.team}_rightHand_physics`,
-      { diameter: bodyConfig.HAND_SPHERE_RADIUS * 2, segments: 8 },
-      this.scene
-    );
-    this.rightHandPhysicsMesh.isVisible = false;
-    this.rightHandPhysicsMesh.isPickable = false;
-
-    // 胴体のPhysicsAggregateを作成（ANIMATED = キネマティック）
-    this.bodyPhysicsAggregate = new PhysicsAggregate(
-      this.bodyPhysicsMesh,
-      PhysicsShapeType.CAPSULE,
-      {
-        mass: 0,  // 静的オブジェクト（ボールに押されない）
-        restitution: bodyConfig.BODY_RESTITUTION,
-        friction: bodyConfig.FRICTION,
-      },
-      this.scene
-    );
-    // キネマティックモードに設定（アニメーションで位置制御）
-    this.bodyPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
-    this.bodyPhysicsAggregate.body.disablePreStep = false;
-
-    // 左手のPhysicsAggregateを作成
-    this.leftHandPhysicsAggregate = new PhysicsAggregate(
-      this.leftHandPhysicsMesh,
-      PhysicsShapeType.SPHERE,
-      {
-        mass: 0,
-        restitution: bodyConfig.HAND_RESTITUTION,
-        friction: bodyConfig.FRICTION,
-      },
-      this.scene
-    );
-    this.leftHandPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
-    this.leftHandPhysicsAggregate.body.disablePreStep = false;
-
-    // 右手のPhysicsAggregateを作成
-    this.rightHandPhysicsAggregate = new PhysicsAggregate(
-      this.rightHandPhysicsMesh,
-      PhysicsShapeType.SPHERE,
-      {
-        mass: 0,
-        restitution: bodyConfig.HAND_RESTITUTION,
-        friction: bodyConfig.FRICTION,
-      },
-      this.scene
-    );
-    this.rightHandPhysicsAggregate.body.setMotionType(PhysicsMotionType.ANIMATED);
-    this.rightHandPhysicsAggregate.body.disablePreStep = false;
-
-    this.physicsInitialized = true;
-
+    this.physicsManager.initialize();
     // 初期位置を同期
     this.updatePhysicsBodyPositions();
   }
@@ -2162,64 +2071,16 @@ export class Character {
    * キャラクターの位置・手の位置に物理メッシュを追従させる
    */
   public updatePhysicsBodyPositions(): void {
-    if (!this.physicsInitialized) {
+    if (!this.physicsManager.isInitialized()) {
       return;
     }
 
-    const characterPos = this.getPosition();
-
-    // 胴体の位置（キャラクター中心）
-    if (this.bodyPhysicsMesh) {
-      this.bodyPhysicsMesh.position = new Vector3(
-        characterPos.x,
-        characterPos.y,  // キャラクターの中心位置
-        characterPos.z
-      );
-      this.bodyPhysicsMesh.rotation.y = this.rotation;
-    }
-
-    // 左手の位置（ワールド座標）
-    if (this.leftHandPhysicsMesh) {
-      const leftHandPos = this.getLeftHandPosition();
-      this.leftHandPhysicsMesh.position = leftHandPos;
-    }
-
-    // 右手の位置（ワールド座標）
-    if (this.rightHandPhysicsMesh) {
-      const rightHandPos = this.getRightHandPosition();
-      this.rightHandPhysicsMesh.position = rightHandPos;
-    }
-  }
-
-  /**
-   * 物理ボディを破棄
-   */
-  private disposePhysics(): void {
-    if (this.bodyPhysicsAggregate) {
-      this.bodyPhysicsAggregate.dispose();
-      this.bodyPhysicsAggregate = null;
-    }
-    if (this.leftHandPhysicsAggregate) {
-      this.leftHandPhysicsAggregate.dispose();
-      this.leftHandPhysicsAggregate = null;
-    }
-    if (this.rightHandPhysicsAggregate) {
-      this.rightHandPhysicsAggregate.dispose();
-      this.rightHandPhysicsAggregate = null;
-    }
-    if (this.bodyPhysicsMesh) {
-      this.bodyPhysicsMesh.dispose();
-      this.bodyPhysicsMesh = null;
-    }
-    if (this.leftHandPhysicsMesh) {
-      this.leftHandPhysicsMesh.dispose();
-      this.leftHandPhysicsMesh = null;
-    }
-    if (this.rightHandPhysicsMesh) {
-      this.rightHandPhysicsMesh.dispose();
-      this.rightHandPhysicsMesh = null;
-    }
-    this.physicsInitialized = false;
+    this.physicsManager.updatePositions({
+      position: this.getPosition(),
+      rotation: this.rotation,
+      leftHandPosition: this.getLeftHandPosition(),
+      rightHandPosition: this.getRightHandPosition(),
+    });
   }
 
   /**
@@ -2228,26 +2089,7 @@ export class Character {
    * @param enabled true=レシーバーモード有効（反発なし）、false=通常モード
    */
   public setPassReceiverMode(enabled: boolean): void {
-    if (!this.physicsInitialized) {
-      return;
-    }
-
-    const restitution = enabled ? 0 : undefined;  // 0=反発なし、undefined=デフォルト値使用
-
-    // 胴体の反発係数を設定
-    if (this.bodyPhysicsAggregate?.shape?.material) {
-      this.bodyPhysicsAggregate.shape.material.restitution = restitution ?? 0.5;
-    }
-
-    // 左手の反発係数を設定
-    if (this.leftHandPhysicsAggregate?.shape?.material) {
-      this.leftHandPhysicsAggregate.shape.material.restitution = restitution ?? 0.6;
-    }
-
-    // 右手の反発係数を設定
-    if (this.rightHandPhysicsAggregate?.shape?.material) {
-      this.rightHandPhysicsAggregate.shape.material.restitution = restitution ?? 0.6;
-    }
+    this.physicsManager.setPassReceiverMode(enabled);
   }
 
   /**
@@ -2255,7 +2097,7 @@ export class Character {
    */
   public dispose(): void {
     // 物理ボディを破棄
-    this.disposePhysics();
+    this.physicsManager.dispose();
 
     // 身体パーツを破棄
     this.headMesh.dispose();
@@ -2328,84 +2170,11 @@ export class Character {
    * 面0同士が接している場合はサークル縮小分だけ前方に飛ぶ
    */
   public setBlockJumpTarget(target: Character | null): void {
-    this.blockJumpTarget = target;
-
-    if (target === null) {
-      this.blockLateralDirection = null;
-      this.blockForwardDirection = null;
-      this.blockForwardSpeed = 0;
-      return;
-    }
-
-    const shooterPos = target.getPosition();
-    const myPos = this.getPosition();
-    const shooterRotation = target.getRotation();
-
-    // シューターの向いている方向を計算（シュート方向）
-    const shootDirection = new Vector3(
-      Math.sin(shooterRotation),
-      0,
-      Math.cos(shooterRotation)
-    ).normalize();
-
-    // シューターからディフェンダーへのベクトル
-    const toDefender = myPos.subtract(shooterPos);
-    toDefender.y = 0; // 水平面のみ考慮
-
-    // シュート軌道上のディフェンダーに最も近い点を計算
-    // 点から直線への最短距離の公式を使用
-    const dot = Vector3.Dot(toDefender, shootDirection);
-    const closestPointOnTrajectory = shooterPos.add(shootDirection.scale(dot));
-
-    // ディフェンダーから軌道への横方向ベクトル
-    const lateralOffset = closestPointOnTrajectory.subtract(myPos);
-    lateralOffset.y = 0;
-
-    const lateralDistance = lateralOffset.length();
-
-    // 横方向のずれが小さい場合は真っ直ぐ飛ぶ（横移動なし）
-    if (lateralDistance < 0.3) {
-      this.blockLateralDirection = null;
-    } else if (lateralDistance > 2.0) {
-      // 横方向のずれが大きすぎる場合はブロック不可
-      this.blockLateralDirection = null;
-    } else {
-      // 横移動方向を正規化
-      this.blockLateralDirection = lateralOffset.normalize();
-      // 移動速度は横方向のずれに応じて調整
-      // ジャンプの最高点到達時間（約0.35秒）を目安に計算
-      const jumpPeakTime = 0.35;
-      this.blockLateralSpeed = lateralDistance / jumpPeakTime;
-    }
-
-    // 面0同士が接しているかチェックし、前方移動を計算
-    const distanceToShooter = toDefender.length();
-    const myCircleRadius = this.footCircleRadius;
-    const shooterCircleRadius = target.getFootCircleRadius();
-    const contactDistance = myCircleRadius + shooterCircleRadius;
-
-    // サークル接触判定（余裕を持って0.2m以内なら接触とみなす）
-    const isCircleContact = distanceToShooter <= contactDistance + 0.2;
-
-    if (isCircleContact) {
-      // サークルの縮小分を計算（defense_marking: 1.0m → blocking: 0.3m）
-      const normalCircleSize = BASE_CIRCLE_SIZE.defense_marking;
-      const blockingCircleSize = BASE_CIRCLE_SIZE.blocking;
-      const circleShrinkage = normalCircleSize - blockingCircleSize; // 0.7m
-
-      // シューターへの方向（前方移動方向）
-      const toShooter = shooterPos.subtract(myPos);
-      toShooter.y = 0;
-      if (toShooter.length() > 0.01) {
-        this.blockForwardDirection = toShooter.normalize();
-        // ジャンプの最高点到達時間（約0.35秒）を目安に計算
-        const jumpPeakTime = 0.35;
-        this.blockForwardSpeed = circleShrinkage / jumpPeakTime;
-      }
-    } else {
-      this.blockForwardDirection = null;
-      this.blockForwardSpeed = 0;
-    }
+    this.blockJumpController.setTarget(
+      target,
+      this.getPosition(),
+      this.footCircleRadius
+    );
   }
 
   /**
@@ -2414,42 +2183,15 @@ export class Character {
    * 横移動（ボール軌道への移動）と前方移動（サークル縮小分）を適用
    */
   public updateBlockJump(deltaTime: number): void {
-    const currentAction = this.actionController.getCurrentAction();
-    const phase = this.actionController.getCurrentPhase();
-
-    // block_shotアクションのstartupまたはactiveフェーズ中のみ移動
-    const isBlockJumping = currentAction === 'block_shot' && (phase === 'startup' || phase === 'active');
-
-    if (!isBlockJumping) {
-      // アクションが終了したらターゲットをクリア
-      // 重心が安定するまでは着地姿勢を維持
-      if (this.blockJumpTarget !== null && this.actionController.isBalanceStable()) {
-        this.blockJumpTarget = null;
-        this.blockLateralDirection = null;
-        this.blockForwardDirection = null;
-        this.blockForwardSpeed = 0;
-      }
-      return;
-    }
-
-    // 移動量を計算
-    let totalMovement = Vector3.Zero();
-
-    // 横移動を計算
-    if (this.blockLateralDirection !== null) {
-      const lateralMovement = this.blockLateralDirection.scale(this.blockLateralSpeed * deltaTime);
-      totalMovement = totalMovement.add(lateralMovement);
-    }
-
-    // 前方移動を計算（サークル縮小分）
-    if (this.blockForwardDirection !== null && this.blockForwardSpeed > 0) {
-      const forwardMovement = this.blockForwardDirection.scale(this.blockForwardSpeed * deltaTime);
-      totalMovement = totalMovement.add(forwardMovement);
-    }
+    const movement = this.blockJumpController.update(deltaTime, {
+      currentAction: this.actionController.getCurrentAction(),
+      currentPhase: this.actionController.getCurrentPhase(),
+      isBalanceStable: this.actionController.isBalanceStable(),
+    });
 
     // 移動がある場合のみ適用
-    if (totalMovement.length() > 0.001) {
-      const newPosition = this.position.add(totalMovement);
+    if (movement !== null) {
+      const newPosition = this.position.add(movement);
       this.setPosition(newPosition);
     }
   }
@@ -2458,6 +2200,6 @@ export class Character {
    * ブロックジャンプのターゲットを取得
    */
   public getBlockJumpTarget(): Character | null {
-    return this.blockJumpTarget;
+    return this.blockJumpController.getTarget() as Character | null;
   }
 }
