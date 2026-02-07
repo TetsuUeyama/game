@@ -189,6 +189,24 @@ export class CharacterPhysicsManager {
   }
 
   /**
+   * 物理ボディの衝突を一時的に無効化/再有効化
+   * ジャンプボール中のジャンパーなど、物理衝突を避けたい場合に使用
+   * メッシュを遠くに移動して衝突を回避する
+   */
+  public setPhysicsEnabled(enabled: boolean): void {
+    if (!this.physicsInitialized) return;
+
+    if (!enabled) {
+      // 物理メッシュを遠くに移動して衝突を回避
+      const farAway = new Vector3(0, -100, 0);
+      if (this.bodyPhysicsMesh) this.bodyPhysicsMesh.position = farAway;
+      if (this.leftHandPhysicsMesh) this.leftHandPhysicsMesh.position = farAway;
+      if (this.rightHandPhysicsMesh) this.rightHandPhysicsMesh.position = farAway;
+    }
+    // enabled=trueの場合は次のupdatePositions()で正しい位置に戻る
+  }
+
+  /**
    * パスレシーバーモードを設定
    * 反発係数を0にしてボールが弾かれないようにする
    * @param enabled true=レシーバーモード有効（反発なし）、false=通常モード

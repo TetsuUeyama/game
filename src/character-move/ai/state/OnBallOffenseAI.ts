@@ -389,6 +389,11 @@ export class OnBallOffenseAI extends BaseStateAI {
       return;
     }
 
+    // 3Pエリア付近: shotPriority順にパス（ファーストチョイスにシュートを打たせる）
+    if (!this.targetPositionOverride && this.tryShotPriorityAction()) {
+      return;
+    }
+
     // アイドル時間追跡の更新
     this.updateIdleTracking(deltaTime);
 
@@ -914,6 +919,95 @@ export class OnBallOffenseAI extends BaseStateAI {
           }
         }
         break; // メインハンドラーは1人なので見つかったら終了
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 3Pエリア付近でのショットプライオリティベースのアクション
+   * shotPriority順（1=ファーストチョイス）にパスを試み、
+   * 自分がファーストチョイスの場合はシュートを試みる
+   * @returns アクションを実行した場合true
+   */
+  private tryShotPriorityAction(): boolean {
+    // ボールを持っているか確認
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    // 3Pエリア付近かチェック（ゴールからの距離）
+    const myPos = this.character.getPosition();
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
+    const distanceToGoal = getDistance2D(myPos, goalPosition);
+
+    // 3Pエリア付近の範囲（3Pライン手前1.5m〜3P最大距離）
+    const threePointNearMin = SHOOT_RANGE.THREE_POINT_LINE - 1.5;
+    if (distanceToGoal < threePointNearMin || distanceToGoal > SHOOT_RANGE.THREE_POINT_MAX) {
+      return false;
+    }
+
+    const myShotPriority = this.character.shotPriority;
+
+    // 自分がファーストチョイスの場合はシュートを試みる
+    if (myShotPriority === 1) {
+      return this.tryShoot();
+    }
+
+    // パスコールバックがない場合は実行不可
+    if (!this.passCallback) {
+      return false;
+    }
+
+    // パスクールダウン中は実行不可
+    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
+      return false;
+    }
+
+    // パスレーン分析
+    const passLaneAnalysis = this.analyzeAllPassLanes();
+
+    // チームメイトをshotPriority順にソート（1=最優先、null=末尾）
+    const teammates = getTeammates(this.allCharacters, this.character);
+    const sortedTeammates = [...teammates].sort((a, b) => {
+      const pa = a.shotPriority ?? 999;
+      const pb = b.shotPriority ?? 999;
+      return pa - pb;
+    });
+
+    // shotPriority順にパスを試みる
+    for (const teammate of sortedTeammates) {
+      // shotPriorityが未設定の選手はスキップ
+      if (teammate.shotPriority == null) {
+        continue;
+      }
+
+      const teammatePos = teammate.getPosition();
+      const distance = Vector3.Distance(myPos, teammatePos);
+
+      // パス可能距離かチェック
+      if (!PassUtils.isPassableDistance(distance)) {
+        continue;
+      }
+
+      // パスレーンのリスクチェック
+      const laneInfo = passLaneAnalysis.find(a => a.teammate === teammate);
+      if (laneInfo && laneInfo.risk > this.maxPassLaneRisk + 0.3) {
+        continue;
+      }
+
+      // パスターゲットの方を向く
+      const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
+      if (toTarget.length() > 0.01) {
+        const angle = Math.atan2(toTarget.x, toTarget.z);
+        this.character.setRotation(angle);
+      }
+
+      // パス実行
+      const result = this.passCallback(this.character, teammate, "pass_chest");
+      if (result.success) {
+        return true;
       }
     }
 

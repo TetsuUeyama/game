@@ -2190,6 +2190,13 @@ export class Character {
   }
 
   /**
+   * 物理ボディの衝突を一時的に無効化/再有効化
+   */
+  public setPhysicsEnabled(enabled: boolean): void {
+    this.physicsManager.setPhysicsEnabled(enabled);
+  }
+
+  /**
    * パスレシーバーモードを設定
    * 反発係数を0にしてボールが弾かれないようにする
    * @param enabled true=レシーバーモード有効（反発なし）、false=通常モード

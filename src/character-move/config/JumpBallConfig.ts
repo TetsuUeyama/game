@@ -25,7 +25,7 @@ export const JUMP_BALL_POSITIONS = {
   /** ボール開始高さ（m）- 審判がボールを持つ位置 */
   BALL_START_HEIGHT: 3.0, // 300cmからスタート
   /** ボール投げ上げ高さ（m）- 開始位置からの上昇分 */
-  BALL_TOSS_HEIGHT: 1.5, // 3.0m + 1.5m = 4.5mまで上昇
+  BALL_TOSS_HEIGHT: 0.5, // 3.0m + 0.5m = 3.5mまで上昇
   /** 待機選手の最小距離（センターからの距離、m） */
   OTHER_PLAYER_MIN_DISTANCE: 3.0,
 } as const;
