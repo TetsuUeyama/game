@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { GameScene } from '@/character-move/scenes/GameScene';
+import type { VisualSettings } from '@/character-move/state';
 
 type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'throw_in_check';
 type CameraModeType = 'on_ball' | 'manual';
@@ -26,6 +27,16 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
     index: number;
     playerName: string;
   } | null>(null);
+  const [visualSettings, setVisualSettings] = useState<VisualSettings>({
+    shootTrajectory: false,
+    passTrajectory: false,
+    dribblePath: false,
+    tacticalZones: false,
+    visionCone: false,
+    gridLines: true,
+    gridLabels: false,
+    shootRange: false,
+  });
 
   // 現在のカメラターゲット情報を更新
   const updateCameraInfo = useCallback(() => {
@@ -41,7 +52,11 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
 
   useEffect(() => {
     updateCameraInfo();
-  }, [updateCameraInfo]);
+    // 視覚情報の初期値を取得
+    if (gameScene) {
+      setVisualSettings(gameScene.getVisualSettings());
+    }
+  }, [updateCameraInfo, gameScene]);
 
   // 定期的にカメラ情報を更新
   useEffect(() => {
@@ -92,6 +107,12 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
   const handleModeSelect = (mode: GameModeType) => {
     onModeChange(mode);
     setIsOpen(false);
+  };
+
+  const handleToggleVisualSetting = (key: keyof VisualSettings) => {
+    if (!gameScene) return;
+    const newValue = gameScene.toggleVisualSetting(key);
+    setVisualSettings(prev => ({ ...prev, [key]: newValue }));
   };
 
   const getModeLabel = (mode: GameModeType): string => {
@@ -267,6 +288,40 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
                 )}
               </div>
             </button>
+          </div>
+
+          {/* 視覚情報セクション */}
+          <div className="p-4 border-t border-gray-700">
+            <h3 className="text-sm font-bold text-gray-400 mb-3">視覚情報</h3>
+            <div className="space-y-2">
+              {([
+                { key: 'shootTrajectory' as const, label: 'シュート軌道' },
+                { key: 'passTrajectory' as const, label: 'パス軌道' },
+                { key: 'dribblePath' as const, label: 'ドリブル導線' },
+                { key: 'shootRange' as const, label: 'シュートレンジ' },
+                { key: 'tacticalZones' as const, label: '戦術ゾーン' },
+                { key: 'visionCone' as const, label: '視野角' },
+                { key: 'gridLines' as const, label: 'マスの枠' },
+                { key: 'gridLabels' as const, label: 'マスの座標名' },
+              ]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => handleToggleVisualSetting(key)}
+                  className={`w-full px-4 py-2 rounded-lg font-semibold text-left transition-all ${
+                    visualSettings[key]
+                      ? 'bg-yellow-500 text-black ring-2 ring-yellow-300'
+                      : 'bg-gray-700 hover:bg-gray-600 text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{label}</span>
+                    {visualSettings[key] && (
+                      <span className="text-xs bg-black/20 px-2 py-0.5 rounded">表示中</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@ import {
   JUMP_BALL_POSITIONS,
   JUMP_BALL_TIMING,
   JUMP_BALL_PHYSICS,
+  JUMP_BALL_CONTEST,
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
 } from "../../config/JumpBallConfig";
@@ -268,6 +269,8 @@ export class JumpBallManager {
     switch (this.jumpBallInfo.phase) {
       case 'preparing':
         this.jumpBallTimer -= deltaTime;
+        // ジャンパーのpower値に基づくポジション取り（押し合い）
+        this.updateJumperContest();
         if (this.jumpBallTimer <= 0) {
           this.executeToss();
         }
@@ -319,6 +322,60 @@ export class JumpBallManager {
         }
         break;
     }
+  }
+
+  /**
+   * ジャンパー同士のpower値に基づくポジション取り
+   * ボールが落ちてくる真下（センターサークル中心）を目指して押し合う
+   */
+  private updateJumperContest(): void {
+    if (!this.jumpBallAllyJumper || !this.jumpBallEnemyJumper) return;
+
+    const allyPower = this.jumpBallAllyJumper.playerData?.stats.power ?? 50;
+    const enemyPower = this.jumpBallEnemyJumper.playerData?.stats.power ?? 50;
+
+    // power差から押し合い比率を計算
+    const powerDiff = allyPower - enemyPower;
+    const normalizedDiff = Math.min(1, Math.abs(powerDiff) / 50);
+
+    // 勝者がボール真下に近づく比率
+    let allyPushRatio: number;
+    let enemyPushRatio: number;
+
+    if (Math.abs(powerDiff) < 1) {
+      allyPushRatio = 0.5;
+      enemyPushRatio = 0.5;
+    } else if (powerDiff > 0) {
+      // allyが強い → allyがセンターに近づく
+      allyPushRatio = JUMP_BALL_CONTEST.MIN_PUSH_RATIO +
+        (JUMP_BALL_CONTEST.MAX_PUSH_RATIO - JUMP_BALL_CONTEST.MIN_PUSH_RATIO) * normalizedDiff;
+      enemyPushRatio = 1 - allyPushRatio;
+    } else {
+      // enemyが強い → enemyがセンターに近づく
+      enemyPushRatio = JUMP_BALL_CONTEST.MIN_PUSH_RATIO +
+        (JUMP_BALL_CONTEST.MAX_PUSH_RATIO - JUMP_BALL_CONTEST.MIN_PUSH_RATIO) * normalizedDiff;
+      allyPushRatio = 1 - enemyPushRatio;
+    }
+
+    // ボールの真下（センター）に向かって押し合い
+    const centerX = CENTER_CIRCLE.CENTER_X;
+    const centerZ = CENTER_CIRCLE.CENTER_Z;
+
+    // ally: power比率に応じてセンターに近づく
+    const allyPos = this.jumpBallAllyJumper.getPosition();
+    const allyTargetZ = centerZ + JUMP_BALL_POSITIONS.JUMPER_OFFSET_Z * (1 - allyPushRatio * 2);
+    const allyNewZ = allyPos.z + (allyTargetZ - allyPos.z) * JUMP_BALL_CONTEST.PUSH_SPEED;
+    this.jumpBallAllyJumper.setPosition(
+      new Vector3(centerX, allyPos.y, allyNewZ)
+    );
+
+    // enemy: power比率に応じてセンターに近づく
+    const enemyPos = this.jumpBallEnemyJumper.getPosition();
+    const enemyTargetZ = centerZ - JUMP_BALL_POSITIONS.JUMPER_OFFSET_Z * (1 - enemyPushRatio * 2);
+    const enemyNewZ = enemyPos.z + (enemyTargetZ - enemyPos.z) * JUMP_BALL_CONTEST.PUSH_SPEED;
+    this.jumpBallEnemyJumper.setPosition(
+      new Vector3(centerX, enemyPos.y, enemyNewZ)
+    );
   }
 
   /**
@@ -382,6 +439,8 @@ export class JumpBallManager {
     const jumpers = [this.jumpBallAllyJumper, this.jumpBallEnemyJumper];
     for (const jumper of jumpers) {
       if (!jumper) continue;
+      // ジャンプ前に物理ボディを再有効化（executeTossで無効化したもの）
+      jumper.setPhysicsEnabled(true);
       // startAction内でモーション再生＋物理力適用（jump値でスケール）
       jumper.getActionController().startAction('jump_ball');
     }

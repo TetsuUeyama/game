@@ -130,12 +130,11 @@ export function DribbleCheckModePanel({ gameScene, onClose }: DribbleCheckModePa
       shootingController.hideShootRange();
     }
 
-    // シュート時の放物線表示を非表示にする（既存の放物線もクリア）
+    // シュート時の飛行を停止する
     const ball = gameScene.getBall();
     if (ball.isInFlight()) {
       ball.endFlight();
     }
-    ball.setTrajectoryVisible(false)
 
     // フェイントコントローラーを作成
     feintControllerRef.current = new FeintController(
