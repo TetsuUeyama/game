@@ -1,4 +1,5 @@
 import { Character } from "../entities/Character";
+import { OffenseRole, DefenseRole } from "../state/PlayerStateTypes";
 import { DEFAULT_FACE_CONFIG } from "../types/FaceConfig";
 import { FaceAvatarRenderer } from "./FaceAvatarRenderer";
 
@@ -8,6 +9,9 @@ export interface FaceAvatarData {
   playerName: string;
   position: string;
   dataUrl: string;
+  shotPriority: number | null;
+  offenseRole: OffenseRole | null;
+  defenseRole: DefenseRole | null;
 }
 
 /**
@@ -34,6 +38,9 @@ export class FaceAvatarCapture {
         playerName: character.playerData?.basic.NAME ?? '',
         position: character.playerPosition ?? '',
         dataUrl,
+        shotPriority: character.shotPriority,
+        offenseRole: character.offenseRole,
+        defenseRole: character.defenseRole,
       });
     }
 
@@ -46,6 +53,9 @@ export class FaceAvatarCapture {
         playerName: character.playerData?.basic.NAME ?? '',
         position: character.playerPosition ?? '',
         dataUrl,
+        shotPriority: character.shotPriority,
+        offenseRole: character.offenseRole,
+        defenseRole: character.defenseRole,
       });
     }
 

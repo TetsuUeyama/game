@@ -113,6 +113,9 @@ export class Character {
   public defenseRole: DefenseRole | null = null;
   public shotPriority: number | null = null;
 
+  // 個人ゲームスタッツ（得点・アシスト）
+  public gameStats = { points: 0, assists: 0 };
+
   // 名前表示用
   private nameLabel: Mesh | null = null;
   private nameLabelTexture: AdvancedDynamicTexture | null = null;

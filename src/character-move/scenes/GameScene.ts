@@ -116,6 +116,9 @@ export class GameScene {
 
   private lastFrameTime: number = Date.now();
 
+  // ゲーム経過時間（秒）— pause中は加算しない
+  private gameElapsedSeconds: number = 0;
+
   // 1on1バトルコントローラー
   private oneOnOneBattleController?: OneOnOneBattleController;
 
@@ -868,6 +871,9 @@ export class GameScene {
       return;
     }
 
+    // ゲーム経過時間を加算
+    this.gameElapsedSeconds += deltaTime;
+
     // ジャンプボール中の更新
     if (this.isJumpBallActive()) {
       this.updateJumpBall(deltaTime);
@@ -1407,6 +1413,15 @@ export class GameScene {
    * @param scoringTeam ゴールを決めたチーム
    */
   private resetAfterGoal(scoringTeam: 'ally' | 'enemy'): void {
+    // 個人スタッツを帰属（ゴールリセット前に読み取る）
+    const scorer = this.shootingController?.getCurrentShooterCharacter();
+    if (scorer) {
+      scorer.gameStats.points++;
+      const assister = this.ball.getPendingAssistFrom();
+      if (assister && assister !== scorer && assister.team === scorer.team) {
+        assister.gameStats.assists++;
+      }
+    }
     this._gameResetManager?.startGoalReset(scoringTeam);
   }
 
@@ -1468,11 +1483,16 @@ export class GameScene {
     // ボールの飛行を停止
     this.ball.endFlight();
 
-    // 全キャラクターのバランスをリセット
+    // 全キャラクターのバランスをリセット＋個人スタッツをリセット
     const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
     for (const character of allCharacters) {
       character.resetBalance();
+      character.gameStats.points = 0;
+      character.gameStats.assists = 0;
     }
+
+    // ゲーム経過時間をリセット
+    this.gameElapsedSeconds = 0;
 
     // ジャンプボールを開始
     this.setupJumpBall();
@@ -1662,6 +1682,26 @@ export class GameScene {
       result[id] = `rgb(${Math.round(rgb.r * 255)},${Math.round(rgb.g * 255)},${Math.round(rgb.b * 255)})`;
     }
     return result;
+  }
+
+  /**
+   * 全選手のID→個人ゲームスタッツマップを返す
+   */
+  public getPlayerGameStats(): Record<string, { points: number; assists: number }> {
+    const result: Record<string, { points: number; assists: number }> = {};
+    for (const c of [...this.allyCharacters, ...this.enemyCharacters]) {
+      const id = c.playerData?.basic.ID;
+      if (!id) continue;
+      result[id] = { ...c.gameStats };
+    }
+    return result;
+  }
+
+  /**
+   * ゲーム経過時間（秒）を取得
+   */
+  public getGameElapsedSeconds(): number {
+    return this.gameElapsedSeconds;
   }
 
   /**

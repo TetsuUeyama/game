@@ -42,6 +42,10 @@ export const JUMP_BALL_TIMING = {
   TIP_ENABLED_MIN_HEIGHT: 2.8, // ジャンパーが手を伸ばして届く最低高さ
   /** ボールがチップ可能な最大高さ */
   TIP_ENABLED_MAX_HEIGHT: 4.5, // 最高到達点付近
+  /** 手とボールの接触判定半径（m） */
+  HAND_BALL_CONTACT_RADIUS: 0.25,
+  /** トス開始からジャンプ発動までの遅延（秒） */
+  JUMP_TRIGGER_DELAY: 0.3,
 } as const;
 
 /**
