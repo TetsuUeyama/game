@@ -77,7 +77,7 @@ export class LeagueManager {
   // ---- リーグ作成・進行 ----
 
   /** 新しいリーグを作成 */
-  static createLeague(): LeagueState {
+  static createLeague(playerTeamId: number): LeagueState {
     const teamIds = LEAGUE_TEAMS.map(t => t.id);
     const matches = generateRoundRobinSchedule(teamIds);
 
@@ -86,10 +86,29 @@ export class LeagueManager {
       matches,
       currentRound: 0,
       isComplete: false,
+      playerTeamId,
     };
 
     this.saveLeagueState(state);
     return state;
+  }
+
+  /** 現在の節でプレイヤーの試合を取得 */
+  static getPlayerMatch(state: LeagueState): LeagueMatch | undefined {
+    return state.matches.find(
+      m => m.round === state.currentRound &&
+        (m.homeTeamId === state.playerTeamId || m.awayTeamId === state.playerTeamId),
+    );
+  }
+
+  /** 現在の節でプレイヤー以外の未消化試合を取得 */
+  static getNonPlayerUnplayedMatches(state: LeagueState): LeagueMatch[] {
+    return state.matches.filter(
+      m => m.round === state.currentRound &&
+        m.result === null &&
+        m.homeTeamId !== state.playerTeamId &&
+        m.awayTeamId !== state.playerTeamId,
+    );
   }
 
   /** 試合結果をリーグに反映 */

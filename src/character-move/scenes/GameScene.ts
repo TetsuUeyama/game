@@ -399,7 +399,7 @@ export class GameScene {
       this.dribblePathVisualizer.setEnabled(true);
     }
 
-    // 入力コントローラーの初期化（プレイヤーキャラクター）
+    // 入力コントローラーの初期化
     if (allCharacters.length > 0) {
       this.inputController = new InputController(this.scene, allCharacters[0]);
       // 関節操作コントローラーの初期化（モーション選択UI含む）
@@ -1487,6 +1487,7 @@ export class GameScene {
   public getWinningScore(): number {
     return 5; // GameResetManagerのwinningScoreと同じ値
   }
+
 
   /**
    * ゲームをリセット

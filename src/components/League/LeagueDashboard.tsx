@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LeagueManager } from '@/league/LeagueManager';
+import { MatchSimulator } from '@/league/MatchSimulator';
+import { LEAGUE_TEAMS } from '@/league/leagueTeams';
 import type { LeagueState } from '@/league/types';
 import { LeagueSchedule } from './LeagueSchedule';
 import { LeagueStarChart } from './LeagueStarChart';
@@ -16,22 +18,36 @@ export function LeagueDashboard() {
   const [leagueState, setLeagueState] = useState<LeagueState | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
 
-  // 初期化: リーグ状態を読み込み + 試合結果を消費
+  // 初期化: リーグ状態を読み込み + 試合結果を消費 + 他試合の即時シミュレーション
   useEffect(() => {
     let state = LeagueManager.loadLeagueState();
 
-    // 試合結果があれば反映
-    const result = LeagueManager.consumeMatchResult();
-    if (result && state) {
-      state = LeagueManager.applyMatchResult(state, result);
+    // プレイヤーの試合結果があれば反映
+    const playerResult = LeagueManager.consumeMatchResult();
+    if (playerResult && state) {
+      state = LeagueManager.applyMatchResult(state, playerResult);
+
+      // プレイヤー試合反映後、同じ節の他試合を即時シミュレーション
+      const unplayed = LeagueManager.getNonPlayerUnplayedMatches(state);
+      if (unplayed.length > 0) {
+        // 非同期でシミュレーション実行し結果を反映
+        MatchSimulator.simulateMatches(unplayed).then(simResults => {
+          let updated = LeagueManager.loadLeagueState();
+          if (!updated) return;
+          for (const sim of simResults) {
+            updated = LeagueManager.applyMatchResult(updated, MatchSimulator.toMatchResultPayload(sim));
+          }
+          setLeagueState(updated);
+        });
+      }
     }
 
     setLeagueState(state);
   }, []);
 
-  // リーグ作成
-  const handleCreateLeague = useCallback(() => {
-    const state = LeagueManager.createLeague();
+  // リーグ作成（チーム選択後）
+  const handleCreateLeague = useCallback((playerTeamId: number) => {
+    const state = LeagueManager.createLeague(playerTeamId);
     setLeagueState(state);
   }, []);
 
@@ -57,29 +73,37 @@ export function LeagueDashboard() {
     router.push('/league/match');
   }, [leagueState, router]);
 
-  // リーグ未作成
+  // リーグ未作成: チーム選択画面
   if (!leagueState) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white">
-        <h1 className="text-4xl font-bold mb-8">Basketball League</h1>
-        <p className="text-gray-400 mb-8">8チームのラウンドロビンリーグ戦</p>
-        <div className="flex gap-4">
-          <button
-            onClick={handleCreateLeague}
-            className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold rounded-xl transition-colors"
-          >
-            リーグ作成
-          </button>
-          <Link
-            href="/"
-            className="px-8 py-4 bg-gray-700 hover:bg-gray-600 text-white text-xl font-bold rounded-xl transition-colors"
-          >
-            ホームに戻る
-          </Link>
+        <h1 className="text-4xl font-bold mb-4">Basketball League</h1>
+        <p className="text-gray-400 mb-8">操作するチームを選んでください</p>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mb-8">
+          {LEAGUE_TEAMS.map(team => (
+            <button
+              key={team.id}
+              onClick={() => handleCreateLeague(team.id)}
+              className="px-4 py-4 bg-gray-800 hover:bg-blue-700 border border-gray-600 hover:border-blue-500 rounded-xl transition-colors text-center"
+            >
+              <p className="text-lg font-bold">{team.name}</p>
+              <p className="text-xs text-gray-400">{team.abbr}</p>
+            </button>
+          ))}
         </div>
+
+        <Link
+          href="/"
+          className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl transition-colors"
+        >
+          ホームに戻る
+        </Link>
       </div>
     );
   }
+
+  const playerTeam = leagueState.teams.find(t => t.id === leagueState.playerTeamId);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'schedule', label: '日程' },
@@ -95,6 +119,9 @@ export function LeagueDashboard() {
           <div>
             <h1 className="text-2xl font-bold">Basketball League</h1>
             <p className="text-sm text-gray-400">
+              {playerTeam && (
+                <span className="text-blue-400 mr-2">MY: {playerTeam.name}</span>
+              )}
               {leagueState.isComplete
                 ? '全日程終了'
                 : `第${leagueState.currentRound + 1}節 進行中`
@@ -140,7 +167,10 @@ export function LeagueDashboard() {
       {/* タブコンテンツ */}
       <div className="max-w-4xl mx-auto px-4 py-4">
         {activeTab === 'schedule' && (
-          <LeagueSchedule leagueState={leagueState} onStartMatch={handleStartMatch} />
+          <LeagueSchedule
+            leagueState={leagueState}
+            onStartMatch={handleStartMatch}
+          />
         )}
         {activeTab === 'star' && (
           <LeagueStarChart leagueState={leagueState} />

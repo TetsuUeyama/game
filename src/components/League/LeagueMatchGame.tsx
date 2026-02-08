@@ -267,31 +267,27 @@ export function LeagueMatchGame() {
     return { points: raw.points, assists: raw.assists, playingTime: formatTime(gameElapsed) };
   };
 
-  // 勝者が決まったら結果を保存
-  const handleSaveResult = useCallback(() => {
-    const config = matchConfigRef.current;
-    if (!config || resultSaved) return;
-
-    const winnerSide: 'home' | 'away' = winner === 'ally' ? 'home' : 'away';
-
-    LeagueManager.saveMatchResult({
-      matchId: config.matchId,
-      homeScore: score.ally,
-      awayScore: score.enemy,
-      winner: winnerSide,
-    });
-
-    LeagueManager.clearMatchConfig();
-    setResultSaved(true);
-  }, [winner, score, resultSaved]);
-
-  // リーグページに戻る
+  // リーグページに戻る（結果保存 → 遷移）
   const handleBackToLeague = useCallback(() => {
+    const config = matchConfigRef.current;
+    if (!config) return;
+
+    // プレイヤーの試合結果を保存
     if (winner && !resultSaved) {
-      handleSaveResult();
+      const winnerSide: 'home' | 'away' = winner === 'ally' ? 'home' : 'away';
+      LeagueManager.saveMatchResult({
+        matchId: config.matchId,
+        homeScore: score.ally,
+        awayScore: score.enemy,
+        winner: winnerSide,
+      });
+      LeagueManager.clearMatchConfig();
+      setResultSaved(true);
     }
+
+    // リーグページへ遷移
     router.push('/league');
-  }, [winner, resultSaved, handleSaveResult, router]);
+  }, [winner, score, resultSaved, router]);
 
   if (error) {
     return (
