@@ -12,7 +12,8 @@ import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
 import { ThrowInCheckModePanel } from './ThrowInCheckModePanel';
 import { FaceAvatarData } from '@/character-move/utils/FaceAvatarCapture';
-import { PlayerFaceAvatar } from './PlayerFaceAvatar';
+import { OffenseRole, DefenseRole } from '@/character-move/state/PlayerStateTypes';
+import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
 
 type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'throw_in_check';
@@ -38,6 +39,8 @@ export default function CharacterMove1on1Game() {
   const [faceAvatars, setFaceAvatars] = useState<FaceAvatarData[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayerInfo | null>(null);
   const [playerStateColors, setPlayerStateColors] = useState<Record<string, string>>({});
+  const [playerGameStats, setPlayerGameStats] = useState<Record<string, { points: number; assists: number }>>({});
+  const [gameElapsed, setGameElapsed] = useState<number>(0);
   const lastCharacterVersionRef = useRef<number>(-1);
 
   useEffect(() => {
@@ -156,6 +159,8 @@ export default function CharacterMove1on1Game() {
         setThrowInTimer(currentThrowInTimer);
         setIsThrowInTimerRunning(currentIsThrowInRunning);
         setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
+        setPlayerGameStats(gameSceneRef.current.getPlayerGameStats());
+        setGameElapsed(gameSceneRef.current.getGameElapsedSeconds());
       }
     }, 100); // 100msごとにチェック
 
@@ -222,6 +227,71 @@ export default function CharacterMove1on1Game() {
     });
   }, []);
 
+  // ロール変更ハンドラー（シュート優先度の自動リオーダー対応）
+  const handleRoleChange = useCallback((
+    characterId: string,
+    team: 'ally' | 'enemy',
+    field: 'shotPriority' | 'offenseRole' | 'defenseRole',
+    value: string,
+  ) => {
+    if (!gameSceneRef.current) return;
+
+    const characters = team === 'ally'
+      ? gameSceneRef.current.getAllyCharacters()
+      : gameSceneRef.current.getEnemyCharacters();
+
+    const character = characters.find(c => c.playerData?.basic.ID === characterId);
+    if (!character) return;
+
+    if (field === 'shotPriority') {
+      const newPriority = value ? Number(value) : null;
+      const oldPriority = character.shotPriority;
+
+      if (newPriority !== null && newPriority !== oldPriority) {
+        // 他の同チーム選手の優先度をシフト
+        for (const c of characters) {
+          if (c === character || c.shotPriority == null) continue;
+          if (oldPriority != null) {
+            // 例: 4→1 の場合、1〜3 を +1 にシフト
+            if (newPriority < oldPriority) {
+              if (c.shotPriority >= newPriority && c.shotPriority < oldPriority) {
+                c.shotPriority++;
+              }
+            } else {
+              // 例: 1→4 の場合、2〜4 を -1 にシフト
+              if (c.shotPriority > oldPriority && c.shotPriority <= newPriority) {
+                c.shotPriority--;
+              }
+            }
+          } else {
+            // 未設定→新規設定: 新優先度以上の既存選手を +1 にシフト
+            if (c.shotPriority >= newPriority) {
+              c.shotPriority++;
+            }
+          }
+        }
+      }
+      character.shotPriority = newPriority;
+    } else if (field === 'offenseRole') {
+      character.offenseRole = (value || null) as OffenseRole | null;
+    } else if (field === 'defenseRole') {
+      character.defenseRole = (value || null) as DefenseRole | null;
+    }
+
+    // faceAvatars state を全チームメンバー分同期
+    setFaceAvatars(prev => prev.map(a => {
+      if (a.team !== team) return a;
+      const c = characters.find(ch => ch.playerData?.basic.ID === a.characterId);
+      if (!c) return a;
+      return {
+        ...a,
+        shotPriority: c.shotPriority,
+        offenseRole: c.offenseRole,
+        defenseRole: c.defenseRole,
+      };
+    }));
+  }, []);
+
   // ゲームをリセット
   const handleResetGame = () => {
     if (gameSceneRef.current) {
@@ -279,6 +349,20 @@ export default function CharacterMove1on1Game() {
     setCurrentMode('game');
   }, []);
 
+  // 経過時間を "MM:SS" に変換
+  const formatTime = (seconds: number): string => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // 選手ごとのスタッツビューを生成
+  const buildStatsView = (charId: string): PlayerGameStatsView | undefined => {
+    const raw = playerGameStats[charId];
+    if (!raw) return undefined;
+    return { points: raw.points, assists: raw.assists, playingTime: formatTime(gameElapsed) };
+  };
+
   // エラー表示
   if (error) {
     return (
@@ -333,7 +417,12 @@ export default function CharacterMove1on1Game() {
                     position={avatar.position}
                     team="enemy"
                     stateColor={playerStateColors[avatar.characterId]}
+                    shotPriority={avatar.shotPriority}
+                    offenseRole={avatar.offenseRole}
+                    defenseRole={avatar.defenseRole}
+                    gameStats={buildStatsView(avatar.characterId)}
                     onClick={() => handleFaceClick(avatar)}
+                    onRoleChange={(field, value) => handleRoleChange(avatar.characterId, 'enemy', field, value)}
                   />
                 ))}
             </div>
@@ -396,7 +485,12 @@ export default function CharacterMove1on1Game() {
                     position={avatar.position}
                     team="ally"
                     stateColor={playerStateColors[avatar.characterId]}
+                    shotPriority={avatar.shotPriority}
+                    offenseRole={avatar.offenseRole}
+                    defenseRole={avatar.defenseRole}
+                    gameStats={buildStatsView(avatar.characterId)}
                     onClick={() => handleFaceClick(avatar)}
+                    onRoleChange={(field, value) => handleRoleChange(avatar.characterId, 'ally', field, value)}
                   />
                 ))}
             </div>

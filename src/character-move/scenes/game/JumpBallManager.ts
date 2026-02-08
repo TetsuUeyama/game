@@ -11,6 +11,7 @@ import {
   CENTER_CIRCLE,
   JUMP_BALL_POSITIONS,
   JUMP_BALL_TIMING,
+  JUMP_BALL_PHYSICS,
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
 } from "../../config/JumpBallConfig";
@@ -58,6 +59,10 @@ export class JumpBallManager {
   private tossStartY: number = 0;
   private tossVelocityY: number = 0;
   private tossElapsedTime: number = 0;
+
+  // ジャンプ発動状態
+  private jumpersTriggered: boolean = false;
+  private tossPhaseElapsed: number = 0;
 
   // ルーズボールタイマー（誰もボールを保持していない状態のタイマー）
   private looseBallTimer: number = 0;
@@ -270,13 +275,35 @@ export class JumpBallManager {
 
       case 'tossing':
         this.updateKinematicToss(deltaTime);
+        this.tossPhaseElapsed += deltaTime;
+
+        // 遅延後にジャンパーにジャンプを発動
+        if (!this.jumpersTriggered && this.tossPhaseElapsed >= JUMP_BALL_TIMING.JUMP_TRIGGER_DELAY) {
+          this.triggerJumperJumps();
+        }
+
+        // 手-ボール接触判定
+        if (this.jumpersTriggered) {
+          const winner = this.checkHandBallContact();
+          if (winner) {
+            this.executeTipForWinner(winner);
+            break;
+          }
+        }
+
         {
           const ballHeight = this.context.ball.getPosition().y;
-          // ボールが地面付近まで落下したらジャンプボール完了
+          // ボールが地面付近まで落下 → フォールバック: 身長が高い方がチップ
           if (ballHeight <= 1.0) {
-            this.jumpBallInfo.phase = 'jumping';
-            this.jumpBallInfo.ballTipped = true;
-            this.complete();
+            const fallbackWinner = this.selectFallbackWinner();
+            if (fallbackWinner) {
+              this.executeTipForWinner(fallbackWinner);
+            } else {
+              // ジャンパーがいない場合はそのまま完了
+              this.jumpBallInfo.phase = 'jumping';
+              this.jumpBallInfo.ballTipped = true;
+              this.complete();
+            }
           }
         }
         break;
@@ -341,11 +368,96 @@ export class JumpBallManager {
     this.tossElapsedTime = 0;
     this.tossActive = true;
 
+    // ジャンプ発動フラグをリセット
+    this.jumpersTriggered = false;
+    this.tossPhaseElapsed = 0;
+
     this.jumpBallInfo.phase = 'tossing';
   }
 
-  // NOTE: triggerJumperJumps() と tryTipBall() は一時的に削除（デバッグ中）
-  // ジャンプボールのトス・チップ機能を復元する際にgit履歴から復元すること
+  /**
+   * 両ジャンパーにジャンプモーション＋物理力を発動
+   */
+  private triggerJumperJumps(): void {
+    const jumpers = [this.jumpBallAllyJumper, this.jumpBallEnemyJumper];
+    for (const jumper of jumpers) {
+      if (!jumper) continue;
+      // startAction内でモーション再生＋物理力適用（jump値でスケール）
+      jumper.getActionController().startAction('jump_ball');
+    }
+    this.jumpersTriggered = true;
+  }
+
+  /**
+   * 手-ボール接触判定
+   * 両ジャンパーの左右の手（計4つ）とボールの距離を計算し、
+   * 最も近い手が HAND_BALL_CONTACT_RADIUS 以内なら、その選手を返す。
+   */
+  private checkHandBallContact(): Character | null {
+    const ballPos = this.context.ball.getPosition();
+    const contactRadius = JUMP_BALL_TIMING.HAND_BALL_CONTACT_RADIUS;
+
+    let closestDistance = Infinity;
+    let closestCharacter: Character | null = null;
+
+    const jumpers = [this.jumpBallAllyJumper, this.jumpBallEnemyJumper];
+    for (const jumper of jumpers) {
+      if (!jumper) continue;
+
+      const rightHandPos = jumper.getRightHandPosition();
+      const leftHandPos = jumper.getLeftHandPosition();
+
+      const rightDist = Vector3.Distance(rightHandPos, ballPos);
+      const leftDist = Vector3.Distance(leftHandPos, ballPos);
+
+      const minDist = Math.min(rightDist, leftDist);
+      if (minDist < closestDistance) {
+        closestDistance = minDist;
+        closestCharacter = jumper;
+      }
+    }
+
+    if (closestDistance <= contactRadius && closestCharacter) {
+      return closestCharacter;
+    }
+
+    return null;
+  }
+
+  /**
+   * フォールバック: 身長が高い方をチップ勝者として選択
+   */
+  private selectFallbackWinner(): Character | null {
+    if (!this.jumpBallAllyJumper || !this.jumpBallEnemyJumper) return null;
+
+    const allyHeight = this.jumpBallAllyJumper.config.physical.height;
+    const enemyHeight = this.jumpBallEnemyJumper.config.physical.height;
+
+    return allyHeight >= enemyHeight ? this.jumpBallAllyJumper : this.jumpBallEnemyJumper;
+  }
+
+  /**
+   * チップ勝者のチームにボールを弾く
+   * @param winner チップに勝った選手
+   */
+  private executeTipForWinner(winner: Character): void {
+    // キネマティックトスを停止
+    this.tossActive = false;
+
+    // チップ方向: 勝者チーム側 (ally→-Z, enemy→+Z) + 上方向成分
+    const isAlly = winner.team === 'ally';
+    const tipDirection = new Vector3(
+      0,
+      JUMP_BALL_PHYSICS.TIP_VERTICAL_RATIO,
+      (isAlly ? -1 : 1) * JUMP_BALL_PHYSICS.TIP_HORIZONTAL_RATIO
+    ).normalize();
+
+    this.context.ball.tipBall(tipDirection, JUMP_BALL_PHYSICS.TIP_BALL_SPEED);
+
+    // フェーズ移行
+    this.jumpBallInfo.phase = 'jumping';
+    this.jumpBallInfo.ballTipped = true;
+  }
 
   /**
    * ジャンプボールを完了
@@ -471,5 +583,7 @@ export class JumpBallManager {
     this.jumpBallEnemyJumper = null;
     this.jumpBallTimer = 0;
     this.tossActive = false;
+    this.jumpersTriggered = false;
+    this.tossPhaseElapsed = 0;
   }
 }

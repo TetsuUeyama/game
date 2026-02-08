@@ -59,6 +59,9 @@ export class Ball {
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
 
+  // アシスト候補（パスした選手を記録。得点時にアシストとして帰属させる）
+  private pendingAssistFrom: Character | null = null;
+
   // パスのターゲット（キャッチ判定用）
   private passTarget: Character | null = null;
 
@@ -411,6 +414,10 @@ export class Ball {
 
     if (character !== null) {
       this.lastToucher = character;
+      // チーム変更時はアシスト候補をクリア（ターンオーバー）
+      if (this.pendingAssistFrom && character.team !== this.pendingAssistFrom.team) {
+        this.pendingAssistFrom = null;
+      }
       // パスターゲットをクリア（レシーバーモードも無効化）
       this.clearPassTarget();
       // バウンスパス状態をリセット
@@ -1195,6 +1202,9 @@ export class Ball {
     this.lastPasser = previousHolder;
     this.passerCooldown = Ball.PASSER_COOLDOWN_TIME;
 
+    // アシスト候補を記録（パスした選手）
+    this.pendingAssistFrom = previousHolder;
+
     return true;
   }
 
@@ -1293,6 +1303,13 @@ export class Ball {
    */
   public clearLastToucher(): void {
     this.lastToucher = null;
+  }
+
+  /**
+   * アシスト候補（最後にパスした選手）を取得
+   */
+  public getPendingAssistFrom(): Character | null {
+    return this.pendingAssistFrom;
   }
 
   /**

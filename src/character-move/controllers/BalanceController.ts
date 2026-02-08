@@ -221,6 +221,38 @@ export class BalanceController {
   }
 
   /**
+   * ActionTypeによる力をスケール付きで適用
+   * Y成分（垂直方向）にスケールを掛けてジャンプ高さを調整する
+   * @param actionType アクションタイプ
+   * @param yScale Y成分のスケール倍率（1.0が標準）
+   */
+  applyActionTypeForceWithScale(actionType: ActionType, yScale: number): void {
+    const config = ACTION_TYPE_FORCES[actionType];
+    if (!config) {
+      console.warn(`[BalanceController] No force config for action type: ${actionType}`);
+      return;
+    }
+
+    // Y成分のみスケール（ジャンプ高さ）
+    const scaledForce = new Vector3(
+      config.force.x,
+      config.force.y * yScale,
+      config.force.z
+    );
+
+    // 体重による力の調整
+    const weightFactor = getWeightForceFactor(this.weight);
+    this.externalForce = scaledForce.scale(weightFactor);
+    this.forceEndTime = Date.now() + config.duration * 1000;
+
+    // ロック設定（ジャンプ系アクション）
+    if (config.lock) {
+      this.state.isLocked = true;
+      this.state.isGrounded = false;
+    }
+  }
+
+  /**
    * 指定したアクションが実行可能かどうか判定
    * 重心が安定していて、ロック中でなければ実行可能
    * ただしシュートアクションは重心チェックを緩和（キャッチ&シュート対応）
