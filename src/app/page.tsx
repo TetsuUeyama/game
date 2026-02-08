@@ -20,6 +20,12 @@ export default function Home() {
         >
           リーグ
         </Link>
+        <Link
+          href="/teams"
+          className="px-8 py-6 bg-purple-600 hover:bg-purple-500 rounded-xl text-xl font-semibold text-center transition-colors"
+        >
+          チーム
+        </Link>
       </div>
     </div>
   );

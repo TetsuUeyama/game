@@ -10,6 +10,7 @@ interface Props {
 
 export function LeagueSchedule({ leagueState, onStartMatch }: Props) {
   const totalRounds = 7;
+  const playerTeamId = leagueState.playerTeamId;
 
   return (
     <div className="space-y-6">
@@ -46,24 +47,34 @@ export function LeagueSchedule({ leagueState, onStartMatch }: Props) {
                 if (!homeTeam || !awayTeam) return null;
 
                 const hasResult = match.result !== null;
-                const canPlay = isCurrent && !hasResult && !leagueState.isComplete;
+                const isPlayerMatch = match.homeTeamId === playerTeamId || match.awayTeamId === playerTeamId;
+                const canPlay = isCurrent && !hasResult && !leagueState.isComplete && isPlayerMatch;
+
+                // ホームチーム名のハイライト
+                const isHomePlayer = match.homeTeamId === playerTeamId;
+                const isAwayPlayer = match.awayTeamId === playerTeamId;
 
                 return (
                   <div
                     key={match.matchId}
                     className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                      hasResult ? 'bg-gray-700/50' : canPlay ? 'bg-gray-700/30' : 'bg-gray-800/30'
+                      isPlayerMatch
+                        ? hasResult ? 'bg-blue-900/30 border border-blue-700/50' : 'bg-blue-900/20 border border-blue-800/30'
+                        : hasResult ? 'bg-gray-700/50' : 'bg-gray-800/30'
                     }`}
                   >
                     {/* ホームチーム */}
                     <div className={`text-right flex-1 ${
-                      hasResult && match.result?.winner === 'home' ? 'text-green-400 font-bold' : 'text-gray-300'
+                      hasResult && match.result?.winner === 'home'
+                        ? 'text-green-400 font-bold'
+                        : isHomePlayer ? 'text-blue-300' : 'text-gray-300'
                     }`}>
                       <span className="text-xs text-gray-500 mr-1">{homeTeam.abbr}</span>
                       {homeTeam.name}
+                      {isHomePlayer && <span className="ml-1 text-[10px] text-blue-400">MY</span>}
                     </div>
 
-                    {/* スコアまたはVS */}
+                    {/* スコアまたはVS/SIMボタン */}
                     <div className="mx-3 min-w-[60px] text-center">
                       {hasResult ? (
                         <span className="font-mono font-bold text-white">
@@ -76,6 +87,8 @@ export function LeagueSchedule({ leagueState, onStartMatch }: Props) {
                         >
                           対戦
                         </button>
+                      ) : isCurrent && !hasResult && !isPlayerMatch ? (
+                        <span className="text-xs text-gray-500">SIM</span>
                       ) : (
                         <span className="text-gray-600 text-xs">vs</span>
                       )}
@@ -83,10 +96,13 @@ export function LeagueSchedule({ leagueState, onStartMatch }: Props) {
 
                     {/* アウェイチーム */}
                     <div className={`text-left flex-1 ${
-                      hasResult && match.result?.winner === 'away' ? 'text-green-400 font-bold' : 'text-gray-300'
+                      hasResult && match.result?.winner === 'away'
+                        ? 'text-green-400 font-bold'
+                        : isAwayPlayer ? 'text-blue-300' : 'text-gray-300'
                     }`}>
                       {awayTeam.name}
                       <span className="text-xs text-gray-500 ml-1">{awayTeam.abbr}</span>
+                      {isAwayPlayer && <span className="ml-1 text-[10px] text-blue-400">MY</span>}
                     </div>
                   </div>
                 );

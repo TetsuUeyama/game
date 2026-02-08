@@ -54,6 +54,7 @@ export interface LeagueState {
   matches: LeagueMatch[];
   currentRound: number; // 現在の節 (0-6)
   isComplete: boolean;
+  playerTeamId: number; // プレイヤーが操作するチームのID
 }
 
 /** 試合開始時にlocalStorageに保存する設定 */
