@@ -9,7 +9,6 @@ import {
   PhysicsShapeType,
   PhysicsMotionType,
   PhysicsMaterialCombineMode,
-  LinesMesh,
 } from "@babylonjs/core";
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
@@ -151,11 +150,6 @@ export class Ball {
       target.setPassReceiverMode(true);
     }
   }
-
-  // 軌道可視化用メッシュ
-  private trajectoryLineMesh: LinesMesh | null = null;
-  private trajectoryParabolaMesh: LinesMesh | null = null;
-  private trajectoryVisible: boolean = true;
 
   // 決定論的軌道計算
   private currentTrajectory: DeterministicTrajectory | null = null;
@@ -779,9 +773,6 @@ export class Ball {
     const initialVel = this.currentTrajectory.getInitialVelocity();
     const velocity = new Vector3(initialVel.x, initialVel.y, initialVel.z);
 
-    // 軌道を可視化（決定論的軌道を使用）
-    this.visualizeTrajectoryDeterministic();
-
     // バックスピンを計算
     // curve値が高いほど強いバックスピン（5〜25 rad/s）
     const backspinStrength = 5 + (curveValue / 99) * 20;
@@ -1330,79 +1321,6 @@ export class Ball {
     this.initializePhysics();
   }
 
-  // ==================== 軌道可視化 ====================
-
-  /**
-   * 軌道の可視化を作成（決定論的軌道を使用）
-   * currentTrajectory から軌道点をサンプリングして描画
-   */
-  private visualizeTrajectoryDeterministic(): void {
-    // 既存の可視化を削除
-    this.clearTrajectoryVisualization();
-
-    if (!this.trajectoryVisible || !this.currentTrajectory) return;
-
-    const params = this.currentTrajectory.getBaseTrajectory().getParams();
-    const start = params.start;
-    const target = params.target;
-
-    // 直線（発射位置→目標位置）
-    const linePoints = [
-      new Vector3(start.x, start.y, start.z),
-      new Vector3(target.x, target.y, target.z),
-    ];
-    this.trajectoryLineMesh = MeshBuilder.CreateLines(
-      "trajectory-line",
-      { points: linePoints },
-      this.scene
-    );
-    this.trajectoryLineMesh.color = new Color3(1, 1, 0); // 黄色
-
-    // 放物線（決定論的軌道からサンプリング）
-    const trajectoryPoints = this.currentTrajectory.sample(50);
-    const parabolaPoints = trajectoryPoints.map(
-      (p) => new Vector3(p.position.x, p.position.y, p.position.z)
-    );
-
-    this.trajectoryParabolaMesh = MeshBuilder.CreateLines(
-      "trajectory-parabola",
-      { points: parabolaPoints },
-      this.scene
-    );
-    this.trajectoryParabolaMesh.color = new Color3(0, 1, 1); // シアン
-  }
-
-  /**
-   * 軌道の可視化を削除
-   */
-  private clearTrajectoryVisualization(): void {
-    if (this.trajectoryLineMesh) {
-      this.trajectoryLineMesh.dispose();
-      this.trajectoryLineMesh = null;
-    }
-    if (this.trajectoryParabolaMesh) {
-      this.trajectoryParabolaMesh.dispose();
-      this.trajectoryParabolaMesh = null;
-    }
-  }
-
-  /**
-   * 軌道可視化の表示/非表示を設定
-   */
-  public setTrajectoryVisible(visible: boolean): void {
-    this.trajectoryVisible = visible;
-    if (!visible) {
-      this.clearTrajectoryVisualization();
-    }
-  }
-
-  /**
-   * 軌道可視化の表示/非表示を切り替え
-   */
-  public toggleTrajectoryVisible(): void {
-    this.setTrajectoryVisible(!this.trajectoryVisible);
-  }
-
   /**
    * ジャンプボール時にボールをチップ（弾く）
    *
@@ -1487,7 +1405,6 @@ export class Ball {
    * 破棄
    */
   dispose(): void {
-    this.clearTrajectoryVisualization();
     if (this.physicsAggregate) {
       this.physicsAggregate.dispose();
     }

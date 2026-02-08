@@ -63,6 +63,20 @@ export const JUMP_BALL_PHYSICS = {
 } as const;
 
 /**
+ * ジャンプボール押し合い設定
+ * preparingフェーズ中にジャンパー同士がpower値に基づいてセンターポジションを争う
+ */
+export const JUMP_BALL_CONTEST = {
+  /** 押し合いの強さ（フレームあたりの最大移動距離 m） */
+  PUSH_SPEED: 0.02,
+  /** ジャンパーがボール真下に到達する目標距離（m） */
+  TARGET_THRESHOLD: 0.05,
+  /** powerステータスの最大差で到達する押し出し比率 */
+  MAX_PUSH_RATIO: 0.85,
+  MIN_PUSH_RATIO: 0.15,
+} as const;
+
+/**
  * ジャンプボール状態
  */
 export type JumpBallPhase =

@@ -23,7 +23,8 @@ import { FeintController } from "../controllers/action/FeintController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
-import { PlayerStateManager, DefenseScheme } from "../state";
+import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "../state";
+import type { VisualSettings } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
 import { PhysicsManager } from "../../physics/PhysicsManager";
@@ -101,6 +102,9 @@ export class GameScene {
   // プレイヤーアクションファサード
   private _playerActionFacade?: PlayerActionFacade;
 
+  // 視覚情報設定マネージャー
+  private _visualSettingsManager: VisualSettingsManager = new VisualSettingsManager();
+
   // キャラクター（5対5）
   private allyCharacters: Character[] = []; // 味方チーム5人
   private enemyCharacters: Character[] = []; // 敵チーム5人
@@ -166,14 +170,23 @@ export class GameScene {
   private faceAvatarCache: FaceAvatarData[] | null = null;
   private characterVersion: number = 0;
 
+  // チーム名（リーグ戦で動的に設定可能）
+  private allyTeamName: string = 'ATM';
+  private enemyTeamName: string = 'BTM';
+
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
     teamConfig?: GameTeamConfig;
     playerData?: Record<string, PlayerData>;
+    allyTeamName?: string;
+    enemyTeamName?: string;
   }) {
     const showAdditionalCharacters = options?.showAdditionalCharacters ?? true;
     const teamConfig = options?.teamConfig;
     const playerData = options?.playerData;
+
+    if (options?.allyTeamName) this.allyTeamName = options.allyTeamName;
+    if (options?.enemyTeamName) this.enemyTeamName = options.enemyTeamName;
 
     // WebGLサポートチェック（テスト用キャンバスを使用して、実際のキャンバスのコンテキストを消費しない）
     const testCanvas = document.createElement("canvas");
@@ -413,6 +426,9 @@ export class GameScene {
 
     // プレイヤーアクションファサードの初期化
     this._playerActionFacade = new PlayerActionFacade(this.createPlayerActionFacadeContext());
+
+    // 視覚情報の初期設定を反映
+    this.applyAllVisualSettings();
 
     // 3Dモデルのロード（オプション）
     // this.loadCharacterModel(); // 一旦無効化
@@ -1455,7 +1471,7 @@ export class GameScene {
    * チーム名を取得（3文字固定）
    */
   public getPlayerNames(): { ally: string; enemy: string } {
-    return { ally: 'ATM', enemy: 'BTM' };
+    return { ally: this.allyTeamName, enemy: this.enemyTeamName };
   }
 
   /**
@@ -1765,6 +1781,84 @@ export class GameScene {
    */
   public isThrowInTimerRunning(): boolean {
     return this._throwInManager?.isTimerRunning() ?? false;
+  }
+
+  // ============================================
+  // 視覚情報設定（VisualSettingsManager）
+  // ============================================
+
+  /**
+   * 視覚情報の全設定を取得
+   */
+  public getVisualSettings(): VisualSettings {
+    return this._visualSettingsManager.getAll();
+  }
+
+  /**
+   * 視覚情報の個別設定を変更し、実際の描画に反映
+   */
+  public setVisualSetting(key: keyof VisualSettings, value: boolean): void {
+    this._visualSettingsManager.set(key, value);
+    this.applyVisualSetting(key, value);
+  }
+
+  /**
+   * 視覚情報の個別設定をトグルし、実際の描画に反映
+   */
+  public toggleVisualSetting(key: keyof VisualSettings): boolean {
+    const newValue = this._visualSettingsManager.toggle(key);
+    this.applyVisualSetting(key, newValue);
+    return newValue;
+  }
+
+  /**
+   * 全ての視覚情報設定を描画に反映（初期化時に使用）
+   */
+  private applyAllVisualSettings(): void {
+    const settings = this._visualSettingsManager.getAll();
+    for (const key of Object.keys(settings) as (keyof VisualSettings)[]) {
+      this.applyVisualSetting(key, settings[key]);
+    }
+  }
+
+  /**
+   * 視覚情報の設定を実際の描画に反映
+   */
+  private applyVisualSetting(key: keyof VisualSettings, value: boolean): void {
+    switch (key) {
+      case 'shootTrajectory':
+        this._visualizationManager?.setShootTrajectoryVisible(value);
+        break;
+      case 'passTrajectory':
+        this._visualizationManager?.setPassTrajectoryVisible(value);
+        break;
+      case 'dribblePath':
+        this._visualizationManager?.setDribblePathVisible(value);
+        break;
+      case 'tacticalZones':
+        this.field.setTacticalZonesVisible(value);
+        break;
+      case 'visionCone':
+        for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+          character.setVisionVisible(value);
+        }
+        break;
+      case 'gridLines':
+        this.field.setGridLinesVisible(value);
+        break;
+      case 'gridLabels':
+        this.field.setGridLabelsVisible(value);
+        break;
+      case 'shootRange':
+        if (this.shootingController) {
+          if (value) {
+            this.shootingController.showShootRange();
+          } else {
+            this.shootingController.hideShootRange();
+          }
+        }
+        break;
+    }
   }
 
   /**

@@ -881,14 +881,7 @@ export class Field {
    * 5. フリースローサークル上半円: 中心 (0, freeThrowZ)、半径 1.80m
    */
   private createPaintAreaForGoal(goalCenterZ: number, goalNumber: number): void {
-    const {
-      laneWidth,
-      freeThrowDistance,
-      freeThrowCircleRadius,
-      lineColor,
-      lineY,
-      circleSegments,
-    } = PAINT_AREA_CONFIG;
+    const {laneWidth, freeThrowDistance, freeThrowCircleRadius, lineY, circleSegments, lineColor} = PAINT_AREA_CONFIG;
 
     const color = Color3.FromHexString(lineColor);
     const halfWidth = laneWidth / 2;
@@ -1004,6 +997,73 @@ export class Field {
     );
     freeThrowCircle.color = color;
     this.paintAreaLines.push(freeThrowCircle);
+
+    // ========================================
+    // 6. ペイントエリア＆フリースローサークル塗りつぶし（チームカラー）
+    // ========================================
+    // goal1（+Z側）= 青チーム、goal2（-Z側）= 赤チーム
+    const teamColor = goalNumber === 1
+      ? new Color3(0.3, 0.5, 1)   // 青
+      : new Color3(1, 0.3, 0.3);  // 赤
+    const fillY = lineY - 0.005; // ラインの少し下に配置（ラインが上に見える）
+
+    // --- レーン矩形の塗りつぶし ---
+    const minZ = Math.min(freeThrowZ, laneBottomZ);
+    const maxZ = Math.max(freeThrowZ, laneBottomZ);
+    const depth = maxZ - minZ;
+
+    const paintFill = MeshBuilder.CreateGround(
+      `paint-fill-${goalNumber}`,
+      { width: laneWidth, height: depth },
+      this.scene
+    );
+    paintFill.position = new Vector3(0, fillY, (minZ + maxZ) / 2);
+
+    const paintMaterial = new StandardMaterial(
+      `paint-fill-material-${goalNumber}`,
+      this.scene
+    );
+    paintMaterial.diffuseColor = teamColor;
+    paintMaterial.emissiveColor = teamColor.scale(0.3);
+    paintMaterial.alpha = 0.75;
+    paintMaterial.backFaceCulling = false;
+    paintFill.material = paintMaterial;
+    this.paintAreaLines.push(paintFill);
+
+    // --- フリースローサークル半円の塗りつぶし ---
+    const semicirclePositions: number[] = [];
+    const semicircleIndices: number[] = [];
+    // 中心点（インデックス0）
+    semicirclePositions.push(0, fillY, freeThrowZ);
+    // 弧上の点（インデックス1〜circleSegments+1）
+    for (let i = 0; i <= circleSegments; i++) {
+      const t = i / circleSegments;
+      const angle = startAngle + (endAngle - startAngle) * t;
+      const sx = Math.cos(angle) * freeThrowCircleRadius;
+      const sz = freeThrowZ + Math.sin(angle) * freeThrowCircleRadius;
+      semicirclePositions.push(sx, fillY, sz);
+    }
+    // 三角形ファン（中心→弧[i]→弧[i+1]）
+    for (let i = 1; i <= circleSegments; i++) {
+      semicircleIndices.push(0, i, i + 1);
+    }
+
+    const semicircleMesh = new Mesh(`paint-ft-circle-fill-${goalNumber}`, this.scene);
+    const vertexData = new VertexData();
+    vertexData.positions = semicirclePositions;
+    vertexData.indices = semicircleIndices;
+    vertexData.applyToMesh(semicircleMesh);
+
+    const semicircleMaterial = new StandardMaterial(
+      `paint-ft-circle-fill-material-${goalNumber}`,
+      this.scene
+    );
+    semicircleMaterial.diffuseColor = teamColor;
+    semicircleMaterial.emissiveColor = teamColor.scale(0.3);
+    semicircleMaterial.alpha = 1;
+    semicircleMaterial.backFaceCulling = false;
+    semicircleMesh.material = semicircleMaterial;
+    this.paintAreaLines.push(semicircleMesh);
   }
 
   /**
@@ -1533,6 +1593,57 @@ export class Field {
   public getDefendingBackboard(team: 'ally' | 'enemy'): Vector3 {
     const backboard = team === 'ally' ? this.goal2Backboard : this.goal1Backboard;
     return backboard.position.clone();
+  }
+
+  /**
+   * 戦術ゾーンの表示/非表示を切り替え
+   */
+  public setTacticalZonesVisible(visible: boolean): void {
+    for (const zone of this.tacticalZones) {
+      zone.isVisible = visible;
+    }
+  }
+
+  /**
+   * 戦術ゾーンの表示状態を取得
+   */
+  public isTacticalZonesVisible(): boolean {
+    if (this.tacticalZones.length === 0) return true;
+    return this.tacticalZones[0].isVisible;
+  }
+
+  /**
+   * グリッド線の表示/非表示を切り替え
+   */
+  public setGridLinesVisible(visible: boolean): void {
+    for (const line of this.gridLines) {
+      line.isVisible = visible;
+    }
+  }
+
+  /**
+   * グリッド線の表示状態を取得
+   */
+  public isGridLinesVisible(): boolean {
+    if (this.gridLines.length === 0) return true;
+    return this.gridLines[0].isVisible;
+  }
+
+  /**
+   * 座標ラベルの表示/非表示を切り替え
+   */
+  public setGridLabelsVisible(visible: boolean): void {
+    for (const label of this.gridLabels) {
+      label.isVisible = visible;
+    }
+  }
+
+  /**
+   * 座標ラベルの表示状態を取得
+   */
+  public isGridLabelsVisible(): boolean {
+    if (this.gridLabels.length === 0) return true;
+    return this.gridLabels[0].isVisible;
   }
 
   /**
