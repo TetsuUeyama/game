@@ -10,7 +10,7 @@ import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, PlayerPosition } from "../../config/FormationConfig";
 import { OffenseRole } from "../../state/PlayerStateTypes";
 import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
-import { InterceptionAnalyzer } from "../analysis/InterceptionAnalyzer";
+import { RiskAssessmentSystem } from "../../systems/RiskAssessmentSystem";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 import { getTeammates } from "../../utils/TeamUtils";
 import { getDistance2DSimple } from "../../utils/CollisionUtils";
@@ -40,7 +40,7 @@ export class OffBallOffenseAI extends BaseStateAI {
 
   // パスレーン分析用
   private trajectoryCalculator: PassTrajectoryCalculator;
-  private interceptionAnalyzer: InterceptionAnalyzer;
+  private riskAssessment: RiskAssessmentSystem | null = null;
   private readonly maxPassLaneRisk: number = 0.4; // この確率以下なら安全とみなす
 
   // スローイン時のパス受け位置用
@@ -59,7 +59,13 @@ export class OffBallOffenseAI extends BaseStateAI {
   ) {
     super(character, ball, allCharacters, field, playerState);
     this.trajectoryCalculator = new PassTrajectoryCalculator();
-    this.interceptionAnalyzer = new InterceptionAnalyzer();
+  }
+
+  /**
+   * RiskAssessmentSystemを設定
+   */
+  public setRiskAssessmentSystem(system: RiskAssessmentSystem): void {
+    this.riskAssessment = system;
   }
 
   /**
@@ -1111,20 +1117,18 @@ export class OffBallOffenseAI extends BaseStateAI {
     // 両方のパスタイプでリスクを分析し、より安全な方を採用
     let minRisk = 1.0;
 
-    if (chestTrajectory) {
-      const chestRiskAnalysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+    if (chestTrajectory && this.riskAssessment) {
+      const chestRiskAnalysis = this.riskAssessment.assessTrajectoryRisk(
         chestTrajectory,
-        this.allCharacters,
         this.character.team
       );
       const chestRisk = chestRiskAnalysis.maxRisk?.probability ?? 0;
       minRisk = Math.min(minRisk, chestRisk);
     }
 
-    if (bounceTrajectory) {
-      const bounceRiskAnalysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+    if (bounceTrajectory && this.riskAssessment) {
+      const bounceRiskAnalysis = this.riskAssessment.assessTrajectoryRisk(
         bounceTrajectory,
-        this.allCharacters,
         this.character.team
       );
       const bounceRisk = bounceRiskAnalysis.maxRisk?.probability ?? 0;

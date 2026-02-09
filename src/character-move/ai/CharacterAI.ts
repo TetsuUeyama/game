@@ -25,6 +25,7 @@ import { PassCallback } from "./state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
+import { RiskAssessmentSystem } from "../systems/RiskAssessmentSystem";
 
 /**
  * キャラクターAI状態管理
@@ -85,6 +86,14 @@ export class CharacterAI {
    */
   public setLooseBallDecisionSystem(system: LooseBallDecisionSystem): void {
     this.looseBallAI.setDecisionSystem(system);
+  }
+
+  /**
+   * RiskAssessmentSystemを設定
+   */
+  public setRiskAssessmentSystem(system: RiskAssessmentSystem): void {
+    this.onBallOffenseAI.setRiskAssessmentSystem(system);
+    this.offBallOffenseAI.setRiskAssessmentSystem(system);
   }
 
   /**
