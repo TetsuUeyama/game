@@ -208,10 +208,13 @@ export class OffBallOffenseAI extends BaseStateAI {
 
   /**
    * パスを受け取るための処理
-   * パスターゲットになった場合、ボールの方向を向いて待機
-   * ボールが近づいてきたら微調整して捕球しやすい位置に移動
+   * パスターゲットになった場合、ボールの方向を向いて積極的にボールに向かう
+   * - 3.0m以上: ダッシュ
+   * - 1.0m以上: 歩き
+   * - 0.3m以上: ゆっくり歩き
+   * - 0.3m以内: 停止してキャッチ待ち
    */
-  private handlePassReceive(_deltaTime: number): void {
+  private handlePassReceive(deltaTime: number): void {
     const myPosition = this.character.getPosition();
     const ballPosition = this.ball.getPosition();
 
@@ -228,25 +231,42 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.character.setRotation(ballAngle);
     }
 
-    // ボールが非常に近い場合（1.5m以内）、ボールに向かって少し移動
-    if (distanceToBall < 1.5 && distanceToBall > 0.3) {
+    // 距離に応じてボールに向かって移動
+    if (distanceToBall > 0.3) {
       toBall.normalize();
-      const moveSpeed = 2.0; // ゆっくり近づく
-      this.character.velocity = new Vector3(
-        toBall.x * moveSpeed,
-        0,
-        toBall.z * moveSpeed
-      );
 
-      // 歩きモーション
-      if (this.character.getCurrentMotionName() !== 'walk_forward') {
-        this.character.playMotion(WALK_FORWARD_MOTION);
+      // 衝突回避を考慮した移動方向
+      const adjustedDirection = this.adjustDirectionForCollision(toBall, deltaTime);
+
+      if (adjustedDirection) {
+        this.character.move(adjustedDirection, deltaTime);
+
+        if (distanceToBall > 3.0) {
+          // ダッシュ
+          if (this.character.getCurrentMotionName() !== 'dash_forward') {
+            this.character.playMotion(DASH_FORWARD_MOTION);
+          }
+        } else if (distanceToBall > 1.0) {
+          // 歩き
+          if (this.character.getCurrentMotionName() !== 'walk_forward') {
+            this.character.playMotion(WALK_FORWARD_MOTION);
+          }
+        } else {
+          // ゆっくり歩き（1.0m以内）
+          if (this.character.getCurrentMotionName() !== 'walk_forward') {
+            this.character.playMotion(WALK_FORWARD_MOTION);
+          }
+        }
+      } else {
+        // 衝突回避で移動できない場合はアイドル
+        if (this.character.getCurrentMotionName() !== 'idle') {
+          this.character.playMotion(IDLE_MOTION);
+        }
       }
     } else {
-      // 停止してボールを待つ
+      // 0.3m以内: 停止してキャッチ待ち
       this.character.velocity = Vector3.Zero();
 
-      // アイドルモーション
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);
       }

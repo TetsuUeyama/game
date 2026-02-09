@@ -6,6 +6,9 @@ import { Field } from "../entities/Field";
 import { PlayerStateManager } from "../state";
 import { ShootingController } from "../controllers/action/ShootingController";
 import { FeintController } from "../controllers/action/FeintController";
+import { PassController } from "../controllers/action/PassController";
+import { DribbleController } from "../controllers/action/DribbleController";
+import { DefenseActionController } from "../controllers/action/DefenseActionController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
@@ -18,7 +21,6 @@ import {
   OffBallOffenseAI,
   OffBallDefenseAI,
 } from "./";
-import { PassCallback } from "./state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
@@ -109,24 +111,24 @@ export class CharacterAI {
   }
 
   /**
-   * パスコールバックを設定
+   * PassControllerを設定
    */
-  public setPassCallback(callback: PassCallback): void {
-    this.onBallOffenseAI.setPassCallback(callback);
+  public setPassController(controller: PassController): void {
+    this.onBallOffenseAI.setPassController(controller);
   }
 
   /**
-   * パスクールダウンチェック用コールバックを設定
+   * DribbleControllerを設定
    */
-  public setPassCanCheckCallback(callback: (passer: Character) => boolean): void {
-    this.onBallOffenseAI.setPassCanCheckCallback(callback);
+  public setDribbleController(controller: DribbleController): void {
+    this.onBallOffenseAI.setDribbleController(controller);
   }
 
   /**
-   * パスクールダウンリセット用コールバックを設定
+   * DefenseActionControllerを設定
    */
-  public setPassResetCallback(callback: (character: Character) => void): void {
-    this.onBallOffenseAI.setPassResetCallback(callback);
+  public setDefenseActionController(controller: DefenseActionController): void {
+    this.onBallDefenseAI.setDefenseActionController(controller);
   }
 
   /**

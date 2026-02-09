@@ -206,21 +206,8 @@ function get1on1ActionProbabilities(params: PositionBehaviorParams): {
   };
 }
 import { OffenseRole } from "../../state/PlayerStateTypes";
-
-/**
- * パス実行時のコールバック型
- */
-export type PassCallback = (passer: Character, target: Character, passType: "pass_chest" | "pass_bounce" | "pass_overhead") => {success: boolean; message: string};
-
-/**
- * パスクールダウンチェック用コールバック型
- */
-export type PassCanCheckCallback = (passer: Character) => boolean;
-
-/**
- * パスクールダウンリセット用コールバック型
- */
-export type PassResetCallback = (character: Character) => void;
+import { PassController } from "../../controllers/action/PassController";
+import { DribbleController } from "../../controllers/action/DribbleController";
 
 /**
  * オンボールオフェンス時のAI
@@ -230,9 +217,8 @@ export class OnBallOffenseAI extends BaseStateAI {
   private shootingController: ShootingController | null = null;
   private feintController: FeintController | null = null;
   private shotClockController: ShotClockController | null = null;
-  private passCallback: PassCallback | null = null;
-  private passCanCheckCallback: PassCanCheckCallback | null = null;
-  private passResetCallback: PassResetCallback | null = null;
+  private passController: PassController | null = null;
+  private dribbleController: DribbleController | null = null;
 
   // シュートクロック残り時間の閾値（この秒数以下でシュート優先）
   private readonly SHOT_CLOCK_URGENT_THRESHOLD: number = 5.0;
@@ -302,24 +288,17 @@ export class OnBallOffenseAI extends BaseStateAI {
   }
 
   /**
-   * パスコールバックを設定
+   * PassControllerを設定
    */
-  public setPassCallback(callback: PassCallback): void {
-    this.passCallback = callback;
+  public setPassController(controller: PassController): void {
+    this.passController = controller;
   }
 
   /**
-   * パスクールダウンチェック用コールバックを設定
+   * DribbleControllerを設定
    */
-  public setPassCanCheckCallback(callback: PassCanCheckCallback): void {
-    this.passCanCheckCallback = callback;
-  }
-
-  /**
-   * パスクールダウンリセット用コールバックを設定
-   */
-  public setPassResetCallback(callback: PassResetCallback): void {
-    this.passResetCallback = callback;
+  public setDribbleController(controller: DribbleController): void {
+    this.dribbleController = controller;
   }
 
   /**
@@ -350,9 +329,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     // クールダウンをリセット（各Controller側）
     this.shootingController?.resetCooldown(this.character);
     this.feintController?.resetCooldown(this.character);
-    if (this.passResetCallback) {
-      this.passResetCallback(this.character);
-    }
+    this.passController?.resetPassCooldown(this.character);
 
     // 周囲確認フェーズを開始（ボールを受け取った直後）
     this.surveyPhase = "look_left";
@@ -390,9 +367,7 @@ export class OnBallOffenseAI extends BaseStateAI {
     // クールダウンをリセット（各Controller側）
     this.shootingController?.resetCooldown(this.character);
     this.feintController?.resetCooldown(this.character);
-    if (this.passResetCallback) {
-      this.passResetCallback(this.character);
-    }
+    this.passController?.resetPassCooldown(this.character);
 
     // 目標位置オーバーライドをクリア
     this.targetPositionOverride = null;
@@ -1006,13 +981,13 @@ export class OnBallOffenseAI extends BaseStateAI {
       return false;
     }
 
-    // パスコールバックがない場合は実行不可
-    if (!this.passCallback) {
+    // PassControllerがない場合は実行不可
+    if (!this.passController) {
       return false;
     }
 
     // パスクールダウン中は実行不可
-    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
+    if (!this.passController.canPass(this.character)) {
       return false;
     }
 
@@ -1051,7 +1026,7 @@ export class OnBallOffenseAI extends BaseStateAI {
             this.character.setRotation(angle);
           }
 
-          const result = this.passCallback(this.character, mainHandler.character, "pass_chest");
+          const result = this.passController.performPass(this.character, mainHandler.character, "pass_chest");
           if (result.success) {
             return true;
           }
@@ -1075,7 +1050,7 @@ export class OnBallOffenseAI extends BaseStateAI {
             this.character.setRotation(angle);
           }
 
-          const result = this.passCallback(this.character, teammate, "pass_chest");
+          const result = this.passController.performPass(this.character, teammate, "pass_chest");
           if (result.success) {
             return true;
           }
@@ -1117,13 +1092,13 @@ export class OnBallOffenseAI extends BaseStateAI {
       return this.tryShoot();
     }
 
-    // パスコールバックがない場合は実行不可
-    if (!this.passCallback) {
+    // PassControllerがない場合は実行不可
+    if (!this.passController) {
       return false;
     }
 
     // パスクールダウン中は実行不可
-    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
+    if (!this.passController.canPass(this.character)) {
       return false;
     }
 
@@ -1167,7 +1142,7 @@ export class OnBallOffenseAI extends BaseStateAI {
       }
 
       // パス実行
-      const result = this.passCallback(this.character, teammate, "pass_chest");
+      const result = this.passController.performPass(this.character, teammate, "pass_chest");
       if (result.success) {
         return true;
       }
@@ -1324,16 +1299,11 @@ export class OnBallOffenseAI extends BaseStateAI {
    * @returns ドリブルムーブを実行した場合true
    */
   private tryDribbleMove(): boolean {
-    // ボールを持っているか確認
-    if (this.ball.getHolder() !== this.character) {
+    if (!this.dribbleController) {
       return false;
     }
 
-    // ドリブル突破アクションを実行
-    const actionController = this.character.getActionController();
-    const result = actionController.startAction("dribble_breakthrough");
-
-    return result.success;
+    return this.dribbleController.performDribbleBreakthrough(this.character);
   }
 
   /**
@@ -1345,13 +1315,13 @@ export class OnBallOffenseAI extends BaseStateAI {
    * @returns パスを実行した場合true
    */
   private tryPass(): boolean {
-    // パスコールバックがない場合は実行不可
-    if (!this.passCallback) {
+    // PassControllerがない場合は実行不可
+    if (!this.passController) {
       return false;
     }
 
-    // パスクールダウン中は実行不可（PlayerActionFacade側でチェック）
-    if (this.passCanCheckCallback && !this.passCanCheckCallback(this.character)) {
+    // パスクールダウン中は実行不可
+    if (!this.passController.canPass(this.character)) {
       return false;
     }
 
@@ -1479,9 +1449,9 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.character.setRotation(angle);
     }
 
-    // パス実行（コールバック経由）
-    // クールダウンはPlayerActionFacade.performPass内で自動記録
-    const result = this.passCallback(this.character, passTarget, "pass_chest");
+    // パス実行（PassController経由）
+    // クールダウンはPassController.performPass内で自動記録
+    const result = this.passController.performPass(this.character, passTarget, "pass_chest");
     if (result.success) {
       return true;
     }

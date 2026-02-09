@@ -39,7 +39,9 @@ export type ActionType =
   // ジャンプボール
   | 'jump_ball'       // ジャンプボール（センターで両手を上に伸ばす）
   // ルーズボール
-  | 'loose_ball_scramble';  // ルーズボール確保
+  | 'loose_ball_scramble'   // ルーズボール確保
+  // パスレシーブ
+  | 'pass_receive';         // パスレシーブ（ボールに向かってダッシュ）
 
 /**
  * アクションフェーズ
@@ -334,6 +336,21 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
       offset: new Vector3(0, 0.4, 0.6), // 低い姿勢で前方に手を伸ばす
     },
   },
+
+  // ==============================
+  // パスレシーブアクション
+  // ==============================
+
+  // パスレシーブ（ボールに向かってダッシュ）
+  pass_receive: {
+    type: 'pass_receive',
+    category: 'offense',
+    motion: 'pass_receive',
+    startupTime: 100,      // 0.1秒（素早く構える）
+    activeTime: 2000,      // 2秒（ボール到着を待つ十分な時間）
+    priority: 7,           // パス(8)より低い
+    interruptible: true,   // キャッチ後やインターセプト時にキャンセル可能
+  },
 };
 
 /**
@@ -381,7 +398,7 @@ export class ActionConfigUtils {
    * パスアクションかどうか
    */
   public static isPassAction(type: ActionType): boolean {
-    return type.startsWith('pass_') && type !== 'pass_intercept';
+    return type.startsWith('pass_') && type !== 'pass_intercept' && type !== 'pass_receive';
   }
 
   /**
@@ -457,4 +474,7 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
 
   // ルーズボールモーション
   loose_ball_scramble: LOOSE_BALL_MOTIONS.loose_ball_scramble,
+
+  // パスレシーブモーション
+  pass_receive: PASS_MOTIONS.pass_receive,
 };
