@@ -20,6 +20,9 @@ import { ShootingController } from "../controllers/action/ShootingController";
 import { ContestController } from "../controllers/ContestController";
 import { CircleSizeController } from "../controllers/CircleSizeController";
 import { FeintController } from "../controllers/action/FeintController";
+import { PassController } from "../controllers/action/PassController";
+import { DribbleController } from "../controllers/action/DribbleController";
+import { DefenseActionController } from "../controllers/action/DefenseActionController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
@@ -137,6 +140,15 @@ export class GameScene {
 
   // フェイントコントローラー
   private feintController?: FeintController;
+
+  // パスコントローラー
+  private passController?: PassController;
+
+  // ドリブルコントローラー
+  private dribbleController?: DribbleController;
+
+  // ディフェンスアクションコントローラー
+  private defenseActionController?: DefenseActionController;
 
   // シュートクロックコントローラー
   private shotClockController?: ShotClockController;
@@ -363,17 +375,24 @@ export class GameScene {
         }
       }
 
-      // 全AIコントローラーにパスコールバックを設定
+      // パスコントローラーの初期化
+      this.passController = new PassController(
+        this.ball,
+        () => this.allyCharacters,
+        () => this.enemyCharacters
+      );
+
+      // ドリブルコントローラーの初期化
+      this.dribbleController = new DribbleController(this.ball);
+
+      // ディフェンスアクションコントローラーの初期化
+      this.defenseActionController = new DefenseActionController();
+
+      // 全AIコントローラーに各種コントローラーを設定
       for (const ai of this.characterAIs) {
-        ai.setPassCallback((passer, target, passType) => {
-          return this.performPass(passer, passType, target);
-        });
-        ai.setPassCanCheckCallback((passer) => {
-          return this._playerActionFacade?.canPass(passer) ?? true;
-        });
-        ai.setPassResetCallback((character) => {
-          this._playerActionFacade?.resetPassCooldown(character);
-        });
+        ai.setPassController(this.passController);
+        ai.setDribbleController(this.dribbleController);
+        ai.setDefenseActionController(this.defenseActionController);
       }
 
       // パス軌道可視化の初期化
@@ -792,6 +811,7 @@ export class GameScene {
       oneOnOneBattleController: this.oneOnOneBattleController,
       shootingController: this.shootingController,
       feintController: this.feintController,
+      passController: this.passController,
       getAllyCharacters: () => this.allyCharacters,
       getEnemyCharacters: () => this.enemyCharacters,
     };
@@ -1926,16 +1946,16 @@ export class GameScene {
           ai.setShotClockController(this.shotClockController);
         }
 
-        // パスコールバックを設定
-        ai.setPassCallback((passer, target, passType) => {
-          return this.performPass(passer, passType, target);
-        });
-        ai.setPassCanCheckCallback((passer) => {
-          return this._playerActionFacade?.canPass(passer) ?? true;
-        });
-        ai.setPassResetCallback((character) => {
-          this._playerActionFacade?.resetPassCooldown(character);
-        });
+        // 各種コントローラーを設定
+        if (this.passController) {
+          ai.setPassController(this.passController);
+        }
+        if (this.dribbleController) {
+          ai.setDribbleController(this.dribbleController);
+        }
+        if (this.defenseActionController) {
+          ai.setDefenseActionController(this.defenseActionController);
+        }
 
         this.characterAIs.push(ai);
       }

@@ -1,0 +1,111 @@
+import { Character } from "../../entities/Character";
+import { Ball } from "../../entities/Ball";
+import { PASS_COOLDOWN } from "../../config/PassConfig";
+import { determineCurveDirection } from "../../utils/CurvePassUtils";
+
+/**
+ * パスを管理するコントローラー
+ * AI（条件判定）→ PassController（バリデーション+実行）→ ActionController（状態管理）
+ */
+export class PassController {
+  private ball: Ball;
+  private getAllyCharacters: () => Character[];
+  private getEnemyCharacters: () => Character[];
+
+  // パスクールダウン管理（キャラクター別）
+  private lastPassTime: Map<Character, number> = new Map();
+
+  constructor(
+    ball: Ball,
+    getAllyCharacters: () => Character[],
+    getEnemyCharacters: () => Character[]
+  ) {
+    this.ball = ball;
+    this.getAllyCharacters = getAllyCharacters;
+    this.getEnemyCharacters = getEnemyCharacters;
+  }
+
+  /**
+   * パスクールダウンが終了しているかチェック
+   * @param passer チェック対象のキャラクター
+   * @returns パス可能な場合true
+   */
+  public canPass(passer: Character): boolean {
+    const now = Date.now() / 1000;
+    const lastPass = this.lastPassTime.get(passer) ?? 0;
+    return now - lastPass >= PASS_COOLDOWN.AFTER_PASS;
+  }
+
+  /**
+   * パスクールダウンをリセット（状態遷移時に使用）
+   */
+  public resetPassCooldown(character: Character): void {
+    this.lastPassTime.delete(character);
+  }
+
+  /**
+   * パスを実行（ActionController経由）
+   * @param passer パスを出すキャラクター
+   * @param passTarget パス先のキャラクター
+   * @param passType パスの種類
+   * @returns 成功/失敗
+   */
+  public performPass(
+    passer: Character,
+    passTarget: Character,
+    passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest'
+  ): { success: boolean; message: string } {
+    const ball = this.ball;
+
+    // ボールを持っているか確認
+    if (ball.getHolder() !== passer) {
+      return { success: false, message: 'ボールを持っていません' };
+    }
+
+    // ActionControllerでパスアクションを開始
+    const actionController = passer.getActionController();
+    const actionResult = actionController.startAction(passType);
+
+    if (!actionResult.success) {
+      return { success: false, message: actionResult.message };
+    }
+
+    // activeフェーズに入ったらボールを投げるコールバックを設定
+    const allyCharacters = this.getAllyCharacters();
+    const enemyCharacters = this.getEnemyCharacters();
+
+    actionController.setCallbacks({
+      onActive: (action) => {
+        // ボールを持っていない場合はパスしない
+        if (ball.getHolder() !== passer) {
+          return;
+        }
+
+        if (action.startsWith('pass_')) {
+          if (passTarget) {
+            const targetPosition = passTarget.getPosition();
+            const opponents = passer.team === 'ally' ? enemyCharacters : allyCharacters;
+            const curveDirection = determineCurveDirection(passer, passTarget, opponents);
+            ball.pass(targetPosition, passTarget, curveDirection);
+
+            // レシーバーにpass_receiveアクションを開始させる
+            const receiverActionController = passTarget.getActionController();
+            receiverActionController.startAction('pass_receive');
+          }
+        }
+      },
+    });
+
+    // パスクールダウンを記録
+    this.lastPassTime.set(passer, Date.now() / 1000);
+
+    return { success: true, message: `${passType}開始` };
+  }
+
+  /**
+   * 破棄
+   */
+  public dispose(): void {
+    this.lastPassTime.clear();
+  }
+}

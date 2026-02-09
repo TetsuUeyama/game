@@ -8,6 +8,7 @@ import { ActionConfigUtils } from "../../config/action/ActionConfig";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { DEFENSE_STANCE_MOTION } from "../../motion/DefenseMotion";
 import { PlayerStateManager } from "../../state";
+import { DefenseActionController } from "../../controllers/action/DefenseActionController";
 
 /**
  * オンボールディフェンダー時のAI
@@ -19,6 +20,8 @@ import { PlayerStateManager } from "../../state";
  * 4. 機会的: スティール試行
  */
 export class OnBallDefenseAI extends BaseStateAI {
+  private defenseActionController: DefenseActionController | null = null;
+
   constructor(
     character: Character,
     ball: Ball,
@@ -27,6 +30,13 @@ export class OnBallDefenseAI extends BaseStateAI {
     playerState?: PlayerStateManager
   ) {
     super(character, ball, allCharacters, field, playerState);
+  }
+
+  /**
+   * DefenseActionControllerを設定
+   */
+  public setDefenseActionController(controller: DefenseActionController): void {
+    this.defenseActionController = controller;
   }
 
   /**
@@ -419,17 +429,17 @@ export class OnBallDefenseAI extends BaseStateAI {
    * @returns アクションを実行した場合true
    */
   private tryDefensiveAction(): boolean {
-    const actionController = this.character.getActionController();
+    if (!this.defenseActionController) {
+      return false;
+    }
 
     // どのアクションを実行するか選択
     const action = DefenseUtils.selectDefensiveAction();
 
     if (action === 'steal') {
-      const result = actionController.startAction('steal_attempt');
-      return result.success;
+      return this.defenseActionController.performDefensiveAction(this.character, 'steal_attempt');
     } else {
-      const result = actionController.startAction('defense_stance');
-      return result.success;
+      return this.defenseActionController.performDefensiveAction(this.character, 'defense_stance');
     }
   }
 
@@ -485,16 +495,11 @@ export class OnBallDefenseAI extends BaseStateAI {
       this.character.setRotation(angle);
     }
 
-    // ブロックアクションを開始
-    const actionController = this.character.getActionController();
-    const result = actionController.startAction('block_shot');
-
-    if (result.success) {
-      // ブロックジャンプ情報を設定（シューターの方向に飛ぶ）
-      this.character.setBlockJumpTarget(shooter);
-      return true;
+    // ブロックアクションを開始（DefenseActionController経由）
+    if (!this.defenseActionController) {
+      return false;
     }
 
-    return false;
+    return this.defenseActionController.performBlockShot(this.character, shooter);
   }
 }

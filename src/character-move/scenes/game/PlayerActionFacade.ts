@@ -8,8 +8,7 @@ import { Ball } from "../../entities/Ball";
 import { OneOnOneBattleController } from "../../controllers/action/OneOnOneBattleController";
 import { ShootingController } from "../../controllers/action/ShootingController";
 import { FeintController } from "../../controllers/action/FeintController";
-import { PASS_COOLDOWN } from "../../config/PassConfig";
-import { determineCurveDirection } from "../../utils/CurvePassUtils";
+import { PassController } from "../../controllers/action/PassController";
 
 /**
  * プレイヤーアクションファサード用コンテキスト
@@ -19,6 +18,7 @@ export interface PlayerActionFacadeContext {
   oneOnOneBattleController?: OneOnOneBattleController;
   shootingController?: ShootingController;
   feintController?: FeintController;
+  passController?: PassController;
 
   // キャラクター取得
   getAllyCharacters: () => Character[];
@@ -30,9 +30,6 @@ export interface PlayerActionFacadeContext {
  */
 export class PlayerActionFacade {
   private context: PlayerActionFacadeContext;
-
-  // パスクールダウン管理（キャラクター別）
-  private lastPassTime: Map<Character, number> = new Map();
 
   constructor(context: PlayerActionFacadeContext) {
     this.context = context;
@@ -130,7 +127,7 @@ export class PlayerActionFacade {
   }
 
   // =============================================================================
-  // パス
+  // パス（PassControllerに委譲）
   // =============================================================================
 
   /**
@@ -139,23 +136,21 @@ export class PlayerActionFacade {
    * @returns パス可能な場合true
    */
   public canPass(passer: Character): boolean {
-    const now = Date.now() / 1000;
-    const lastPass = this.lastPassTime.get(passer) ?? 0;
-    return now - lastPass >= PASS_COOLDOWN.AFTER_PASS;
+    return this.context.passController?.canPass(passer) ?? true;
   }
 
   /**
    * パスクールダウンをリセット（状態遷移時に使用）
    */
   public resetPassCooldown(character: Character): void {
-    this.lastPassTime.delete(character);
+    this.context.passController?.resetPassCooldown(character);
   }
 
   /**
-   * パスを実行（ActionController経由）
+   * パスを実行（PassController経由）
    * @param passer パスを出すキャラクター
    * @param passType パスの種類
-   * @param target パス先のキャラクター（省略時はチームメイトの最初の一人）
+   * @param target パス先のキャラクター
    * @returns 成功/失敗
    */
   public performPass(
@@ -163,54 +158,24 @@ export class PlayerActionFacade {
     passType: 'pass_chest' | 'pass_bounce' | 'pass_overhead' = 'pass_chest',
     target?: Character
   ): { success: boolean; message: string } {
-    const ball = this.context.ball;
-
-    // ボールを持っているか確認
-    if (ball.getHolder() !== passer) {
-      return { success: false, message: 'ボールを持っていません' };
+    if (!this.context.passController) {
+      return { success: false, message: 'PassControllerが初期化されていません' };
     }
 
-    // ActionControllerでパスアクションを開始
-    const actionController = passer.getActionController();
-    const actionResult = actionController.startAction(passType);
-
-    if (!actionResult.success) {
-      return { success: false, message: actionResult.message };
+    // パス先のキャラクターを決定
+    let passTarget = target;
+    if (!passTarget) {
+      const allyCharacters = this.context.getAllyCharacters();
+      const enemyCharacters = this.context.getEnemyCharacters();
+      const teammates = passer.team === 'ally' ? allyCharacters : enemyCharacters;
+      passTarget = teammates.find(c => c !== passer);
     }
 
-    // activeフェーズに入ったらボールを投げるコールバックを設定
-    const allyCharacters = this.context.getAllyCharacters();
-    const enemyCharacters = this.context.getEnemyCharacters();
+    if (!passTarget) {
+      return { success: false, message: 'パス先が見つかりません' };
+    }
 
-    actionController.setCallbacks({
-      onActive: (action) => {
-        // ボールを持っていない場合はパスしない
-        if (ball.getHolder() !== passer) {
-          return;
-        }
-
-        if (action.startsWith('pass_')) {
-          // パス先のキャラクターを決定
-          let passTarget = target;
-          if (!passTarget) {
-            const teammates = passer.team === 'ally' ? allyCharacters : enemyCharacters;
-            passTarget = teammates.find(c => c !== passer);
-          }
-
-          if (passTarget) {
-            const targetPosition = passTarget.getPosition();
-            const opponents = passer.team === 'ally' ? enemyCharacters : allyCharacters;
-            const curveDirection = determineCurveDirection(passer, passTarget, opponents);
-            ball.pass(targetPosition, passTarget, curveDirection);
-          }
-        }
-      },
-    });
-
-    // パスクールダウンを記録
-    this.lastPassTime.set(passer, Date.now() / 1000);
-
-    return { success: true, message: `${passType}開始` };
+    return this.context.passController.performPass(passer, passTarget, passType);
   }
 
   // =============================================================================
