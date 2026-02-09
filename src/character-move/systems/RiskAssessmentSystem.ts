@@ -5,6 +5,7 @@ import { Field } from "../entities/Field";
 import { DefenderStateUtils } from "../utils/DefenderStateUtils";
 import { RISK_ASSESSMENT_CONFIG } from "../config/RiskAssessmentConfig";
 import {
+  PassTrajectoryCalculator,
   TrajectoryResult,
   Vec3,
 } from "../physics/PassTrajectoryCalculator";
@@ -13,7 +14,10 @@ import {
   INTERCEPTION_RISK_COLORS,
   getInterceptionRiskLevel,
   PassType,
+  PASS_TYPE_CONFIGS,
 } from "../config/PassTrajectoryConfig";
+import { getTeammates } from "../utils/TeamUtils";
+import { getDistance2DSimple } from "../utils/CollisionUtils";
 
 /**
  * リスクレベル
@@ -107,11 +111,13 @@ export class RiskAssessmentSystem {
   private ball: Ball;
   private field: Field;
   private allCharacters: Character[];
+  private trajectoryCalculator: PassTrajectoryCalculator;
 
   constructor(ball: Ball, field: Field, allCharacters: Character[]) {
     this.ball = ball;
     this.field = field;
     this.allCharacters = allCharacters;
+    this.trajectoryCalculator = new PassTrajectoryCalculator();
   }
 
   /**
@@ -131,6 +137,72 @@ export class RiskAssessmentSystem {
   // =====================================================
   // パスリスク判定
   // =====================================================
+
+  /**
+   * 全チームメイトへのパスレーンリスクを一括評価
+   * チェストパスとバウンスパスの両方を計算し、低い方のリスクを返す
+   * @param passer パスを出すキャラクター
+   * @returns 各チームメイトへのリスク情報の配列
+   */
+  assessAllPassLanes(
+    passer: Character
+  ): Array<{ teammate: Character; risk: number }> {
+    const myPos = passer.getPosition();
+    const myHeight = passer.config.physical.height;
+    const passerVec: Vec3 = {
+      x: myPos.x,
+      y: myPos.y + myHeight * 0.15,
+      z: myPos.z,
+    };
+
+    const teammates = getTeammates(this.allCharacters, passer);
+    const results: Array<{ teammate: Character; risk: number }> = [];
+
+    for (const teammate of teammates) {
+      const teammatePos = teammate.getPosition();
+      const teammateHeight = teammate.config.physical.height;
+      const receiverVec: Vec3 = {
+        x: teammatePos.x,
+        y: teammatePos.y + teammateHeight * 0.15,
+        z: teammatePos.z,
+      };
+
+      const distance = getDistance2DSimple(receiverVec, passerVec);
+
+      const chestConfig = PASS_TYPE_CONFIGS[PassType.CHEST];
+      const bounceConfig = PASS_TYPE_CONFIGS[PassType.BOUNCE];
+
+      const inChestRange = distance >= chestConfig.minDistance && distance <= chestConfig.maxDistance;
+      const inBounceRange = distance >= bounceConfig.minDistance && distance <= bounceConfig.maxDistance;
+
+      if (!inChestRange && !inBounceRange) {
+        results.push({ teammate, risk: 1.0 });
+        continue;
+      }
+
+      let minRisk = 1.0;
+
+      if (inChestRange) {
+        const chestTrajectory = this.trajectoryCalculator.calculateTrajectory(passerVec, receiverVec, PassType.CHEST, 20);
+        if (chestTrajectory) {
+          const analysis = this.assessTrajectoryRisk(chestTrajectory, passer.team);
+          minRisk = Math.min(minRisk, analysis.maxRisk?.probability ?? 0);
+        }
+      }
+
+      if (inBounceRange) {
+        const bounceTrajectory = this.trajectoryCalculator.calculateTrajectory(passerVec, receiverVec, PassType.BOUNCE, 20);
+        if (bounceTrajectory) {
+          const analysis = this.assessTrajectoryRisk(bounceTrajectory, passer.team);
+          minRisk = Math.min(minRisk, analysis.maxRisk?.probability ?? 0);
+        }
+      }
+
+      results.push({ teammate, risk: minRisk });
+    }
+
+    return results;
+  }
 
   /**
    * パスのリスク評価
