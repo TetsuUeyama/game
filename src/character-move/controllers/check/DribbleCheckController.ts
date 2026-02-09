@@ -5,7 +5,7 @@ import { Field } from "../../entities/Field";
 import { FieldGridUtils } from "../../config/FieldGridConfig";
 import { DEFAULT_CHARACTER_CONFIG } from "../../types/CharacterStats";
 import { CharacterState } from "../../types/CharacterState";
-import { CharacterAI } from "../CharacterAI";
+import { CharacterAI } from "../../ai/CharacterAI";
 import { FeintController } from "../action/FeintController";
 import {
   DRIBBLE_CHECK_DISTANCE,

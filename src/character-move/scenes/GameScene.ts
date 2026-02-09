@@ -14,7 +14,7 @@ import { Ball } from "../entities/Ball";
 import { InputController } from "../controllers/InputController";
 import { JointController } from "../controllers/JointController";
 import { CollisionHandler } from "../controllers/CollisionHandler";
-import { CharacterAI } from "../controllers/CharacterAI";
+import { CharacterAI } from "../ai/CharacterAI";
 import { OneOnOneBattleController } from "../controllers/action/OneOnOneBattleController";
 import { ShootingController } from "../controllers/action/ShootingController";
 import { ContestController } from "../controllers/ContestController";
@@ -24,6 +24,7 @@ import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "../state";
+import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
 import type { VisualSettings } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -117,6 +118,9 @@ export class GameScene {
 
   // 全選手一括管理
   private playerStateManager?: PlayerStateManager;
+
+  // ルーズボール判断システム
+  private looseBallDecisionSystem?: LooseBallDecisionSystem;
 
   private lastFrameTime: number = Date.now();
 
@@ -266,12 +270,16 @@ export class GameScene {
       );
     }
 
+    // ルーズボール判断システムの初期化
+    this.looseBallDecisionSystem = new LooseBallDecisionSystem(this.playerStateManager, this.ball, this.field);
+
     // AIコントローラーの初期化（hasAI: trueのキャラクターのみ）
     if (showAdditionalCharacters) {
       for (const character of allCharacters) {
         // AIで動くキャラクターのみAIコントローラーを設定
         if (this.aiCharacterIndices.has(character)) {
           const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager);
+          ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
           this.characterAIs.push(ai);
         }
       }
@@ -963,6 +971,11 @@ export class GameScene {
       if (this.playerStateManager) {
         const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
         this.playerStateManager.update(allCharacters);
+      }
+
+      // ルーズボール判断を一括計算（スナップショット更新後、AI更新前）
+      if (this.looseBallDecisionSystem) {
+        this.looseBallDecisionSystem.update();
       }
 
       // 1on1バトルコントローラーの更新（状態更新後に実行して正しい状態で動作）

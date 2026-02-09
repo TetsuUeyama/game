@@ -4,9 +4,9 @@ import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { Field } from "../entities/Field";
 import { PlayerStateManager } from "../state";
-import { ShootingController } from "./action/ShootingController";
-import { FeintController } from "./action/FeintController";
-import { ShotClockController } from "./ShotClockController";
+import { ShootingController } from "../controllers/action/ShootingController";
+import { FeintController } from "../controllers/action/FeintController";
+import { ShotClockController } from "../controllers/ShotClockController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
 import { IDLE_MOTION } from "../motion/IdleMotion";
@@ -20,13 +20,14 @@ import {
   ThrowInThrowerAI,
   ThrowInReceiverAI,
   ThrowInOtherAI
-} from "../ai";
-import { PassCallback } from "../ai/state/OnBallOffenseAI";
+} from "./";
+import { PassCallback } from "./state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
+import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
 
 /**
- * キャラクターAIコントローラー
+ * キャラクターAI状態管理
  * キャラクターの状態に応じて適切なAIに処理を委譲する
  */
 export class CharacterAI {
@@ -77,6 +78,13 @@ export class CharacterAI {
    */
   public getCharacter(): Character {
     return this.character;
+  }
+
+  /**
+   * LooseBallDecisionSystemを設定
+   */
+  public setLooseBallDecisionSystem(system: LooseBallDecisionSystem): void {
+    this.looseBallAI.setDecisionSystem(system);
   }
 
   /**
