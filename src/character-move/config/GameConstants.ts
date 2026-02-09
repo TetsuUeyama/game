@@ -59,19 +59,6 @@ export const INTERCEPTION_CONSTANTS = {
 } as const;
 
 /**
- * スローイン関連の定数
- */
-export const THROW_IN_CONSTANTS = {
-  // クールダウン
-  THROWER_COOLDOWN_TIME: 0.5,        // スロワー衝突無視時間 (秒)
-  RECEIVER_CATCH_RADIUS: 1.5,        // レシーバーキャッチ半径 (m)
-
-  // タイミング
-  PREPARATION_TIME: 3.0,             // スローイン準備時間 (秒)
-  POSITION_ARRIVAL_THRESHOLD: 0.5,   // 位置到着判定しきい値 (m)
-} as const;
-
-/**
  * AI判定関連の定数
  */
 export const AI_CONSTANTS = {
@@ -159,7 +146,6 @@ export const GAME_CONSTANTS = {
   MOVEMENT: MOVEMENT_CONSTANTS,
   COLLISION: COLLISION_CONSTANTS,
   INTERCEPTION: INTERCEPTION_CONSTANTS,
-  THROW_IN: THROW_IN_CONSTANTS,
   AI: AI_CONSTANTS,
   BALL: BALL_CONSTANTS,
   PASS: PASS_CONSTANTS,

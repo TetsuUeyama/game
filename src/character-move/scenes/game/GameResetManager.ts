@@ -28,8 +28,6 @@ export interface GameResetContext {
   onScoreUpdate?: (allyScore: number, enemyScore: number) => void;
   onWinner?: (winner: 'ally' | 'enemy') => void;
   onRequestJumpBall?: () => void;
-  onRequestThrowIn?: (offendingTeam: 'ally' | 'enemy', position: Vector3) => void;
-  onClearThrowInState?: () => void;
   onResetOneOnOneBattle?: () => void;
 }
 
@@ -54,7 +52,6 @@ export class GameResetManager {
   // アウトオブバウンズ後リセット
   private pendingOutOfBoundsReset: boolean = false;
   private outOfBoundsResetTimer: number = 0;
-  private outOfBoundsBallPosition: Vector3 | null = null;
   private readonly outOfBoundsResetDelay: number = 1.5;
 
   // シュートクロック違反後リセット
@@ -210,10 +207,9 @@ export class GameResetManager {
   /**
    * アウトオブバウンズリセットを開始
    */
-  public startOutOfBoundsReset(ballPosition: Vector3): void {
+  public startOutOfBoundsReset(_ballPosition: Vector3): void {
     this.pendingOutOfBoundsReset = true;
     this.outOfBoundsResetTimer = this.outOfBoundsResetDelay;
-    this.outOfBoundsBallPosition = ballPosition.clone();
   }
 
   /**
@@ -233,19 +229,15 @@ export class GameResetManager {
 
   /**
    * アウトオブバウンズリセットを実行
+   * アウトオブバウンズ時はセンターサークルでジャンプボールを実施
    */
   private executeOutOfBoundsReset(): void {
     this.pendingOutOfBoundsReset = false;
 
-    // 最後に触った選手のチームからスローイン
-    const lastToucher = this.context.ball.getLastToucher();
-    const offendingTeam = lastToucher?.team || 'ally';
-
-    if (this.context.onRequestThrowIn && this.outOfBoundsBallPosition) {
-      this.context.onRequestThrowIn(offendingTeam, this.outOfBoundsBallPosition);
+    // ジャンプボールを開始
+    if (this.context.onRequestJumpBall) {
+      this.context.onRequestJumpBall();
     }
-
-    this.outOfBoundsBallPosition = null;
   }
 
   // =============================================================================
@@ -408,11 +400,6 @@ export class GameResetManager {
     // ボールの飛行を停止
     this.context.ball.endFlight();
 
-    // スローイン状態をクリア
-    if (this.context.onClearThrowInState) {
-      this.context.onClearThrowInState();
-    }
-
     const allyCharacters = this.context.getAllyCharacters();
     const enemyCharacters = this.context.getEnemyCharacters();
 
@@ -527,7 +514,6 @@ export class GameResetManager {
 
     this.pendingOutOfBoundsReset = false;
     this.outOfBoundsResetTimer = 0;
-    this.outOfBoundsBallPosition = null;
 
     this.pendingShotClockViolationReset = false;
     this.shotClockViolationResetTimer = 0;

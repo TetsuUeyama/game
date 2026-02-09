@@ -1,6 +1,6 @@
 /**
  * チェックモードマネージャー
- * ドリブルチェック、シュートチェック、パスチェック、スローインチェックを管理
+ * ドリブルチェック、シュートチェック、パスチェックを管理
  */
 
 import { Scene, Vector3, LinesMesh, MeshBuilder, Color3 } from "@babylonjs/core";
@@ -15,15 +15,12 @@ import { ShootTrajectoryVisualizer } from "../../visualization/ShootTrajectoryVi
 import { PassTrajectoryVisualizer } from "../../visualization/PassTrajectoryVisualizer";
 import { ShootingController } from "../../controllers/action/ShootingController";
 import { PassCheckController, DefenderPlacement } from "../../controllers/check/PassCheckController";
-import { ThrowInCheckController } from "../../controllers/check/ThrowInCheckController";
 import { FeintController } from "../../controllers/action/FeintController";
-import { FieldGridUtils } from "../../config/FieldGridConfig";
-import { OuterCellInfo, getAllOuterCells, getValidReceiverCells, THROW_IN_CHECK_CONFIG } from "../../config/check/ThrowInCheckConfig";
 
 /**
  * ゲームモード
  */
-export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check' | 'throw_in_check';
+export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check';
 
 /**
  * チェックモード用コンテキスト
@@ -517,177 +514,6 @@ export class CheckModeManager {
     return Vector3.Distance(
       new Vector3(passerPos.x, 0, passerPos.z),
       new Vector3(receiverPos.x, 0, receiverPos.z)
-    );
-  }
-
-  // =============================================================================
-  // スローインチェックモード
-  // =============================================================================
-
-  /**
-   * スローインチェックモード用のセットアップ
-   * @param throwerPlayerId スロワーの選手ID
-   * @param receiverPlayerId レシーバーの選手ID
-   * @param throwerCell スロワーの配置セル（外側マス）
-   * @param receiverCell レシーバーの配置セル（フィールド内）
-   * @param playerData 選手データ
-   */
-  public setupThrowInCheckMode(
-    throwerPlayerId: string,
-    receiverPlayerId: string,
-    throwerCell: { col: string; row: number },
-    receiverCell: { col: string; row: number },
-    playerData?: Record<string, PlayerData>
-  ): { thrower: Character; receiver: Character } | null {
-    this.resetForCheckMode();
-    this.setGameMode('throw_in_check');
-
-    const data = playerData || this.context.savedPlayerData;
-    if (!data) {
-      console.error('[CheckModeManager] 選手データがありません');
-      return null;
-    }
-
-    const throwerData = data[throwerPlayerId];
-    const receiverData = data[receiverPlayerId];
-
-    if (!throwerData || !receiverData) {
-      console.error('[CheckModeManager] 指定された選手IDのデータが見つかりません');
-      return null;
-    }
-
-    // スロワーの位置を取得（外側マス）
-    const throwerWorld = FieldGridUtils.outerCellToWorld(throwerCell.col, throwerCell.row);
-    if (!throwerWorld) {
-      console.error('[CheckModeManager] スロワーのセル位置が無効です:', throwerCell);
-      return null;
-    }
-
-    // レシーバーの位置を取得（フィールド内）
-    const receiverWorld = FieldGridUtils.cellToWorld(receiverCell.col, receiverCell.row);
-    if (!receiverWorld) {
-      console.error('[CheckModeManager] レシーバーのセル位置が無効です:', receiverCell);
-      return null;
-    }
-
-    // スロワーを作成（外側マスに配置）
-    const thrower = this.createCheckModeCharacter(
-      'ally',
-      { x: throwerWorld.x, z: throwerWorld.z },
-      throwerData,
-      'PG'
-    );
-    // クランプをスキップして外側マスに配置
-    thrower.setPosition(new Vector3(throwerWorld.x, 0, throwerWorld.z), true);
-    this.context.addAllyCharacter(thrower);
-
-    // レシーバーを作成
-    const receiver = this.createCheckModeCharacter(
-      'ally',
-      { x: receiverWorld.x, z: receiverWorld.z },
-      receiverData,
-      'SG'
-    );
-    this.context.addAllyCharacter(receiver);
-
-    // 衝突判定を更新
-    this.context.updateCollisionHandler([thrower, receiver]);
-
-    // 向きを設定
-    thrower.lookAt(receiver.getPosition());
-    receiver.lookAt(thrower.getPosition());
-
-    // ボールをスロワーに持たせる
-    this.context.ball.setHolder(thrower);
-
-    // 状態を設定
-    thrower.setState(CharacterState.THROW_IN_THROWER);
-    receiver.setState(CharacterState.THROW_IN_RECEIVER);
-
-    return { thrower, receiver };
-  }
-
-  /**
-   * スローインチェックコントローラーを作成
-   */
-  public createThrowInCheckController(
-    thrower: Character,
-    receiver: Character,
-    config: {
-      minDistance?: number;
-      maxDistance?: number;
-      timeoutSeconds?: number;
-    } = {}
-  ): ThrowInCheckController {
-    // デフォルト値を適用
-    const fullConfig = {
-      minDistance: config.minDistance ?? 3,
-      maxDistance: config.maxDistance ?? 10,
-      timeoutSeconds: config.timeoutSeconds ?? 5,
-    };
-
-    return new ThrowInCheckController(
-      thrower,
-      receiver,
-      this.context.ball,
-      fullConfig
-    );
-  }
-
-  /**
-   * スローインテストを1回実行
-   */
-  public executeThrowInTest(): boolean {
-    if (this.gameMode !== 'throw_in_check') {
-      console.error('[CheckModeManager] スローインチェックモードでのみ使用可能です');
-      return false;
-    }
-
-    const allyChars = this.context.getAllyCharacters();
-    if (allyChars.length < 2) {
-      console.error('[CheckModeManager] スロワーとレシーバーが必要です');
-      return false;
-    }
-
-    const thrower = allyChars[0];
-    const receiver = allyChars[1];
-
-    if (this.context.ball.getHolder() !== thrower) {
-      console.error('[CheckModeManager] スロワーがボールを持っていません');
-      return false;
-    }
-
-    // レシーバーの胸の高さを目標に
-    const receiverHeight = receiver.config.physical.height;
-    const targetPosition = new Vector3(
-      receiver.getPosition().x,
-      receiverHeight * 0.65,
-      receiver.getPosition().z
-    );
-
-    // パスを実行
-    return this.context.ball.passWithArc(targetPosition, receiver, 'chest');
-  }
-
-  /**
-   * スローインチェック用の外周セル一覧を取得
-   */
-  public getAllOuterCellsForThrowInCheck(): OuterCellInfo[] {
-    return getAllOuterCells();
-  }
-
-  /**
-   * 指定された外側マスからパス可能なレシーバーマスを取得
-   */
-  public getValidReceiverCellsForThrowInCheck(
-    outerCell: OuterCellInfo,
-    minDistance?: number,
-    maxDistance?: number
-  ): Array<{ col: string; row: number; worldX: number; worldZ: number; distance: number }> {
-    return getValidReceiverCells(
-      outerCell,
-      minDistance ?? THROW_IN_CHECK_CONFIG.minPassDistance,
-      maxDistance ?? THROW_IN_CHECK_CONFIG.maxPassDistance
     );
   }
 

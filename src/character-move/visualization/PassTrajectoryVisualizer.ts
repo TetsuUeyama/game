@@ -190,20 +190,16 @@ export class PassTrajectoryVisualizer {
       const targetVec: Vec3 = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
 
       // パス方向チェック（後ろ斜め・真後ろは不可）
-      // ただし、スローインスロワーの場合は方向チェックをスキップ（投げる前に向きを変えるため）
-      const isThrowInThrower = holder.getIsThrowInThrower();
-      if (!isThrowInThrower) {
-        const passerRotation = holder.getRotation();
-        if (!isPassDirectionValid(
-          passerRotation,
-          passerPos.x,
-          passerPos.z,
-          targetPosition.x,
-          targetPosition.z
-        )) {
-          // パス不可能な方向なのでスキップ
-          continue;
-        }
+      const passerRotation = holder.getRotation();
+      if (!isPassDirectionValid(
+        passerRotation,
+        passerPos.x,
+        passerPos.z,
+        targetPosition.x,
+        targetPosition.z
+      )) {
+        // パス不可能な方向なのでスキップ
+        continue;
       }
 
       // 利き腕チェック（簡易的に常にtrue）

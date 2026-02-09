@@ -10,13 +10,13 @@ import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
 import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
-import { ThrowInCheckModePanel } from './ThrowInCheckModePanel';
+
 import { FaceAvatarData } from '@/character-move/utils/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/character-move/state/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
 
-type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'throw_in_check';
+type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -32,8 +32,6 @@ export default function CharacterMove1on1Game() {
   const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ATM', enemy: 'BTM' });
   const [shotClock, setShotClock] = useState<number>(24.0);
   const [shotClockOffenseTeam, setShotClockOffenseTeam] = useState<'ally' | 'enemy' | null>(null);
-  const [throwInTimer, setThrowInTimer] = useState<number>(0);
-  const [isThrowInTimerRunning, setIsThrowInTimerRunning] = useState<boolean>(false);
   const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
   const [currentMode, setCurrentMode] = useState<GameModeType>('game');
   const [faceAvatars, setFaceAvatars] = useState<FaceAvatarData[]>([]);
@@ -149,15 +147,10 @@ export default function CharacterMove1on1Game() {
         const currentWinner = gameSceneRef.current.getWinner();
         const currentShotClock = gameSceneRef.current.getShotClockRemainingTime();
         const currentOffenseTeam = gameSceneRef.current.getShotClockOffenseTeam();
-        const currentThrowInTimer = gameSceneRef.current.getThrowInRemainingTime();
-        const currentIsThrowInRunning = gameSceneRef.current.isThrowInTimerRunning();
-
         setScore(currentScore);
         setWinner(currentWinner);
         setShotClock(currentShotClock);
         setShotClockOffenseTeam(currentOffenseTeam);
-        setThrowInTimer(currentThrowInTimer);
-        setIsThrowInTimerRunning(currentIsThrowInRunning);
         setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
         setPlayerGameStats(gameSceneRef.current.getPlayerGameStats());
         setGameElapsed(gameSceneRef.current.getGameElapsedSeconds());
@@ -435,36 +428,21 @@ export default function CharacterMove1on1Game() {
                 <p className="text-3xl font-black text-red-400">{score.enemy}</p>
               </div>
 
-              {/* クロック表示（中央）- スローイン時は5秒タイマー、通常時はショットクロック */}
-              {isThrowInTimerRunning ? (
-                <div className={`px-4 py-2 rounded-lg font-mono ${
-                  throwInTimer <= 2
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : throwInTimer <= 3
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-orange-500 text-white'
+              {/* ショットクロック表示（中央） */}
+              <div className={`px-4 py-2 rounded-lg font-mono ${
+                shotClock <= 5
+                  ? 'bg-red-600 text-white animate-pulse'
+                  : shotClock <= 10
+                    ? 'bg-yellow-500 text-black'
+                    : 'bg-gray-700/80 text-white'
+              }`}>
+                <p className="text-xs text-center opacity-80">SHOT</p>
+                <p className={`text-2xl font-black text-center ${
+                  shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
                 }`}>
-                  <p className="text-xs text-center opacity-80">THROW</p>
-                  <p className="text-2xl font-black text-center text-white">
-                    {Math.ceil(throwInTimer)}
-                  </p>
-                </div>
-              ) : (
-                <div className={`px-4 py-2 rounded-lg font-mono ${
-                  shotClock <= 5
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : shotClock <= 10
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-gray-700/80 text-white'
-                }`}>
-                  <p className="text-xs text-center opacity-80">SHOT</p>
-                  <p className={`text-2xl font-black text-center ${
-                    shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
-                  }`}>
-                    {Math.ceil(shotClock)}
-                  </p>
-                </div>
-              )}
+                  {Math.ceil(shotClock)}
+                </p>
+              </div>
 
               {/* 味方スコア（右側） */}
               <div className="text-center min-w-[80px]">
@@ -577,14 +555,6 @@ export default function CharacterMove1on1Game() {
       {/* パスチェックモードパネル */}
       {currentMode === 'pass_check' && (
         <PassCheckModePanel
-          gameScene={gameSceneRef.current}
-          onClose={handleCloseCheckMode}
-        />
-      )}
-
-      {/* スローインチェックモードパネル */}
-      {currentMode === 'throw_in_check' && (
-        <ThrowInCheckModePanel
           gameScene={gameSceneRef.current}
           onClose={handleCloseCheckMode}
         />

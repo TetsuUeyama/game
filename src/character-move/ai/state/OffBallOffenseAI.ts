@@ -43,10 +43,6 @@ export class OffBallOffenseAI extends BaseStateAI {
   private riskAssessment: RiskAssessmentSystem | null = null;
   private readonly maxPassLaneRisk: number = 0.4; // この確率以下なら安全とみなす
 
-  // スローイン時のパス受け位置用
-  private throwInTargetPosition: Vector3 | null = null;
-  private throwInPassType: 'short' | 'long' = 'short'; // short = chest/bounce, long = long pass
-
   // チームメイト重複回避用
   private readonly minTeammateDistance: number = 2.5; // チームメイトからの最小距離
 
@@ -108,7 +104,6 @@ export class OffBallOffenseAI extends BaseStateAI {
    */
   public forceReset(): void {
     this.resetTargetPosition();
-    this.throwInTargetPosition = null;
     this.mainHandlerTargetPosition = null;
     this.mainHandlerReevaluateTimer = 0;
     this.secondHandlerTargetPosition = null;
@@ -122,8 +117,6 @@ export class OffBallOffenseAI extends BaseStateAI {
   public onEnterState(): void {
     // 目標位置をリセット（新しい状況で再評価させる）
     this.resetTargetPosition();
-    // スローイン用の位置もリセット
-    this.throwInTargetPosition = null;
     // メインハンドラー用の位置もリセット
     this.mainHandlerTargetPosition = null;
     this.mainHandlerReevaluateTimer = 0;
@@ -142,8 +135,6 @@ export class OffBallOffenseAI extends BaseStateAI {
     this.currentZoneType = null;
     this.zoneCenter = null;
     this.positionReevaluateTimer = 0;
-    // スローイン用の位置もリセット
-    this.throwInTargetPosition = null;
     // メインハンドラー用の位置もリセット
     this.mainHandlerTargetPosition = null;
     this.mainHandlerReevaluateTimer = 0;
@@ -182,18 +173,6 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     // オンボールプレイヤーを取得
     const onBallPlayer = this.findOnBallPlayer();
-
-    // スローイン中かチェック（オンボールプレイヤーがスローインスロワーの場合）
-    const isThrowIn = onBallPlayer && onBallPlayer.getIsThrowInThrower();
-    if (isThrowIn) {
-      this.handleThrowInReceivePosition(deltaTime, onBallPlayer!);
-      return;
-    }
-
-    // スローイン終了時にターゲット位置をクリア
-    if (this.throwInTargetPosition && onBallPlayer && !onBallPlayer.getIsThrowInThrower()) {
-      this.throwInTargetPosition = null;
-    }
 
     if (onBallPlayer) {
       const actionController = onBallPlayer.getActionController();
@@ -272,297 +251,6 @@ export class OffBallOffenseAI extends BaseStateAI {
         this.character.playMotion(IDLE_MOTION);
       }
     }
-  }
-
-  /**
-   * スローイン時のパス受け位置への移動処理
-   * 90%: チェストパス/バウンスパスを受けられる位置（2-8m）
-   * 10%: ロングパスを受けられる位置（8-15m）
-   * フィールドの最外周マスには入らない
-   */
-  private handleThrowInReceivePosition(deltaTime: number, thrower: Character): void {
-    const myPosition = this.character.getPosition();
-    const throwerPosition = thrower.getPosition();
-
-    // スロワー方向への回転角度を計算（メソッドの最後で必ず適用する）
-    const toThrower = new Vector3(
-      throwerPosition.x - myPosition.x,
-      0,
-      throwerPosition.z - myPosition.z
-    );
-    const throwerAngle = toThrower.length() > 0.01
-      ? Math.atan2(toThrower.x, toThrower.z)
-      : this.character.getRotation();
-
-    // 目標位置が設定されていない場合、新しい位置を計算
-    if (!this.throwInTargetPosition) {
-      this.calculateThrowInTargetPosition(thrower);
-    }
-
-    if (!this.throwInTargetPosition) {
-      // 計算に失敗した場合はスロワーを向いてアイドル
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      // 最後に必ずスロワー方向を向く
-      this.character.setRotation(throwerAngle);
-      return;
-    }
-
-    // 目標位置への方向と距離
-    const toTarget = new Vector3(
-      this.throwInTargetPosition.x - myPosition.x,
-      0,
-      this.throwInTargetPosition.z - myPosition.z
-    );
-    const distanceToTarget = toTarget.length();
-
-    // 目標位置に到達した場合
-    if (distanceToTarget < 0.5) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-
-      // 定期的に位置を再評価（パスレーンが良くなったか）
-      this.positionReevaluateTimer += deltaTime;
-      if (this.positionReevaluateTimer >= this.getDecisionInterval()) {
-        this.positionReevaluateTimer = 0;
-        // パスレーンリスクが高い場合は新しい位置を計算
-        const risk = this.calculatePassLaneRisk(
-          { x: myPosition.x, z: myPosition.z },
-          thrower
-        );
-        if (risk > this.maxPassLaneRisk) {
-          this.calculateThrowInTargetPosition(thrower);
-        }
-      }
-      // 最後に必ずスロワー方向を向く
-      this.character.setRotation(throwerAngle);
-      return;
-    }
-
-    // 目標位置に向かって移動
-    toTarget.normalize();
-    const boundaryAdjusted = this.adjustDirectionForBoundary(toTarget, deltaTime);
-    if (!boundaryAdjusted) {
-      // 境界で停止した場合
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      // 最後に必ずスロワー方向を向く
-      this.character.setRotation(throwerAngle);
-      return;
-    }
-
-    const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
-    if (adjustedDirection) {
-      // 移動処理
-      this.character.move(adjustedDirection, deltaTime);
-
-      // 距離に応じてダッシュまたは歩き
-      if (distanceToTarget > 3.0) {
-        if (this.character.getCurrentMotionName() !== 'dash_forward') {
-          this.character.playMotion(DASH_FORWARD_MOTION);
-        }
-      } else {
-        if (this.character.getCurrentMotionName() !== 'walk_forward') {
-          this.character.playMotion(WALK_FORWARD_MOTION);
-        }
-      }
-    } else {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-    }
-
-    // 最後に必ずスロワー方向を向く（全ての処理の後で回転を設定）
-    this.character.setRotation(throwerAngle);
-  }
-
-  /**
-   * スローイン時の目標位置を計算
-   * 優先順位:
-   * 1. スロワー周囲7m以内のフリースペース（前後左右2mに誰もいない場所）
-   * 2. 90%: 短距離パス用（2-8m）、10%: 長距離パス用（8-15m）
-   */
-  private calculateThrowInTargetPosition(thrower: Character): void {
-    const throwerPos = thrower.getPosition();
-    const myPosition = this.character.getPosition();
-
-    // 優先1: スロワー周囲7m以内のフリースペースを探す
-    const freeSpacePosition = this.findFreeSpaceNearThrower(
-      thrower, 7.0, 2.0,
-      SAFE_BOUNDARY_CONFIG.minX, SAFE_BOUNDARY_CONFIG.maxX,
-      SAFE_BOUNDARY_CONFIG.minZ, SAFE_BOUNDARY_CONFIG.maxZ
-    );
-    if (freeSpacePosition) {
-      this.throwInTargetPosition = new Vector3(freeSpacePosition.x, myPosition.y, freeSpacePosition.z);
-      this.throwInPassType = 'short';
-      return;
-    }
-
-    // 優先2: 従来のパスタイプによる位置選択（フリースペースがない場合）
-    // パスタイプを確率で決定（90%短距離、10%長距離）
-    const random = Math.random();
-    this.throwInPassType = random < 0.9 ? 'short' : 'long';
-
-    // 距離範囲を決定
-    let minDist: number;
-    let maxDist: number;
-    if (this.throwInPassType === 'short') {
-      // チェストパス/バウンスパスの範囲（近すぎず、確実に受けられる距離）
-      minDist = 3.0;  // 近すぎない
-      maxDist = 8.0;  // バウンスパスの最大距離
-    } else {
-      // ロングパスの範囲
-      minDist = 8.0;
-      maxDist = 15.0;
-    }
-
-    // 最適な位置を探す（複数回試行）
-    let bestPosition: Vector3 | null = null;
-    let bestRisk = 1.0;
-    const maxAttempts = 20;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      // ランダムな角度で候補位置を生成
-      const angle = Math.random() * Math.PI * 2;
-      const distance = minDist + Math.random() * (maxDist - minDist);
-
-      let candidateX = throwerPos.x + Math.cos(angle) * distance;
-      let candidateZ = throwerPos.z + Math.sin(angle) * distance;
-
-      // 安全な境界内にクランプ
-      candidateX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, candidateX));
-      candidateZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, candidateZ));
-
-      // スロワーからの実際の距離をチェック
-      const actualDist = Math.sqrt(
-        Math.pow(candidateX - throwerPos.x, 2) + Math.pow(candidateZ - throwerPos.z, 2)
-      );
-
-      // 距離が範囲外の場合はスキップ
-      if (actualDist < minDist * 0.8 || actualDist > maxDist * 1.2) {
-        continue;
-      }
-
-      const candidate = { x: candidateX, z: candidateZ };
-
-      // チームメイトに近すぎる場合はスキップ
-      if (this.isTooCloseToTeammates(candidate)) {
-        continue;
-      }
-
-      // パスレーンリスクを計算
-      const risk = this.calculatePassLaneRisk(candidate, thrower);
-
-      // より良い位置が見つかった場合
-      if (risk < bestRisk) {
-        bestRisk = risk;
-        bestPosition = new Vector3(candidateX, myPosition.y, candidateZ);
-
-        // 十分に安全な位置が見つかったら終了
-        if (risk <= this.maxPassLaneRisk) {
-          break;
-        }
-      }
-    }
-
-    // 最良の位置を設定（見つからなかった場合は現在位置の近くにフォールバック）
-    if (bestPosition) {
-      this.throwInTargetPosition = bestPosition;
-    } else {
-      this.throwInTargetPosition = myPosition.clone();
-    }
-  }
-
-  /**
-   * スロワー周囲のフリースペースを探す
-   * @param thrower スロワー
-   * @param searchRadius 探索半径（m）
-   * @param clearanceRadius クリアランス半径（前後左右に誰もいない距離、m）
-   * @returns フリースペースの位置、見つからなければnull
-   */
-  private findFreeSpaceNearThrower(
-    thrower: Character,
-    searchRadius: number,
-    clearanceRadius: number,
-    safeMinX: number,
-    safeMaxX: number,
-    safeMinZ: number,
-    safeMaxZ: number
-  ): { x: number; z: number } | null {
-    const throwerPos = thrower.getPosition();
-
-    // 候補位置を生成（1mグリッドで探索）
-    const candidates: { x: number; z: number; risk: number }[] = [];
-    const step = 1.0; // 1mグリッド
-
-    for (let dx = -searchRadius; dx <= searchRadius; dx += step) {
-      for (let dz = -searchRadius; dz <= searchRadius; dz += step) {
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        // 最小距離（2m）と最大距離（searchRadius）のチェック
-        if (distance < 2.0 || distance > searchRadius) {
-          continue;
-        }
-
-        const candidateX = throwerPos.x + dx;
-        const candidateZ = throwerPos.z + dz;
-
-        // 安全な境界内かチェック
-        if (candidateX < safeMinX || candidateX > safeMaxX ||
-            candidateZ < safeMinZ || candidateZ > safeMaxZ) {
-          continue;
-        }
-
-        const candidate = { x: candidateX, z: candidateZ };
-
-        // 前後左右にクリアランス距離内に誰もいないかチェック
-        if (!this.isFreeSpace(candidate, clearanceRadius)) {
-          continue;
-        }
-
-        // チームメイトに近すぎないかチェック
-        if (this.isTooCloseToTeammates(candidate)) {
-          continue;
-        }
-
-        // パスレーンリスクを計算
-        const risk = this.calculatePassLaneRisk(candidate, thrower);
-        candidates.push({ x: candidateX, z: candidateZ, risk });
-      }
-    }
-
-    // リスクが低い順にソート
-    candidates.sort((a, b) => a.risk - b.risk);
-
-    // 最もリスクが低い位置を返す
-    if (candidates.length > 0) {
-      return { x: candidates[0].x, z: candidates[0].z };
-    }
-
-    return null;
-  }
-
-  /**
-   * 指定位置がフリースペースかどうかチェック
-   * 前後左右のclearanceRadius以内に誰もいなければフリー
-   */
-  private isFreeSpace(position: { x: number; z: number }, clearanceRadius: number): boolean {
-    for (const character of this.allCharacters) {
-      if (character === this.character) continue;
-
-      const charPos = character.getPosition();
-      const dx = Math.abs(position.x - charPos.x);
-      const dz = Math.abs(position.z - charPos.z);
-
-      // 前後左右方向（X方向またはZ方向）で近すぎるかチェック
-      // 斜め方向は許容（前後左右2マスのみチェック）
-      if ((dx < clearanceRadius && dz < 1.0) || (dz < clearanceRadius && dx < 1.0)) {
-        return false;
-      }
-    }
-    return true;
   }
 
   // ============================================

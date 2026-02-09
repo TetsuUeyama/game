@@ -187,11 +187,6 @@ export class Character {
   // Havok物理ボディマネージャー
   private physicsManager: CharacterPhysicsManager;
 
-  // スローインスロワー制御
-  // スロワーは外枠の固定位置から移動できないが、向きは変更可能
-  private isThrowInThrower: boolean = false;
-  private throwInFixedPosition: Vector3 | null = null;
-
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
     this.position = position.clone();
@@ -1688,34 +1683,6 @@ export class Character {
    */
   public isDefeated(): boolean {
     return this.defeated;
-  }
-
-  /**
-   * スローインスロワーとして設定
-   * @param fixedPosition 固定位置（外枠マス）、nullで解除
-   */
-  public setAsThrowInThrower(fixedPosition: Vector3 | null): void {
-    if (fixedPosition) {
-      this.isThrowInThrower = true;
-      this.throwInFixedPosition = fixedPosition.clone();
-    } else {
-      this.isThrowInThrower = false;
-      this.throwInFixedPosition = null;
-    }
-  }
-
-  /**
-   * スローインスロワーかどうかを取得
-   */
-  public getIsThrowInThrower(): boolean {
-    return this.isThrowInThrower;
-  }
-
-  /**
-   * スローインスロワーの固定位置を取得
-   */
-  public getThrowInFixedPosition(): Vector3 | null {
-    return this.throwInFixedPosition;
   }
 
   /**

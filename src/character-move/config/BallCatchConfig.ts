@@ -13,7 +13,6 @@ import { CatchScenario, type CatchConfig } from "../types/BallCatchTypes";
  * | シナリオ     | 体距離 | 手距離 | 速度チェック | 高さチェック | 優先度 |
  * |-------------|-------|-------|------------|------------|-------|
  * | PASS_TARGET | 1.5m  | 2.0m  | スキップ    | スキップ    | 10    |
- * | THROW_IN    | 3.0m  | 3.5m  | スキップ    | スキップ    | 9     |
  * | INTERCEPTOR | 3.0m  | 3.0m  | スキップ    | あり       | 8     |
  * | JUMP_BALL   | 1.0m  | 1.5m  | あり        | あり       | 5     |
  * | REBOUND     | 1.0m  | 1.5m  | あり        | あり       | 5     |
@@ -27,14 +26,6 @@ export const CATCH_SCENARIO_CONFIGS: Record<CatchScenario, CatchConfig> = {
     skipVelocityCheck: true,
     skipHeightCheck: true,
     priority: 10,
-  },
-  [CatchScenario.THROW_IN]: {
-    scenario: CatchScenario.THROW_IN,
-    bodyDistanceThreshold: 5.0,  // スローインは長距離で着地誤差が大きいため広めに
-    handDistanceThreshold: 5.5,  // レシーバーが少し離れていても反応できるように
-    skipVelocityCheck: true,
-    skipHeightCheck: true,
-    priority: 9,
   },
   [CatchScenario.INTERCEPTOR]: {
     scenario: CatchScenario.INTERCEPTOR,
@@ -107,7 +98,7 @@ export const BALL_CATCH_PHYSICS = {
   /** キャプチャ距離（m）- この距離以下で完全にキャッチ */
   CAPTURE_DISTANCE: 0.5,
 
-  /** 視野角（ラジアン）- スローイン時の視野内キャッチ判定 */
+  /** 視野角（ラジアン）- 視野内キャッチ判定 */
   FIELD_OF_VIEW_ANGLE: Math.PI / 2, // 90度
 
   /** 視野内キャッチの最大距離（m） */

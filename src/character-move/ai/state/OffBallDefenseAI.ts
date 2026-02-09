@@ -9,7 +9,7 @@ import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, FormationUtils, PlayerPosition } from "../../config/FormationConfig";
 import { DefenseRole, OffenseRole } from "../../state/PlayerStateTypes";
-import { SAFE_BOUNDARY_CONFIG } from "../../config/gameConfig";
+
 import { TacticalZoneType, getZonePosition } from "../../config/TacticalZoneConfig";
 
 /**
@@ -64,7 +64,6 @@ export class OffBallDefenseAI extends BaseStateAI {
    * AIの更新処理
    * 同じポジションのオフェンスプレイヤーをマンマークする
    * シュート時はリバウンドポジションへ移動
-   * スローイン時は外側マスを避ける
    */
   public update(deltaTime: number): void {
     // ボールが飛行中（シュート中）の場合はその場でボールを見守る
@@ -76,13 +75,6 @@ export class OffBallDefenseAI extends BaseStateAI {
 
     // オンボールプレイヤーを取得
     const onBallPlayer = this.findOnBallPlayer();
-
-    // スローイン中かチェック（相手チームがスローインスロワーの場合）
-    if (onBallPlayer && onBallPlayer.getIsThrowInThrower()) {
-      // スローイン中はマンマークしつつ外側マスを避ける
-      this.handleThrowInDefense(deltaTime);
-      return;
-    }
 
     if (onBallPlayer) {
       const actionController = onBallPlayer.getActionController();
@@ -107,122 +99,6 @@ export class OffBallDefenseAI extends BaseStateAI {
       // ロール未設定: 同ポジションマンマーク（フォールバック）
       this.handleManToManDefense(deltaTime);
     }
-  }
-
-  /**
-   * スローイン時のディフェンス処理
-   * 外側マスに入らないようにしながらマンマークする
-   */
-  private handleThrowInDefense(deltaTime: number): void {
-    // 判断タイマーを更新
-    this.decisionTimer += deltaTime;
-
-    // 判断間隔に達したら目標位置を再計算
-    if (this.decisionTimer >= this.getDecisionInterval() || this.cachedTargetPosition === null) {
-      this.decisionTimer = 0;
-      this.recalculateThrowInMarkPosition();
-    }
-
-    // キャッシュされた目標がない場合はフォーメーション位置へ
-    if (!this.cachedTargetPosition || !this.cachedTargetPosition.markTarget) {
-      this.handleFormationPositionAvoidingEdge(deltaTime);
-      return;
-    }
-
-    const myPosition = this.character.getPosition();
-    const idealPosition = new Vector3(
-      this.cachedTargetPosition.x,
-      myPosition.y,
-      this.cachedTargetPosition.z
-    );
-
-    // 理想位置に向かって移動
-    this.moveTowardsMarkPosition(idealPosition, this.cachedTargetPosition.markTarget, deltaTime);
-  }
-
-  /**
-   * スローイン時のマーク位置を再計算してキャッシュ
-   */
-  private recalculateThrowInMarkPosition(): void {
-    // マークする相手を探す
-    const markTarget = this.findMarkTarget();
-
-    if (!markTarget) {
-      this.cachedTargetPosition = null;
-      return;
-    }
-
-    // マーク対象の位置を取得
-    const targetPosition = markTarget.getPosition();
-
-    // 守るべきゴールの位置を取得
-    const defendingGoal = this.getDefendingGoalPosition();
-
-    // マーク対象とゴールの間に位置取り
-    const targetToGoal = new Vector3(
-      defendingGoal.x - targetPosition.x,
-      0,
-      defendingGoal.z - targetPosition.z
-    );
-
-    if (targetToGoal.length() > 0.01) {
-      targetToGoal.normalize();
-    }
-
-    // マーク対象から1.5m程度ゴール側に位置取り
-    const markDistance = 1.5;
-    let idealX = targetPosition.x + targetToGoal.x * markDistance;
-    let idealZ = targetPosition.z + targetToGoal.z * markDistance;
-
-    // 外側マスを避ける（最外周マージン以内に入らない）
-    idealX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, idealX));
-    idealZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, idealZ));
-
-    this.cachedTargetPosition = {
-      x: idealX,
-      z: idealZ,
-      markTarget: markTarget,
-    };
-  }
-
-  /**
-   * 外側マスを避けながらフォーメーション位置へ移動
-   */
-  private handleFormationPositionAvoidingEdge(deltaTime: number): void {
-    const playerPosition = this.character.playerPosition as PlayerPosition;
-    if (!playerPosition) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
-    }
-
-    // フォーメーションから目標位置を取得
-    const isAllyTeam = this.character.team === 'ally';
-    const targetPos = FormationUtils.getTargetPosition(
-      this.currentFormation,
-      playerPosition,
-      isAllyTeam
-    );
-
-    if (!targetPos) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
-      }
-      return;
-    }
-
-    // 外側マスを避ける
-    const safeX = Math.max(SAFE_BOUNDARY_CONFIG.minX, Math.min(SAFE_BOUNDARY_CONFIG.maxX, targetPos.x));
-    const safeZ = Math.max(SAFE_BOUNDARY_CONFIG.minZ, Math.min(SAFE_BOUNDARY_CONFIG.maxZ, targetPos.z));
-
-    const targetPosition = new Vector3(
-      safeX,
-      this.character.getPosition().y,
-      safeZ
-    );
-
-    this.moveTowardsFormationPosition(targetPosition, deltaTime);
   }
 
   /**

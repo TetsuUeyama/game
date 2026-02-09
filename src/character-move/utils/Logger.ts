@@ -239,7 +239,6 @@ export const LogCategory = {
   INPUT: 'InputController',
   MOTION: 'MotionController',
   PHYSICS: 'Physics',
-  THROW_IN: 'ThrowIn',
   SHOOTING: 'Shooting',
   PASS: 'Pass',
   AI_DECISION: 'AIDecision',

@@ -28,8 +28,6 @@ export function LeagueMatchGame() {
   const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: '', enemy: '' });
   const [shotClock, setShotClock] = useState<number>(24.0);
   const [shotClockOffenseTeam, setShotClockOffenseTeam] = useState<'ally' | 'enemy' | null>(null);
-  const [throwInTimer, setThrowInTimer] = useState<number>(0);
-  const [isThrowInTimerRunning, setIsThrowInTimerRunning] = useState<boolean>(false);
   const [resultSaved, setResultSaved] = useState(false);
 
   // 顔アバター関連
@@ -123,8 +121,6 @@ export function LeagueMatchGame() {
       setWinner(gameSceneRef.current.getWinner());
       setShotClock(gameSceneRef.current.getShotClockRemainingTime());
       setShotClockOffenseTeam(gameSceneRef.current.getShotClockOffenseTeam());
-      setThrowInTimer(gameSceneRef.current.getThrowInRemainingTime());
-      setIsThrowInTimerRunning(gameSceneRef.current.isThrowInTimerRunning());
       setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
       setPlayerGameStats(gameSceneRef.current.getPlayerGameStats());
       setGameElapsed(gameSceneRef.current.getGameElapsedSeconds());
@@ -348,36 +344,21 @@ export function LeagueMatchGame() {
                 <p className="text-3xl font-black text-red-400">{score.enemy}</p>
               </div>
 
-              {/* クロック表示（中央）- スローイン時は5秒タイマー、通常時はショットクロック */}
-              {isThrowInTimerRunning ? (
-                <div className={`px-4 py-2 rounded-lg font-mono ${
-                  throwInTimer <= 2
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : throwInTimer <= 3
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-orange-500 text-white'
+              {/* ショットクロック表示（中央） */}
+              <div className={`px-4 py-2 rounded-lg font-mono ${
+                shotClock <= 5
+                  ? 'bg-red-600 text-white animate-pulse'
+                  : shotClock <= 10
+                    ? 'bg-yellow-500 text-black'
+                    : 'bg-gray-700/80 text-white'
+              }`}>
+                <p className="text-xs text-center opacity-80">SHOT</p>
+                <p className={`text-2xl font-black text-center ${
+                  shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
                 }`}>
-                  <p className="text-xs text-center opacity-80">THROW</p>
-                  <p className="text-2xl font-black text-center text-white">
-                    {Math.ceil(throwInTimer)}
-                  </p>
-                </div>
-              ) : (
-                <div className={`px-4 py-2 rounded-lg font-mono ${
-                  shotClock <= 5
-                    ? 'bg-red-600 text-white animate-pulse'
-                    : shotClock <= 10
-                      ? 'bg-yellow-500 text-black'
-                      : 'bg-gray-700/80 text-white'
-                }`}>
-                  <p className="text-xs text-center opacity-80">SHOT</p>
-                  <p className={`text-2xl font-black text-center ${
-                    shotClockOffenseTeam === 'ally' ? 'text-blue-300' : shotClockOffenseTeam === 'enemy' ? 'text-red-300' : ''
-                  }`}>
-                    {Math.ceil(shotClock)}
-                  </p>
-                </div>
-              )}
+                  {Math.ceil(shotClock)}
+                </p>
+              </div>
 
               {/* 味方スコア（右側） */}
               <div className="text-center min-w-[80px]">

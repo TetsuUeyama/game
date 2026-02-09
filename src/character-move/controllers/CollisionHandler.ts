@@ -71,16 +71,8 @@ export class CollisionHandler {
    * power値が高い方が低い方を押し出す
    * 8方向ごとの半径を考慮した衝突判定
    *
-   * IMPROVEMENT_PLAN.md: バグ1追加修正 - スローイン状態のキャラクターは衝突判定をスキップ
    */
   private resolveCharacterCharacterCollision(character1: Character, character2: Character): void {
-    // スローインスロワーは衝突判定をスキップ
-    // （外側マスにいるため、衝突解決でフィールド内にクランプされるのを防ぐ）
-    // 新設計: THROW_IN_*状態ではなく、isThrowInThrowerフラグを使用
-    if (character1.getIsThrowInThrower() || character2.getIsThrowInThrower()) {
-      return;
-    }
-
     const state1 = character1.getState();
     const state2 = character2.getState();
 
@@ -128,18 +120,6 @@ export class CollisionHandler {
     character2.setPosition(resolution.newPos2);
   }
 
-  /**
-   * スローイン状態を全てクリア
-   * IMPROVEMENT_PLAN.md: バグ2修正 - レシーバーがキャッチした後に状態をクリア
-   */
-  private clearThrowInStates(): void {
-    // 新設計: THROW_IN_*状態ではなく、isThrowInThrowerフラグをクリア
-    for (const character of this.allCharacters) {
-      if (character.getIsThrowInThrower()) {
-        character.setAsThrowInThrower(null);
-      }
-    }
-  }
 
   /**
    * ジャンプボール状態を全てクリア
@@ -157,26 +137,9 @@ export class CollisionHandler {
 
   /**
    * キャラクターの状態を更新
-   * 新設計: THROW_IN_*状態ではなく、isThrowInThrowerフラグを使用
    */
   private updateCharacterStates(): void {
     const holder = this.ball.getHolder();
-
-    // スローインスロワーがいるかチェック（新設計: フラグベース）
-    const throwInThrower = this.allCharacters.find(char => char.getIsThrowInThrower());
-
-    if (throwInThrower) {
-      // スロワーがボールを持っている間のみ状態更新をスキップ
-      // ボールが飛行中（パス後）の場合は状態更新を続行（スロワーをOFF_BALL_PLAYERに）
-      if (holder === throwInThrower) {
-        return;
-      }
-      // 誰かがボールをキャッチした場合、スローイン状態をクリア
-      if (holder && holder !== throwInThrower) {
-        this.clearThrowInStates();
-      }
-      // スローイン中でもボール飛行中は状態更新を続行
-    }
 
     // ジャンプボール状態のキャラクターがいるかチェック
     const hasJumpBallState = this.allCharacters.some(char => {
@@ -217,13 +180,8 @@ export class CollisionHandler {
       }
 
       // ルーズボール時（飛行中でない、保持者もいない）
-      // 全員BALL_LOSTに設定（ただしスロワーは除く）
+      // 全員BALL_LOSTに設定
       for (const character of this.allCharacters) {
-        // スロワーはBALL_LOSTにしない（ボールに向かって移動するのを防ぐ）
-        if (character.getIsThrowInThrower()) {
-          character.setState(CharacterState.OFF_BALL_PLAYER);
-          continue;
-        }
         character.setState(CharacterState.BALL_LOST);
       }
       return;
