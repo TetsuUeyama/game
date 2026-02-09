@@ -33,9 +33,6 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
   protected passController: PassController | null = null;
   private dribbleController: DribbleController | null = null;
 
-  // シュートクロック残り時間の閾値（この秒数以下でシュート優先）
-  private readonly SHOT_CLOCK_URGENT_THRESHOLD: number = 5.0;
-
   // 目標位置オーバーライド（設定時はゴールではなくこの位置に向かう）
   protected targetPositionOverride: Vector3 | null = null;
 
@@ -178,6 +175,21 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
   // ==============================
 
   /**
+   * shotPriority に応じたシュート積極性の減衰係数を返す
+   * 1（ファーストチョイス）=1.0, 5（フィフスチョイス）=0.15
+   */
+  private getShotPriorityDampening(): number {
+    switch (this.character.shotPriority) {
+      case 1:  return 1.0;
+      case 2:  return 0.7;
+      case 3:  return 0.5;
+      case 4:  return 0.3;
+      case 5:  return 0.15;
+      default: return 0.5; // null・未設定
+    }
+  }
+
+  /**
    * ポジション別行動パラメータを取得（キャッシュ付き）
    */
   protected getPositionBehaviorParams(): PositionBehaviorParams {
@@ -274,16 +286,11 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
   }
 
   /**
-   * シュートクロック残り時間が少ないかどうかを判定
-   * @returns 残り時間が閾値以下ならtrue
+   * ショットクロック残り時間を取得
+   * @returns 残り秒数（コントローラー未設定時は24.0）
    */
-  protected isShotClockUrgent(): boolean {
-    if (!this.shotClockController) {
-      return false;
-    }
-
-    const remainingTime = this.shotClockController.getRemainingTime();
-    return remainingTime <= this.SHOT_CLOCK_URGENT_THRESHOLD;
+  protected getShotClockRemainingTime(): number {
+    return this.shotClockController?.getRemainingTime() ?? 24.0;
   }
 
   /**
@@ -407,9 +414,10 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
 
   /**
    * シュートを試みる
+   * @param aggressivenessBoost 積極性ブースト（0.0〜1.0、CRITICAL時に1.0で確率無視）
    * @returns シュートを打った場合true
    */
-  protected tryShoot(): boolean {
+  protected tryShoot(aggressivenessBoost: number = 0): boolean {
     // ShootingControllerがない場合はスキップ
     if (!this.shootingController) {
       return false;
@@ -449,12 +457,16 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     const positionBehavior = this.getPositionBehaviorParams();
 
     // シュートタイプに応じたポジション別積極性を取得
-    const shootAggressiveness = rangeInfo.shootType
+    const baseAggressiveness = rangeInfo.shootType
       ? getShootAggressiveness(positionBehavior, rangeInfo.shootType)
       : 0.5;
 
-    // シュートタイプに応じた処理（rangeInfo.shootTypeを使用）
-    // ポジション別の積極性に基づいてシュートするかどうかを判断
+    // shotPriority に応じた減衰係数を適用（1=ファースト→1.0, 5=フィフス→0.15）
+    const priorityDampening = this.getShotPriorityDampening();
+    const shootAggressiveness = baseAggressiveness * priorityDampening;
+
+    // 減衰後の積極性 + ブースト（CRITICAL時のboost=1.0で全員シュート可能）
+    const boostedAggressiveness = Math.min(shootAggressiveness + aggressivenessBoost, 1.0);
     let shouldShoot = false;
 
     switch (rangeInfo.shootType) {
@@ -462,13 +474,13 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
       case "midrange":
         // 外からのシュートはポジション別の積極性に基づいて判断
         // 積極性が低いポジション（C等）は外からは打ちにくい
-        shouldShoot = Math.random() < shootAggressiveness;
+        shouldShoot = Math.random() < boostedAggressiveness;
         break;
       case "layup":
       case "dunk":
         // インサイドシュートは積極性を高めに設定
         // ゴール下では全ポジションが積極的にシュート
-        shouldShoot = Math.random() < Math.max(shootAggressiveness, 0.8);
+        shouldShoot = Math.random() < Math.max(boostedAggressiveness, 0.8);
         break;
     }
 

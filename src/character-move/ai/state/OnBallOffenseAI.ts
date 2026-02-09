@@ -5,141 +5,473 @@ import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { DefenseUtils } from "../../config/DefenseConfig";
 import { OnBallOffenseAISub } from "./OnBallOffenseAISub";
 import { getShootAggressiveness, get1on1ActionProbabilities } from "../../config/PositionBehaviorConfig";
+import { CourtZone, ShotClockPhase, detectCourtZone, getShotClockPhase } from "../../config/CourtZoneConfig";
+import { OffenseRole } from "../../state/PlayerStateTypes";
+import { getOpponents } from "../../utils/TeamUtils";
 
 /**
  * オンボールオフェンス時のAI
  * ボール保持者として攻撃を組み立てる
  *
- * このクラスは判断の条件分岐のみを含む。
+ * コートゾーン × ショットクロックフェーズの2軸で判断を構造化。
  * 設定・ユーティリティ・アクション実装はOnBallOffenseAISub（親クラス）に委譲。
  */
 export class OnBallOffenseAI extends OnBallOffenseAISub {
 
+  /** フロントコート3P外での1on1継続時間（秒） */
+  private frontcourt1on1Timer: number = 0;
+  private readonly FRONTCOURT_1ON1_PASS_THRESHOLD: number = 5.0;
+
+  public override onEnterState(): void {
+    super.onEnterState();
+    this.frontcourt1on1Timer = 0;
+  }
+
+  public override onExitState(): void {
+    super.onExitState();
+    this.frontcourt1on1Timer = 0;
+  }
+
+  public override forceReset(): void {
+    super.forceReset();
+    this.frontcourt1on1Timer = 0;
+  }
+
   /**
    * AIの更新処理
-   * 1つの大きなif-else条件分岐で判断フローを表現
+   * コートゾーン × ショットクロックフェーズで判断をディスパッチ
    */
   public update(deltaTime: number): void {
+    // ========================================
+    // 1. ボール飛行中 → 見守る
+    // ========================================
     if (this.ball.isInFlight()) {
-      // ========================================
-      // ボール飛行中 → 見守る
-      // ========================================
       this.handleWatchShot();
+      return;
+    }
 
-    } else if (this.surveyPhase !== "none") {
-      // ========================================
-      // 周囲確認フェーズ（ボール受取直後）
-      // ========================================
+    // ========================================
+    // 2. 周囲確認フェーズ（ボール受取直後）
+    // ========================================
+    if (this.surveyPhase !== "none") {
       this.updateSurveyPhase(deltaTime);
+      return;
+    }
 
-    } else if (!this.targetPositionOverride && this.tryRoleBasedPassToMainHandler()) {
-      // ========================================
-      // ロール別パス → メインハンドラーへ返す
-      // ========================================
+    // ========================================
+    // 3. アイドル時間追跡（常に実行）
+    // ========================================
+    this.updateIdleTracking(deltaTime);
 
-    } else if (!this.targetPositionOverride && this.tryPaintAreaShot(deltaTime)) {
-      // ========================================
-      // ペイントエリア内 → レイアップ/ダンク最優先
-      // ========================================
+    // ========================================
+    // 4. フェイント突破ウィンドウ
+    // ========================================
+    if (this.feintController?.isInBreakthroughWindow(this.character) && this.tryBreakthroughAfterFeint()) {
+      return;
+    }
 
-    } else if (!this.targetPositionOverride && this.tryShotPriorityAction()) {
-      // ========================================
-      // 3Pエリア付近 → shotPriority順にパス
-      // ========================================
+    // ========================================
+    // 5. 長時間静止 → 強制行動
+    // ========================================
+    if (this.idleTimer >= this.IDLE_FORCE_ACTION_THRESHOLD && this.tryForceActionWhenIdle()) {
+      this.idleTimer = 0;
+      return;
+    }
 
+    // ========================================
+    // 6. targetPositionOverride → 目標位置への移動
+    // ========================================
+    if (this.targetPositionOverride) {
+      this.handleTargetOverrideMovement(deltaTime);
+      return;
+    }
+
+    // ========================================
+    // 7. ゾーン判定 + ゴール方向を向く
+    // ========================================
+    const targetPosition = this.getTargetPosition();
+    const myPosition = this.character.getPosition();
+    const toGoal = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+
+    if (toGoal.length() > 0.01) {
+      this.character.setRotation(Math.atan2(toGoal.x, toGoal.z));
+    }
+
+    const zone = detectCourtZone({ x: myPosition.x, z: myPosition.z }, this.character.team);
+    const remainingTime = this.getShotClockRemainingTime();
+    const phase = getShotClockPhase(zone, remainingTime);
+
+    // ========================================
+    // 8. ゾーン別ハンドラーへディスパッチ
+    // ========================================
+    switch (zone) {
+      case CourtZone.BACKCOURT:
+        this.handleBackcourt(deltaTime, phase);
+        break;
+      case CourtZone.FRONTCOURT_OUTSIDE_3P:
+        this.handleFrontcourtOutside3P(deltaTime, phase);
+        break;
+      case CourtZone.INSIDE_3P:
+        this.handleInside3P(deltaTime, phase);
+        break;
+      case CourtZone.PAINT_AREA:
+        this.handlePaintArea(deltaTime, phase);
+        break;
+      case CourtZone.BEHIND_GOAL:
+        this.handleBehindGoal(deltaTime, phase);
+        break;
+    }
+  }
+
+  // ==============================
+  // ゾーン別ハンドラー
+  // ==============================
+
+  /**
+   * バックコート: ボールを前に運ぶのが最優先
+   */
+  private handleBackcourt(deltaTime: number, phase: ShotClockPhase): void {
+    // ダブルチーム検出 → 即パス
+    if (this.isDoubleteamed() && this.tryPass()) return;
+
+    switch (phase) {
+      case ShotClockPhase.EARLY:
+        if (this.character.offenseRole !== OffenseRole.MAIN_HANDLER) {
+          if (this.tryRoleBasedPassToMainHandler()) return;
+        }
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.MID:
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.LATE:
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.CRITICAL:
+        if (this.tryShoot(1.0)) return;
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+    }
+  }
+
+  /**
+   * フロントコート3P外: オフェンス組立
+   */
+  private handleFrontcourtOutside3P(deltaTime: number, phase: ShotClockPhase): void {
+    // ダブルチーム検出 → 即パス
+    if (this.isDoubleteamed() && this.tryPass()) return;
+
+    // 1on1継続タイマー: ディフェンダーが経路上にいれば加算、いなければリセット
+    const targetPosition = this.getTargetPosition();
+    const defenderInPath = this.findDefenderInPathToGoal(targetPosition);
+
+    if (defenderInPath) {
+      this.frontcourt1on1Timer += deltaTime;
     } else {
-      // ========================================
-      // メイン判断フェーズ
-      // ========================================
-      this.updateIdleTracking(deltaTime);
+      this.frontcourt1on1Timer = 0;
+    }
 
-      if (this.idleTimer >= this.IDLE_FORCE_ACTION_THRESHOLD && this.tryForceActionWhenIdle()) {
-        // 長時間静止 → 強制行動
-        this.idleTimer = 0;
+    // 1on1が5秒以上続いたら強制パス
+    if (this.frontcourt1on1Timer >= this.FRONTCOURT_1ON1_PASS_THRESHOLD) {
+      if (this.tryPass()) {
+        this.frontcourt1on1Timer = 0;
+        return;
+      }
+    }
 
-      } else if (this.feintController?.isInBreakthroughWindow(this.character) && this.tryBreakthroughAfterFeint()) {
-        // フェイント成功後 → ドリブル突破
+    switch (phase) {
+      case ShotClockPhase.EARLY:
+        if (this.tryRoleBasedPassToMainHandler()) return;
+        if (this.tryShotPriorityAction()) return;
+        this.handleDefenderBasedAction(deltaTime);
+        break;
 
-      } else {
-        // === ゴール方向を向く ===
-        const targetPosition = this.getTargetPosition();
-        const myPosition = this.character.getPosition();
-        const toGoal = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+      case ShotClockPhase.MID:
+        if (this.tryShotPriorityAction()) return;
+        if (this.tryPass()) return;
+        this.handleDefenderBasedAction(deltaTime);
+        break;
 
-        if (toGoal.length() > 0.01) {
-          this.character.setRotation(Math.atan2(toGoal.x, toGoal.z));
-        }
+      case ShotClockPhase.LATE:
+        if (this.tryPass()) return;
+        if (this.tryDribbleMove()) return;
+        if (this.tryFeint()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
 
-        if (!this.targetPositionOverride && this.isShotClockUrgent() && this.tryShoot()) {
-          // ========================================
-          // ショットクロック緊急 → 最優先シュート
-          // ========================================
+      case ShotClockPhase.CRITICAL:
+        if (this.tryShoot(0.3)) return;
+        if (this.tryPass()) return;
+        if (this.tryDribbleMove()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+    }
+  }
 
+  /**
+   * 3Pアーク内: 主要得点ゾーン、1on1 + シュート中心
+   * shotPriority（1=ファーストチョイス）に応じてシュート積極性を変化
+   */
+  private handleInside3P(deltaTime: number, phase: ShotClockPhase): void {
+    const isFirstChoice = this.character.shotPriority === 1;
+
+    switch (phase) {
+      case ShotClockPhase.EARLY:
+        if (isFirstChoice) {
+          // ファーストチョイス: シュート最優先
+          if (this.tryShoot()) return;
+          if (this.tryFeint()) return;
+          this.handleDefenderBasedAction(deltaTime);
         } else {
-          // === ディフェンダー状況に応じた分岐 ===
-          const defenderInPath = this.findDefenderInPathToGoal(targetPosition);
-
-          if (defenderInPath) {
-            const defenderPosition = defenderInPath.getPosition();
-            const isDefenderInFOV = DefenseUtils.is1on1StateByFieldOfView(
-              { x: myPosition.x, z: myPosition.z },
-              this.character.getRotation(),
-              { x: defenderPosition.x, z: defenderPosition.z }
-            );
-
-            if (isDefenderInFOV) {
-              // ========================================
-              // 1on1状態（ディフェンダーが視野内）
-              // ========================================
-              this.handle1on1State(targetPosition, deltaTime);
-
-            } else {
-              // ========================================
-              // ディフェンダーが視野外 → ダッシュ/シュート
-              // ========================================
-              this.handleDefenderOutOfFOV(targetPosition, deltaTime);
-            }
-
-          } else if (!this.targetPositionOverride && this.tryShoot()) {
-            // ========================================
-            // ディフェンダーなし + シュートレンジ → シュート
-            // ========================================
-
-          } else if (!this.targetPositionOverride && this.tryPass()) {
-            // ========================================
-            // ディフェンダーなし + パス試行
-            // ========================================
-
-          } else {
-            // ========================================
-            // ディフェンダーなし → ゴールへドライブ
-            // ========================================
-            const distanceToTarget = toGoal.length();
-            const stopDistance = this.targetPositionOverride ? 0.5 : 1.0;
-
-            if (distanceToTarget > stopDistance) {
-              // ダッシュでゴールへ前進
-              if (this.character.getCurrentMotionName() !== "dash_forward") {
-                this.character.playMotion(DASH_FORWARD_MOTION);
-              }
-              const direction = toGoal.normalize();
-              const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
-              this.character.move(boundaryAdjusted || direction, deltaTime);
-
-            } else if (!this.targetPositionOverride && this.tryShoot()) {
-              // 目標到達 → シュート再試行
-
-            } else {
-              // アイドル
-              if (this.character.getCurrentMotionName() !== "idle") {
-                this.character.playMotion(IDLE_MOTION);
-              }
-            }
-          }
+          // それ以外: ファーストチョイスへ展開優先
+          if (this.tryShotPriorityAction()) return;
+          if (this.tryPass()) return;
+          if (this.tryShoot()) return;
+          this.handleDefenderBasedAction(deltaTime);
         }
+        break;
+
+      case ShotClockPhase.MID:
+        if (isFirstChoice) {
+          if (this.tryShoot(0.2)) return;
+          if (this.tryFeint()) return;
+          this.handleDefenderBasedAction(deltaTime);
+        } else {
+          if (this.tryShotPriorityAction()) return;
+          if (this.tryPass()) return;
+          if (this.tryShoot()) return;
+          this.handleDefenderBasedAction(deltaTime);
+        }
+        break;
+
+      case ShotClockPhase.LATE:
+        if (isFirstChoice) {
+          if (this.tryShoot(0.3)) return;
+          if (this.tryDribbleMove()) return;
+          this.advanceTowardGoal(deltaTime);
+        } else {
+          if (this.tryPass()) return;
+          if (this.tryShoot(0.15)) return;
+          if (this.tryDribbleMove()) return;
+          this.advanceTowardGoal(deltaTime);
+        }
+        break;
+
+      case ShotClockPhase.CRITICAL:
+        if (this.tryShoot(1.0)) return;
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+    }
+  }
+
+  /**
+   * ペイントエリア: ゴール下、常にシュート最優先
+   */
+  private handlePaintArea(deltaTime: number, phase: ShotClockPhase): void {
+    switch (phase) {
+      case ShotClockPhase.EARLY:
+        if (this.tryPaintAreaShot(deltaTime)) return;
+        if (this.tryPass()) return;
+        if (this.tryFeint()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.MID:
+        if (this.tryPaintAreaShot(deltaTime)) return;
+        if (this.tryFeint()) return;
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.LATE:
+        if (this.tryPaintAreaShot(deltaTime)) return;
+        if (this.tryShoot()) return;
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+
+      case ShotClockPhase.CRITICAL:
+        if (this.tryPaintAreaShot(deltaTime)) return;
+        if (this.tryShoot(1.0)) return;
+        if (this.tryPass()) return;
+        this.advanceTowardGoal(deltaTime);
+        break;
+    }
+  }
+
+  /**
+   * ゴール裏: 脱出最優先
+   */
+  private handleBehindGoal(deltaTime: number, phase: ShotClockPhase): void {
+    if (phase === ShotClockPhase.CRITICAL) {
+      if (this.tryPass()) return;
+      if (this.tryShoot(1.0)) return;
+      this.moveBackTowardCourt(deltaTime);
+    } else {
+      if (this.tryPass()) return;
+      this.moveBackTowardCourt(deltaTime);
+    }
+  }
+
+  // ==============================
+  // 共通ヘルパーメソッド
+  // ==============================
+
+  /**
+   * 近くに相手が2人以上いるかどうかを判定
+   * @param radius 検出半径（デフォルト3.0m）
+   * @returns 2人以上いればtrue
+   */
+  private isDoubleteamed(radius: number = 3.0): boolean {
+    const myPos = this.character.getPosition();
+    const opponents = getOpponents(this.allCharacters, this.character);
+    let count = 0;
+
+    for (const opponent of opponents) {
+      const opPos = opponent.getPosition();
+      const dx = opPos.x - myPos.x;
+      const dz = opPos.z - myPos.z;
+      if (dx * dx + dz * dz <= radius * radius) {
+        count++;
+        if (count >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * ゴール方向にダッシュ前進（境界チェック付き）
+   */
+  private advanceTowardGoal(deltaTime: number): void {
+    const targetPosition = this.getTargetPosition();
+    const myPosition = this.character.getPosition();
+    const toGoal = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+    const distanceToGoal = toGoal.length();
+
+    if (distanceToGoal > 1.0) {
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+      const direction = toGoal.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        const adjusted = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
+        this.character.move(adjusted, deltaTime);
+      } else {
+        this.character.move(direction, deltaTime);
+      }
+    } else if (this.tryShoot()) {
+      // 目標到達 → シュート再試行
+    } else {
+      if (this.character.getCurrentMotionName() !== "idle") {
+        this.character.playMotion(IDLE_MOTION);
       }
     }
   }
+
+  /**
+   * ディフェンダー状況に応じた行動
+   * findDefenderInPathToGoal → 1on1 or ダッシュ
+   */
+  private handleDefenderBasedAction(deltaTime: number): void {
+    const targetPosition = this.getTargetPosition();
+    const myPosition = this.character.getPosition();
+    const defenderInPath = this.findDefenderInPathToGoal(targetPosition);
+
+    if (defenderInPath) {
+      const defenderPosition = defenderInPath.getPosition();
+      const isDefenderInFOV = DefenseUtils.is1on1StateByFieldOfView(
+        { x: myPosition.x, z: myPosition.z },
+        this.character.getRotation(),
+        { x: defenderPosition.x, z: defenderPosition.z }
+      );
+
+      if (isDefenderInFOV) {
+        this.handle1on1State(targetPosition, deltaTime);
+      } else {
+        this.handleDefenderOutOfFOV(targetPosition, deltaTime);
+      }
+    } else {
+      // ディフェンダーなし → ゴールへドライブ
+      this.advanceTowardGoal(deltaTime);
+    }
+  }
+
+  /**
+   * ゴール裏からコート内へ移動（FTライン方向へダッシュ）
+   */
+  private moveBackTowardCourt(deltaTime: number): void {
+    const myPosition = this.character.getPosition();
+    // FTライン付近の位置を目標にする（コート中央、ゴール前方向）
+    const isAlly = this.character.team === "ally";
+    // ゴール裏からFTライン方向（コート内側）へ戻る
+    const targetZ = isAlly ? 9.0 : -9.0;
+    const targetPosition = new Vector3(0, 0, targetZ);
+
+    const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+
+    if (toTarget.length() > 0.5) {
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      const direction = toTarget.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        const adjusted = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
+        this.character.move(adjusted, deltaTime);
+      } else {
+        this.character.move(direction, deltaTime);
+      }
+    } else {
+      if (this.character.getCurrentMotionName() !== "idle") {
+        this.character.playMotion(IDLE_MOTION);
+      }
+    }
+  }
+
+  /**
+   * targetPositionOverrideへの移動処理
+   */
+  private handleTargetOverrideMovement(deltaTime: number): void {
+    const targetPosition = this.targetPositionOverride!;
+    const myPosition = this.character.getPosition();
+    const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+
+    // ゴール方向を向く
+    if (toTarget.length() > 0.01) {
+      this.character.setRotation(Math.atan2(toTarget.x, toTarget.z));
+    }
+
+    const distanceToTarget = toTarget.length();
+
+    if (distanceToTarget > 0.5) {
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+      const direction = toTarget.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+      this.character.move(boundaryAdjusted || direction, deltaTime);
+    } else {
+      // 到着 → アイドル
+      if (this.character.getCurrentMotionName() !== "idle") {
+        this.character.playMotion(IDLE_MOTION);
+      }
+    }
+  }
+
+  // ==============================
+  // 既存の1on1 / ディフェンダー外ハンドラー（内部利用）
+  // ==============================
 
   /**
    * 1on1状態（ディフェンダーが視野内）の処理
@@ -155,95 +487,75 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
 
     const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
 
-    if (!this.targetPositionOverride && this.isShotClockUrgent() && this.tryShoot()) {
-      // ========================================
-      // ショットクロック緊急 → シュート
-      // ========================================
+    if (this.tryPass()) {
+      return;
+    }
 
-    } else if (!this.targetPositionOverride && this.tryPass()) {
-      // ========================================
-      // パス試行
-      // ========================================
+    if (this.moveToCreatePassLane(deltaTime)) {
+      return;
+    }
 
-    } else if (!this.targetPositionOverride && this.moveToCreatePassLane(deltaTime)) {
-      // ========================================
-      // パスレーン作成移動
-      // ========================================
+    // 確率ベースアクション選択 + 前進
+    const positionBehavior = this.getPositionBehaviorParams();
+    const actionProbs = get1on1ActionProbabilities(positionBehavior);
+    const rangeInfo = this.shootingController?.getShootRangeInfo(this.character);
+    const inShootRange = rangeInfo?.inRange ?? false;
+    const shootType = rangeInfo?.shootType;
+    const shootAggressiveness = shootType
+      ? getShootAggressiveness(positionBehavior, shootType)
+      : positionBehavior.midRangeAggressiveness;
+    const actionChoice = Math.random();
 
-    } else {
-      // ========================================
-      // 確率ベースアクション選択 + 前進
-      // ========================================
-      const positionBehavior = this.getPositionBehaviorParams();
-      const actionProbs = get1on1ActionProbabilities(positionBehavior);
-      const rangeInfo = this.shootingController?.getShootRangeInfo(this.character);
-      const inShootRange = rangeInfo?.inRange ?? false;
-      const shootType = rangeInfo?.shootType;
-      const shootAggressiveness = shootType
-        ? getShootAggressiveness(positionBehavior, shootType)
-        : positionBehavior.midRangeAggressiveness;
-      const actionChoice = Math.random();
+    let actionTaken = false;
 
-      let actionTaken = false;
-
-      if (inShootRange) {
-        // --- シュートレンジ内 ---
-        if (actionChoice < shootAggressiveness && !this.targetPositionOverride && this.tryShoot()) {
-          actionTaken = true;
-
-        } else {
-          // シュートしなかった/できなかった → フェイント/ドライブ/様子見
-          const remainingChoice = Math.random();
-          const total = actionProbs.feint + actionProbs.drive + actionProbs.wait;
-          const normalizedFeint = actionProbs.feint / total;
-          const normalizedDrive = actionProbs.drive / total;
-
-          if (remainingChoice < normalizedFeint) {
-            if (this.tryFeint()) {
-              actionTaken = true;
-            }
-          } else if (remainingChoice < normalizedFeint + normalizedDrive) {
-            if (this.tryDribbleMove()) {
-              actionTaken = true;
-            }
-          }
-          // 残り: 様子見（actionTaken = false → 前進）
-        }
-
+    if (inShootRange) {
+      if (actionChoice < shootAggressiveness && this.tryShoot()) {
+        actionTaken = true;
       } else {
-        // --- シュートレンジ外 ---
-        if (actionChoice < actionProbs.drive) {
-          if (this.tryDribbleMove()) {
-            actionTaken = true;
-          }
-        } else if (actionChoice < actionProbs.drive + actionProbs.feint) {
+        const remainingChoice = Math.random();
+        const total = actionProbs.feint + actionProbs.drive + actionProbs.wait;
+        const normalizedFeint = actionProbs.feint / total;
+        const normalizedDrive = actionProbs.drive / total;
+
+        if (remainingChoice < normalizedFeint) {
           if (this.tryFeint()) {
             actionTaken = true;
           }
-        }
-        // 残り: 前進（actionTaken = false）
-      }
-
-      // アクション未実行 → 前進
-      if (!actionTaken) {
-        const distanceToTarget = toTarget.length();
-
-        if (distanceToTarget > 0.5) {
-          // 目標に向かって前進（衝突回避付き）
-          const direction = toTarget.normalize();
-          let moveDirection = direction;
-          const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
-
-          if (boundaryAdjusted) {
-            moveDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
+        } else if (remainingChoice < normalizedFeint + normalizedDrive) {
+          if (this.tryDribbleMove()) {
+            actionTaken = true;
           }
-
-          const moveSpeed = inShootRange ? 0.6 : 0.9;
-          this.character.move(moveDirection.scale(moveSpeed), deltaTime);
-
-        } else if (!this.targetPositionOverride && this.tryShoot()) {
-          // 目標至近距離 → シュート再試行
         }
+      }
+    } else {
+      if (actionChoice < actionProbs.drive) {
+        if (this.tryDribbleMove()) {
+          actionTaken = true;
+        }
+      } else if (actionChoice < actionProbs.drive + actionProbs.feint) {
+        if (this.tryFeint()) {
+          actionTaken = true;
+        }
+      }
+    }
+
+    // アクション未実行 → 前進
+    if (!actionTaken) {
+      const distanceToTarget = toTarget.length();
+
+      if (distanceToTarget > 0.5) {
+        const direction = toTarget.normalize();
+        let moveDirection = direction;
+        const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+        if (boundaryAdjusted) {
+          moveDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
+        }
+
+        const moveSpeed = inShootRange ? 0.6 : 0.9;
+        this.character.move(moveDirection.scale(moveSpeed), deltaTime);
+      } else if (this.tryShoot()) {
+        // 目標至近距離 → シュート再試行
       }
     }
   }
@@ -255,42 +567,32 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
   private handleDefenderOutOfFOV(targetPosition: Vector3, deltaTime: number): void {
     const myPosition = this.character.getPosition();
 
-    if (!this.targetPositionOverride && this.tryShoot()) {
-      // ========================================
-      // シュート試行
-      // ========================================
+    if (this.tryShoot()) {
+      return;
+    }
 
+    const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
+    const distanceToTarget = toTarget.length();
+
+    if (distanceToTarget > 0.5) {
+      if (this.character.getCurrentMotionName() !== "dash_forward") {
+        this.character.playMotion(DASH_FORWARD_MOTION);
+      }
+
+      const direction = toTarget.normalize();
+      let moveDirection = direction;
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        moveDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
+      }
+
+      this.character.move(moveDirection, deltaTime);
+    } else if (this.tryShoot()) {
+      // 目標至近距離 → シュート再試行
     } else {
-      // ========================================
-      // ダッシュで目標に向かう
-      // ========================================
-      const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
-      const distanceToTarget = toTarget.length();
-
-      if (distanceToTarget > 0.5) {
-        // ダッシュモーションで全速力前進
-        if (this.character.getCurrentMotionName() !== "dash_forward") {
-          this.character.playMotion(DASH_FORWARD_MOTION);
-        }
-
-        const direction = toTarget.normalize();
-        let moveDirection = direction;
-        const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
-
-        if (boundaryAdjusted) {
-          moveDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
-        }
-
-        this.character.move(moveDirection, deltaTime);
-
-      } else if (!this.targetPositionOverride && this.tryShoot()) {
-        // 目標至近距離 → シュート再試行
-
-      } else {
-        // アイドル
-        if (this.character.getCurrentMotionName() !== "idle") {
-          this.character.playMotion(IDLE_MOTION);
-        }
+      if (this.character.getCurrentMotionName() !== "idle") {
+        this.character.playMotion(IDLE_MOTION);
       }
     }
   }
