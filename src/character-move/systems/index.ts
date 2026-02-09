@@ -21,3 +21,5 @@ export {
   type TrajectoryInterceptionRisk,
   type TrajectoryRiskAnalysisResult,
 } from './RiskAssessmentSystem';
+
+export { LooseBallDecisionSystem } from './LooseBallDecisionSystem';
