@@ -428,48 +428,4 @@ export class FieldGridUtils {
     return baseDefense * coefficient;
   }
 
-  /**
-   * ボールがアウトオブバウンズになった位置から、スローイン用の外側マスを取得
-   * @param ballOutX ボールがコート外に出た時のX座標
-   * @param ballOutZ ボールがコート外に出た時のZ座標
-   */
-  static getThrowInCell(ballOutX: number, ballOutZ: number): CellCoord {
-    // バックボード裏側のZ範囲（ゴール設定から）
-    const backboardDistance = 1.2; // GOAL_CONFIG.backboardDistance
-    const goal1BackboardZ = this.halfLength - backboardDistance; // 13.8m
-    const goal2BackboardZ = -this.halfLength + backboardDistance; // -13.8m
-
-    // サイドラインを超えた場合（X方向）
-    if (Math.abs(ballOutX) > this.halfWidth) {
-      const col = ballOutX < 0
-        ? OUTER_GRID_CONFIG.outerColumnLeft
-        : OUTER_GRID_CONFIG.outerColumnRight;
-
-      // Z座標を行番号に変換（バックボード裏側は調整）
-      let adjustedZ = ballOutZ;
-      if (adjustedZ > goal1BackboardZ) {
-        adjustedZ = goal1BackboardZ;
-      } else if (adjustedZ < goal2BackboardZ) {
-        adjustedZ = goal2BackboardZ;
-      }
-      const row = this.zToRow(adjustedZ);
-      return { col, row };
-    }
-
-    // エンドラインを超えた場合（Z方向）
-    if (Math.abs(ballOutZ) > this.halfLength) {
-      const col = this.xToColumnName(ballOutX);
-      const row = ballOutZ > 0
-        ? OUTER_GRID_CONFIG.outerRowTop
-        : OUTER_GRID_CONFIG.outerRowBottom;
-      return { col, row };
-    }
-
-    // どちらも超えていない場合（エラーケース）- 最も近いサイドラインを選択
-    const col = ballOutX >= 0
-      ? OUTER_GRID_CONFIG.outerColumnRight
-      : OUTER_GRID_CONFIG.outerColumnLeft;
-    const row = this.zToRow(ballOutZ);
-    return { col, row };
-  }
 }

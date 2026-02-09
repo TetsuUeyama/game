@@ -19,12 +19,6 @@ export { OnBallDefenseAI } from './state/OnBallDefenseAI';
 export { OffBallOffenseAI } from './state/OffBallOffenseAI';
 export { OffBallDefenseAI } from './state/OffBallDefenseAI';
 
-// スローイン系AI
-export { ThrowInBaseAI } from './state/ThrowInBaseAI';
-export { ThrowInThrowerAI } from './state/ThrowInThrowerAI';
-export { ThrowInReceiverAI } from './state/ThrowInReceiverAI';
-export { ThrowInOtherAI } from './state/ThrowInOtherAI';
-
 // ジャンプボール系AI
 export { JumpBallJumperAI } from './state/JumpBallJumperAI';
 export { JumpBallOtherAI } from './state/JumpBallOtherAI';

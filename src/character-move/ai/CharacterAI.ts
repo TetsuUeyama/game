@@ -17,9 +17,6 @@ import {
   OnBallDefenseAI,
   OffBallOffenseAI,
   OffBallDefenseAI,
-  ThrowInThrowerAI,
-  ThrowInReceiverAI,
-  ThrowInOtherAI
 } from "./";
 import { PassCallback } from "./state/OnBallOffenseAI";
 import { Formation } from "../config/FormationConfig";
@@ -41,9 +38,6 @@ export class CharacterAI {
   private onBallDefenseAI: OnBallDefenseAI;
   private offBallOffenseAI: OffBallOffenseAI;
   private offBallDefenseAI: OffBallDefenseAI;
-  private throwInThrowerAI: ThrowInThrowerAI;
-  private throwInReceiverAI: ThrowInReceiverAI;
-  private throwInOtherAI: ThrowInOtherAI;
 
 
   // 前回の状態（状態遷移検出用）
@@ -66,9 +60,6 @@ export class CharacterAI {
     this.onBallDefenseAI = new OnBallDefenseAI(character, ball, allCharacters, field, playerState);
     this.offBallOffenseAI = new OffBallOffenseAI(character, ball, allCharacters, field, playerState);
     this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field, playerState);
-    this.throwInThrowerAI = new ThrowInThrowerAI(character, ball, allCharacters, field, playerState);
-    this.throwInReceiverAI = new ThrowInReceiverAI(character, ball, allCharacters, field, playerState);
-    this.throwInOtherAI = new ThrowInOtherAI(character, ball, allCharacters, field, playerState);
 
     // オフェンス側のボール保持位置を設定
     this.character.setBallHoldingFaces([...BALL_HOLDING_CONFIG.OFFENSE_HOLDING_FACES]);
@@ -190,27 +181,6 @@ export class CharacterAI {
   }
 
   /**
-   * スローインスローワーAIを取得
-   */
-  public getThrowInThrowerAI(): ThrowInThrowerAI {
-    return this.throwInThrowerAI;
-  }
-
-  /**
-   * スローインレシーバーAIを取得
-   */
-  public getThrowInReceiverAI(): ThrowInReceiverAI {
-    return this.throwInReceiverAI;
-  }
-
-  /**
-   * スローイン中の他プレイヤーAIを取得
-   */
-  public getThrowInOtherAI(): ThrowInOtherAI {
-    return this.throwInOtherAI;
-  }
-
-  /**
    * AIとキャラクター状態を強制的に初期化
    * リセット処理（センターサークル再開、ゴール後再開等）で使用
    * 前回の行動や状態を完全にクリアして新しい状態で開始
@@ -309,15 +279,8 @@ export class CharacterAI {
     // 状態遷移後の反応遅延中はボールを見てアイドル状態を維持
     // 以下の状態は反応遅延をスキップ：
     // - ON_BALL_PLAYER: 独自のサーベイ処理がある
-    // - THROW_IN_*: スローイン準備は即座に行う必要がある
-    // - スローイン中のOFF_BALL_PLAYER: スロワーを見ながら位置取りが必要
-    const isThrowInMode = this.ball.getHolder()?.getIsThrowInThrower() ?? false;
     const skipReactionDelay =
-      state === CharacterState.ON_BALL_PLAYER ||
-      state === CharacterState.THROW_IN_THROWER ||
-      state === CharacterState.THROW_IN_RECEIVER ||
-      state === CharacterState.THROW_IN_OTHER ||
-      (state === CharacterState.OFF_BALL_PLAYER && isThrowInMode);
+      state === CharacterState.ON_BALL_PLAYER;
 
     if (this.stateTransitionReactionTimer > 0 && !skipReactionDelay) {
       this.stateTransitionReactionTimer -= deltaTime;
@@ -355,18 +318,6 @@ export class CharacterAI {
         // オフボールディフェンス（同ポジションマッチアップ）
         this.offBallDefenseAI.update(deltaTime);
         break;
-      case CharacterState.THROW_IN_THROWER:
-        // スローインを投げる人
-        this.throwInThrowerAI.update(deltaTime);
-        break;
-      case CharacterState.THROW_IN_RECEIVER:
-        // スローインを受ける人
-        this.throwInReceiverAI.update(deltaTime);
-        break;
-      case CharacterState.THROW_IN_OTHER:
-        // スローイン中の他のプレイヤー
-        this.throwInOtherAI.update(deltaTime);
-        break;
     }
   }
 
@@ -403,15 +354,6 @@ export class CharacterAI {
         break;
       case CharacterState.OFF_BALL_DEFENDER:
         this.offBallDefenseAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_THROWER:
-        this.throwInThrowerAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_RECEIVER:
-        this.throwInReceiverAI.onEnterState();
-        break;
-      case CharacterState.THROW_IN_OTHER:
-        this.throwInOtherAI.onEnterState();
         break;
     }
   }
@@ -455,27 +397,14 @@ export class CharacterAI {
       case CharacterState.OFF_BALL_DEFENDER:
         this.offBallDefenseAI.onExitState();
         break;
-      case CharacterState.THROW_IN_THROWER:
-        this.throwInThrowerAI.onExitState();
-        break;
-      case CharacterState.THROW_IN_RECEIVER:
-        this.throwInReceiverAI.onExitState();
-        break;
-      case CharacterState.THROW_IN_OTHER:
-        this.throwInOtherAI.onExitState();
-        break;
       // JUMP_BALL_JUMPER, JUMP_BALL_OTHER はGameSceneで管理
     }
 
     // reflexesに基づいた反応遅延を計算
     // 以下の状態は即座にonEnterStateを呼び出す（反応遅延なし）：
     // - ON_BALL_PLAYER: 独自のサーベイ処理がある
-    // - THROW_IN_*: スローイン準備は即座に行う必要がある
     const skipReactionDelay =
-      toState === CharacterState.ON_BALL_PLAYER ||
-      toState === CharacterState.THROW_IN_THROWER ||
-      toState === CharacterState.THROW_IN_RECEIVER ||
-      toState === CharacterState.THROW_IN_OTHER;
+      toState === CharacterState.ON_BALL_PLAYER;
 
     if (skipReactionDelay) {
       this.stateTransitionReactionTimer = 0;

@@ -258,11 +258,6 @@ export class OnBallOffenseAI extends BaseStateAI {
   private readonly SURVEY_LOOK_ANGLE: number = Math.PI / 3; // 左右を見る角度（60度）
   private readonly SURVEY_MAX_TOTAL_TIME: number = 3.0; // 周囲確認の最大時間（秒）- これを超えると強制終了
 
-  // スローインスロワー用の初期化フラグ
-  private throwInInitialized: boolean = false;
-  // スローインサーベイ完了フラグ（一度完了したら再実行しない）
-  private throwInSurveyCompleted: boolean = false;
-
   // アイドル時間追跡（静止状態が続いた場合に強制行動）
   private idleTimer: number = 0;
   private lastPosition: Vector3 | null = null;
@@ -359,10 +354,6 @@ export class OnBallOffenseAI extends BaseStateAI {
       this.passResetCallback(this.character);
     }
 
-    // スローイン関連をリセット（前回のON_BALL_PLAYER時の残留状態を防ぐ）
-    this.throwInInitialized = false;
-    this.throwInSurveyCompleted = false;
-
     // 周囲確認フェーズを開始（ボールを受け取った直後）
     this.surveyPhase = "look_left";
     this.surveyTimer = 0;
@@ -415,10 +406,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     this.surveyTimer = 0;
     this.surveyTotalTimer = 0;
     this.surveyStartRotation = 0;
-
-    // スローイン関連をリセット
-    this.throwInInitialized = false;
-    this.throwInSurveyCompleted = false;
 
     // アイドル時間追跡をリセット
     this.idleTimer = 0;
@@ -541,16 +528,6 @@ export class OnBallOffenseAI extends BaseStateAI {
    * AIの更新処理
    */
   public update(deltaTime: number): void {
-    // スローインスロワーの場合は特別な処理
-    if (this.character.getIsThrowInThrower()) {
-      this.updateThrowInThrower(deltaTime);
-      return;
-    } else if (this.throwInInitialized) {
-      // スローインが終了した場合、フラグをリセット
-      this.throwInInitialized = false;
-      this.throwInSurveyCompleted = false;
-    }
-
     // シュート後、ボールが飛行中の場合はその場でボールを見守る
     if (this.ball.isInFlight()) {
       this.handleWatchShot();
@@ -1661,195 +1638,6 @@ export class OnBallOffenseAI extends BaseStateAI {
     const dist2 = Vector3.Distance(testPos2, goalPos);
 
     return dist1 < dist2 ? perpDir : perpDir.scale(-1);
-  }
-
-  /**
-   * スローインスロワー用の更新処理
-   * 移動はできないが、向きの変更とパスは可能
-   * 4人のチームメイト全員がパス対象
-   */
-  private updateThrowInThrower(deltaTime: number): void {
-    const myPos = this.character.getPosition();
-
-    // 移動を完全に停止
-    this.character.stopMovement();
-    this.character.clearAIMovement();
-
-    // スローイン用の初期化（初回のみ）
-    if (!this.throwInInitialized) {
-      this.throwInInitialized = true;
-      this.surveyPhase = "look_left";
-      this.surveyTimer = 0;
-      this.surveyTotalTimer = 0;
-      this.surveyStartRotation = this.character.getRotation();
-      // パスクールダウンをリセット
-      if (this.passResetCallback) {
-        this.passResetCallback(this.character);
-      }
-    }
-
-    // 周囲確認フェーズの処理（スロー前に周囲を確認）
-    // サーベイ完了済みの場合はスキップ（onEnterStateでsurveyPhaseがリセットされても再実行しない）
-    if (this.surveyPhase !== "none" && !this.throwInSurveyCompleted) {
-      this.updateThrowInSurveyPhase(deltaTime);
-      return;
-    }
-
-    // サーベイ完了後、パス先を探す
-
-    // ドリブル構えモーションを維持
-    if (this.character.getCurrentMotionName() !== "dribble_stance") {
-      this.character.playMotion(DRIBBLE_STANCE_MOTION);
-    }
-
-    // パスレーン分析を行い、最も良いパス先を探す
-    const passLaneAnalysis = this.analyzeAllPassLanes();
-    const passableCandidates: Array<{
-      teammate: Character;
-      risk: number;
-      distanceToGoal: number;
-    }> = [];
-
-    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
-
-    for (const analysis of passLaneAnalysis) {
-      const teammatePos = analysis.teammate.getPosition();
-      const distance = Vector3.Distance(myPos, teammatePos);
-
-      // パス可能距離かチェック（デバッグログ付き）
-      const isPassable = PassUtils.isPassableDistance(distance);
-
-      if (!isPassable) {
-        continue;
-      }
-
-      // パスレーンのリスクが高すぎる場合でも候補には入れる（最悪でもパスする必要があるため）
-      const distanceToGoal = Vector3.Distance(teammatePos, goalPosition);
-
-      passableCandidates.push({
-        teammate: analysis.teammate,
-        risk: analysis.risk,
-        distanceToGoal,
-      });
-    }
-
-    if (passableCandidates.length === 0) {
-      return;
-    }
-
-    // パス先を選択（優先順位: 低リスク > ゴールに近い）
-    passableCandidates.sort((a, b) => {
-      if (Math.abs(a.risk - b.risk) < 0.1) {
-        return a.distanceToGoal - b.distanceToGoal;
-      }
-      return a.risk - b.risk;
-    });
-
-    const bestTarget = passableCandidates[0];
-
-    // ターゲットの方を向く
-    const targetPos = bestTarget.teammate.getPosition();
-    const toTarget = new Vector3(targetPos.x - myPos.x, 0, targetPos.z - myPos.z);
-    if (toTarget.length() > 0.01) {
-      const angle = Math.atan2(toTarget.x, toTarget.z);
-      this.character.setRotation(angle);
-    }
-
-    // パスクールダウンが終わっていればパスを実行（PlayerActionFacade側でチェック）
-    const canPass = this.passCanCheckCallback ? this.passCanCheckCallback(this.character) : true;
-
-    if (canPass && this.passCallback) {
-      // スローイン時は重心をリセットしてからパスを実行
-      // （立ち止まっていても小さな揺れでパスできないことを防ぐ）
-      const balanceController = this.character.getBalanceController();
-      if (balanceController) {
-        balanceController.reset();
-      }
-
-      // クールダウンはPlayerActionFacade.performPass内で自動記録
-      const result = this.passCallback(this.character, bestTarget.teammate, "pass_chest");
-      if (result.success) {
-        // スロワーフラグはCollisionHandlerのupdateCharacterStates()で
-        // レシーバーがキャッチした時点で自動的にクリアされる
-      }
-    }
-  }
-
-  /**
-   * スローインスロワー用の周囲確認フェーズ
-   * 通常のサーベイと同じだが、最後はゴールではなくコート内を向く
-   */
-  private updateThrowInSurveyPhase(deltaTime: number): void {
-    this.surveyTimer += deltaTime;
-    this.surveyTotalTimer += deltaTime;
-
-    // ドリブル構えモーションを維持
-    if (this.character.getCurrentMotionName() !== "dribble_stance") {
-      this.character.playMotion(DRIBBLE_STANCE_MOTION);
-    }
-
-    // 安全チェック: 周囲確認が最大時間を超えた場合は強制終了
-    if (this.surveyTotalTimer >= this.SURVEY_MAX_TOTAL_TIME) {
-      this.surveyPhase = "none";
-      this.surveyTimer = 0;
-      this.surveyTotalTimer = 0;
-      this.throwInSurveyCompleted = true; // サーベイ完了をマーク
-      return;
-    }
-
-    switch (this.surveyPhase) {
-      case "look_left":
-        {
-          const progress = Math.min(this.surveyTimer / this.SURVEY_LOOK_DURATION, 1.0);
-          const targetAngle = this.surveyStartRotation + this.SURVEY_LOOK_ANGLE;
-          const currentAngle = this.surveyStartRotation + (targetAngle - this.surveyStartRotation) * progress;
-          this.character.setRotation(currentAngle);
-
-          if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
-            this.surveyPhase = "look_right";
-            this.surveyTimer = 0;
-          }
-        }
-        break;
-
-      case "look_right":
-        {
-          const progress = Math.min(this.surveyTimer / this.SURVEY_LOOK_DURATION, 1.0);
-          const startAngle = this.surveyStartRotation + this.SURVEY_LOOK_ANGLE;
-          const targetAngle = this.surveyStartRotation - this.SURVEY_LOOK_ANGLE;
-          const currentAngle = startAngle + (targetAngle - startAngle) * progress;
-          this.character.setRotation(currentAngle);
-
-          if (this.surveyTimer >= this.SURVEY_LOOK_DURATION) {
-            this.surveyPhase = "face_goal";
-            this.surveyTimer = 0;
-          }
-        }
-        break;
-
-      case "face_goal":
-        // スローインの場合はゴールではなくコート中央方向を向く
-        {
-          const myPos = this.character.getPosition();
-          // コート中央方向（0, 0）を向く
-          const toCourt = new Vector3(-myPos.x, 0, -myPos.z);
-          const courtAngle = toCourt.length() > 0.01 ? Math.atan2(toCourt.x, toCourt.z) : 0;
-
-          const progress = Math.min(this.surveyTimer / this.SURVEY_FACE_GOAL_DURATION, 1.0);
-          const startAngle = this.surveyStartRotation - this.SURVEY_LOOK_ANGLE;
-          const angleDiff = normalizeAngle(courtAngle - startAngle);
-          const currentAngle = startAngle + angleDiff * progress;
-          this.character.setRotation(currentAngle);
-
-          if (this.surveyTimer >= this.SURVEY_FACE_GOAL_DURATION) {
-            this.surveyPhase = "none";
-            this.surveyTimer = 0;
-            this.throwInSurveyCompleted = true; // サーベイ完了をマーク
-            this.character.setRotation(courtAngle);
-          }
-        }
-        break;
-    }
   }
 
   /**

@@ -73,34 +73,6 @@ export class Ball {
   private curveForce: Vector3 = Vector3.Zero();
   private isCurvePass: boolean = false;
 
-  // スローインロック（スローイン中は指定されたパス以外でボールを解放できない）
-  private throwInLocked: boolean = false;
-  private throwInReceiver: Character | null = null;
-
-  /**
-   * スローインロックを設定
-   * @param receiver スローインで受け取る予定のキャラクター
-   */
-  public setThrowInLock(receiver: Character): void {
-    this.throwInLocked = true;
-    this.throwInReceiver = receiver;
-  }
-
-  /**
-   * スローインロックを解除
-   */
-  public clearThrowInLock(): void {
-    this.throwInLocked = false;
-    this.throwInReceiver = null;
-  }
-
-  /**
-   * スローインロック中かどうか
-   */
-  public isThrowInLocked(): boolean {
-    return this.throwInLocked;
-  }
-
   /**
    * パスターゲットを取得
    */
@@ -603,7 +575,7 @@ export class Ball {
         // 注意: ここではpassTargetをクリアしない
         // 理由: ball.update()がcollisionHandler.update()より先に実行されるため、
         // ここでpassTargetをクリアすると、BallCatchSystemでレシーバーが
-        // THROW_INシナリオとして認識されず、キャッチに失敗する可能性がある。
+        // キャッチに失敗する可能性がある。
         // passTargetはルーズボール時のupdate()（speed < 0.3）でクリアされる。
       }
     }
@@ -623,12 +595,6 @@ export class Ball {
     curveValue: number = 50
   ): boolean {
     if (this.inFlight) return false;
-
-    // スローインロック中はシュート禁止
-    if (this.throwInLocked) {
-      console.warn('[Ball] スローインロック中：シュートは拒否されました');
-      return false;
-    }
 
     const previousHolder = this.holder;
     this.holder = null;
@@ -731,12 +697,6 @@ export class Ball {
     noiseSeed?: number
   ): boolean {
     if (this.inFlight) return false;
-
-    // スローインロック中はシュート禁止
-    if (this.throwInLocked) {
-      console.warn('[Ball] スローインロック中：シュートは拒否されました');
-      return false;
-    }
 
     const previousHolder = this.holder;
     this.holder = null;
@@ -995,16 +955,6 @@ export class Ball {
   ): boolean {
     if (!this.holder) return false;
     if (this.inFlight) return false;
-
-    // スローインロック中は指定されたレシーバーへのパスのみ許可
-    if (this.throwInLocked) {
-      if (!targetCharacter || targetCharacter !== this.throwInReceiver) {
-        console.warn('[Ball] スローインロック中：指定レシーバー以外へのパスは拒否されました');
-        return false;
-      }
-      // スローインパスが実行されるのでロックを解除
-      this.clearThrowInLock();
-    }
 
     const previousHolder = this.holder;
     this.holder = null;

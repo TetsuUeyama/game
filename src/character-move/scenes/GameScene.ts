@@ -33,15 +33,12 @@ import { PhysicsManager } from "../../physics/PhysicsManager";
 // import { ModelLoader } from "../loaders/ModelLoader"; // 一旦無効化
 import {
   LIGHT_CONFIG,
-  FIELD_CONFIG,
   // MODEL_CONFIG, // 一旦無効化
 } from "../config/gameConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { ShootTrajectoryVisualizer } from "../visualization/ShootTrajectoryVisualizer";
 import { DribblePathVisualizer } from "../visualization/DribblePathVisualizer";
 import { PassCheckController, DefenderPlacement } from "../controllers/check/PassCheckController";
-import { ThrowInCheckController } from "../controllers/check/ThrowInCheckController";
-import { OuterCellInfo } from "../config/check/ThrowInCheckConfig";
 import {
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
@@ -51,8 +48,6 @@ import {
   CheckModeContext,
   JumpBallManager,
   JumpBallContext,
-  ThrowInManager,
-  ThrowInContext,
   GameResetManager,
   GameResetContext,
   CameraManager,
@@ -88,9 +83,6 @@ export class GameScene {
 
   // ジャンプボールマネージャー（Phase 2で作成）
   private _jumpBallManager?: JumpBallManager;
-
-  // スローインマネージャー（Phase 3で作成）
-  private _throwInManager?: ThrowInManager;
 
   // ゲームリセットマネージャー（Phase 4で作成）
   private _gameResetManager?: GameResetManager;
@@ -431,9 +423,6 @@ export class GameScene {
     // ジャンプボールマネージャーの初期化
     this._jumpBallManager = new JumpBallManager(this.createJumpBallContext());
 
-    // スローインマネージャーの初期化
-    this._throwInManager = new ThrowInManager(this.createThrowInContext());
-
     // ゲームリセットマネージャーの初期化
     this._gameResetManager = new GameResetManager(this.createGameResetContext());
 
@@ -772,30 +761,6 @@ export class GameScene {
   }
 
   /**
-   * スローインコンテキストを作成
-   */
-  private createThrowInContext(): ThrowInContext {
-    return {
-      ball: this.ball,
-      shotClockController: this.shotClockController,
-      getAllyCharacters: () => this.allyCharacters,
-      getEnemyCharacters: () => this.enemyCharacters,
-      getCharacterAIs: () => this.characterAIs,
-      onThrowInComplete: () => {
-        // シュートクロックを開始
-        const holder = this.ball.getHolder();
-        if (holder && this.shotClockController) {
-          this.shotClockController.reset(holder.team);
-        }
-      },
-      onThrowInViolation: (violatingTeam: 'ally' | 'enemy', position: Vector3) => {
-        // 相手チームからスローイン再開
-        this._throwInManager?.executeReset(violatingTeam, position);
-      },
-    };
-  }
-
-  /**
    * カメラマネージャーコンテキストを作成
    */
   private createCameraManagerContext(): CameraManagerContext {
@@ -845,26 +810,6 @@ export class GameScene {
       // onScoreUpdate と onWinner は GameResetManager が状態を保持するため不要
       onRequestJumpBall: () => {
         this._jumpBallManager?.setup();
-      },
-      onRequestThrowIn: (offendingTeam: 'ally' | 'enemy', position: Vector3) => {
-        // エンドラインかサイドラインかを判定
-        const halfWidth = FIELD_CONFIG.width / 2;
-        const halfLength = FIELD_CONFIG.length / 2;
-        const isOutZ = Math.abs(position.z) > halfLength;
-        const isOutX = Math.abs(position.x) > halfWidth;
-
-        if (isOutZ) {
-          // エンドライン（ゴールサイドライン）からのアウトオブバウンズ
-          // → ゴール下で相手チームボール保持で再開
-          this.executeGoalUnderReset(offendingTeam);
-        } else if (isOutX) {
-          // サイドラインからのアウトオブバウンズ
-          // → スローインで再開
-          this._throwInManager?.executeReset(offendingTeam, position);
-        }
-      },
-      onClearThrowInState: () => {
-        this.clearThrowInState();
       },
       onResetOneOnOneBattle: () => {
         if (this.oneOnOneBattleController) {
@@ -959,9 +904,6 @@ export class GameScene {
       if (this.feintController) {
         this.feintController.update(deltaTime);
       }
-
-      // スローイン中の位置強制（衝突判定前に実行してレシーバー位置を正確にする）
-      this.enforceThrowInPositions();
 
       // ボールを更新（キャラクター位置が確定した後にボール位置を更新）
       // 衝突判定より先に実行して、正しいボール位置で判定する
@@ -1090,25 +1032,12 @@ export class GameScene {
       this.previousBallHolder = currentBallHolder;
     }
 
-    // スローイン後、ボールがルーズ状態になった場合のpassTargetクリア
-    const throwInThrower = this._throwInManager?.getThrower();
-    if (throwInThrower && !currentBallHolder && !this.ball.isInFlight()) {
-      const lastToucher = this.ball.getLastToucher();
-      if (lastToucher === throwInThrower && this.ball.getPassTarget()) {
-        this.ball.clearPassTarget();
-      }
-    }
-
     // アウトオブバウンズ判定（GameResetManagerを使用）
     const isGoalResetPending = this._gameResetManager?.isGoalResetPending() ?? false;
     const isOutOfBoundsResetPending = this._gameResetManager?.isOutOfBoundsResetPending() ?? false;
-    const isThrowInActive = this._throwInManager?.isActive() ?? false;
-    const ballHolder = this.ball.getHolder();
-    const ballInFlight = this.ball.isInFlight();
-    const isThrowInBeforeThrow = isThrowInActive && (ballHolder === throwInThrower || ballInFlight);
     const isJumpBallInProgress = this.isJumpBallActive();
 
-    if (!isGoalResetPending && !isOutOfBoundsResetPending && !isThrowInBeforeThrow && !isJumpBallInProgress && this._gameResetManager?.checkOutOfBounds()) {
+    if (!isGoalResetPending && !isOutOfBoundsResetPending && !isJumpBallInProgress && this._gameResetManager?.checkOutOfBounds()) {
       // アウトオブバウンズリセットを開始
       this._gameResetManager?.startOutOfBoundsReset(this.ball.getPosition().clone());
     }
@@ -1122,7 +1051,7 @@ export class GameScene {
     }
 
     // ルーズボールタイマー更新（JumpBallManagerに委譲）
-    const isResetPending = isGoalResetPending || isOutOfBoundsResetPending || isThrowInActive;
+    const isResetPending = isGoalResetPending || isOutOfBoundsResetPending;
     if (this._jumpBallManager?.updateLooseBallTimer(deltaTime, isResetPending)) {
       return; // ジャンプボールが開始された
     }
@@ -1130,42 +1059,9 @@ export class GameScene {
     // シュートクロック違反リセット待機処理（GameResetManagerに委譲）
     this._gameResetManager?.updateShotClockViolationReset(deltaTime);
 
-    // スローイン処理（ThrowInManagerに委譲）
-    this._throwInManager?.update(deltaTime);
-
     // ボールの前フレーム位置を更新（アウトオブバウンズ方向判定用 - GameResetManagerに委譲）
     this._gameResetManager?.updatePreviousBallPosition();
   }
-
-  /**
-   * スローイン状態を完全にクリア（ThrowInManagerに委譲）
-   */
-  private clearThrowInState(): void {
-    this._throwInManager?.clear();
-  }
-
-  /**
-   * スローイン中のキャラクター位置を強制（衝突判定前に呼び出す）
-   * ThrowInManagerのゲッターを使用
-   */
-  private enforceThrowInPositions(): void {
-    // ボールを投げた後は位置固定しない
-    if (this._throwInManager?.hasBallBeenThrown()) {
-      return;
-    }
-
-    const thrower = this._throwInManager?.getThrower();
-    const position = this._throwInManager?.getPosition();
-
-    if (thrower && position) {
-      thrower.setPosition(position, true);
-      // 待機中でなければ移動も停止
-      if (!this._throwInManager?.isPending()) {
-        thrower.stopMovement();
-      }
-    }
-  }
-
 
   // ==============================
   // ジャンプボール関連メソッド（JumpBallManagerに委譲）
@@ -1476,15 +1372,6 @@ export class GameScene {
 
 
   /**
-   * ゴール下から再開（ボール保持状態）
-   * ゴール後やシュートクロック違反後に使用（GameResetManagerに委譲）
-   * @param offendingTeam 違反/得点したチーム（この相手チームがボールを保持）
-   */
-  private executeGoalUnderReset(offendingTeam: 'ally' | 'enemy'): void {
-    this._gameResetManager?.executeGoalUnderReset(offendingTeam);
-  }
-
-  /**
    * スコアを取得
    */
   public getScore(): { ally: number; enemy: number } {
@@ -1519,7 +1406,6 @@ export class GameScene {
   public resetGame(): void {
     // 待機状態をリセット（マネージャーに委譲、スコアもリセットされる）
     this._gameResetManager?.resetForCheckMode();
-    this.clearThrowInState();
 
     // ボールの飛行を停止
     this.ball.endFlight();
@@ -1654,13 +1540,6 @@ export class GameScene {
   }
 
   /**
-   * スローインマネージャーを取得
-   */
-  public getThrowInManager(): ThrowInManager | undefined {
-    return this._throwInManager;
-  }
-
-  /**
    * ゲームリセットマネージャーを取得
    */
   public getGameResetManager(): GameResetManager | undefined {
@@ -1792,20 +1671,6 @@ export class GameScene {
    */
   public getShotClockOffenseTeam(): 'ally' | 'enemy' | null {
     return this.shotClockController?.getCurrentOffenseTeam() ?? null;
-  }
-
-  /**
-   * スローイン残り時間を取得（5秒ルール）
-   */
-  public getThrowInRemainingTime(): number {
-    return this._throwInManager?.getRemainingTime() ?? 0;
-  }
-
-  /**
-   * スローイン5秒タイマーが動作中かどうかを取得
-   */
-  public isThrowInTimerRunning(): boolean {
-    return this._throwInManager?.isTimerRunning() ?? false;
   }
 
   // ============================================
@@ -2291,81 +2156,6 @@ export class GameScene {
 
     // ゲームをリセット
     this.resetGame();
-  }
-
-  // ============================================
-  // スローインチェックモード関連
-  // ============================================
-
-  /**
-   * スローインチェックモード用のセットアップ
-   * CheckModeManagerに委譲
-   */
-  public setupThrowInCheckMode(
-    throwerPlayerId: string,
-    receiverPlayerId: string,
-    throwerCell: { col: string; row: number },
-    receiverCell: { col: string; row: number },
-    playerData?: Record<string, PlayerData>
-  ): {
-    thrower: Character;
-    receiver: Character;
-  } | null {
-    return this._checkModeManager?.setupThrowInCheckMode(
-      throwerPlayerId,
-      receiverPlayerId,
-      throwerCell,
-      receiverCell,
-      playerData
-    ) ?? null;
-  }
-
-  /**
-   * スローインチェックコントローラーを作成
-   * CheckModeManagerに委譲
-   */
-  public createThrowInCheckController(
-    thrower: Character,
-    receiver: Character,
-    config: {
-      minDistance?: number;
-      maxDistance?: number;
-      timeoutSeconds?: number;
-    } = {}
-  ): ThrowInCheckController {
-    return this._checkModeManager!.createThrowInCheckController(thrower, receiver, config);
-  }
-
-  /**
-   * スローインテストを1回実行
-   * CheckModeManagerに委譲
-   */
-  public executeThrowInTest(): boolean {
-    return this._checkModeManager?.executeThrowInTest() ?? false;
-  }
-
-  /**
-   * スローインチェック用の全外側マスを取得
-   * CheckModeManagerに委譲
-   */
-  public getAllOuterCellsForThrowInCheck(): OuterCellInfo[] {
-    return this._checkModeManager?.getAllOuterCellsForThrowInCheck() ?? [];
-  }
-
-  /**
-   * 指定された外側マスからパス可能なレシーバーマスを取得
-   * CheckModeManagerに委譲
-   */
-  public getValidReceiverCellsForThrowInCheck(
-    outerCell: OuterCellInfo,
-    minDistance?: number,
-    maxDistance?: number
-  ): Array<{ col: string; row: number; worldX: number; worldZ: number; distance: number }> {
-    return this._checkModeManager?.getValidReceiverCellsForThrowInCheck(
-      outerCell,
-      minDistance,
-      maxDistance
-    ) ?? [];
   }
 
   /**

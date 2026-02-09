@@ -2,7 +2,7 @@
  * ボールキャッチシステム
  *
  * ボールキャッチ処理を統一するシステム。
- * シナリオベースの設計で、パス、スローイン、ルーズボール等の
+ * シナリオベースの設計で、パス、ルーズボール等の
  * 異なるキャッチ条件を明確に分離。
  *
  * 処理フロー:
@@ -31,7 +31,7 @@ import {
   BALL_RADIUS,
   LOOSE_BALL_PICKUP,
 } from "../config/BallCatchConfig";
-import { normalizeAngle, getDistance2D, getDistance3D } from "../utils/CollisionUtils";
+import { getDistance2D, getDistance3D } from "../utils/CollisionUtils";
 
 /**
  * ボールキャッチシステム
@@ -163,11 +163,6 @@ export class BallCatchSystem {
    * キャッチ判定の前に確認する共通条件
    */
   private passesPreConditions(character: Character): boolean {
-    // スローイン中のスロワーは衝突判定をスキップ
-    if (character.getIsThrowInThrower()) {
-      return false;
-    }
-
     // クールダウン中はキャッチできない
     if (!this.ball.canBeCaughtBy(character)) {
       return false;
@@ -325,33 +320,15 @@ export class BallCatchSystem {
     // playerPositionで比較（オブジェクト参照が異なる場合でも正しく判定）
     const isPassTarget = passTarget !== null &&
       passTarget.playerPosition === character.playerPosition;
-    const lastToucher = this.ball.getLastToucher();
-    const isThrowIn = lastToucher && lastToucher.getIsThrowInThrower();
 
     // バウンスパス保護: バウンド前はパスターゲットのみがキャッチ可能
     if (this.ball.getIsBouncePass() && !this.ball.getHasBounced() && !isPassTarget) {
       return null;
     }
 
-    // スローイン保護: スローイン中はパスターゲットのみがキャッチ可能
-    // （他のプレイヤーがボールを弾くのを防ぐ）
-    // passTargetがnullの場合は保護をスキップ（ルーズボールとして処理）
-    if (isThrowIn && passTarget && !isPassTarget) {
-      return null;
-    }
-
     // パスターゲットの場合
     if (isPassTarget) {
-      // スローインの場合はTHROW_INシナリオを使用（より広い判定距離）
-      if (isThrowIn) {
-        return CatchScenario.THROW_IN;
-      }
       return CatchScenario.PASS_TARGET;
-    }
-
-    // スローイン時の視野内キャッチ判定
-    if (this.isThrowInReceiverWithBallInView(character, ballPosition)) {
-      return CatchScenario.INTERCEPTOR;
     }
 
     // ジャンプボール状態のキャラクター
@@ -623,74 +600,6 @@ export class BallCatchSystem {
     // インパルスを適用
     const impulse = direction.scale(impulseStrength);
     this.ball.applyImpulse(impulse, ballPosition);
-  }
-
-  /**
-   * スローイン時に視野内にボールがあるレシーバーかどうかを判定
-   */
-  private isThrowInReceiverWithBallInView(
-    character: Character,
-    ballPosition: Vector3
-  ): boolean {
-    // スローイン中かチェック（ボールのパスターゲットがいて、飛行中）
-    if (!this.ball.isInFlight()) {
-      return false;
-    }
-
-    const passTarget = this.ball.getPassTarget();
-    if (!passTarget) {
-      return false;
-    }
-
-    // 味方チームかチェック
-    if (character.team !== passTarget.team) {
-      return false;
-    }
-
-    // パスターゲット自身は通常のパスターゲット処理で扱う（playerPositionで比較）
-    if (character.playerPosition === passTarget.playerPosition) {
-      return false;
-    }
-
-    // スロワーを取得（lastToucher）
-    const thrower = this.ball.getLastToucher();
-    if (!thrower || !thrower.getIsThrowInThrower()) {
-      return false;
-    }
-
-    // キャラクターがスロワーの方を向いているかチェック
-    const characterPos = character.getPosition();
-    const throwerPos = thrower.getPosition();
-    const characterRotation = character.getRotation();
-
-    // スロワーへの方向
-    const toThrowerX = throwerPos.x - characterPos.x;
-    const toThrowerZ = throwerPos.z - characterPos.z;
-    const angleToThrower = Math.atan2(toThrowerX, toThrowerZ);
-
-    // キャラクターの向きとスロワー方向の角度差
-    const angleDiff = normalizeAngle(angleToThrower - characterRotation);
-
-    // 視野角チェック
-    if (Math.abs(angleDiff) > BALL_CATCH_PHYSICS.FIELD_OF_VIEW_ANGLE) {
-      return false; // スロワーを見ていない
-    }
-
-    // ボールが視野内にあるかチェック
-    const toBallX = ballPosition.x - characterPos.x;
-    const toBallZ = ballPosition.z - characterPos.z;
-    const angleToBall = Math.atan2(toBallX, toBallZ);
-
-    const ballAngleDiff = normalizeAngle(angleToBall - characterRotation);
-
-    if (Math.abs(ballAngleDiff) > BALL_CATCH_PHYSICS.FIELD_OF_VIEW_ANGLE) {
-      return false; // ボールが視野外
-    }
-
-    // ボールまでの距離が適切かチェック
-    const distanceToBall = getDistance2D(characterPos, ballPosition);
-
-    return distanceToBall < BALL_CATCH_PHYSICS.VIEW_CATCH_MAX_DISTANCE;
   }
 
   /**

@@ -10,10 +10,6 @@ export type { GameMode, CheckModeContext } from "./CheckModeManager";
 export { JumpBallManager } from "./JumpBallManager";
 export type { JumpBallContext } from "./JumpBallManager";
 
-// スローインマネージャー
-export { ThrowInManager } from "./ThrowInManager";
-export type { ThrowInContext } from "./ThrowInManager";
-
 // ゲームリセットマネージャー
 export { GameResetManager } from "./GameResetManager";
 export type { GameResetContext } from "./GameResetManager";
