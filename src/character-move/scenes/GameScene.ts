@@ -25,6 +25,7 @@ import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
 import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "../state";
 import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
+import { RiskAssessmentSystem } from "../systems/RiskAssessmentSystem";
 import type { VisualSettings } from "../state";
 import { GameTeamConfig } from "../loaders/TeamConfigLoader";
 import { PlayerData } from "../types/PlayerData";
@@ -121,6 +122,9 @@ export class GameScene {
 
   // ルーズボール判断システム
   private looseBallDecisionSystem?: LooseBallDecisionSystem;
+
+  // リスク判定システム
+  private riskAssessmentSystem?: RiskAssessmentSystem;
 
   private lastFrameTime: number = Date.now();
 
@@ -273,6 +277,9 @@ export class GameScene {
     // ルーズボール判断システムの初期化
     this.looseBallDecisionSystem = new LooseBallDecisionSystem(this.playerStateManager, this.ball, this.field);
 
+    // リスク判定システムの初期化
+    this.riskAssessmentSystem = new RiskAssessmentSystem(this.ball, this.field, allCharacters);
+
     // AIコントローラーの初期化（hasAI: trueのキャラクターのみ）
     if (showAdditionalCharacters) {
       for (const character of allCharacters) {
@@ -280,6 +287,7 @@ export class GameScene {
         if (this.aiCharacterIndices.has(character)) {
           const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager);
           ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
+          ai.setRiskAssessmentSystem(this.riskAssessmentSystem);
           this.characterAIs.push(ai);
         }
       }
@@ -382,6 +390,9 @@ export class GameScene {
         this.ball,
         allCharacters
       );
+      if (this.riskAssessmentSystem) {
+        this.passTrajectoryVisualizer.setRiskAssessmentSystem(this.riskAssessmentSystem);
+      }
 
       // 全AIコントローラーにパス軌道可視化を設定
       for (const ai of this.characterAIs) {
@@ -2019,10 +2030,21 @@ export class GameScene {
       );
     }
 
+    // リスク判定システムを再初期化
+    this.riskAssessmentSystem = new RiskAssessmentSystem(this.ball, this.field, allCharacters);
+
     // AIコントローラーを再初期化
     for (const character of allCharacters) {
       if (this.aiCharacterIndices.has(character)) {
         const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager);
+
+        // LooseBallDecisionSystemを設定
+        if (this.looseBallDecisionSystem) {
+          ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
+        }
+
+        // RiskAssessmentSystemを設定
+        ai.setRiskAssessmentSystem(this.riskAssessmentSystem);
 
         // ShootingControllerを設定
         if (this.shootingController) {
@@ -2075,6 +2097,9 @@ export class GameScene {
       this.ball,
       characters
     );
+    if (this.riskAssessmentSystem) {
+      this.passTrajectoryVisualizer.setRiskAssessmentSystem(this.riskAssessmentSystem);
+    }
     this.passTrajectoryVisualizer.setEnabled(true);
   }
 

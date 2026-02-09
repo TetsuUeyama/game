@@ -26,9 +26,9 @@ import {
   ValidPassOption,
 } from "../physics/PassTrajectoryCalculator";
 import {
-  InterceptionAnalyzer,
-  TrajectoryRiskAnalysis,
-} from "../ai/analysis/InterceptionAnalyzer";
+  RiskAssessmentSystem,
+  TrajectoryRiskAnalysisResult,
+} from "../systems/RiskAssessmentSystem";
 import { getTeammates } from "../utils/TeamUtils";
 
 /**
@@ -46,7 +46,7 @@ interface VisualizedPassOption {
   /** バウンスポイントマーカー（バウンスパス用） */
   bounceMarker?: Mesh;
   /** リスク分析結果 */
-  riskAnalysis: TrajectoryRiskAnalysis;
+  riskAnalysis: TrajectoryRiskAnalysisResult;
 }
 
 /**
@@ -58,7 +58,7 @@ export class PassTrajectoryVisualizer {
   private allCharacters: Character[];
 
   private trajectoryCalculator: PassTrajectoryCalculator;
-  private interceptionAnalyzer: InterceptionAnalyzer;
+  private riskAssessment: RiskAssessmentSystem | null = null;
 
   // 可視化オプション
   private isEnabled: boolean = true;
@@ -80,7 +80,13 @@ export class PassTrajectoryVisualizer {
     this.allCharacters = allCharacters;
 
     this.trajectoryCalculator = new PassTrajectoryCalculator();
-    this.interceptionAnalyzer = new InterceptionAnalyzer();
+  }
+
+  /**
+   * RiskAssessmentSystemを設定
+   */
+  public setRiskAssessmentSystem(system: RiskAssessmentSystem): void {
+    this.riskAssessment = system;
   }
 
   /**
@@ -214,9 +220,11 @@ export class PassTrajectoryVisualizer {
       // 各パスオプションを可視化
       for (const option of validOptions) {
         // インターセプトリスクを分析
-        const riskAnalysis = this.interceptionAnalyzer.analyzeTrajectoryRisk(
+        if (!this.riskAssessment) {
+          continue;
+        }
+        const riskAnalysis = this.riskAssessment.assessTrajectoryRisk(
           option.trajectory,
-          this.allCharacters,
           holder.team
         );
 
@@ -247,7 +255,7 @@ export class PassTrajectoryVisualizer {
   private createVisualization(
     target: Character,
     option: ValidPassOption,
-    riskAnalysis: TrajectoryRiskAnalysis,
+    riskAnalysis: TrajectoryRiskAnalysisResult,
     targetPosition: Vector3
   ): VisualizedPassOption | null {
     const { trajectory, config, passType } = option;
