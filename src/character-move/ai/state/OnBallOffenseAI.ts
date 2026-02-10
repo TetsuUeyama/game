@@ -396,7 +396,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
   }
 
   /**
-   * ゴール方向にダッシュ前進（境界チェック付き）
+   * ゴール方向に前進（境界チェック付き）
+   * ディフェンダーが正面にいる場合はドリブル構え+低速、いなければダッシュ
    */
   private advanceTowardGoal(deltaTime: number): void {
     const targetPosition = this.getTargetPosition();
@@ -405,17 +406,34 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const distanceToGoal = toGoal.length();
 
     if (distanceToGoal > 1.0) {
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      // ディフェンダーが正面にいるかチェック
+      const defenderInPath = this.findDefenderInPathToGoal(targetPosition);
+      const hasDefenderInFront = defenderInPath !== null && DefenseUtils.is1on1StateByFieldOfView(
+        { x: myPosition.x, z: myPosition.z },
+        this.character.getRotation(),
+        { x: defenderInPath.getPosition().x, z: defenderInPath.getPosition().z }
+      );
+
+      if (hasDefenderInFront) {
+        // ディフェンダーが正面 → ドリブル構え+低速前進
+        if (this.character.getCurrentMotionName() !== "dribble_stance") {
+          this.character.playMotion(DRIBBLE_STANCE_MOTION);
+        }
+      } else {
+        // ディフェンダーなし or 抜き去った → ダッシュ
+        if (this.character.getCurrentMotionName() !== "dash_forward") {
+          this.character.playMotion(DASH_FORWARD_MOTION);
+        }
       }
+
       const direction = toGoal.normalize();
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
 
       if (boundaryAdjusted) {
         const adjusted = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime) || boundaryAdjusted;
-        this.character.move(adjusted, deltaTime);
+        this.character.move(hasDefenderInFront ? adjusted.scale(0.6) : adjusted, deltaTime);
       } else {
-        this.character.move(direction, deltaTime);
+        this.character.move(hasDefenderInFront ? direction.scale(0.6) : direction, deltaTime);
       }
     } else if (this.tryShoot()) {
       // 目標到達 → シュート再試行

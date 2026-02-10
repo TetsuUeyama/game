@@ -66,3 +66,55 @@ export function determineCurveDirection(
   // ディフェンダーが右寄りなら左にカーブ（-1）、左寄りなら右にカーブ（+1）
   return weightedOffset > 0 ? -1 : 1;
 }
+
+/**
+ * パスレーン上にディフェンダーが直接立ちはだかっているか判定
+ * determineCurveDirectionより厳しい判定（幅1.0m以内）で、
+ * チェストパスが通らないレベルのブロックを検出する。
+ *
+ * @param passer パスを出すキャラクター
+ * @param receiver パスを受けるキャラクター
+ * @param opponents 相手チームの全キャラクター
+ * @returns true: パスレーンがブロックされている
+ */
+export function isPassLaneBlocked(
+  passer: Character,
+  receiver: Character,
+  opponents: Character[]
+): boolean {
+  const passerPos = passer.getPosition();
+  const receiverPos = receiver.getPosition();
+
+  const passVec = new Vector3(
+    receiverPos.x - passerPos.x, 0,
+    receiverPos.z - passerPos.z
+  );
+  const passDistance = passVec.length();
+  if (passDistance < 0.01) return false;
+
+  const passDir = passVec.normalize();
+  const lateralDir = new Vector3(passDir.z, 0, -passDir.x);
+
+  const BLOCK_WIDTH = 1.0; // ブロック判定幅（m）
+
+  for (const opponent of opponents) {
+    const opponentPos = opponent.getPosition();
+    const toOpponent = new Vector3(
+      opponentPos.x - passerPos.x, 0,
+      opponentPos.z - passerPos.z
+    );
+
+    // パサーとレシーバーの間にいるか確認
+    const forwardDist = Vector3.Dot(toOpponent, passDir);
+    if (forwardDist < 0.5 || forwardDist > passDistance - 0.5) continue;
+
+    // パスラインからの横方向距離
+    const lateralDist = Math.abs(Vector3.Dot(toOpponent, lateralDir));
+
+    if (lateralDist <= BLOCK_WIDTH) {
+      return true;
+    }
+  }
+
+  return false;
+}

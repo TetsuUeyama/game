@@ -464,10 +464,23 @@ export class CharacterAI {
       (ballPos.x - myPos.x) ** 2 + (ballPos.z - myPos.z) ** 2;
     if (horizDistSq > 2.0 * 2.0) return false;
 
-    // ボールの高さチェック（頭上〜ジャンプで届く範囲）
     const height = this.character.config.physical.height;
-    if (ballPos.y < height * 0.8) return false;   // 頭より低い → 拾えばよい
-    if (ballPos.y > height + 1.5) return false;    // ジャンプでも届かない
+
+    // ジャンプ頂点到達時のボール予測高さで判断
+    // startup(0.15s) + 上昇時間(~0.30s) = 約0.45s後にジャンプ頂点
+    const TIME_TO_JUMP_PEAK = 0.45;
+    const GRAVITY = 9.81;
+    const predictedBallY = ballPos.y
+      + ballVel.y * TIME_TO_JUMP_PEAK
+      - 0.5 * GRAVITY * TIME_TO_JUMP_PEAK * TIME_TO_JUMP_PEAK;
+
+    // 立ったまま手が届く高さ → ジャンプ不要
+    const standingReach = height * 1.1;
+    if (predictedBallY <= standingReach) return false;
+
+    // ジャンプでも届かない → 無駄ジャンプ防止
+    const maxJumpReach = height + 1.5;
+    if (predictedBallY > maxJumpReach) return false;
 
     // ボールの方を向く
     const toBall = new Vector3(ballPos.x - myPos.x, 0, ballPos.z - myPos.z);

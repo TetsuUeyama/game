@@ -1,7 +1,7 @@
 import { Character } from "../../entities/Character";
 import { Ball } from "../../entities/Ball";
 import { PASS_COOLDOWN } from "../../config/PassConfig";
-import { determineCurveDirection } from "../../utils/CurvePassUtils";
+import { determineCurveDirection, isPassLaneBlocked } from "../../utils/CurvePassUtils";
 
 /**
  * パスを管理するコントローラー
@@ -62,18 +62,25 @@ export class PassController {
       return { success: false, message: 'ボールを持っていません' };
     }
 
+    // パスレーンがブロックされている場合、バウンスパスに切り替え
+    const allyCharacters = this.getAllyCharacters();
+    const enemyCharacters = this.getEnemyCharacters();
+    const opponents = passer.team === 'ally' ? enemyCharacters : allyCharacters;
+
+    let resolvedPassType = passType;
+    if (passType !== 'pass_bounce' && isPassLaneBlocked(passer, passTarget, opponents)) {
+      resolvedPassType = 'pass_bounce';
+    }
+
     // ActionControllerでパスアクションを開始
     const actionController = passer.getActionController();
-    const actionResult = actionController.startAction(passType);
+    const actionResult = actionController.startAction(resolvedPassType);
 
     if (!actionResult.success) {
       return { success: false, message: actionResult.message };
     }
 
     // activeフェーズに入ったらボールを投げるコールバックを設定
-    const allyCharacters = this.getAllyCharacters();
-    const enemyCharacters = this.getEnemyCharacters();
-
     actionController.setCallbacks({
       onActive: (action) => {
         // ボールを持っていない場合はパスしない
@@ -84,9 +91,17 @@ export class PassController {
         if (action.startsWith('pass_')) {
           if (passTarget) {
             const targetPosition = passTarget.getPosition();
-            const opponents = passer.team === 'ally' ? enemyCharacters : allyCharacters;
-            const curveDirection = determineCurveDirection(passer, passTarget, opponents);
-            ball.pass(targetPosition, passTarget, curveDirection);
+            // パス実行直前に再度ディフェンダーチェック（リアルタイム位置）
+            const currentOpponents = passer.team === 'ally'
+              ? this.getEnemyCharacters()
+              : this.getAllyCharacters();
+            const curveDirection = determineCurveDirection(passer, passTarget, currentOpponents);
+
+            // アクション名からボール側のパスタイプに変換
+            const ballPassType = action === 'pass_bounce' ? 'bounce'
+              : action === 'pass_overhead' ? 'overhead'
+              : 'chest';
+            ball.passWithArc(targetPosition, passTarget, ballPassType, curveDirection);
 
             // レシーバーにpass_receiveアクションを開始させる
             const receiverActionController = passTarget.getActionController();
