@@ -439,6 +439,9 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
       return false;
     }
 
+    // 回転を保存（失敗時に復元するため）
+    const savedRotation = this.character.getRotation();
+
     // シュートレンジ内に入ったらゴール方向を向く
     const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
     this.character.setRotation(angle);
@@ -450,6 +453,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     const rangeInfo = this.shootingController.getShootRangeInfo(this.character, isDunkRange);
 
     if (!rangeInfo.inRange || !rangeInfo.facingGoal) {
+      this.character.setRotation(savedRotation);
       return false;
     }
 
@@ -472,27 +476,23 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     switch (rangeInfo.shootType) {
       case "3pt":
       case "midrange":
-        // 外からのシュートはポジション別の積極性に基づいて判断
-        // 積極性が低いポジション（C等）は外からは打ちにくい
         shouldShoot = Math.random() < boostedAggressiveness;
         break;
       case "layup":
       case "dunk":
-        // インサイドシュートは積極性を高めに設定
-        // ゴール下では全ポジションが積極的にシュート
         shouldShoot = Math.random() < Math.max(boostedAggressiveness, 0.8);
         break;
     }
 
     if (shouldShoot) {
-      // シュート実行（ダンクレンジ内ならforceDunk=true）
-      // クールダウンはShootingController.startShootAction内で自動記録
       const result = this.shootingController.startShootAction(this.character, isDunkRange);
       if (result.success) {
         return true;
       }
     }
 
+    // シュートしなかった/できなかった → 回転を復元
+    this.character.setRotation(savedRotation);
     return false;
   }
 
@@ -536,16 +536,30 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
       return false; // 10%は通常行動へ
     }
 
+    // パスレーンリスク分析（リスクが高すぎるパスは出さない）
+    const passLaneAnalysis = this.riskAssessment
+      ? this.riskAssessment.assessAllPassLanes(this.character)
+      : null;
+    const maxPassRisk = 0.5; // メインハンドラーへのパスのリスク上限
+
     // PlayerStateManagerからメインハンドラーを探す
     if (this.playerState) {
       const mainHandler = this.playerState.getMainHandler(this.character.team);
       if (mainHandler && mainHandler.character !== this.character) {
-        // パスレーンの安全性チェック
         const teammatePos = mainHandler.character.getPosition();
         const distance = Vector3.Distance(myPos, teammatePos);
 
         if (PassUtils.isPassableDistance(distance)) {
+          // パスレーンリスクチェック
+          if (passLaneAnalysis) {
+            const laneInfo = passLaneAnalysis.find(a => a.teammate === mainHandler.character);
+            if (laneInfo && laneInfo.risk > maxPassRisk) {
+              return false; // リスクが高いのでパスしない
+            }
+          }
+
           // メインハンドラーの方を向く
+          const savedRotation1 = this.character.getRotation();
           const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
           if (toTarget.length() > 0.01) {
             const angle = Math.atan2(toTarget.x, toTarget.z);
@@ -556,6 +570,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
           if (result.success) {
             return true;
           }
+          // パス失敗時は回転を復元
+          this.character.setRotation(savedRotation1);
         }
       }
     }
@@ -569,10 +585,19 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
         const distance = Vector3.Distance(myPos, teammatePos);
 
         if (PassUtils.isPassableDistance(distance)) {
+          // パスレーンリスクチェック
+          if (passLaneAnalysis) {
+            const laneInfo = passLaneAnalysis.find(a => a.teammate === teammate);
+            if (laneInfo && laneInfo.risk > maxPassRisk) {
+              return false; // リスクが高いのでパスしない
+            }
+          }
+
           // メインハンドラーの方を向く
-          const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
-          if (toTarget.length() > 0.01) {
-            const angle = Math.atan2(toTarget.x, toTarget.z);
+          const savedRotation2 = this.character.getRotation();
+          const toTarget2 = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
+          if (toTarget2.length() > 0.01) {
+            const angle = Math.atan2(toTarget2.x, toTarget2.z);
             this.character.setRotation(angle);
           }
 
@@ -580,6 +605,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
           if (result.success) {
             return true;
           }
+          // パス失敗時は回転を復元
+          this.character.setRotation(savedRotation2);
         }
         break; // メインハンドラーは1人なので見つかったら終了
       }
@@ -903,7 +930,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
       }
 
       // パスレーンのリスクが許容度を超える場合はスキップ
-      if (analysis.risk > maxRiskTolerance + 0.2) {
+      if (analysis.risk > maxRiskTolerance) {
         continue;
       }
 
@@ -953,9 +980,9 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
 
     // 3. それでも決まらなければ、低リスクでゴールに近いチームメイト
     if (!passTarget) {
-      // リスクでソート、同じならゴールに近い方
+      // リスク優先でソート、ほぼ同等ならゴールに近い方
       passableCandidates.sort((a, b) => {
-        if (Math.abs(a.risk - b.risk) < 0.1) {
+        if (Math.abs(a.risk - b.risk) < 0.03) {
           return a.distanceToGoal - b.distanceToGoal;
         }
         return a.risk - b.risk;
@@ -967,6 +994,9 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
       return false;
     }
 
+    // 回転を保存（失敗時に復元するため）
+    const savedRotation = this.character.getRotation();
+
     // パスターゲットの方を向く
     const targetPos = passTarget.getPosition();
     const toTarget = new Vector3(targetPos.x - myPos.x, 0, targetPos.z - myPos.z);
@@ -976,12 +1006,13 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     }
 
     // パス実行（PassController経由）
-    // クールダウンはPassController.performPass内で自動記録
     const result = this.passController.performPass(this.character, passTarget, "pass_chest");
     if (result.success) {
       return true;
     }
 
+    // パス失敗 → 回転を復元
+    this.character.setRotation(savedRotation);
     return false;
   }
 

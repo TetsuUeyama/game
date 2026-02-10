@@ -130,7 +130,8 @@ export class JumpBallManager {
     // 全選手にジャンプボール状態を設定
     this.setJumpBallStates(allCharacters);
 
-    // ボールをセンターサークル上空に配置
+    // ボールの保持者をクリアし、センターサークル上空に配置
+    this.context.ball.setHolder(null);
     const ballStartPos = new Vector3(
       CENTER_CIRCLE.CENTER_X,
       JUMP_BALL_POSITIONS.BALL_START_HEIGHT,
