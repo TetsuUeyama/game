@@ -340,6 +340,13 @@ export const ACTION_TYPE_FORCES: Record<string, ActionForceConfig> = {
     duration: 0.15,
     lock: true,
   },
+
+  // リバウンドジャンプ（垂直ジャンプのみ、前方移動なし）
+  'rebound_jump': {
+    force: new Vector3(0, 2000, 0),
+    duration: 0.15,
+    lock: true,
+  },
 };
 
 /**

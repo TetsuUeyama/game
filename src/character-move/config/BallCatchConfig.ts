@@ -48,7 +48,7 @@ export const CATCH_SCENARIO_CONFIGS: Record<CatchScenario, CatchConfig> = {
     bodyDistanceThreshold: 1.0,
     handDistanceThreshold: 1.5,
     skipVelocityCheck: false,
-    skipHeightCheck: false,
+    skipHeightCheck: true,     // ジャンプ中は手距離チェックで十分
     priority: 5,
   },
   [CatchScenario.LOOSE_BALL]: {

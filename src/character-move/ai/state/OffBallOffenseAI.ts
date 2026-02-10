@@ -46,6 +46,12 @@ export class OffBallOffenseAI extends BaseStateAI {
   // チームメイト重複回避用
   private readonly minTeammateDistance: number = 2.5; // チームメイトからの最小距離
 
+  // DUNKERゴール下ポジショニング用
+  /** DUNKERがゴール下に向かう判定距離（攻撃ゴールからの距離、3Pライン付近） */
+  private readonly DUNKER_GOAL_ENTRY_THRESHOLD: number = 7.5;
+  /** DUNKERのゴール下オフセット距離（攻撃ゴールからの距離） */
+  private readonly DUNKER_GOAL_OFFSET: number = 0.5;
+
   constructor(
     character: Character,
     ball: Ball,
@@ -199,6 +205,12 @@ export class OffBallOffenseAI extends BaseStateAI {
     if (this.character.offenseRole === OffenseRole.SECOND_HANDLER && onBallPlayer &&
         onBallPlayer.offenseRole === OffenseRole.MAIN_HANDLER) {
       this.handleSecondHandlerPosition(deltaTime, onBallPlayer);
+      return;
+    }
+
+    // 【ロール別行動】ダンカーはゴール付近に入ったらゴール下に陣取る
+    if (this.character.offenseRole === OffenseRole.DUNKER) {
+      this.handleDunkerPosition(deltaTime, onBallPlayer);
       return;
     }
 
@@ -576,6 +588,63 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     candidates.sort((a, b) => a.score - b.score);
     this.secondHandlerTargetPosition = candidates[0].pos;
+  }
+
+  // ============================================
+  // DUNKERゴール下ポジショニング
+  // ============================================
+
+  /**
+   * DUNKERのオフボール行動
+   * 攻撃ゴール付近（3Pライン以内）に入ったらゴール下に陣取り、
+   * パスからのダンク・リバウンドを狙う。
+   * 3Pラインより外にいる場合は通常のフォーメーション配置。
+   */
+  private handleDunkerPosition(deltaTime: number, onBallPlayer: Character | null): void {
+    const myPosition = this.character.getPosition();
+    const attackingGoal = this.field.getAttackingGoalRim(this.character.team);
+
+    // 攻撃ゴールからの距離を計算
+    const distFromGoal = Math.sqrt(
+      Math.pow(myPosition.x - attackingGoal.x, 2) +
+      Math.pow(myPosition.z - attackingGoal.z, 2)
+    );
+
+    if (distFromGoal <= this.DUNKER_GOAL_ENTRY_THRESHOLD) {
+      // 3Pライン付近以内: ゴール下に陣取る
+      this.handleDunkerGoalPosition(deltaTime, onBallPlayer);
+    } else {
+      // 3Pラインより外: 通常のフォーメーション
+      this.handleFormationPosition(deltaTime, onBallPlayer);
+    }
+  }
+
+  /**
+   * DUNKERゴール下ポジション
+   * 攻撃ゴール直下付近に位置取り、オンボールプレイヤーの方を向いて
+   * パスを受ける準備をする
+   */
+  private handleDunkerGoalPosition(deltaTime: number, onBallPlayer: Character | null): void {
+    const myPosition = this.character.getPosition();
+    const attackingGoal = this.field.getAttackingGoalRim(this.character.team);
+
+    // 攻撃ゴール手前にポジション
+    // allyはgoal1(+Z)を攻撃 → -Z方向にオフセット（ゴール手前）
+    // enemyはgoal2(-Z)を攻撃 → +Z方向にオフセット（ゴール手前）
+    const isAlly = this.character.team === 'ally';
+    const zOffset = isAlly ? -this.DUNKER_GOAL_OFFSET : this.DUNKER_GOAL_OFFSET;
+
+    const goalPosition = new Vector3(
+      attackingGoal.x,
+      myPosition.y,
+      attackingGoal.z + zOffset
+    );
+
+    if (onBallPlayer) {
+      this.moveTowardsPosition(goalPosition, onBallPlayer, deltaTime);
+    } else {
+      this.moveTowardsPositionWithoutLookAt(goalPosition, deltaTime);
+    }
   }
 
   // ============================================
@@ -966,10 +1035,10 @@ export class OffBallOffenseAI extends BaseStateAI {
     const goalPosition = targetGoal.position;
     const myPosition = this.character.getPosition();
 
-    // リバウンドポジション（ゴール下、少しオフセット）
-    const zOffset = isGoal1 ? -1.5 : 1.5;
-    // ポジションに応じて左右にずらす（PFは左、Cは右）
-    const xOffset = this.character.playerPosition === 'PF' ? -1.5 : 1.5;
+    // リバウンドポジション（ゴール真下付近）
+    const zOffset = isGoal1 ? -0.5 : 0.5;
+    // ポジションに応じて左右に少しずらす（PFは左、Cは右）
+    const xOffset = this.character.playerPosition === 'PF' ? -0.8 : 0.8;
 
     const reboundPosition = new Vector3(
       goalPosition.x + xOffset,
@@ -981,7 +1050,12 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     // リバウンドポジションに近い場合はボールを見て待機
     if (distanceToRebound < 1.0) {
-      // ボールの方を向く
+      // リバウンドジャンプを試みる
+      if (this.tryReboundJump()) {
+        return;
+      }
+
+      // ボールの方を向く（ジャンプしなかった場合）
       const ballPosition = this.ball.getPosition();
       const toBall = new Vector3(
         ballPosition.x - myPosition.x,

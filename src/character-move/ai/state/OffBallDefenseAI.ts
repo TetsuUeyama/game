@@ -30,6 +30,16 @@ export class OffBallDefenseAI extends BaseStateAI {
   /** マーク時の距離（相手とゴールの間にポジション） */
   private readonly ZONE_MARK_DISTANCE: number = 1.5;
 
+  // LOW_MANゴール下ポジショニング用定数
+  /** リバウンドポジション判定距離（ゴールからこの距離以遠→リバウンド位置） */
+  private readonly REBOUND_POSITION_THRESHOLD: number = 6.0;
+  /** ブロックポジション判定距離（ゴールからこの距離以内→ブロック位置） */
+  private readonly BLOCK_POSITION_THRESHOLD: number = 6.0;
+  /** リバウンド時のゴールからの距離 */
+  private readonly REBOUND_GOAL_OFFSET: number = 0.5;
+  /** ブロック時のゴールからの距離 */
+  private readonly BLOCK_GOAL_OFFSET: number = 1.5;
+
   constructor(
     character: Character,
     ball: Ball,
@@ -66,10 +76,17 @@ export class OffBallDefenseAI extends BaseStateAI {
    * シュート時はリバウンドポジションへ移動
    */
   public update(deltaTime: number): void {
-    // ボールが飛行中（シュート中）の場合はその場でボールを見守る
-    // シュート結果が出るまで動かない
+    // DefenseRoleを取得
+    const defenseRole = this.character.defenseRole;
+
+    // ボールが飛行中（シュート中）の場合
     if (this.ball.isInFlight()) {
-      this.handleWatchShot();
+      if (defenseRole === DefenseRole.LOW_MAN) {
+        // LOW_MAN: ゴール下へ移動してリバウンドポジション
+        this.handleLowManRebound(deltaTime);
+      } else {
+        this.handleWatchShot();
+      }
       return;
     }
 
@@ -80,20 +97,26 @@ export class OffBallDefenseAI extends BaseStateAI {
       const actionController = onBallPlayer.getActionController();
       const currentAction = actionController.getCurrentAction();
       if (currentAction && currentAction.startsWith('shoot_')) {
-        // シュートモーション中もボールを見守る
-        this.handleWatchShot();
+        if (defenseRole === DefenseRole.LOW_MAN) {
+          // LOW_MAN: シュートモーション中もリバウンド位置へ
+          this.handleLowManRebound(deltaTime);
+        } else {
+          // シュートモーション中もボールを見守る
+          this.handleWatchShot();
+        }
         return;
       }
     }
 
     // DefenseRoleに基づくディフェンス
-    const defenseRole = this.character.defenseRole;
-
     if (defenseRole === DefenseRole.POA) {
       // POA: メインハンドラーを直接マンマーク
       this.handleManToManDefense(deltaTime);
+    } else if (defenseRole === DefenseRole.LOW_MAN) {
+      // LOW_MAN専用: 状況に応じてゴール下ポジショニング
+      this.handleLowManDefense(deltaTime);
     } else if (defenseRole) {
-      // NAIL/LOW_MAN/CLOSEOUT/SCRAMBLER: ゾーンディフェンス
+      // NAIL/CLOSEOUT/SCRAMBLER: ゾーンディフェンス
       this.handleZoneDefense(deltaTime);
     } else {
       // ロール未設定: 同ポジションマンマーク（フォールバック）
@@ -333,7 +356,157 @@ export class OffBallDefenseAI extends BaseStateAI {
   }
 
   // ============================================
-  // ゾーンディフェンス（NAIL, LOW_MAN, CLOSEOUT, SCRAMBLER用）
+  // LOW_MANゴール下ポジショニング
+  // ============================================
+
+  /**
+   * LOW_MAN専用ディフェンス処理
+   * オンボールプレイヤーの位置に応じてブロック/リバウンド/通常ゾーンを切り替え
+   */
+  private handleLowManDefense(deltaTime: number): void {
+    const onBallPlayer = this.findOnBallPlayer();
+
+    if (!onBallPlayer) {
+      // オンボールプレイヤーがいない場合: 通常ゾーンディフェンス
+      this.handleZoneDefense(deltaTime);
+      return;
+    }
+
+    // オンボールプレイヤーと守備ゴールの距離で判定
+    const distFromGoal = this.getDistanceFromDefendingGoal(onBallPlayer);
+
+    if (distFromGoal <= this.BLOCK_POSITION_THRESHOLD) {
+      // ペイント付近以内: ブロック位置に陣取る
+      this.handleLowManBlock(deltaTime, onBallPlayer);
+    } else if (distFromGoal >= this.REBOUND_POSITION_THRESHOLD) {
+      // 3Pライン付近以遠: リバウンド位置に陣取る
+      this.handleLowManRebound(deltaTime);
+    } else {
+      // ミッドレンジ: 通常ゾーンディフェンス
+      this.handleZoneDefense(deltaTime);
+    }
+  }
+
+  /**
+   * LOW_MANリバウンドポジション
+   * 守備ゴール直下付近に移動してボールを見る
+   */
+  private handleLowManRebound(deltaTime: number): void {
+    const defendingGoal = this.getDefendingGoalPosition();
+    const myPosition = this.character.getPosition();
+
+    // 守備ゴールの前方（コート中央寄り）にリバウンド位置を設定
+    // allyはgoal2(-Z)を守備 → +Z方向にオフセット
+    // enemyはgoal1(+Z)を守備 → -Z方向にオフセット
+    const isAlly = this.character.team === 'ally';
+    const zOffset = isAlly ? this.REBOUND_GOAL_OFFSET : -this.REBOUND_GOAL_OFFSET;
+
+    const reboundPosition = new Vector3(
+      defendingGoal.x,
+      myPosition.y,
+      defendingGoal.z + zOffset
+    );
+
+    const distanceToRebound = Vector3.Distance(myPosition, reboundPosition);
+
+    // リバウンド位置に近い場合はボールを見て待機
+    if (distanceToRebound < 1.0) {
+      // リバウンドジャンプを試みる
+      if (this.tryReboundJump()) {
+        return;
+      }
+
+      // ボールの方を向く（ジャンプしなかった場合）
+      const ballPosition = this.ball.getPosition();
+      const toBall = new Vector3(
+        ballPosition.x - myPosition.x,
+        0,
+        ballPosition.z - myPosition.z
+      );
+      if (toBall.length() > 0.01) {
+        const angle = Math.atan2(toBall.x, toBall.z);
+        this.character.setRotation(angle);
+      }
+      if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+      return;
+    }
+
+    // リバウンド位置へ移動
+    const direction = new Vector3(
+      reboundPosition.x - myPosition.x,
+      0,
+      reboundPosition.z - myPosition.z
+    );
+    direction.normalize();
+
+    const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+    if (boundaryAdjusted) {
+      const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
+      if (adjustedDirection) {
+        this.character.move(adjustedDirection, deltaTime);
+        if (distanceToRebound > 3.0) {
+          if (this.character.getCurrentMotionName() !== 'dash_forward') {
+            this.character.playMotion(DASH_FORWARD_MOTION);
+          }
+        } else {
+          if (this.character.getCurrentMotionName() !== 'walk_forward') {
+            this.character.playMotion(WALK_FORWARD_MOTION);
+          }
+        }
+        return;
+      }
+    }
+
+    if (this.character.getCurrentMotionName() !== 'idle') {
+      this.character.playMotion(IDLE_MOTION);
+    }
+  }
+
+  /**
+   * LOW_MANブロックポジション
+   * 攻撃者とゴールの間に位置取りしてブロック
+   */
+  private handleLowManBlock(deltaTime: number, attacker: Character): void {
+    const defendingGoal = this.getDefendingGoalPosition();
+    const attackerPos = attacker.getPosition();
+    const myPosition = this.character.getPosition();
+
+    // ゴールから攻撃者方向への単位ベクトル
+    const goalToAttacker = new Vector3(
+      attackerPos.x - defendingGoal.x,
+      0,
+      attackerPos.z - defendingGoal.z
+    );
+    if (goalToAttacker.length() > 0.01) {
+      goalToAttacker.normalize();
+    }
+
+    // ゴールから攻撃者方向に BLOCK_GOAL_OFFSET 分だけ前方に位置取り
+    const blockPosition = new Vector3(
+      defendingGoal.x + goalToAttacker.x * this.BLOCK_GOAL_OFFSET,
+      myPosition.y,
+      defendingGoal.z + goalToAttacker.z * this.BLOCK_GOAL_OFFSET
+    );
+
+    // 攻撃者の方を向いて移動
+    this.moveTowardsMarkPosition(blockPosition, attacker, deltaTime);
+  }
+
+  /**
+   * キャラクターと守備ゴール間の水平距離を計算
+   */
+  private getDistanceFromDefendingGoal(character: Character): number {
+    const pos = character.getPosition();
+    const goalPos = this.getDefendingGoalPosition();
+    return Math.sqrt(
+      Math.pow(pos.x - goalPos.x, 2) + Math.pow(pos.z - goalPos.z, 2)
+    );
+  }
+
+  // ============================================
+  // ゾーンディフェンス（NAIL, CLOSEOUT, SCRAMBLER用）
   // ============================================
 
   /**

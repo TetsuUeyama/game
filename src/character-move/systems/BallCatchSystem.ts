@@ -340,6 +340,12 @@ export class BallCatchSystem {
       return CatchScenario.JUMP_BALL;
     }
 
+    // リバウンドジャンプ中のキャラクター
+    const actionController = character.getActionController();
+    if (actionController && actionController.getCurrentAction() === 'rebound_jump') {
+      return CatchScenario.REBOUND;
+    }
+
     // デフォルト: ルーズボール
     return CatchScenario.LOOSE_BALL;
   }
