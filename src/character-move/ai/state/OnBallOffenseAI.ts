@@ -57,6 +57,16 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     }
 
     // ========================================
+    // 1.5. ショットクロック残り3秒以下 → 強制シュート最優先
+    //      ポジション・優先度・ゾーンに関係なく即座にシュート
+    // ========================================
+    if (this.getShotClockRemainingTime() <= 3.0) {
+      if (this.tryShoot(1.0)) return;
+      this.advanceTowardGoal(deltaTime);
+      return;
+    }
+
+    // ========================================
     // 2. 周囲確認フェーズ（ボール受取直後）
     // ========================================
     if (this.surveyPhase !== "none") {

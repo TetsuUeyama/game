@@ -521,6 +521,50 @@ export abstract class BaseStateAI {
   }
 
   /**
+   * リバウンドジャンプを試みる
+   * ゴール下でボールが下降中の場合にジャンプしてリバウンドを狙う
+   * @returns アクション開始に成功した場合true
+   */
+  protected tryReboundJump(): boolean {
+    // ボールが飛行中でない場合はスキップ
+    if (!this.ball.isInFlight()) return false;
+
+    // 別アクション実行中ならスキップ
+    const actionController = this.character.getActionController();
+    if (actionController.getCurrentAction() !== null) return false;
+
+    const ballPos = this.ball.getPosition();
+    const ballVel = this.ball.getVelocity();
+    const myPos = this.character.getPosition();
+
+    // ボールが下降中でなければスキップ
+    if (ballVel.y >= 0) return false;
+
+    // ボールとの水平距離が近い場合のみ（3m以内）
+    const horizDistSq =
+      (ballPos.x - myPos.x) ** 2 + (ballPos.z - myPos.z) ** 2;
+    if (horizDistSq > 3.0 * 3.0) return false;
+
+    // ボールが高すぎる場合はスキップ（ジャンプ+手のリーチで届く範囲）
+    const maxReach = this.character.config.physical.height + 1.5;
+    if (ballPos.y > maxReach) return false;
+
+    // ボールが地面に近い場合は拾えばいいのでジャンプしない
+    if (ballPos.y < 1.0) return false;
+
+    // ボールの方を向く
+    const toBall = new Vector3(ballPos.x - myPos.x, 0, ballPos.z - myPos.z);
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // リバウンドジャンプ実行
+    const result = actionController.startAction('rebound_jump');
+    return result.success;
+  }
+
+  /**
    * 判断間隔を取得（選手のalignmentに基づく）
    * 計算式: 1 - (alignment / 50) 秒
    * alignment=50 → 0秒（毎フレーム判断）

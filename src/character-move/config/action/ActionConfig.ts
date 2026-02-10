@@ -41,6 +41,8 @@ export type ActionType =
   // ルーズボール
   | 'loose_ball_scramble'   // ルーズボール確保（競合時ダイブ）
   | 'loose_ball_pickup'     // ルーズボール拾い（非競合時）
+  // リバウンド
+  | 'rebound_jump'          // リバウンドジャンプ（ゴール下でボールを取る）
   // パスレシーブ
   | 'pass_receive';         // パスレシーブ（ボールに向かってダッシュ）
 
@@ -319,6 +321,26 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
   },
 
   // ==============================
+  // リバウンドアクション
+  // ==============================
+
+  // リバウンドジャンプ
+  rebound_jump: {
+    type: 'rebound_jump',
+    category: 'movement',
+    motion: 'rebound_jump',
+    startupTime: 150,       // 0.15秒でジャンプ開始
+    activeTime: 500,        // 0.5秒間（空中時間）
+    priority: 10,
+    interruptible: false,
+    hitbox: {
+      type: 'sphere',
+      radius: 0.3,          // 両手の判定半径（jump_ballの0.25より少し大きい）
+      offset: new Vector3(0, 2.5, 0), // 頭上（真上に飛ぶ）
+    },
+  },
+
+  // ==============================
   // ルーズボールアクション
   // ==============================
 
@@ -484,6 +506,9 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
 
   // ジャンプボールモーション
   jump_ball: JUMP_BALL_MOTIONS.jump_ball,
+
+  // リバウンドジャンプモーション（jump_ballモーションを再利用）
+  rebound_jump: JUMP_BALL_MOTIONS.jump_ball,
 
   // ルーズボールモーション
   loose_ball_scramble: LOOSE_BALL_MOTIONS.loose_ball_scramble,
