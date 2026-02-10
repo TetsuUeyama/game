@@ -30,6 +30,7 @@ import {
   BALL_CATCH_PHYSICS,
   BALL_RADIUS,
   LOOSE_BALL_PICKUP,
+  PALM_CATCH,
 } from "../config/BallCatchConfig";
 import { getDistance2D, getDistance3D } from "../utils/CollisionUtils";
 
@@ -71,6 +72,12 @@ export class BallCatchSystem {
       return null;
     }
 
+    // 手のひら接触チェック（最優先）
+    const palmCheck = this.checkPalmCatch();
+    if (palmCheck.handled) {
+      return palmCheck.result;
+    }
+
     // ルーズボール滞在時間を更新
     this.updateLooseBallDwellTimes(deltaTime);
 
@@ -97,6 +104,58 @@ export class BallCatchSystem {
     }
 
     return null;
+  }
+
+  /**
+   * 手のひら接触チェック（最優先判定）
+   * 全キャラクターの両手をチェックし、ボールに触れていたら即キャッチ。
+   * 複数キャラクターが同時に触れている場合はボールを弾く。
+   */
+  private checkPalmCatch(): { result: BallCatchEvent | null; handled: boolean } {
+    const ballPosition = this.ball.getPosition();
+    const contactDistance = PALM_CATCH.CONTACT_DISTANCE;
+
+    const touchingCharacters: Character[] = [];
+
+    for (const character of this.allCharacters) {
+      // ON_BALL_PLAYERは対象外
+      if (character.getState() === CharacterState.ON_BALL_PLAYER) continue;
+
+      // 前提条件チェック（クールダウン等）
+      if (!this.passesPreConditions(character)) continue;
+
+      // 両手をチェック
+      const rightHandPos = character.getRightHandPosition();
+      const leftHandPos = character.getLeftHandPosition();
+
+      const distRight = getDistance3D(ballPosition, rightHandPos);
+      const distLeft = getDistance3D(ballPosition, leftHandPos);
+
+      if (distRight <= contactDistance || distLeft <= contactDistance) {
+        touchingCharacters.push(character);
+      }
+    }
+
+    if (touchingCharacters.length === 0) {
+      return { result: null, handled: false };
+    }
+
+    if (touchingCharacters.length === 1) {
+      // 1人だけ → 即キャッチ
+      const catcher = touchingCharacters[0];
+      const scenario = this.determineCatchScenario(catcher, ballPosition)
+        ?? CatchScenario.LOOSE_BALL;
+      return {
+        result: this.executeCatch(catcher, scenario, ballPosition),
+        handled: true,
+      };
+    }
+
+    // 複数人 → 弾く
+    const firstToucher = touchingCharacters[0];
+    const handPosition = firstToucher.getBallHoldingPosition();
+    this.executeFumble(firstToucher, handPosition, ballPosition);
+    return { result: null, handled: true };
   }
 
   /**

@@ -545,12 +545,25 @@ export abstract class BaseStateAI {
       (ballPos.x - myPos.x) ** 2 + (ballPos.z - myPos.z) ** 2;
     if (horizDistSq > 3.0 * 3.0) return false;
 
-    // ボールが高すぎる場合はスキップ（ジャンプ+手のリーチで届く範囲）
-    const maxReach = this.character.config.physical.height + 1.5;
-    if (ballPos.y > maxReach) return false;
+    const height = this.character.config.physical.height;
 
-    // ボールが地面に近い場合は拾えばいいのでジャンプしない
-    if (ballPos.y < 1.0) return false;
+    // ジャンプ頂点到達時のボール予測高さで判断
+    // startup(0.15s) + 上昇時間(~0.30s) = 約0.45s後にジャンプ頂点
+    const TIME_TO_JUMP_PEAK = 0.45;
+    const GRAVITY = 9.81;
+    const predictedBallY = ballPos.y
+      + ballVel.y * TIME_TO_JUMP_PEAK
+      - 0.5 * GRAVITY * TIME_TO_JUMP_PEAK * TIME_TO_JUMP_PEAK;
+
+    // 立ったまま手が届く高さ（身長 × 1.1 ≒ 頭上に手を伸ばした到達点）
+    const standingReach = height * 1.1;
+
+    // 予測高さが立ったまま届く → ジャンプ不要（飛ばない方が取れる）
+    if (predictedBallY <= standingReach) return false;
+
+    // 予測高さがジャンプでも届かない → 間に合わないので飛ばない
+    const maxJumpReach = height + 1.5;
+    if (predictedBallY > maxJumpReach) return false;
 
     // ボールの方を向く
     const toBall = new Vector3(ballPos.x - myPos.x, 0, ballPos.z - myPos.z);

@@ -126,3 +126,12 @@ export const LOOSE_BALL_PICKUP = {
   /** 即時保持判定の相手チームプレイヤー不在距離（m） */
   NO_OPPONENT_RADIUS: 1.0,
 } as const;
+
+/**
+ * 手のひらキャッチ設定
+ * 手の物理球がボールに触れた瞬間にキャッチ判定を行う
+ */
+export const PALM_CATCH = {
+  /** 接触判定距離（m）= 手の物理球半径(0.08) + ボール半径(0.12) + バッファ(0.05) */
+  CONTACT_DISTANCE: 0.25,
+} as const;
