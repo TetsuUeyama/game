@@ -97,7 +97,7 @@
         "hasAI": true,
         "offenseRole": "SCREENER",
         "defenseRole": "CLOSEOUT",
-        "shotPriority": 5
+        "shotPriority": 1
       },
       {
         "playerId": "9",
@@ -107,7 +107,7 @@
         "hasAI": true,
         "offenseRole": "MAIN_HANDLER",
         "defenseRole": "POA",
-        "shotPriority": 1
+        "shotPriority": 5
       }
     ]
   }

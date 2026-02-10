@@ -39,7 +39,8 @@ export type ActionType =
   // ジャンプボール
   | 'jump_ball'       // ジャンプボール（センターで両手を上に伸ばす）
   // ルーズボール
-  | 'loose_ball_scramble'   // ルーズボール確保
+  | 'loose_ball_scramble'   // ルーズボール確保（競合時ダイブ）
+  | 'loose_ball_pickup'     // ルーズボール拾い（非競合時）
   // パスレシーブ
   | 'pass_receive';         // パスレシーブ（ボールに向かってダッシュ）
 
@@ -337,6 +338,18 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     },
   },
 
+  // ルーズボール拾い（非競合時）
+  loose_ball_pickup: {
+    type: 'loose_ball_pickup',
+    category: 'movement',
+    motion: 'loose_ball_pickup',
+    startupTime: 50,       // 0.05秒（素早く拾う）
+    activeTime: 200,       // 0.2秒（拾い上げ動作）
+    priority: 11,
+    interruptible: true,   // キャンセル可能
+    // ヒットボックスなし（競合しないため）
+  },
+
   // ==============================
   // パスレシーブアクション
   // ==============================
@@ -474,6 +487,7 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
 
   // ルーズボールモーション
   loose_ball_scramble: LOOSE_BALL_MOTIONS.loose_ball_scramble,
+  loose_ball_pickup: LOOSE_BALL_MOTIONS.loose_ball_pickup,
 
   // パスレシーブモーション
   pass_receive: PASS_MOTIONS.pass_receive,

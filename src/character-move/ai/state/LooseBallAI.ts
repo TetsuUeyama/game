@@ -8,6 +8,7 @@ import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { PlayerStateManager } from "../../state";
 import { LooseBallDecisionSystem } from "../../systems/LooseBallDecisionSystem";
+import { LooseBallController } from "../../controllers/action/LooseBallController";
 
 /**
  * ルーズボール時のAI
@@ -16,8 +17,12 @@ import { LooseBallDecisionSystem } from "../../systems/LooseBallDecisionSystem";
  * 判断ロジック（ボール追跡判定、味方反発、守備位置）は
  * LooseBallDecisionSystemに委譲し、ここでは移動実行のみを担当する。
  */
+/** アクション開始距離（m） */
+const PICKUP_TRIGGER_DISTANCE = 1.5;
+
 export class LooseBallAI extends BaseStateAI {
   private decisionSystem: LooseBallDecisionSystem | null = null;
+  private looseBallController: LooseBallController | null = null;
 
   constructor(
     character: Character,
@@ -34,6 +39,13 @@ export class LooseBallAI extends BaseStateAI {
    */
   public setDecisionSystem(system: LooseBallDecisionSystem): void {
     this.decisionSystem = system;
+  }
+
+  /**
+   * LooseBallControllerを設定
+   */
+  public setLooseBallController(controller: LooseBallController): void {
+    this.looseBallController = controller;
   }
 
   /**
@@ -57,7 +69,27 @@ export class LooseBallAI extends BaseStateAI {
     const toBall = new Vector3(ballPosition.x - myPosition.x, 0, ballPosition.z - myPosition.z);
     const distToBall = toBall.length();
 
-    if (shouldChase && distToBall <= 0.01) {
+    if (shouldChase && distToBall <= PICKUP_TRIGGER_DISTANCE && distToBall > 0.01) {
+      // ── ボール追跡: 確保距離内 → コントローラーで確保アクション試行 ──
+      toBall.normalize();
+      this.character.setRotation(Math.atan2(toBall.x, toBall.z));
+
+      if (this.looseBallController?.trySecureBall(this.character)) {
+        return; // アクション開始成功
+      }
+
+      // 失敗時はゆっくり接近（下の近距離処理にフォールスルー）
+      const adjusted = this.adjustDirectionForCollision(toBall.scale(0.5), deltaTime);
+      if (adjusted) {
+        this.character.move(adjusted, deltaTime);
+        if (this.character.getCurrentMotionName() !== 'walk_forward') {
+          this.character.playMotion(WALK_FORWARD_MOTION);
+        }
+      } else if (this.character.getCurrentMotionName() !== 'idle') {
+        this.character.playMotion(IDLE_MOTION);
+      }
+
+    } else if (shouldChase && distToBall <= 0.01) {
       // ── ボール追跡: 到着済み → 待機 ──
       if (this.character.getCurrentMotionName() !== 'idle') {
         this.character.playMotion(IDLE_MOTION);

@@ -25,16 +25,22 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
   public override onEnterState(): void {
     super.onEnterState();
     this.frontcourt1on1Timer = 0;
+    this.currentHoldingRestriction = "default";
   }
 
   public override onExitState(): void {
     super.onExitState();
     this.frontcourt1on1Timer = 0;
+    // 状態離脱時にデフォルトに戻す
+    this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
+    this.currentHoldingRestriction = "default";
   }
 
   public override forceReset(): void {
     super.forceReset();
     this.frontcourt1on1Timer = 0;
+    this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
+    this.currentHoldingRestriction = "default";
   }
 
   /**
@@ -100,6 +106,11 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const zone = detectCourtZone({ x: myPosition.x, z: myPosition.z }, this.character.team);
     const remainingTime = this.getShotClockRemainingTime();
     const phase = getShotClockPhase(zone, remainingTime);
+
+    // ========================================
+    // 7.5. ゾーンに応じたボール保持面の制限
+    // ========================================
+    this.applyZoneBallHoldingRestriction(zone);
 
     // ========================================
     // 8. ゾーン別ハンドラーへディスパッチ
@@ -323,6 +334,34 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
   // ==============================
   // 共通ヘルパーメソッド
   // ==============================
+
+  /** 現在適用中のボール保持面制限 */
+  private currentHoldingRestriction: "default" | "inside3p" | "paint" = "default";
+
+  /**
+   * ゾーンに応じてボール保持面を制限
+   * - ペイントエリア: 正面(0)のみ
+   * - 3Pアーク内: 正面(0) + 斜め前(1,7)
+   * - それ以外: デフォルト(0,1,2,6,7)
+   */
+  private applyZoneBallHoldingRestriction(zone: CourtZone): void {
+    if (zone === CourtZone.PAINT_AREA) {
+      if (this.currentHoldingRestriction !== "paint") {
+        this.character.setBallHoldingFaces([0]);
+        this.currentHoldingRestriction = "paint";
+      }
+    } else if (zone === CourtZone.INSIDE_3P) {
+      if (this.currentHoldingRestriction !== "inside3p") {
+        this.character.setBallHoldingFaces([0, 1, 7]);
+        this.currentHoldingRestriction = "inside3p";
+      }
+    } else {
+      if (this.currentHoldingRestriction !== "default") {
+        this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
+        this.currentHoldingRestriction = "default";
+      }
+    }
+  }
 
   /**
    * 近くに相手が2人以上いるかどうかを判定

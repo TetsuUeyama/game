@@ -9,6 +9,7 @@ import { FeintController } from "../controllers/action/FeintController";
 import { PassController } from "../controllers/action/PassController";
 import { DribbleController } from "../controllers/action/DribbleController";
 import { DefenseActionController } from "../controllers/action/DefenseActionController";
+import { LooseBallController } from "../controllers/action/LooseBallController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 import { BALL_HOLDING_CONFIG } from "../config/CharacterAIConfig";
@@ -129,6 +130,13 @@ export class CharacterAI {
    */
   public setDefenseActionController(controller: DefenseActionController): void {
     this.onBallDefenseAI.setDefenseActionController(controller);
+  }
+
+  /**
+   * LooseBallControllerを設定
+   */
+  public setLooseBallController(controller: LooseBallController): void {
+    this.looseBallAI.setLooseBallController(controller);
   }
 
   /**

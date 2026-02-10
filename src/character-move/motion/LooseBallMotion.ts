@@ -78,6 +78,92 @@ const LOOSE_BALL_SCRAMBLE_POSITION_ANIMATIONS: Record<string, Record<number, num
   z: {[LB_T0]: 0, [LB_T1]: 0.15, [LB_T2]: 0.3, [LB_T3]: 0.2, [LB_T4]: 0},    // 前方に突き出す
 };
 
+// ──────────────────────────────────────
+// loose_ball_pickup: 穏やかなピックアップモーション（敵が近くにいない場合）
+// ──────────────────────────────────────
+const PU_T0 = 0.0;
+const PU_T1 = 0.05;   // startupTime
+const PU_T2 = 0.15;   // active中盤（最低点）
+const PU_T3 = 0.25;   // active終了
+const PU_T4 = 0.4;    // 起き上がり完了
+
+const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
+  // 上半身：浅めの前傾（20度程度）
+  upperBodyX: {[PU_T0]: 0, [PU_T1]: 10, [PU_T2]: 20, [PU_T3]: 15, [PU_T4]: 0},
+  upperBodyY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  upperBodyZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  lowerBodyX: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  lowerBodyY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  lowerBodyZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  headX: {[PU_T0]: 0, [PU_T1]: 5, [PU_T2]: 10, [PU_T3]: 5, [PU_T4]: 0},
+  headY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  headZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  // 両腕：前方下方に伸ばす（ボールを拾う動作）
+  rightShoulderX: {[PU_T0]: -45, [PU_T1]: -60, [PU_T2]: -75, [PU_T3]: -60, [PU_T4]: -45},
+  rightShoulderY: {[PU_T0]: 0, [PU_T1]: -5, [PU_T2]: -10, [PU_T3]: -5, [PU_T4]: 0},
+  rightShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  rightElbowX: {[PU_T0]: 45, [PU_T1]: 30, [PU_T2]: 15, [PU_T3]: 25, [PU_T4]: 45},
+  rightElbowY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  rightElbowZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  leftShoulderX: {[PU_T0]: -45, [PU_T1]: -60, [PU_T2]: -75, [PU_T3]: -60, [PU_T4]: -45},
+  leftShoulderY: {[PU_T0]: 0, [PU_T1]: 5, [PU_T2]: 10, [PU_T3]: 5, [PU_T4]: 0},
+  leftShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  leftElbowX: {[PU_T0]: 45, [PU_T1]: 30, [PU_T2]: 15, [PU_T3]: 25, [PU_T4]: 45},
+  leftElbowY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  leftElbowZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  // 脚：浅いしゃがみ
+  leftHipX: {[PU_T0]: -30, [PU_T1]: -40, [PU_T2]: -50, [PU_T3]: -40, [PU_T4]: -30},
+  leftHipY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  leftHipZ: {[PU_T0]: 0, [PU_T1]: -3, [PU_T2]: -5, [PU_T3]: -3, [PU_T4]: 0},
+
+  rightHipX: {[PU_T0]: -30, [PU_T1]: -40, [PU_T2]: -50, [PU_T3]: -40, [PU_T4]: -30},
+  rightHipY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  rightHipZ: {[PU_T0]: 0, [PU_T1]: 3, [PU_T2]: 5, [PU_T3]: 3, [PU_T4]: 0},
+
+  leftKneeX: {[PU_T0]: 50, [PU_T1]: 60, [PU_T2]: 75, [PU_T3]: 60, [PU_T4]: 50},
+  leftKneeY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  leftKneeZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+
+  rightKneeX: {[PU_T0]: 50, [PU_T1]: 60, [PU_T2]: 75, [PU_T3]: 60, [PU_T4]: 50},
+  rightKneeY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  rightKneeZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+};
+
+const LOOSE_BALL_PICKUP_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
+  x: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
+  y: {[PU_T0]: 0, [PU_T1]: -0.1, [PU_T2]: -0.2, [PU_T3]: -0.1, [PU_T4]: 0},  // 浅い姿勢
+  z: {[PU_T0]: 0, [PU_T1]: 0.05, [PU_T2]: 0.1, [PU_T3]: 0.05, [PU_T4]: 0},   // 軽く前方
+};
+
+export const LOOSE_BALL_PICKUP_MOTION: MotionData = {
+  name: "loose_ball_pickup",
+  duration: PU_T4,
+  loop: false,
+  keyframes: buildKeyframes(LOOSE_BALL_PICKUP_JOINT_ANIMATIONS, LOOSE_BALL_PICKUP_POSITION_ANIMATIONS),
+  priorities: [
+    { jointName: "rightShoulder", priority: 10 },
+    { jointName: "leftShoulder", priority: 10 },
+    { jointName: "rightElbow", priority: 9 },
+    { jointName: "leftElbow", priority: 9 },
+    { jointName: "upperBody", priority: 8 },
+  ],
+};
+
+export const LOOSE_BALL_PICKUP_MOTION_CONFIG: MotionConfig = {
+  motionData: LOOSE_BALL_PICKUP_MOTION,
+  isDefault: false,
+  blendDuration: 0.05,
+  priority: 40,
+  interruptible: true,
+};
+
 export const LOOSE_BALL_SCRAMBLE_MOTION: MotionData = {
   name: "loose_ball_scramble",
   duration: LB_T4,
@@ -105,6 +191,7 @@ export const LOOSE_BALL_SCRAMBLE_MOTION_CONFIG: MotionConfig = {
  */
 export const LOOSE_BALL_MOTIONS = {
   loose_ball_scramble: LOOSE_BALL_SCRAMBLE_MOTION,
+  loose_ball_pickup: LOOSE_BALL_PICKUP_MOTION,
 };
 
 /**
@@ -112,4 +199,5 @@ export const LOOSE_BALL_MOTIONS = {
  */
 export const LOOSE_BALL_MOTION_CONFIGS = {
   loose_ball_scramble: LOOSE_BALL_SCRAMBLE_MOTION_CONFIG,
+  loose_ball_pickup: LOOSE_BALL_PICKUP_MOTION_CONFIG,
 };

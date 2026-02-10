@@ -23,6 +23,7 @@ import { FeintController } from "../controllers/action/FeintController";
 import { PassController } from "../controllers/action/PassController";
 import { DribbleController } from "../controllers/action/DribbleController";
 import { DefenseActionController } from "../controllers/action/DefenseActionController";
+import { LooseBallController } from "../controllers/action/LooseBallController";
 import { ShotClockController } from "../controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "../types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "../types/CharacterState";
@@ -149,6 +150,9 @@ export class GameScene {
 
   // ディフェンスアクションコントローラー
   private defenseActionController?: DefenseActionController;
+
+  // ルーズボール確保コントローラー
+  private looseBallController?: LooseBallController;
 
   // シュートクロックコントローラー
   private shotClockController?: ShotClockController;
@@ -388,11 +392,18 @@ export class GameScene {
       // ディフェンスアクションコントローラーの初期化
       this.defenseActionController = new DefenseActionController();
 
+      // ルーズボール確保コントローラーの初期化
+      this.looseBallController = new LooseBallController(
+        this.ball,
+        () => [...this.allyCharacters, ...this.enemyCharacters]
+      );
+
       // 全AIコントローラーに各種コントローラーを設定
       for (const ai of this.characterAIs) {
         ai.setPassController(this.passController);
         ai.setDribbleController(this.dribbleController);
         ai.setDefenseActionController(this.defenseActionController);
+        ai.setLooseBallController(this.looseBallController);
       }
 
       // パス軌道可視化の初期化
@@ -1427,7 +1438,8 @@ export class GameScene {
     // 待機状態をリセット（マネージャーに委譲、スコアもリセットされる）
     this._gameResetManager?.resetForCheckMode();
 
-    // ボールの飛行を停止
+    // ボールの保持者をクリアし、飛行を停止
+    this.ball.setHolder(null);
     this.ball.endFlight();
 
     // 全キャラクターのバランスをリセット＋個人スタッツをリセット
@@ -1437,6 +1449,9 @@ export class GameScene {
       character.gameStats.points = 0;
       character.gameStats.assists = 0;
     }
+
+    // ルーズボール確保コントローラーの状態をリセット
+    this.looseBallController?.reset();
 
     // ゲーム経過時間をリセット
     this.gameElapsedSeconds = 0;
@@ -1955,6 +1970,9 @@ export class GameScene {
         }
         if (this.defenseActionController) {
           ai.setDefenseActionController(this.defenseActionController);
+        }
+        if (this.looseBallController) {
+          ai.setLooseBallController(this.looseBallController);
         }
 
         this.characterAIs.push(ai);

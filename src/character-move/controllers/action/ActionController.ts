@@ -292,6 +292,7 @@ export class ActionController {
   public forceResetAction(): void {
     // currentActionがなくてもphaseがidleでない場合は異常状態なのでリセット
     if (this.state.currentAction !== null || this.state.phase !== 'idle') {
+      this.callbacks = {};  // コールバックもクリア（遅延発火を防止）
       this.resetState();
     }
   }
