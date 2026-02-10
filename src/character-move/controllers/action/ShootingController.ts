@@ -10,6 +10,7 @@ import { PhysicsConstants } from "../../../physics/PhysicsConfig";
 import {
   SHOOT_RANGE,
   SHOOT_ANGLE,
+  SHOOT_ACCURACY,
   SHOOT_PHYSICS,
   SHOOT_START_OFFSET,
   SHOOT_COOLDOWN,
@@ -420,26 +421,62 @@ export class ShootingController {
     );
 
     // シュート精度を計算
-    // 3Pとミドルシュートは非利き腕使用時に精度が低下（レイアップは持ち替えて打つため影響なし）
-    const accuracy3pValue = shooter.playerData?.stats['3paccuracy'] ?? 50;
-    let accuracy = ShootingUtils.getAccuracyByShootType(shootType, accuracy3pValue);
-    if (shootType === '3pt' || shootType === 'midrange') {
-      // 非利き腕による精度低下
-      const handMultiplier = shooter.getHandAccuracyMultiplier();
-      accuracy = accuracy * handMultiplier;
+    // 3Pとミドル: ステータス値を成功確率(%)として判定し、外れた場合にXYZブレを適用
+    // レイアップ・ダンク: 従来通りの固定精度
+    let offsetX = 0;
+    let offsetY = 0;
+    let offsetZ = 0;
 
-      // 1対1有利/不利による精度調整（オフェンス有利→精度UP、不利→精度DOWN）
-      // accuracyは小さいほど精度が高いので、有利時は減少、不利時は増加
-      const advantageStatus = shooter.getAdvantageStatus();
-      if (advantageStatus.state === 'offense') {
-        // オフェンス有利：精度向上（accuracyを減少）
-        accuracy = accuracy * (1 - advantageStatus.multiplier * 0.5);
-      } else if (advantageStatus.state === 'defense') {
-        // ディフェンス有利：精度低下（accuracyを増加）
-        accuracy = accuracy * (1 + advantageStatus.multiplier * 0.5);
+    if (shootType === '3pt') {
+      const stat = shooter.playerData?.stats['3paccuracy'] ?? 50;
+      if (!ShootingUtils.isAccurateShot(stat)) {
+        // ブレ発生（非利き腕・1v1不利でブレ幅増大）
+        let multiplier = 1.0;
+        const handMultiplier = shooter.getHandAccuracyMultiplier();
+        if (handMultiplier > 1) {
+          multiplier *= handMultiplier;
+        }
+        const advantageStatus = shooter.getAdvantageStatus();
+        if (advantageStatus.state === 'defense') {
+          multiplier *= (1 + advantageStatus.multiplier * 0.5);
+        }
+        const offset = ShootingUtils.generateRandomOffset3D(
+          SHOOT_ACCURACY.THREE_POINT_ERROR_X * multiplier,
+          SHOOT_ACCURACY.THREE_POINT_ERROR_Y * multiplier,
+          SHOOT_ACCURACY.THREE_POINT_ERROR_Z * multiplier
+        );
+        offsetX = offset.x;
+        offsetY = offset.y;
+        offsetZ = offset.z;
       }
+    } else if (shootType === 'midrange') {
+      const stat = shooter.playerData?.stats.shootccuracy ?? 50;
+      if (!ShootingUtils.isAccurateShot(stat)) {
+        let multiplier = 1.0;
+        const handMultiplier = shooter.getHandAccuracyMultiplier();
+        if (handMultiplier > 1) {
+          multiplier *= handMultiplier;
+        }
+        const advantageStatus = shooter.getAdvantageStatus();
+        if (advantageStatus.state === 'defense') {
+          multiplier *= (1 + advantageStatus.multiplier * 0.5);
+        }
+        const offset = ShootingUtils.generateRandomOffset3D(
+          SHOOT_ACCURACY.MIDRANGE_ERROR_X * multiplier,
+          SHOOT_ACCURACY.MIDRANGE_ERROR_Y * multiplier,
+          SHOOT_ACCURACY.MIDRANGE_ERROR_Z * multiplier
+        );
+        offsetX = offset.x;
+        offsetY = offset.y;
+        offsetZ = offset.z;
+      }
+    } else {
+      // レイアップ・ダンク等は従来通り
+      const accuracy = ShootingUtils.getAccuracyByShootType(shootType);
+      const offset2D = ShootingUtils.generateRandomOffset(accuracy);
+      offsetX = offset2D.x;
+      offsetZ = offset2D.z;
     }
-    const { x: offsetX, z: offsetZ } = ShootingUtils.generateRandomOffset(accuracy);
 
     // リング奥側を狙うためのオフセット
     const toRim = new Vector3(
@@ -454,7 +491,7 @@ export class ShootingController {
 
     const targetPosition = new Vector3(
       baseTargetPosition.x + offsetX + toRim.x * backRimOffset,
-      baseTargetPosition.y,
+      baseTargetPosition.y + offsetY,
       baseTargetPosition.z + offsetZ + toRim.z * backRimOffset
     );
 

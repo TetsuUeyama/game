@@ -46,15 +46,22 @@ export const SHOOT_ANGLE = {
 } as const;
 
 /**
- * シュート精度設定（ズレの最大値：メートル）
+ * シュート精度設定
+ * 3Pとミドルはステータス判定で外れた場合にXYZブレを適用
+ * レイアップ・ダンクは従来通りの固定精度
  */
 export const SHOOT_ACCURACY = {
-  // 3Pシュートの精度（現在は0に設定）
-  THREE_POINT_BASE_ERROR: 0,        // 基本誤差
-  THREE_POINT_MAX_ERROR: 0,         // 最大追加誤差
+  // 3Pシュートのブレ幅（ステータス判定で外れた場合に適用）
+  THREE_POINT_ERROR_X: 0.3,         // X軸（左右）最大ブレ幅（m）
+  THREE_POINT_ERROR_Y: 0.15,        // Y軸（高さ）最大ブレ幅（m）
+  THREE_POINT_ERROR_Z: 0.3,         // Z軸（前後）最大ブレ幅（m）
 
-  // 固定精度
-  MIDRANGE: 0.01,                   // ミドルレンジ：±0.01m
+  // ミドルシュートのブレ幅（ステータス判定で外れた場合に適用）
+  MIDRANGE_ERROR_X: 0.2,            // X軸（左右）最大ブレ幅（m）
+  MIDRANGE_ERROR_Y: 0.1,            // Y軸（高さ）最大ブレ幅（m）
+  MIDRANGE_ERROR_Z: 0.2,            // Z軸（前後）最大ブレ幅（m）
+
+  // 固定精度（レイアップ・ダンク等）
   LAYUP: 0.01,                      // レイアップ：±0.01m（高精度）
   DUNK: 0,                          // ダンク：誤差なし（ボールを直接リムに置く）
   DEFAULT: 0.3,                     // デフォルト：±0.3m
@@ -170,29 +177,16 @@ export class ShootingUtils {
   }
 
   /**
-   * 3Pシュートの精度（最大誤差）を計算
-   */
-  private static calculate3PAccuracy(accuracy3p: number | undefined): number {
-    const accuracy = accuracy3p ?? 100;
-    return SHOOT_ACCURACY.THREE_POINT_BASE_ERROR +
-      SHOOT_ACCURACY.THREE_POINT_MAX_ERROR * (100 - accuracy) / 100;
-  }
-
-  /**
    * シュートタイプに応じた精度（最大誤差）を取得
+   * ※ 3pt/midrangeは新しいisAccurateShot + generateRandomOffset3Dフローを使用
+   *   このメソッドはレイアップ・ダンク等の従来フロー用に残す
    * @param shootType シュートタイプ
-   * @param accuracy3p 3Pシュートの場合の精度ステータス
    * @returns 最大誤差（メートル）
    */
   public static getAccuracyByShootType(
-    shootType: '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range',
-    accuracy3p?: number
+    shootType: '3pt' | 'midrange' | 'layup' | 'dunk' | 'out_of_range'
   ): number {
     switch (shootType) {
-      case '3pt':
-        return this.calculate3PAccuracy(accuracy3p);
-      case 'midrange':
-        return SHOOT_ACCURACY.MIDRANGE;
       case 'layup':
         return SHOOT_ACCURACY.LAYUP;
       case 'dunk':
@@ -200,6 +194,33 @@ export class ShootingUtils {
       default:
         return SHOOT_ACCURACY.DEFAULT;
     }
+  }
+
+  /**
+   * ステータス値に基づいてシュートがブレるかを判定
+   * @param statValue 精度ステータス（0-100）= 完璧な軌道になる確率(%)
+   * @returns true: ブレなし（完璧）、false: ブレあり
+   */
+  public static isAccurateShot(statValue: number): boolean {
+    const clampedStat = Math.max(0, Math.min(100, statValue));
+    return Math.random() * 100 < clampedStat;
+  }
+
+  /**
+   * 3Dランダムオフセットを生成（XYZ軸それぞれにブレを適用）
+   * @param errorX X軸（左右）最大ブレ幅
+   * @param errorY Y軸（高さ）最大ブレ幅
+   * @param errorZ Z軸（前後）最大ブレ幅
+   * @returns {x, y, z} オフセット値
+   */
+  public static generateRandomOffset3D(
+    errorX: number, errorY: number, errorZ: number
+  ): { x: number; y: number; z: number } {
+    return {
+      x: (Math.random() - 0.5) * 2 * errorX,
+      y: (Math.random() - 0.5) * 2 * errorY,
+      z: (Math.random() - 0.5) * 2 * errorZ,
+    };
   }
 
   /**
