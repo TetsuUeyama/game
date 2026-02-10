@@ -307,6 +307,13 @@ export class CharacterAI {
       this.callOnEnterState(state);
     }
 
+    // ========================================
+    // 反射行動の評価（状態AIより先に実行）
+    // ========================================
+    if (this.evaluateReflexes()) {
+      return;
+    }
+
     switch (state) {
       case CharacterState.BALL_LOST:
         // ボールが誰にも保持されていない場合は、全員がボールを取りに行く
@@ -366,6 +373,112 @@ export class CharacterAI {
         this.offBallDefenseAI.onEnterState();
         break;
     }
+  }
+
+  /**
+   * 反射行動を評価・実行
+   * 状態別AIの判断より先に、条件が揃えば自動的にアクションを発動する。
+   * @returns 反射行動を実行した場合true（状態AI処理をスキップ）
+   */
+  private evaluateReflexes(): boolean {
+    // ボールが保持されている場合は反射不要
+    if (this.ball.isHeld()) return false;
+
+    // ボールが飛行中でない場合は反射不要
+    if (!this.ball.isInFlight()) return false;
+
+    // アクション実行可能かチェック（この時点でcurrentAction===nullは保証済み）
+    const actionController = this.character.getActionController();
+
+    // 1. ボールキャッチ反射（自分に向かってくるボールをキャッチ）
+    if (this.tryReflexCatch(actionController)) return true;
+
+    // 2. リバウンドキャッチ反射（頭上で下降中のボールにジャンプ）
+    if (this.tryReflexRebound(actionController)) return true;
+
+    return false;
+  }
+
+  /**
+   * ボールキャッチ反射
+   * 自分の方向に飛んでくるボールを検知して pass_receive を自動発動
+   */
+  private tryReflexCatch(actionController: ReturnType<Character['getActionController']>): boolean {
+    const ballPos = this.ball.getPosition();
+    const ballVel = this.ball.getVelocity();
+    const myPos = this.character.getPosition();
+
+    // ボールの速度が十分あるか（ゆっくりなら反射不要）
+    const speed = ballVel.length();
+    if (speed < 2.0) return false;
+
+    // 自分からボールへのベクトル
+    const toBall = new Vector3(ballPos.x - myPos.x, 0, ballPos.z - myPos.z);
+    const horizDist = toBall.length();
+
+    // 遠すぎる場合はスキップ（5m以内）
+    if (horizDist > 5.0) return false;
+
+    // 近すぎる場合はスキップ（BallCatchSystemに任せる）
+    if (horizDist < 1.0) return false;
+
+    // ボールの水平速度方向
+    const ballDirXZ = new Vector3(ballVel.x, 0, ballVel.z);
+    if (ballDirXZ.length() < 0.1) return false;
+    ballDirXZ.normalize();
+
+    // ボールから自分への方向
+    const ballToMe = new Vector3(myPos.x - ballPos.x, 0, myPos.z - ballPos.z);
+    ballToMe.normalize();
+
+    // ボールの進行方向と「ボール→自分」の方向の内積
+    // 1.0に近いほどまっすぐ自分に向かっている
+    const dot = Vector3.Dot(ballDirXZ, ballToMe);
+    if (dot < 0.7) return false; // 約45度以内
+
+    // ボールの方を向く
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // pass_receive アクション発動
+    const result = actionController.startAction('pass_receive');
+    return result.success;
+  }
+
+  /**
+   * リバウンドキャッチ反射
+   * 頭上付近で下降中のボールにジャンプして確保
+   */
+  private tryReflexRebound(actionController: ReturnType<Character['getActionController']>): boolean {
+    const ballPos = this.ball.getPosition();
+    const ballVel = this.ball.getVelocity();
+    const myPos = this.character.getPosition();
+
+    // ボールが下降中でなければスキップ
+    if (ballVel.y >= 0) return false;
+
+    // ボールとの水平距離（2m以内）
+    const horizDistSq =
+      (ballPos.x - myPos.x) ** 2 + (ballPos.z - myPos.z) ** 2;
+    if (horizDistSq > 2.0 * 2.0) return false;
+
+    // ボールの高さチェック（頭上〜ジャンプで届く範囲）
+    const height = this.character.config.physical.height;
+    if (ballPos.y < height * 0.8) return false;   // 頭より低い → 拾えばよい
+    if (ballPos.y > height + 1.5) return false;    // ジャンプでも届かない
+
+    // ボールの方を向く
+    const toBall = new Vector3(ballPos.x - myPos.x, 0, ballPos.z - myPos.z);
+    if (toBall.length() > 0.01) {
+      const angle = Math.atan2(toBall.x, toBall.z);
+      this.character.setRotation(angle);
+    }
+
+    // rebound_jump アクション発動
+    const result = actionController.startAction('rebound_jump');
+    return result.success;
   }
 
   /**

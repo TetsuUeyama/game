@@ -68,9 +68,9 @@ export const PhysicsConstants = {
     FRICTION: 0.3,
   },
 
-  // リム
+  // リム（金属製リング: ボール(0.83) × リム(0.85) = 0.706 の実効反発）
   RIM: {
-    RESTITUTION: 0.7,
+    RESTITUTION: 0.85,
     FRICTION: 0.01,
     RADIUS: 0.225, // リムの半径（m）
   },

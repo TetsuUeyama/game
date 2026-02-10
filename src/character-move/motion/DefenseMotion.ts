@@ -334,7 +334,7 @@ const DEFENSE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   // 両腕：広げて構える、小さく揺れる
   rightShoulderX: {[STANCE_T0]: -45, [STANCE_T1]: -60, [STANCE_T2]: -65, [STANCE_T3]: -60},
   rightShoulderY: {[STANCE_T0]: 0, [STANCE_T1]: -30, [STANCE_T2]: -32, [STANCE_T3]: -30},
-  rightShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: -20, [STANCE_T2]: -22, [STANCE_T3]: -20},
+  rightShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 20, [STANCE_T2]: 22, [STANCE_T3]: 20},
 
   rightElbowX: {[STANCE_T0]: 45, [STANCE_T1]: 60, [STANCE_T2]: 65, [STANCE_T3]: 60},
   rightElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
@@ -342,7 +342,7 @@ const DEFENSE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
 
   leftShoulderX: {[STANCE_T0]: -45, [STANCE_T1]: -60, [STANCE_T2]: -62, [STANCE_T3]: -60},
   leftShoulderY: {[STANCE_T0]: 0, [STANCE_T1]: 30, [STANCE_T2]: 28, [STANCE_T3]: 30},
-  leftShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 20, [STANCE_T2]: 18, [STANCE_T3]: 20},
+  leftShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: -20, [STANCE_T2]: -18, [STANCE_T3]: -20},
 
   leftElbowX: {[STANCE_T0]: 45, [STANCE_T1]: 60, [STANCE_T2]: 62, [STANCE_T3]: 60},
   leftElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
