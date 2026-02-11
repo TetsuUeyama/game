@@ -86,6 +86,9 @@ export interface ActionDefinition {
   // 物理判定設定（ディフェンス用）
   hitbox?: HitboxConfig;
 
+  /** アクション中に反射行動（リバウンドジャンプ、パスキャッチ等）を許可するか */
+  allowReflexes?: boolean;
+
   // ※ recoveryTime と cooldownTime は削除
   // 重心システム（BalanceController）により、アクション後の硬直と
   // 次のアクションへの遷移可否が物理的に決定される
@@ -296,6 +299,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     activeTime: -1,        // 継続（-1 = 無限）
     priority: 5,
     interruptible: true,   // いつでも解除可能
+    allowReflexes: true,   // 構え中もリバウンド等の反射行動を許可
     // 重心: 低い姿勢 → 安定、すぐ動ける
   },
 
@@ -385,6 +389,7 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     activeTime: 2000,      // 2秒（ボール到着を待つ十分な時間）
     priority: 7,           // パス(8)より低い
     interruptible: true,   // キャッチ後やインターセプト時にキャンセル可能
+    allowReflexes: true,   // レシーブ待機中もリバウンド等の反射行動を許可
   },
 };
 

@@ -109,6 +109,10 @@ export class PassController {
           }
         }
       },
+      onComplete: (_action) => {
+        // パス完了後に上半身回転をリセット
+        passer.setUpperBodyYawOffset(0);
+      },
     });
 
     // パスクールダウンを記録

@@ -79,6 +79,8 @@ export interface PlayerStateSnapshot {
   hasBall: boolean;
   /** スピード能力値（キャッシュ） */
   speedStat: number;
+  /** パワー能力値（キャッシュ） */
+  powerStat: number;
 }
 
 /**

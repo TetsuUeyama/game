@@ -21,6 +21,13 @@ const DEFENSIVE_ZONE_Z = {
 /** ゴール近接判定の閾値 */
 const GOAL_PROXIMITY_THRESHOLD = 5.0;
 
+/** リバウンドポジション争いの距離閾値（m） */
+const REBOUND_BATTLE_DISTANCE = 2.0;
+/** リバウンドポジション争いの基本力（N） */
+const REBOUND_PUSH_BASE_FORCE = 300;
+/** power差1ポイントあたりの力ボーナス（N） */
+const REBOUND_PUSH_POWER_SCALE = 10;
+
 /**
  * ルーズボール判断システム
  *
@@ -93,6 +100,11 @@ export class LooseBallDecisionSystem {
     for (const snapshot of allSnapshots) {
       this.computeRepulsionDir(snapshot);
       this.computeDefensivePosition(snapshot, goal1Pos, goal2Pos, distToGoal1, distToGoal2);
+    }
+
+    // リバウンドポジション争い（ボックスアウト）
+    if (this.nearGoalFlag) {
+      this.processReboundBattles(goal1Pos, goal2Pos, distToGoal1, distToGoal2);
     }
   }
 
@@ -226,6 +238,57 @@ export class LooseBallDecisionSystem {
       const targetX = this.getDefensiveX(snapshot.playerPosition);
       const defensePos = new Vector3(targetX, snapshot.position.y, defensiveZ);
       this.defensivePositions.set(snapshot.character, defensePos);
+    }
+  }
+
+  /**
+   * リバウンドポジション争い（ボックスアウト）
+   * ゴール付近の敵味方ペアに対し、powerの差に基づいて押し合い力を適用
+   */
+  private processReboundBattles(
+    goal1Pos: Vector3, goal2Pos: Vector3,
+    distToGoal1: number, distToGoal2: number
+  ): void {
+    const isGoal1 = distToGoal1 < distToGoal2;
+    const goalPos = isGoal1 ? goal1Pos : goal2Pos;
+
+    const allSnapshots = this.playerState.getAll();
+
+    // ゴール付近の選手を抽出
+    const nearGoalPlayers = allSnapshots.filter(s => {
+      const dist = Vector3.Distance(s.position, goalPos);
+      return dist < GOAL_PROXIMITY_THRESHOLD;
+    });
+
+    // 敵味方ペアの競り合い
+    for (let i = 0; i < nearGoalPlayers.length; i++) {
+      for (let j = i + 1; j < nearGoalPlayers.length; j++) {
+        const a = nearGoalPlayers[i];
+        const b = nearGoalPlayers[j];
+        if (a.team === b.team) continue;
+
+        const dist = Vector3.Distance(a.position, b.position);
+        if (dist > REBOUND_BATTLE_DISTANCE || dist < 0.1) continue;
+
+        const powerDiff = a.powerStat - b.powerStat;
+        const pushForce = REBOUND_PUSH_BASE_FORCE + Math.abs(powerDiff) * REBOUND_PUSH_POWER_SCALE;
+
+        // A→Bの方向
+        const dirAtoB = b.position.subtract(a.position).normalize();
+
+        const balA = a.character.getBalanceController();
+        const balB = b.character.getBalanceController();
+
+        if (powerDiff >= 0) {
+          // Aが強い → Bをゴールから押し出す
+          balB.applyForce(dirAtoB.scale(-pushForce), 0.1);
+          balA.applyForce(dirAtoB.scale(pushForce * 0.2), 0.1);
+        } else {
+          // Bが強い → Aをゴールから押し出す
+          balA.applyForce(dirAtoB.scale(pushForce), 0.1);
+          balB.applyForce(dirAtoB.scale(-pushForce * 0.2), 0.1);
+        }
+      }
     }
   }
 

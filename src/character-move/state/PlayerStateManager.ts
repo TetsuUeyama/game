@@ -99,6 +99,7 @@ export class PlayerStateManager {
         shotPriority: character.shotPriority,
         hasBall: character === holder,
         speedStat: character.playerData?.stats.speed ?? 50,
+        powerStat: character.playerData?.stats.power ?? 50,
       };
 
       this.snapshots.push(snapshot);

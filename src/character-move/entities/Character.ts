@@ -26,6 +26,7 @@ import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
 import { BalanceController } from "../controllers/BalanceController";
+import { MOVEMENT_BALANCE } from "../config/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
@@ -84,10 +85,12 @@ export class Character {
 
   public position: Vector3; // 位置
   public rotation: number = 0; // Y軸周りの回転（ラジアン）
+  private targetRotation: number = 0; // 目標回転角度（ラジアン）
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
   private groundY: number; // 地面のY座標
   private motionOffsetY: number = 0; // モーションによるY軸オフセット
+  private upperBodyYawOffset: number = 0; // 上半身のYaw回転オフセット（パス時に使用）
 
   // 衝突判定（footCircleRadiusで統一）
 
@@ -532,19 +535,46 @@ export class Character {
     this.mesh.position.y = this.position.y + this.motionOffsetY;
   }
 
+  /** 上半身のYaw回転オフセットを設定（ラジアン） */
+  public setUpperBodyYawOffset(offset: number): void {
+    this.upperBodyYawOffset = offset;
+  }
+
+  /** 上半身のYaw回転オフセットを取得（ラジアン） */
+  public getUpperBodyYawOffset(): number {
+    return this.upperBodyYawOffset;
+  }
+
   /**
-   * 向きを設定（ラジアン）
+   * 向きを設定（ラジアン）— ターゲットベース
+   * 実際の回転は update() で重心ベースの速度制限付きで補間される
    */
   public setRotation(angle: number): void {
+    this.targetRotation = angle;
+  }
+
+  /**
+   * 向きを即時設定（ラジアン）
+   * 初期化・失敗時の復元など、即座に反映が必要な場合に使用
+   */
+  public setRotationImmediate(angle: number): void {
     this.rotation = angle;
+    this.targetRotation = angle;
     this.mesh.rotation.y = angle;
   }
 
   /**
-   * 向きを取得（ラジアン）
+   * 向きを取得（ラジアン）— 実際の回転角度
    */
   public getRotation(): number {
     return this.rotation;
+  }
+
+  /**
+   * 目標向きを取得（ラジアン）
+   */
+  public getTargetRotation(): number {
+    return this.targetRotation;
   }
 
   /**
@@ -624,8 +654,12 @@ export class Character {
 
     // === 実際の移動処理 ===
 
-    // 速度を計算
-    this.velocity = direction.scale(speed);
+    // 重心ボールの慣性による移動速度制限
+    // ボールが同じ方向に動いていればフルスピード、違う方向なら減速
+    const balanceSpeedFactor = this.balanceController.getMovementSpeedFactor(normalizedDir);
+
+    // 速度を計算（重心制限を適用）
+    this.velocity = direction.scale(speed * balanceSpeedFactor);
 
     // 新しい位置を計算（モーションオフセットを除いた基準位置を使用）
     const newPosition = this.position.add(this.velocity.scale(deltaTime));
@@ -669,24 +703,13 @@ export class Character {
   }
 
   /**
-   * スムーズに回転（補間）
+   * スムーズに回転（ターゲット設定のみ）
+   * 実際の回転補間は update() で重心ベースの速度制限付きで行われる
    * @param targetRotation ターゲット回転（ラジアン）
-   * @param deltaTime フレーム時間（秒）
+   * @param _deltaTime フレーム時間（互換性のため残存、未使用）
    */
-  public rotateTowards(targetRotation: number, deltaTime: number): void {
-    // quicknessベースの回転速度（2〜10 rad/s）
-    const quickness = this.playerData?.stats.quickness ?? 50;
-    const rotationSpeed = 2 + (quickness / 100) * 8;
-
-    // 角度差を計算（-π から π の範囲に正規化）
-    const diff = normalizeAngle(targetRotation - this.rotation);
-
-    // 回転量を計算（速度を考慮）
-    const maxRotation = rotationSpeed * deltaTime;
-    const rotation = Math.max(-maxRotation, Math.min(maxRotation, diff));
-
-    // 回転を適用
-    this.setRotation(this.rotation + rotation);
+  public rotateTowards(targetRotation: number, _deltaTime: number): void {
+    this.setRotation(targetRotation);
   }
 
   /**
@@ -702,6 +725,9 @@ export class Character {
 
     // 重心コントローラーを更新
     this.balanceController.update(deltaTime);
+
+    // === 重心ベースの回転補間 ===
+    this.updateRotation(deltaTime);
 
     // 重心球の位置を更新（表示中のみ）
     if (this.balanceSphereVisible) {
@@ -736,11 +762,6 @@ export class Character {
       return false; // まだ反応時間中
     }
 
-    // 重心が安定していない場合は移動しない（重心システム）
-    if (!this.balanceController.canTransition()) {
-      return false; // 重心が不安定
-    }
-
     // 移動先の位置を計算
     const speed = CHARACTER_CONFIG.speed;
     const scaledDirection = this.aiMovementDirection.scale(this.aiMovementSpeed);
@@ -773,11 +794,6 @@ export class Character {
     const elapsedTime = currentTime - this.aiMovementStartTime;
     if (elapsedTime < this.aiMovementDelay) {
       return; // まだ反応時間中
-    }
-
-    // 重心が安定していない場合は移動しない（重心システム）
-    if (!this.balanceController.canTransition()) {
-      return; // 重心が不安定
     }
 
     // 衝突判定をスキップして移動を実行
@@ -2268,6 +2284,43 @@ export class Character {
       this.getPosition(),
       this.footCircleRadius
     );
+  }
+
+  /**
+   * 重心ベースの回転補間
+   * targetRotation に向かって、重心の安定度に応じた速度で回転する
+   * 回転時は重心ボールに力が加わる
+   */
+  private updateRotation(deltaTime: number): void {
+    // 目標と現在の角度差を計算
+    const diff = normalizeAngle(this.targetRotation - this.rotation);
+
+    // 差がほぼゼロなら何もしない
+    if (Math.abs(diff) < 0.001) {
+      return;
+    }
+
+    // quickness ベースの基本回転速度
+    const quickness = this.playerData?.stats.quickness ?? 50;
+    const maxTurnRate = MOVEMENT_BALANCE.BASE_TURN_RATE
+      + (quickness / 100) * MOVEMENT_BALANCE.TURN_RATE_QUICKNESS_BONUS;
+
+    // 重心安定度による係数
+    const balanceFactor = this.balanceController.getTurnSpeedFactor();
+
+    // 実効回転速度
+    const effectiveTurnRate = maxTurnRate * balanceFactor;
+
+    // このフレームで回転できる最大量
+    const maxRotation = effectiveTurnRate * deltaTime;
+    const turnAmount = Math.max(-maxRotation, Math.min(maxRotation, diff));
+
+    // 回転を適用
+    this.rotation += turnAmount;
+    this.mesh.rotation.y = this.rotation;
+
+    // 回転による重心力を適用
+    this.balanceController.applyTurnForce(turnAmount, this.rotation);
   }
 
   /**
