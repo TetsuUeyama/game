@@ -34,6 +34,7 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     // 状態離脱時にデフォルトに戻す
     this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
     this.currentHoldingRestriction = "default";
+    this.character.setUpperBodyYawOffset(0);
   }
 
   public override forceReset(): void {
@@ -41,6 +42,7 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     this.frontcourt1on1Timer = 0;
     this.character.setBallHoldingFaces([0, 1, 2, 6, 7]);
     this.currentHoldingRestriction = "default";
+    this.character.setUpperBodyYawOffset(0);
   }
 
   /**

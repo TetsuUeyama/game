@@ -604,6 +604,11 @@ export class MotionController {
       joint.rotation.x = (rotation.x * Math.PI) / 180;
       joint.rotation.y = (rotation.y * Math.PI) / 180;
       joint.rotation.z = (rotation.z * Math.PI) / 180;
+
+      // 上半身パス回転オフセットを加算
+      if (jointName === 'upperBody') {
+        joint.rotation.y += this.character.getUpperBodyYawOffset();
+      }
     }
   }
 

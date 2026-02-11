@@ -455,6 +455,116 @@ export class BalanceController {
   }
 
   // ==========================================================================
+  // 回転速度制限
+  // ==========================================================================
+
+  /**
+   * 重心状態に基づく回転速度係数を取得（0〜1）
+   *
+   * 重心が安定していれば1.0（フル回転速度）、
+   * 不安定なほど回転が遅くなる。
+   */
+  getTurnSpeedFactor(): number {
+    // ロック中（空中）は制限なし
+    if (this.state.isLocked) return 1.0;
+
+    // 水平オフセット（基準位置からのずれ）
+    const hOffset = this.getHorizontalOffset();
+    // 水平速度
+    const hSpeed = Math.sqrt(
+      this.state.velocity.x * this.state.velocity.x +
+      this.state.velocity.z * this.state.velocity.z
+    );
+
+    // オフセットが大きいほど回転が遅い（TRANSITION閾値の4倍で最大制限）
+    const offsetPenalty = Math.min(1.0, hOffset / (BALANCE_THRESHOLD.TRANSITION * 4));
+    // 速度が大きいほど回転が遅い（VELOCITY閾値の4倍で最大制限）
+    const speedPenalty = Math.min(1.0, hSpeed / (BALANCE_THRESHOLD.VELOCITY * 4));
+
+    // 大きい方のペナルティを採用
+    const penalty = Math.max(offsetPenalty, speedPenalty);
+
+    return Math.max(MOVEMENT_BALANCE.TURN_MIN_FACTOR, 1.0 - penalty);
+  }
+
+  /**
+   * 回転による重心力を適用
+   *
+   * 体を回すと慣性で重心が横にずれる。
+   * 回転量が大きいほど大きな力が加わる。
+   *
+   * @param turnAmount 実際に回転した量（ラジアン、符号付き）
+   * @param characterRotation 回転後のキャラクター向き（ラジアン）
+   */
+  applyTurnForce(turnAmount: number, characterRotation: number): void {
+    if (this.state.isLocked) return;
+    if (Math.abs(turnAmount) < 0.001) return;
+
+    const forceMagnitude = Math.abs(turnAmount) * MOVEMENT_BALANCE.TURN_FORCE_PER_RAD;
+
+    // 回転の逆方向（慣性で体が振られる方向）に力を加える
+    // 右回転(+) → 左方向に力、左回転(-) → 右方向に力
+    const lateralAngle = characterRotation + (turnAmount > 0 ? -Math.PI / 2 : Math.PI / 2);
+    const forceVector = new Vector3(
+      Math.sin(lateralAngle) * forceMagnitude,
+      -forceMagnitude * 0.05, // わずかに下向き
+      Math.cos(lateralAngle) * forceMagnitude
+    );
+
+    const weightFactor = getWeightForceFactor(this.weight);
+    this.externalForce = forceVector.scale(weightFactor);
+    this.forceEndTime = Date.now() + 50; // 短い持続
+  }
+
+  // ==========================================================================
+  // 移動方向制限
+  // ==========================================================================
+
+  /**
+   * 移動方向に対する速度係数を取得（0〜1）
+   *
+   * 重心ボールが進行方向に動いていれば1.0（フルスピード）、
+   * 違う方向に動いていれば低い値を返す。
+   * ボールの慣性を止めて→新しい方向へ向ける必要があるため。
+   *
+   * @param intendedDirection 意図する移動方向（正規化済み）
+   * @returns 速度係数 0〜1
+   */
+  getMovementSpeedFactor(intendedDirection: Vector3): number {
+    // ロック中（空中）は制限なし
+    if (this.state.isLocked) return 1.0;
+
+    // 重心ボールの水平速度を取得
+    const ballVelX = this.state.velocity.x;
+    const ballVelZ = this.state.velocity.z;
+    const ballSpeed = Math.sqrt(ballVelX * ballVelX + ballVelZ * ballVelZ);
+
+    // ボールがほぼ静止 → 制限なし（静止からの発進を妨げない）
+    if (ballSpeed < MOVEMENT_BALANCE.DIRECTION_RESTRICT_SPEED_THRESHOLD) {
+      return 1.0;
+    }
+
+    // ボール速度方向と意図する移動方向の一致度（-1〜1）
+    const alignment = (ballVelX * intendedDirection.x + ballVelZ * intendedDirection.z) / ballSpeed;
+
+    // alignment: 1.0=同方向, 0=直角, -1=逆方向
+    // rawFactor: 同方向=1.0, 直角以下=0
+    const rawFactor = Math.max(0, alignment);
+
+    // ボール速度が速いほど制限が強い（0=制限なし, 1=フル制限）
+    const restrictionStrength = Math.min(
+      1.0,
+      (ballSpeed - MOVEMENT_BALANCE.DIRECTION_RESTRICT_SPEED_THRESHOLD) /
+      (MOVEMENT_BALANCE.DIRECTION_RESTRICT_FULL_SPEED - MOVEMENT_BALANCE.DIRECTION_RESTRICT_SPEED_THRESHOLD)
+    );
+
+    // 最終係数: 制限なし(1.0)とrawFactorをブレンド
+    const factor = 1.0 - restrictionStrength * (1.0 - rawFactor);
+
+    return Math.max(MOVEMENT_BALANCE.DIRECTION_RESTRICT_MIN_FACTOR, factor);
+  }
+
+  // ==========================================================================
   // 衝突処理
   // ==========================================================================
 

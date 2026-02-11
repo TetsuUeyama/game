@@ -418,6 +418,11 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
    * @returns シュートを打った場合true
    */
   protected tryShoot(aggressivenessBoost: number = 0): boolean {
+    // 上半身が回転中（パス選択中）はシュート不可
+    if (this.character.getUpperBodyYawOffset() !== 0) {
+      return false;
+    }
+
     // ShootingControllerがない場合はスキップ
     if (!this.shootingController) {
       return false;
@@ -442,9 +447,9 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     // 回転を保存（失敗時に復元するため）
     const savedRotation = this.character.getRotation();
 
-    // シュートレンジ内に入ったらゴール方向を向く
+    // シュートレンジ内に入ったらゴール方向を向く（即時反映：同フレーム内でfacingGoalチェックするため）
     const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
-    this.character.setRotation(angle);
+    this.character.setRotationImmediate(angle);
 
     // ダンクレンジ内かどうかを確認（forceDunk=true で確認）
     const isDunkRange = distanceToGoal <= 3.5; // DUNK_MAX_EXTENDED
@@ -453,7 +458,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     const rangeInfo = this.shootingController.getShootRangeInfo(this.character, isDunkRange);
 
     if (!rangeInfo.inRange || !rangeInfo.facingGoal) {
-      this.character.setRotation(savedRotation);
+      this.character.setRotationImmediate(savedRotation);
       return false;
     }
 
@@ -492,7 +497,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     }
 
     // シュートしなかった/できなかった → 回転を復元
-    this.character.setRotation(savedRotation);
+    this.character.setRotationImmediate(savedRotation);
     return false;
   }
 
@@ -558,12 +563,12 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
             }
           }
 
-          // メインハンドラーの方を向く
+          // メインハンドラーの方を向く（即時反映：パス前に視覚的に対象を向くため）
           const savedRotation1 = this.character.getRotation();
           const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
           if (toTarget.length() > 0.01) {
             const angle = Math.atan2(toTarget.x, toTarget.z);
-            this.character.setRotation(angle);
+            this.character.setRotationImmediate(angle);
           }
 
           const result = this.passController.performPass(this.character, mainHandler.character, "pass_chest");
@@ -571,7 +576,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
             return true;
           }
           // パス失敗時は回転を復元
-          this.character.setRotation(savedRotation1);
+          this.character.setRotationImmediate(savedRotation1);
         }
       }
     }
@@ -593,12 +598,12 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
             }
           }
 
-          // メインハンドラーの方を向く
+          // メインハンドラーの方を向く（即時反映）
           const savedRotation2 = this.character.getRotation();
           const toTarget2 = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
           if (toTarget2.length() > 0.01) {
             const angle = Math.atan2(toTarget2.x, toTarget2.z);
-            this.character.setRotation(angle);
+            this.character.setRotationImmediate(angle);
           }
 
           const result = this.passController.performPass(this.character, teammate, "pass_chest");
@@ -606,7 +611,7 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
             return true;
           }
           // パス失敗時は回転を復元
-          this.character.setRotation(savedRotation2);
+          this.character.setRotationImmediate(savedRotation2);
         }
         break; // メインハンドラーは1人なので見つかったら終了
       }
@@ -687,11 +692,11 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
         continue;
       }
 
-      // パスターゲットの方を向く
+      // パスターゲットの方を向く（即時反映：パス前に視覚的に対象を向くため）
       const toTarget = new Vector3(teammatePos.x - myPos.x, 0, teammatePos.z - myPos.z);
       if (toTarget.length() > 0.01) {
         const angle = Math.atan2(toTarget.x, toTarget.z);
-        this.character.setRotation(angle);
+        this.character.setRotationImmediate(angle);
       }
 
       // パス実行
@@ -735,9 +740,9 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     // ペイントエリア内にいる - レイアップ/ダンクを狙う
     const goalPosition = this.field.getAttackingGoalRim(this.character.team);
 
-    // ゴール方向を向く
+    // ゴール方向を向く（即時反映：同フレーム内でfacingGoalチェックするため）
     const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
-    this.character.setRotation(angle);
+    this.character.setRotationImmediate(angle);
 
     // シュート情報を取得（forceDunk=true でダンクも検出）
     const rangeInfo = this.shootingController.getShootRangeInfo(this.character, true);
@@ -852,6 +857,11 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
    * @returns ドリブルムーブを実行した場合true
    */
   protected tryDribbleMove(): boolean {
+    // 上半身が回転中（パス選択中）はドリブル不可
+    if (this.character.getUpperBodyYawOffset() !== 0) {
+      return false;
+    }
+
     if (!this.dribbleController) {
       return false;
     }
@@ -997,12 +1007,22 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     // 回転を保存（失敗時に復元するため）
     const savedRotation = this.character.getRotation();
 
-    // パスターゲットの方を向く
+    // パスターゲットの方を向く（上半身回転を優先、超過分のみ全身回転）
     const targetPos = passTarget.getPosition();
     const toTarget = new Vector3(targetPos.x - myPos.x, 0, targetPos.z - myPos.z);
     if (toTarget.length() > 0.01) {
-      const angle = Math.atan2(toTarget.x, toTarget.z);
-      this.character.setRotation(angle);
+      const targetAngle = Math.atan2(toTarget.x, toTarget.z);
+      const angleDiff = normalizeAngle(targetAngle - savedRotation);
+      const MAX_UPPER_BODY_YAW = Math.PI / 3; // 60°
+
+      // 上半身回転で収まる分と、全身回転が必要な分を分離
+      const clampedOffset = Math.max(-MAX_UPPER_BODY_YAW, Math.min(MAX_UPPER_BODY_YAW, angleDiff));
+      const bodyRotation = angleDiff - clampedOffset;
+
+      if (Math.abs(bodyRotation) > 0.01) {
+        this.character.setRotation(savedRotation + bodyRotation);
+      }
+      this.character.setUpperBodyYawOffset(clampedOffset);
     }
 
     // パス実行（PassController経由）
@@ -1012,7 +1032,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     }
 
     // パス失敗 → 回転を復元
-    this.character.setRotation(savedRotation);
+    this.character.setRotationImmediate(savedRotation);
+    this.character.setUpperBodyYawOffset(0);
     return false;
   }
 

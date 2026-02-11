@@ -2177,6 +2177,17 @@ export class GameScene {
   }
 
   /**
+   * モーションチェックモード用のセットアップ
+   * CheckModeManagerに委譲
+   */
+  public setupMotionCheckMode(
+    playerId: string,
+    playerData?: Record<string, PlayerData>
+  ): Character | null {
+    return this._checkModeManager?.setupMotionCheckMode(playerId, playerData) ?? null;
+  }
+
+  /**
    * チェックモードを終了して通常のゲームモードに戻る
    */
   public exitCheckMode(): void {

@@ -26,6 +26,7 @@ import { Formation } from "../config/FormationConfig";
 import { PassTrajectoryVisualizer } from "../visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "../systems/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "../systems/RiskAssessmentSystem";
+import { ACTION_DEFINITIONS } from "../config/action/ActionConfig";
 
 /**
  * キャラクターAI状態管理
@@ -282,15 +283,20 @@ export class CharacterAI {
     }
 
     if (currentAction !== null || currentPhase !== 'idle') {
-      // アクション中は待機モーションも再生しない（アクションモーションが再生中）
+      // アクション中でも allowReflexes が有効なら反射行動のみ評価
+      if (currentAction !== null && ACTION_DEFINITIONS[currentAction].allowReflexes) {
+        this.evaluateReflexes();
+      }
       return;
     }
 
     // 状態遷移後の反応遅延中はボールを見てアイドル状態を維持
     // 以下の状態は反応遅延をスキップ：
     // - ON_BALL_PLAYER: 独自のサーベイ処理がある
+    // - BALL_LOST: リバウンド等、全員が即座に反応すべき
     const skipReactionDelay =
-      state === CharacterState.ON_BALL_PLAYER;
+      state === CharacterState.ON_BALL_PLAYER ||
+      state === CharacterState.BALL_LOST;
 
     if (this.stateTransitionReactionTimer > 0 && !skipReactionDelay) {
       this.stateTransitionReactionTimer -= deltaTime;
@@ -539,8 +545,10 @@ export class CharacterAI {
     // reflexesに基づいた反応遅延を計算
     // 以下の状態は即座にonEnterStateを呼び出す（反応遅延なし）：
     // - ON_BALL_PLAYER: 独自のサーベイ処理がある
+    // - BALL_LOST: リバウンド等、全員が即座に反応すべき
     const skipReactionDelay =
-      toState === CharacterState.ON_BALL_PLAYER;
+      toState === CharacterState.ON_BALL_PLAYER ||
+      toState === CharacterState.BALL_LOST;
 
     if (skipReactionDelay) {
       this.stateTransitionReactionTimer = 0;
