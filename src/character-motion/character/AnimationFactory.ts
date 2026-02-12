@@ -102,7 +102,7 @@ export function createPoseData(
   const isRigify = rigType === "rigify";
 
   const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
-  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
+  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify, undefined, WALK_MOTION.isDelta);
 
   // Idle / Walk の Euler キーを Quaternion に変換して PoseBoneData に統合
   const boneMap = new Map<Bone, PoseBoneData>();
@@ -150,7 +150,7 @@ export function createAnimationsForSkeleton(
   const isRigify = rigType === "rigify";
 
   const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
-  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
+  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify, undefined, WALK_MOTION.isDelta);
 
   const idleGroup = new AnimationGroup("idle", scene);
   for (const { bone, keys } of idleEntries) {
@@ -278,6 +278,7 @@ function motionToEulerKeys(
   bones: FoundBones,
   isRigify: boolean,
   restPoses?: RestPoseCache,
+  isDelta?: boolean,
 ): { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] {
   const results: { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] = [];
   const processedBones = new Set<Bone>();
@@ -311,21 +312,34 @@ function motionToEulerKeys(
     }
     const times = Array.from(timesSet).sort((a, b) => a - b);
 
-    const rest = restPoses?.get(bone) ?? restRot(bone);
     const adjX = isRigify ? (motion.rigifyAdjustments?.[jointName + "X"] ?? 0) : 0;
     const adjY = isRigify ? (motion.rigifyAdjustments?.[jointName + "Y"] ?? 0) : 0;
     const adjZ = isRigify ? (motion.rigifyAdjustments?.[jointName + "Z"] ?? 0) : 0;
 
-    const keys = times.map((time) => ({
-      frame: Math.round(time * FPS),
-      value: new Vector3(
-        rest.x + ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
-        rest.y + ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
-        rest.z + ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
-      ),
-    }));
-
-    results.push({ bone, keys });
+    if (isDelta) {
+      // デルタモード: レスト姿勢を加算しない（idle との差分のみ）
+      const keys = times.map((time) => ({
+        frame: Math.round(time * FPS),
+        value: new Vector3(
+          ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
+          ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
+          ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
+        ),
+      }));
+      results.push({ bone, keys });
+    } else {
+      // 絶対モード: レスト姿勢 + オフセット
+      const rest = restPoses?.get(bone) ?? restRot(bone);
+      const keys = times.map((time) => ({
+        frame: Math.round(time * FPS),
+        value: new Vector3(
+          rest.x + ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
+          rest.y + ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
+          rest.z + ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
+        ),
+      }));
+      results.push({ bone, keys });
+    }
   }
 
   // Rigify 調整のみ（アニメーションデータなし）の関節を処理
@@ -341,38 +355,69 @@ function motionToEulerKeys(
       if (!bone || processedBones.has(bone)) continue;
 
       processedBones.add(bone);
-      const rest = restPoses?.get(bone) ?? restRot(bone);
       const adjX = motion.rigifyAdjustments[jointName + "X"] ?? 0;
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
-      const value = new Vector3(
-        rest.x + adjX * DEG_TO_RAD,
-        rest.y + adjY * DEG_TO_RAD,
-        rest.z + adjZ * DEG_TO_RAD,
-      );
-      results.push({
-        bone,
-        keys: [
-          { frame: 0, value: value.clone() },
-          { frame: totalFrames, value: value.clone() },
-        ],
-      });
+      if (isDelta) {
+        // デルタモード: 調整値のみ
+        const value = new Vector3(
+          adjX * DEG_TO_RAD,
+          adjY * DEG_TO_RAD,
+          adjZ * DEG_TO_RAD,
+        );
+        results.push({
+          bone,
+          keys: [
+            { frame: 0, value: value.clone() },
+            { frame: totalFrames, value: value.clone() },
+          ],
+        });
+      } else {
+        // 絶対モード: レスト + 調整値
+        const rest = restPoses?.get(bone) ?? restRot(bone);
+        const value = new Vector3(
+          rest.x + adjX * DEG_TO_RAD,
+          rest.y + adjY * DEG_TO_RAD,
+          rest.z + adjZ * DEG_TO_RAD,
+        );
+        results.push({
+          bone,
+          keys: [
+            { frame: 0, value: value.clone() },
+            { frame: totalFrames, value: value.clone() },
+          ],
+        });
+      }
     }
   }
 
-  // 残りのボーン: レスト姿勢キーフレーム
+  // 残りのボーン
   for (const bone of Object.values(bones)) {
     if (!bone || processedBones.has(bone)) continue;
     processedBones.add(bone);
-    const rest = restPoses?.get(bone) ?? restRot(bone);
-    results.push({
-      bone,
-      keys: [
-        { frame: 0, value: rest.clone() },
-        { frame: totalFrames, value: rest.clone() },
-      ],
-    });
+
+    if (isDelta) {
+      // デルタモード: ゼロ（Identity）= 追加回転なし
+      const zero = Vector3.Zero();
+      results.push({
+        bone,
+        keys: [
+          { frame: 0, value: zero.clone() },
+          { frame: totalFrames, value: zero.clone() },
+        ],
+      });
+    } else {
+      // 絶対モード: レスト姿勢キーフレーム
+      const rest = restPoses?.get(bone) ?? restRot(bone);
+      results.push({
+        bone,
+        keys: [
+          { frame: 0, value: rest.clone() },
+          { frame: totalFrames, value: rest.clone() },
+        ],
+      });
+    }
   }
 
   return results;
@@ -397,7 +442,7 @@ export function createSingleMotionPoseData(
   if (!bones) return null;
 
   const isRigify = rigType === "rigify";
-  const entries = motionToEulerKeys(motion, bones, isRigify, restPoses);
+  const entries = motionToEulerKeys(motion, bones, isRigify, restPoses, motion.isDelta);
 
   return {
     bones: entries.map(({ bone, keys }) => ({

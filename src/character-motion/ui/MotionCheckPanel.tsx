@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MotionDefinition, JointKeyframes } from "../motion/MotionTypes";
 import { JOINT_NAMES, AXES, motionToCode } from "./CheckModeTypes";
 import { CodeExportDialog } from "./CodeExportDialog";
@@ -12,6 +12,7 @@ interface MotionCheckPanelProps {
   onPlayToggle: () => void;
   availableMotions: { name: string; motion: MotionDefinition }[];
   onMotionSelect: (name: string) => void;
+  getPlaybackTime: () => number;
 }
 
 export function MotionCheckPanel({
@@ -21,14 +22,38 @@ export function MotionCheckPanel({
   onPlayToggle,
   availableMotions,
   onMotionSelect,
+  getPlaybackTime,
 }: MotionCheckPanelProps) {
   const [exportCode, setExportCode] = useState<string | null>(null);
   const [expandedJoint, setExpandedJoint] = useState<string | null>(null);
+
+  // タイムバーのマーカー要素ref
+  const markerRef = useRef<HTMLDivElement>(null);
+  const timeTextRef = useRef<HTMLSpanElement>(null);
+  const rafRef = useRef<number>(0);
 
   // モーション切替時に展開状態をリセット
   useEffect(() => {
     setExpandedJoint(null);
   }, [motionData.name]);
+
+  // requestAnimationFrame でマーカー位置を更新（React再描画なし）
+  useEffect(() => {
+    const update = () => {
+      const t = getPlaybackTime();
+      const dur = motionData.duration;
+      if (markerRef.current) {
+        const pct = dur > 0 ? (t / dur) * 100 : 0;
+        markerRef.current.style.top = `${pct}%`;
+      }
+      if (timeTextRef.current) {
+        timeTextRef.current.textContent = `${t.toFixed(2)}s`;
+      }
+      rafRef.current = requestAnimationFrame(update);
+    };
+    rafRef.current = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [getPlaybackTime, motionData.duration]);
 
   // 元のモーションデータ（リセット用）
   const originalMotion = useMemo(
@@ -195,40 +220,57 @@ export function MotionCheckPanel({
                 )}
               </div>
 
-              {/* Expanded: time × axis table */}
+              {/* Expanded: time bar + time × axis table */}
               {isExpanded && (
                 <div style={jointBodyStyle}>
-                  {/* Table header */}
+                  {/* Table header (offset for time bar column) */}
                   <div style={tableHeaderStyle}>
+                    <span style={barHeaderSpaceStyle} />
                     <span style={timeColStyle}>time</span>
                     {AXES.map((axis) => (
                       <span key={axis} style={axisColHeaderStyle}>{axis}</span>
                     ))}
                   </div>
-                  {/* Table rows */}
-                  {allTimes.map((time) => (
-                    <div key={time} style={tableRowStyle}>
-                      <span style={timeColStyle}>{time.toFixed(3)}s</span>
-                      {AXES.map((axis) => {
-                        const key = jointName + axis;
-                        const val = getValue(key, time);
-                        return (
-                          <div key={axis} style={axisCellStyle}>
-                            <input
-                              type="number"
-                              step={0.5}
-                              value={val}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value);
-                                handleValueChange(jointName, axis, time, isNaN(v) ? 0 : v);
-                              }}
-                              style={cellInputStyle}
-                            />
-                          </div>
-                        );
-                      })}
+                  {/* Data area: time bar + rows */}
+                  <div style={dataAreaStyle}>
+                    {/* Time bar (left) */}
+                    <div style={timeBarContainerStyle}>
+                      <div style={timeBarTrackStyle} />
+                      <div ref={markerRef} style={timeBarMarkerStyle}>
+                        <div style={timeBarMarkerHeadStyle} />
+                      </div>
                     </div>
-                  ))}
+                    {/* Table rows */}
+                    <div style={tableRowsStyle}>
+                      {allTimes.map((time) => (
+                        <div key={time} style={tableRowStyle}>
+                          <span style={timeColStyle}>{time.toFixed(3)}s</span>
+                          {AXES.map((axis) => {
+                            const key = jointName + axis;
+                            const val = getValue(key, time);
+                            return (
+                              <div key={axis} style={axisCellStyle}>
+                                <input
+                                  type="number"
+                                  step={0.5}
+                                  value={val}
+                                  onChange={(e) => {
+                                    const v = parseFloat(e.target.value);
+                                    handleValueChange(jointName, axis, time, isNaN(v) ? 0 : v);
+                                  }}
+                                  style={cellInputStyle}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Current time display */}
+                  <div style={currentTimeDisplayStyle}>
+                    <span ref={timeTextRef} style={currentTimeTextStyle}>0.00s</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -401,6 +443,11 @@ const tableHeaderStyle: React.CSSProperties = {
   marginBottom: 2,
 };
 
+const barHeaderSpaceStyle: React.CSSProperties = {
+  width: 14,
+  flexShrink: 0,
+};
+
 const timeColStyle: React.CSSProperties = {
   width: 52,
   fontSize: 10,
@@ -416,6 +463,51 @@ const axisColHeaderStyle: React.CSSProperties = {
   color: "#888",
   fontWeight: "bold",
   textAlign: "center",
+};
+
+const dataAreaStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 0,
+};
+
+const timeBarContainerStyle: React.CSSProperties = {
+  position: "relative",
+  width: 14,
+  flexShrink: 0,
+};
+
+const timeBarTrackStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  bottom: 0,
+  left: 6,
+  width: 2,
+  background: "#333",
+  borderRadius: 1,
+};
+
+const timeBarMarkerStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 0,
+  width: 14,
+  transform: "translateY(-50%)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "none",
+};
+
+const timeBarMarkerHeadStyle: React.CSSProperties = {
+  width: 10,
+  height: 10,
+  borderRadius: "50%",
+  background: "#0078d4",
+  border: "2px solid #4aa3df",
+  boxSizing: "border-box",
+};
+
+const tableRowsStyle: React.CSSProperties = {
+  flex: 1,
 };
 
 const tableRowStyle: React.CSSProperties = {
@@ -440,6 +532,21 @@ const cellInputStyle: React.CSSProperties = {
   fontSize: 11,
   fontFamily: "monospace",
   textAlign: "right",
+};
+
+const currentTimeDisplayStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-start",
+  padding: "4px 0 0 2px",
+  borderTop: "1px solid #333",
+  marginTop: 4,
+};
+
+const currentTimeTextStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: "#0078d4",
+  fontFamily: "monospace",
+  fontWeight: "bold",
 };
 
 const exportButtonStyle: React.CSSProperties = {

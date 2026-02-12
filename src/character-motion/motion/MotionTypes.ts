@@ -33,4 +33,11 @@ export interface MotionDefinition {
    * 指定された関節+軸の全キーフレームに加算される
    */
   rigifyAdjustments?: Record<string, number>;
+  /**
+   * true の場合、このモーションは idle に対する差分として扱われる。
+   * 値は「idle の上に加算される追加回転（度）」を意味する。
+   * PoseBlender: idle * Slerp(Identity, delta, weight)
+   * MotionPlayer: idle ポーズ + delta を合成して再生
+   */
+  isDelta?: boolean;
 }
