@@ -9,10 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@babylonjs/core": "^8.40.1",
-    "@babylonjs/gui": "^8.43.0",
+    "@babylonjs/core": "^8.50.5",
+    "@babylonjs/gui": "^8.50.5",
     "@babylonjs/havok": "^1.3.11",
-    "@babylonjs/materials": "^8.40.1",
+    "@babylonjs/loaders": "^8.50.5",
+    "@babylonjs/materials": "^8.50.5",
     "@chakra-ui/react": "^3.26.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
