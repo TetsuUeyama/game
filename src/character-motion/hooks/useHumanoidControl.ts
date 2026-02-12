@@ -243,10 +243,18 @@ export function useHumanoidControl(
 
         // ロード完了時に既にモーションチェックモードなら MotionPlayer を生成
         if (motionCheckActiveRef.current) {
+          const motion = currentMotionRef.current;
           const players: MotionPlayer[] = [];
           for (let i = 0; i < skeletons.length; i++) {
-            const data = createSingleMotionPoseData(skeletons[i], currentMotionRef.current, restCaches[i]);
-            if (data) players.push(new MotionPlayer(data));
+            const data = createSingleMotionPoseData(skeletons[i], motion, restCaches[i]);
+            if (data) {
+              const player = new MotionPlayer(data);
+              if (motion.isDelta) {
+                const baseData = createSingleMotionPoseData(skeletons[i], IDLE_MOTION, restCaches[i]);
+                player.setBaseData(baseData);
+              }
+              players.push(player);
+            }
           }
           motionPlayersRef.current = players;
         }
@@ -494,6 +502,7 @@ export function useHumanoidControl(
 
   /** モーション更新（キーフレーム編集時に MotionPlayer をホットスワップ） */
   const updateMotion = useCallback((motion: MotionDefinition) => {
+    const prevName = currentMotionRef.current.name;
     setCurrentMotion(motion);
     currentMotionRef.current = motion;
 
@@ -501,12 +510,23 @@ export function useHumanoidControl(
       const skeletons = skeletonsRef.current;
       const caches = restPoseCachesRef.current;
       const players = motionPlayersRef.current;
+      const nameChanged = motion.name !== prevName;
+
       for (let i = 0; i < players.length; i++) {
         const skeleton = skeletons[i];
         if (!skeleton) continue;
         const data = createSingleMotionPoseData(skeleton, motion, caches[i]);
         if (data) {
           players[i].setData(data);
+          // モーション切替時のみベースを更新（キーフレーム編集時は不要）
+          if (nameChanged) {
+            if (motion.isDelta) {
+              const baseData = createSingleMotionPoseData(skeleton, IDLE_MOTION, caches[i]);
+              players[i].setBaseData(baseData);
+            } else {
+              players[i].setBaseData(null);
+            }
+          }
         }
       }
     }
@@ -516,12 +536,20 @@ export function useHumanoidControl(
   const setMotionCheckMode = useCallback((active: boolean) => {
     motionCheckActiveRef.current = active;
     if (active) {
+      const motion = currentMotionRef.current;
       const players: MotionPlayer[] = [];
       const skeletons = skeletonsRef.current;
       const caches = restPoseCachesRef.current;
       for (let i = 0; i < skeletons.length; i++) {
-        const data = createSingleMotionPoseData(skeletons[i], currentMotionRef.current, caches[i]);
-        if (data) players.push(new MotionPlayer(data));
+        const data = createSingleMotionPoseData(skeletons[i], motion, caches[i]);
+        if (data) {
+          const player = new MotionPlayer(data);
+          if (motion.isDelta) {
+            const baseData = createSingleMotionPoseData(skeletons[i], IDLE_MOTION, caches[i]);
+            player.setBaseData(baseData);
+          }
+          players.push(player);
+        }
       }
       for (const p of motionPlayersRef.current) p.dispose();
       motionPlayersRef.current = players;
@@ -537,6 +565,12 @@ export function useHumanoidControl(
     motionPlayingRef.current = playing;
   }, []);
 
+  /** 現在の再生時刻を取得（UI のタイムバー用） */
+  const getPlaybackTime = useCallback((): number => {
+    const players = motionPlayersRef.current;
+    return players.length > 0 ? players[0].currentTime : 0;
+  }, []);
+
   return {
     loading,
     error,
@@ -550,6 +584,7 @@ export function useHumanoidControl(
     motionPlaying,
     setMotionPlaying: handleSetMotionPlaying,
     setMotionCheckMode,
+    getPlaybackTime,
   };
 }
 

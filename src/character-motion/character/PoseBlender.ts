@@ -62,7 +62,9 @@ export class PoseBlender {
 
   private _idleQ = new Quaternion();
   private _walkQ = new Quaternion();
+  private _tempQ = new Quaternion();
   private _resultQ = new Quaternion();
+  private _identityQ = Quaternion.Identity();
 
   constructor(data: PoseData, config: CharacterMotionConfig) {
     this._config = config;
@@ -113,7 +115,9 @@ export class PoseBlender {
     const idleFrame = (this._idleTime / idleDuration) * this._idleFrameCount;
     const walkFrame = (this._walkTime / (this._walkFrameCount / FPS)) * this._walkFrameCount;
 
-    // ── 各ボーンに適用 ──
+    // ── 各ボーンに適用（加算ブレンド） ──
+    // walk は idle に対する差分回転。
+    // result = idle * Slerp(Identity, walkDelta, weight)
     for (const tgt of this._targets) {
       this._evaluateTo(tgt.idleKeys, idleFrame, this._idleFrameCount, this._idleQ);
 
@@ -121,7 +125,9 @@ export class PoseBlender {
         this._applyRotation(tgt, this._idleQ);
       } else {
         this._evaluateTo(tgt.walkKeys, walkFrame, this._walkFrameCount, this._walkQ);
-        Quaternion.SlerpToRef(this._idleQ, this._walkQ, w, this._resultQ);
+        // walkQ はデルタ回転（Identity 近傍）→ weight で補間してから idle に合成
+        Quaternion.SlerpToRef(this._identityQ, this._walkQ, w, this._tempQ);
+        this._idleQ.multiplyToRef(this._tempQ, this._resultQ);
         this._applyRotation(tgt, this._resultQ);
       }
     }

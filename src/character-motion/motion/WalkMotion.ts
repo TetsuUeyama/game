@@ -1,12 +1,13 @@
 import { MotionDefinition } from "./MotionTypes";
 
 /**
- * 歩行モーション
+ * 歩行モーション（差分方式）
  *
  * 1秒サイクル（30フレーム @ 30fps）
  *
- * 値はレスト姿勢からのオフセット（度）:
- *   0° = レスト姿勢のまま
+ * 値は idle に対する追加回転（度）:
+ *   0° = idle のまま（追加なし）
+ *   isDelta: true により、idle ポーズの上にこの回転が加算される
  *
  * 主要タイミング:
  *   0s(f0) → 0.267s(f8) → 0.5s(f15) → 0.767s(f23) → 1.0s(f30)
@@ -15,6 +16,7 @@ import { MotionDefinition } from "./MotionTypes";
 export const WALK_MOTION: MotionDefinition = {
   name: "walk",
   duration: 1.0,
+  isDelta: true,
   joints: {
     // ── Hips: 左右回転（Y）と左右傾き（Z） ──
     hipsY: { 0: 0, 0.267: 3.44, 0.5: 0, 0.767: -3.44, 1.0: 0 },
@@ -67,11 +69,6 @@ export const WALK_MOTION: MotionDefinition = {
     rightElbowX: { 0: -5.73, 0.267: -11.46, 0.5: -28.65, 0.767: -11.46, 1.0: -5.73 },
   },
 
-  // Rigify T-pose → 自然な立ち姿勢への静的オフセット
-  rigifyAdjustments: {
-    leftShoulderZ: 28.78,   // 左腕を真下に下ろす
-    rightShoulderZ: -28.78,   // 右腕を真下に下ろす
-    leftElbowX: -8.59,        // 左前腕を軽く曲げる
-    rightElbowX: -8.59,       // 右前腕を軽く曲げる
-  },
+  // isDelta=true のため rigifyAdjustments は不要（idle が基本姿勢を担当）
+  rigifyAdjustments: {},
 };

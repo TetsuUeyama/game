@@ -32,6 +32,7 @@ export default function HumanoidScene() {
     motionPlaying,
     setMotionPlaying,
     setMotionCheckMode,
+    getPlaybackTime,
   } = useHumanoidControl(canvasRef);
 
   const [mode, setMode] = useState<CheckMode>("face");
@@ -128,6 +129,7 @@ export default function HumanoidScene() {
               onPlayToggle={() => setMotionPlaying(!motionPlaying)}
               availableMotions={AVAILABLE_MOTIONS}
               onMotionSelect={handleMotionSelect}
+              getPlaybackTime={getPlaybackTime}
             />
           )}
         </div>
