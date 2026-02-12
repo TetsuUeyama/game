@@ -13,6 +13,7 @@ import {
   LogicalBoneName,
 } from "../types/CharacterMotionConfig";
 import { PoseData, PoseBoneData } from "./PoseBlender";
+import { SingleMotionPoseData } from "./MotionPlayer";
 import { MotionDefinition } from "../motion/MotionTypes";
 import { IDLE_MOTION } from "../motion/IdleMotion";
 import { WALK_MOTION } from "../motion/WalkMotion";
@@ -61,7 +62,29 @@ const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
 const DEG_TO_RAD = Math.PI / 180;
 const FPS = 30;
 
+/** ボーンのレスト姿勢キャッシュ（初期化時に取得し、後で再利用） */
+export type RestPoseCache = Map<Bone, Vector3>;
+
 // ─── Public API ─────────────────────────────────────────────
+
+/**
+ * スケルトンの全対象ボーンのレスト姿勢を取得・キャッシュする。
+ * GLBロード直後（PoseBlender 適用前）に呼び出すこと。
+ * 後から createSingleMotionPoseData に渡して正しい基準回転を使う。
+ */
+export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
+  const rigType = detectRigType(skeleton);
+  const bones = findAllBones(skeleton, rigType);
+  if (!bones) return null;
+
+  const cache: RestPoseCache = new Map();
+  for (const bone of Object.values(bones)) {
+    if (bone) {
+      cache.set(bone, restRot(bone).clone());
+    }
+  }
+  return cache;
+}
 
 /**
  * スケルトンに対して Idle / Walk のポーズデータを生成する。
@@ -254,6 +277,7 @@ function motionToEulerKeys(
   motion: MotionDefinition,
   bones: FoundBones,
   isRigify: boolean,
+  restPoses?: RestPoseCache,
 ): { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] {
   const results: { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] = [];
   const processedBones = new Set<Bone>();
@@ -287,7 +311,7 @@ function motionToEulerKeys(
     }
     const times = Array.from(timesSet).sort((a, b) => a - b);
 
-    const rest = restRot(bone);
+    const rest = restPoses?.get(bone) ?? restRot(bone);
     const adjX = isRigify ? (motion.rigifyAdjustments?.[jointName + "X"] ?? 0) : 0;
     const adjY = isRigify ? (motion.rigifyAdjustments?.[jointName + "Y"] ?? 0) : 0;
     const adjZ = isRigify ? (motion.rigifyAdjustments?.[jointName + "Z"] ?? 0) : 0;
@@ -317,7 +341,7 @@ function motionToEulerKeys(
       if (!bone || processedBones.has(bone)) continue;
 
       processedBones.add(bone);
-      const rest = restRot(bone);
+      const rest = restPoses?.get(bone) ?? restRot(bone);
       const adjX = motion.rigifyAdjustments[jointName + "X"] ?? 0;
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
@@ -341,7 +365,7 @@ function motionToEulerKeys(
   for (const bone of Object.values(bones)) {
     if (!bone || processedBones.has(bone)) continue;
     processedBones.add(bone);
-    const rest = restRot(bone);
+    const rest = restPoses?.get(bone) ?? restRot(bone);
     results.push({
       bone,
       keys: [
@@ -352,4 +376,35 @@ function motionToEulerKeys(
   }
 
   return results;
+}
+
+// ─── Single Motion Pose Data ────────────────────────────────
+
+/**
+ * スケルトンと MotionDefinition から、MotionPlayer 用のデータを生成する。
+ * キーフレーム編集時にも呼び出され、ホットスワップに使用される。
+ *
+ * @param restPoses 初期化時に captureRestPoses() で取得したキャッシュ。
+ *                  PoseBlender がボーン回転を変更した後でも正しいレスト姿勢を参照できる。
+ */
+export function createSingleMotionPoseData(
+  skeleton: Skeleton,
+  motion: MotionDefinition,
+  restPoses?: RestPoseCache,
+): SingleMotionPoseData | null {
+  const rigType = detectRigType(skeleton);
+  const bones = findAllBones(skeleton, rigType);
+  if (!bones) return null;
+
+  const isRigify = rigType === "rigify";
+  const entries = motionToEulerKeys(motion, bones, isRigify, restPoses);
+
+  return {
+    bones: entries.map(({ bone, keys }) => ({
+      bone,
+      keys: keys.map((k) => ({ frame: k.frame, quat: eq(k.value) })),
+    })),
+    frameCount: Math.round(motion.duration * FPS),
+    duration: motion.duration,
+  };
 }
