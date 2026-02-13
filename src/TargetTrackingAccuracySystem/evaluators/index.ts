@@ -1,1 +1,1 @@
-// 精度評価器実装（将来実装）
+export { evaluateAccuracy } from "./AccuracyEvaluator";
