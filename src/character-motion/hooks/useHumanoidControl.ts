@@ -11,6 +11,7 @@ import {
   Color3,
   KeyboardEventTypes,
   AbstractMesh,
+  TransformNode,
   Skeleton,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
@@ -18,7 +19,7 @@ import { BlendController } from "../character/BlendController";
 import { PoseBlender } from "../character/PoseBlender";
 import { IKSystem } from "../character/IKSystem";
 import { TargetPose } from "../character/TargetPose";
-import { createPoseData, createSingleMotionPoseData, captureRestPoses, RestPoseCache } from "../character/AnimationFactory";
+import { createPoseData, createSingleMotionPoseData, captureRestPoses, RestPoseCache, findBoneForJoint, getJointCorrection } from "../character/AnimationFactory";
 import { MotionPlayer } from "../character/MotionPlayer";
 import {
   createProceduralHumanoid,
@@ -118,6 +119,8 @@ export function useHumanoidControl(
   const motionPlayersRef = useRef<MotionPlayer[]>([]);
   const currentMotionRef = useRef<MotionDefinition>({ ...IDLE_MOTION });
   const motionPlayingRef = useRef(true);
+  /** ジョイントインジケータ用（補正ノード含む） */
+  const indicatorMeshesRef = useRef<TransformNode[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -195,13 +198,13 @@ export function useHumanoidControl(
           }
 
           // PoseBlender 適用前にレスト姿勢をキャッシュ
-          const restCache = captureRestPoses(skeleton);
-          restCaches.push(restCache ?? new Map());
+          const restCache = captureRestPoses(skeleton) ?? new Map();
+          restCaches.push(restCache);
 
           rootMesh.position.x = X_POSITIONS[i];
           rootMesh.scaling.setAll(HEIGHTS[i] / BASE_HEIGHT_CM);
 
-          const poseData = createPoseData(skeleton);
+          const poseData = createPoseData(skeleton, restCache);
           if (!poseData) {
             throw new Error("スケルトンのボーン名が認識できません");
           }
@@ -297,7 +300,7 @@ export function useHumanoidControl(
               if (input.speed > 0) {
                 inst.rootMesh.translate(Vector3.Forward(), input.speed * config.walkSpeed * dt);
               }
-              inst.ik.update();
+              inst.ik.update(input.speed);
               inst.pose.capture();
             }
 
@@ -314,7 +317,7 @@ export function useHumanoidControl(
             const idleInput: BlendInput = { speed: 0, turnRate: 0 };
             for (const inst of instances) {
               inst.poseBlender!.update(idleInput, dt);
-              inst.ik.update();
+              inst.ik.update(0);
               inst.pose.capture();
             }
 
@@ -422,6 +425,8 @@ export function useHumanoidControl(
     return () => {
       mounted = false;
       window.removeEventListener("resize", onResize);
+      for (const m of indicatorMeshesRef.current) m.dispose();
+      indicatorMeshesRef.current = [];
       for (const p of motionPlayersRef.current) p.dispose();
       motionPlayersRef.current = [];
       skeletonsRef.current = [];
@@ -571,6 +576,124 @@ export function useHumanoidControl(
     return players.length > 0 ? players[0].currentTime : 0;
   }, []);
 
+  /**
+   * 腕IKターゲットを設定する。
+   * @param charIndex キャラクターインデックス
+   * @param side "left" | "right"
+   * @param target シーン内のTransformNode。null で解除。
+   */
+  const setArmTarget = useCallback(
+    (charIndex: number, side: "left" | "right", target: TransformNode | null) => {
+      const inst = instancesRef.current[charIndex];
+      if (!inst) return;
+      inst.ik.setArmTarget(side, target);
+    },
+    []
+  );
+
+  /** 選択中のジョイントをハイライト表示（XYZ矢印付き、右側ボーン補正対応） */
+  const setHighlightedJoint = useCallback((jointName: string | null) => {
+    // 既存のインジケータを破棄
+    for (const m of indicatorMeshesRef.current) m.dispose();
+    indicatorMeshesRef.current = [];
+
+    if (!jointName) return;
+
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // renderingGroup 1 は深度クリアして常に手前に描画
+    scene.setRenderingAutoClearDepthStencil(1, true, true);
+
+    const skeletons = skeletonsRef.current;
+    const caches = restPoseCachesRef.current;
+    const nodes: TransformNode[] = [];
+    const arrowLen = 0.25;
+
+    for (let si = 0; si < skeletons.length; si++) {
+      const skeleton = skeletons[si];
+      const bone = findBoneForJoint(skeleton, jointName);
+      if (!bone) continue;
+
+      const boneNode = bone.getTransformNode() ?? bone;
+
+      // 右側ボーンの補正がある場合、中間ノードで矢印軸を補正
+      const corr = getJointCorrection(skeleton, jointName, caches[si]);
+      let parentNode: TransformNode | typeof bone = boneNode;
+      if (corr) {
+        const comp = new TransformNode("jind_comp", scene);
+        comp.parent = boneNode;
+        comp.rotationQuaternion = corr.clone();
+        nodes.push(comp);
+        parentNode = comp;
+      }
+
+      // ジョイント位置のハイライト球
+      const sphere = MeshBuilder.CreateSphere("jind_sphere", { diameter: 0.05 }, scene);
+      const sphereMat = new StandardMaterial("jind_sphereMat", scene);
+      sphereMat.emissiveColor = new Color3(1, 1, 0);
+      sphereMat.disableLighting = true;
+      sphere.material = sphereMat;
+      sphere.parent = parentNode;
+      sphere.renderingGroupId = 1;
+
+      // X軸（赤）
+      const xLine = MeshBuilder.CreateLines("jind_x", {
+        points: [Vector3.Zero(), new Vector3(arrowLen, 0, 0)],
+      }, scene);
+      xLine.color = new Color3(1, 0, 0);
+      xLine.parent = parentNode;
+      xLine.renderingGroupId = 1;
+
+      const xTip = MeshBuilder.CreateSphere("jind_xTip", { diameter: 0.025 }, scene);
+      xTip.position = new Vector3(arrowLen, 0, 0);
+      const xMat = new StandardMaterial("jind_xMat", scene);
+      xMat.emissiveColor = new Color3(1, 0, 0);
+      xMat.disableLighting = true;
+      xTip.material = xMat;
+      xTip.parent = parentNode;
+      xTip.renderingGroupId = 1;
+
+      // Y軸（緑）
+      const yLine = MeshBuilder.CreateLines("jind_y", {
+        points: [Vector3.Zero(), new Vector3(0, arrowLen, 0)],
+      }, scene);
+      yLine.color = new Color3(0, 1, 0);
+      yLine.parent = parentNode;
+      yLine.renderingGroupId = 1;
+
+      const yTip = MeshBuilder.CreateSphere("jind_yTip", { diameter: 0.025 }, scene);
+      yTip.position = new Vector3(0, arrowLen, 0);
+      const yMat = new StandardMaterial("jind_yMat", scene);
+      yMat.emissiveColor = new Color3(0, 1, 0);
+      yMat.disableLighting = true;
+      yTip.material = yMat;
+      yTip.parent = parentNode;
+      yTip.renderingGroupId = 1;
+
+      // Z軸（青）
+      const zLine = MeshBuilder.CreateLines("jind_z", {
+        points: [Vector3.Zero(), new Vector3(0, 0, arrowLen)],
+      }, scene);
+      zLine.color = new Color3(0, 0, 1);
+      zLine.parent = parentNode;
+      zLine.renderingGroupId = 1;
+
+      const zTip = MeshBuilder.CreateSphere("jind_zTip", { diameter: 0.025 }, scene);
+      zTip.position = new Vector3(0, 0, arrowLen);
+      const zMat = new StandardMaterial("jind_zMat", scene);
+      zMat.emissiveColor = new Color3(0, 0, 1);
+      zMat.disableLighting = true;
+      zTip.material = zMat;
+      zTip.parent = parentNode;
+      zTip.renderingGroupId = 1;
+
+      nodes.push(sphere, xLine, xTip, yLine, yTip, zLine, zTip);
+    }
+
+    indicatorMeshesRef.current = nodes;
+  }, []);
+
   return {
     loading,
     error,
@@ -585,6 +708,8 @@ export function useHumanoidControl(
     setMotionPlaying: handleSetMotionPlaying,
     setMotionCheckMode,
     getPlaybackTime,
+    setHighlightedJoint,
+    setArmTarget,
   };
 }
 
