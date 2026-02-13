@@ -13,6 +13,7 @@ interface MotionCheckPanelProps {
   availableMotions: { name: string; motion: MotionDefinition }[];
   onMotionSelect: (name: string) => void;
   getPlaybackTime: () => number;
+  onJointExpand?: (jointName: string | null) => void;
 }
 
 export function MotionCheckPanel({
@@ -23,6 +24,7 @@ export function MotionCheckPanel({
   availableMotions,
   onMotionSelect,
   getPlaybackTime,
+  onJointExpand,
 }: MotionCheckPanelProps) {
   const [exportCode, setExportCode] = useState<string | null>(null);
   const [expandedJoint, setExpandedJoint] = useState<string | null>(null);
@@ -35,7 +37,8 @@ export function MotionCheckPanel({
   // モーション切替時に展開状態をリセット
   useEffect(() => {
     setExpandedJoint(null);
-  }, [motionData.name]);
+    onJointExpand?.(null);
+  }, [motionData.name, onJointExpand]);
 
   // requestAnimationFrame でマーカー位置を更新（React再描画なし）
   useEffect(() => {
@@ -197,7 +200,11 @@ export function MotionCheckPanel({
               {/* Joint header */}
               <div style={jointHeaderRowStyle}>
                 <button
-                  onClick={() => setExpandedJoint(isExpanded ? null : jointName)}
+                  onClick={() => {
+                    const next = isExpanded ? null : jointName;
+                    setExpandedJoint(next);
+                    onJointExpand?.(next);
+                  }}
                   style={jointHeaderStyle}
                 >
                   <span style={chevronStyle}>{isExpanded ? "v" : ">"}</span>
@@ -223,6 +230,12 @@ export function MotionCheckPanel({
               {/* Expanded: time bar + time × axis table */}
               {isExpanded && (
                 <div style={jointBodyStyle}>
+                  {/* Axis color legend */}
+                  <div style={axisLegendStyle}>
+                    <span style={legendItemStyle}><span style={legendDotX} />X</span>
+                    <span style={legendItemStyle}><span style={legendDotY} />Y</span>
+                    <span style={legendItemStyle}><span style={legendDotZ} />Z</span>
+                  </div>
                   {/* Table header (offset for time bar column) */}
                   <div style={tableHeaderStyle}>
                     <span style={barHeaderSpaceStyle} />
@@ -548,6 +561,31 @@ const currentTimeTextStyle: React.CSSProperties = {
   fontFamily: "monospace",
   fontWeight: "bold",
 };
+
+const axisLegendStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  padding: "2px 4px 4px",
+  fontSize: 10,
+  color: "#888",
+};
+
+const legendItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 3,
+};
+
+const legendDotBase: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: "50%",
+  display: "inline-block",
+};
+
+const legendDotX: React.CSSProperties = { ...legendDotBase, background: "#f44" };
+const legendDotY: React.CSSProperties = { ...legendDotBase, background: "#4f4" };
+const legendDotZ: React.CSSProperties = { ...legendDotBase, background: "#44f" };
 
 const exportButtonStyle: React.CSSProperties = {
   padding: "8px 0",

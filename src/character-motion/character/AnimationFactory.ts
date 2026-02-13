@@ -1,3 +1,27 @@
+/**
+ * AnimationFactory — モーション変換パイプライン
+ *
+ * 全体の流れ:
+ *
+ *   1. captureRestPoses()       ← GLBロード直後に1回呼ぶ
+ *      bone.getRestPose() からバインドポーズ Quaternion を取得してキャッシュ。
+ *      BIND_POSE_CORRECTIONS の補正も適用済み。
+ *
+ *   2. motionToEulerKeys()      ← 度数 → 純粋オフセット Euler (rad)
+ *      MotionDefinition の度数データを、レスト姿勢を含まないオフセットに変換。
+ *
+ *   3. eulerKeysToQuatKeys()    ← オフセット Euler → 最終 Quaternion
+ *      Q_rest × eq(offset) でクォータニオン合成。
+ *      旧実装の eq(rest_euler + offset_euler) は数学的に不正確だったため廃止。
+ *
+ *   4. PoseBlender              ← bone.rotationQuaternion に書き込み
+ *      idle/walk を速度比でブレンドして毎フレーム適用。
+ *
+ * 重要な注意点:
+ *   - バインドポーズは getRestPose() から取得（不変）
+ *   - getLocalMatrix() は使用禁止（アニメーション状態で変わる）
+ *   - IKSystem は PoseBlender の後に実行（FK を上書きするため）
+ */
 import {
   Skeleton,
   Bone,
@@ -59,18 +83,55 @@ const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
   rightFoot: "rFoot",
 };
 
+/** FoundBones キー → LogicalBoneName（ボーン検索用） */
+const FOUND_TO_LOGICAL: Record<keyof FoundBones, LogicalBoneName> = {
+  hips: "hips",
+  spine: "spine",
+  lUpLeg: "leftUpLeg",
+  rUpLeg: "rightUpLeg",
+  lLeg: "leftLeg",
+  rLeg: "rightLeg",
+  lFoot: "leftFoot",
+  rFoot: "rightFoot",
+  lArm: "leftArm",
+  rArm: "rightArm",
+  lForeArm: "leftForeArm",
+  rForeArm: "rightForeArm",
+};
+
 const DEG_TO_RAD = Math.PI / 180;
 const FPS = 30;
 
-/** ボーンのレスト姿勢キャッシュ（初期化時に取得し、後で再利用） */
-export type RestPoseCache = Map<Bone, Vector3>;
+/** ボーンのレスト姿勢キャッシュ（Quaternion で保持） */
+export type RestPoseCache = Map<Bone, Quaternion>;
+
+/**
+ * バインドポーズの静的補正（度）。
+ *
+ * 問題: 一部のリグ（Rigify 等）では、右膝(rLeg) のバインドポーズが
+ *       左膝と比べて Y 軸方向に約45° ズレており、左右非対称になる。
+ *       そのままだと、モーションで Y=0° を指定しても膝が斜めを向く。
+ *
+ * 解決: captureRestPoses() でレスト姿勢をキャッシュする際に、
+ *       ここで指定した度数を Q_rest に乗算して「補正済みレスト姿勢」にする。
+ *       → モーションのオフセット 0° で正面を向くようになる。
+ *
+ * 適用箇所: captureRestPoses() 内で Q_rest = Q_rest × Q_correction
+ */
+const BIND_POSE_CORRECTIONS: Partial<Record<keyof FoundBones, { x?: number; y?: number; z?: number }>> = {
+  rLeg: { y: 45 },
+};
 
 // ─── Public API ─────────────────────────────────────────────
 
 /**
  * スケルトンの全対象ボーンのレスト姿勢を取得・キャッシュする。
- * GLBロード直後（PoseBlender 適用前）に呼び出すこと。
- * 後から createSingleMotionPoseData に渡して正しい基準回転を使う。
+ * GLBロード直後（PoseBlender 適用前）に1回だけ呼び出すこと。
+ *
+ * ここでキャッシュした Quaternion が、以降すべての変換の基準（Q_rest）になる。
+ * キャッシュする理由: PoseBlender が bone.rotationQuaternion を毎フレーム上書きするため、
+ * getLocalMatrix() からは正しいバインドポーズを取れなくなる。
+ * getRestPose() は不変だが、BIND_POSE_CORRECTIONS の適用結果も含めて保持したいのでキャッシュする。
  */
 export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
   const rigType = detectRigType(skeleton);
@@ -78,12 +139,59 @@ export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
   if (!bones) return null;
 
   const cache: RestPoseCache = new Map();
-  for (const bone of Object.values(bones)) {
+  for (const [key, bone] of Object.entries(bones)) {
     if (bone) {
-      cache.set(bone, restRot(bone).clone());
+      // Step 1: bone.getRestPose() から不変のバインドポーズ Quaternion を取得
+      let q = restRotQuat(bone);
+
+      // Step 2: BIND_POSE_CORRECTIONS に定義があれば、レスト姿勢自体を補正
+      //         例: rLeg に Y=45° → Q_rest = Q_rest × Q(0, 45°, 0)
+      //         これにより、モーションオフセット 0° で膝が正面を向く
+      const corr = BIND_POSE_CORRECTIONS[key as keyof FoundBones];
+      if (corr) {
+        const corrQ = Quaternion.RotationYawPitchRoll(
+          (corr.y ?? 0) * DEG_TO_RAD,
+          (corr.x ?? 0) * DEG_TO_RAD,
+          (corr.z ?? 0) * DEG_TO_RAD,
+        );
+        q = q.multiply(corrQ);
+      }
+      cache.set(bone, q);
     }
   }
   return cache;
+}
+
+/**
+ * モーション関節名（"leftShoulder" 等）からスケルトンのボーンを取得する。
+ * UI でジョイントハイライト表示に使用。
+ *
+ * findSkeletonBone は Rigify で DEF- プレフィックス以外のボーン（hips="torso",
+ * spine="ORG-spine.003"）を返さないため、フォールバックで直接検索する。
+ */
+export function findBoneForJoint(
+  skeleton: Skeleton,
+  jointName: string,
+): Bone | null {
+  const foundKey = JOINT_TO_BONE[jointName];
+  if (!foundKey) return null;
+  const logicalName = FOUND_TO_LOGICAL[foundKey];
+  if (!logicalName) return null;
+
+  // 通常検索（Mixamo / unknown）
+  const bone = findSkeletonBone(skeleton, logicalName);
+  if (bone) return bone;
+
+  // フォールバック: Rigify の非 DEF ボーン（torso, ORG-spine 等）を直接検索
+  const rigifyName = RIGIFY_BONE_NAMES[logicalName];
+  if (rigifyName) {
+    return skeleton.bones.find((b) =>
+      b.name === rigifyName ||
+      b.name.startsWith(rigifyName + "_")
+    ) ?? null;
+  }
+
+  return null;
 }
 
 /**
@@ -91,9 +199,16 @@ export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
  *
  * AnimationGroup ではなく、PoseBlender 用の Quaternion キーフレームデータを返す。
  * PoseBlender が毎フレーム直接ボーンの rotationQuaternion を設定する。
+ *
+ * 変換パイプライン:
+ *   MotionDefinition (度数)
+ *     → motionToEulerKeys(): 純粋なオフセット Euler (rad)
+ *       → eulerKeysToQuatKeys(): Q_rest × eq(offset) → 最終 Quaternion
+ *         → PoseBlender: bone.rotationQuaternion に書き込み
  */
 export function createPoseData(
-  skeleton: Skeleton
+  skeleton: Skeleton,
+  restPoses?: RestPoseCache,
 ): PoseData | null {
   const rigType = detectRigType(skeleton);
   const bones = findAllBones(skeleton, rigType);
@@ -101,30 +216,31 @@ export function createPoseData(
 
   const isRigify = rigType === "rigify";
 
-  const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
-  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify, undefined, WALK_MOTION.isDelta);
+  // 左右対称補正: 右ボーンのレスト姿勢が左のミラーと一致しない場合の補正
+  const corrections = computeCorrections(bones, restPoses);
 
-  // Idle / Walk の Euler キーを Quaternion に変換して PoseBoneData に統合
+  // Step 1: MotionDefinition → 純粋なオフセット Euler キーフレーム
+  //         レスト姿勢は含まない（後段で Quaternion 合成する）
+  const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
+  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
+
   const boneMap = new Map<Bone, PoseBoneData>();
 
+  // Step 2: オフセット Euler → 最終 Quaternion
+  //         idle は絶対モード: Q_rest × eq(offset)
   for (const { bone, keys } of idleEntries) {
     if (!boneMap.has(bone)) {
       boneMap.set(bone, { bone, idleKeys: [], walkKeys: [] });
     }
-    boneMap.get(bone)!.idleKeys = keys.map((k) => ({
-      frame: k.frame,
-      quat: eq(k.value),
-    }));
+    boneMap.get(bone)!.idleKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, false);
   }
 
+  //         walk は isDelta=true なので: eq(offset) のみ（PoseBlender が idle に加算）
   for (const { bone, keys } of walkEntries) {
     if (!boneMap.has(bone)) {
       boneMap.set(bone, { bone, idleKeys: [], walkKeys: [] });
     }
-    boneMap.get(bone)!.walkKeys = keys.map((k) => ({
-      frame: k.frame,
-      quat: eq(k.value),
-    }));
+    boneMap.get(bone)!.walkKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, WALK_MOTION.isDelta ?? false);
   }
 
   return {
@@ -150,27 +266,36 @@ export function createAnimationsForSkeleton(
   const isRigify = rigType === "rigify";
 
   const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
-  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify, undefined, WALK_MOTION.isDelta);
+  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
 
+  // プロシージャルスケルトン用: Euler Animation API なので rest + offset に戻す
   const idleGroup = new AnimationGroup("idle", scene);
   for (const { bone, keys } of idleEntries) {
+    const rest = restRot(bone);
     const anim = new Animation(
       `idle_${bone.name}`, "rotation", FPS,
       Animation.ANIMATIONTYPE_VECTOR3,
       Animation.ANIMATIONLOOPMODE_CYCLE
     );
-    anim.setKeys(keys.map((k) => ({ frame: k.frame, value: k.value })));
+    anim.setKeys(keys.map((k) => ({
+      frame: k.frame,
+      value: new Vector3(rest.x + k.value.x, rest.y + k.value.y, rest.z + k.value.z),
+    })));
     idleGroup.addTargetedAnimation(anim, bone);
   }
 
   const walkGroup = new AnimationGroup("walk", scene);
   for (const { bone, keys } of walkEntries) {
+    const rest = restRot(bone);
     const anim = new Animation(
       `walk_${bone.name}`, "rotation", FPS,
       Animation.ANIMATIONTYPE_VECTOR3,
       Animation.ANIMATIONLOOPMODE_CYCLE
     );
-    anim.setKeys(keys.map((k) => ({ frame: k.frame, value: k.value })));
+    anim.setKeys(keys.map((k) => ({
+      frame: k.frame,
+      value: new Vector3(rest.x + k.value.x, rest.y + k.value.y, rest.z + k.value.z),
+    })));
     walkGroup.addTargetedAnimation(anim, bone);
   }
 
@@ -251,34 +376,196 @@ export function findSkeletonBone(
 }
 
 // ─── Rest Pose ────────────────────────────────────────────
+//
+// バインドポーズ（レスト姿勢）の取得方法:
+//   bone.getRestPose() を使う。これは GLTF ロード時に確定する不変の行列。
+//   bone.getLocalMatrix() は絶対NG — アニメーション適用後に値が変わるため、
+//   PoseBlender がボーン回転を書き換えた後は正しいバインドポーズを返さない。
 
-const _tmpScale = new Vector3();
-const _tmpQuat = new Quaternion();
-const _tmpPos = new Vector3();
-
+/** ボーンのバインドポーズを Euler で取得（プロシージャルスケルトン用） */
 function restRot(bone: Bone): Vector3 {
-  bone.getLocalMatrix().decompose(_tmpScale, _tmpQuat, _tmpPos);
-  return _tmpQuat.toEulerAngles();
+  const q = new Quaternion();
+  bone.getRestPose().decompose(undefined, q, undefined);
+  return q.toEulerAngles();
 }
 
-// ─── Helpers ───────────────────────────────────────────────
+/** ボーンのバインドポーズを Quaternion で取得（不変、アニメーション状態に依存しない） */
+function restRotQuat(bone: Bone): Quaternion {
+  const q = new Quaternion();
+  // getRestPose() = GLTF の TRS から構築された不変行列（_restMatrix）
+  // getLocalMatrix() とは異なり、ランタイムの回転状態に影響されない
+  bone.getRestPose().decompose(undefined, q, undefined);
+  return q;
+}
 
-/** Euler (YXZ) → Quaternion 変換 */
+/** Euler(Vector3) → Quaternion 変換（YawPitchRoll 順序） */
 function eq(euler: Vector3): Quaternion {
   return Quaternion.RotationYawPitchRoll(euler.y, euler.x, euler.z);
 }
 
-// ─── Motion → Euler Keys 変換 ─────────────────────────────
+// ─── 左右対称補正 ──────────────────────────────────────────
 //
-// MotionDefinition の度数データを各ボーンの Euler キーフレームに変換する。
-// 変換ルール: 最終オイラー = restRot(bone) + (度数 × π/180)
+// Rigify リグでは右側ボーン（rUpLeg, rArm）のレスト姿勢が
+// 左側のミラーと一致しない場合がある（例: rightHip が Y 軸 45° ズレ）。
+// 補正は Euler→Quaternion 変換ステップでのみ適用し、
+// motionToEulerKeys（オイラー加算）はそのまま維持する。
+
+/** 補正対象の右→左ペア（全右側ボーン） */
+const CORRECTED_PAIRS: [keyof FoundBones, keyof FoundBones][] = [
+  ["rUpLeg", "lUpLeg"],
+  ["rLeg", "lLeg"],
+  ["rFoot", "lFoot"],
+  ["rArm", "lArm"],
+  ["rForeArm", "lForeArm"],
+];
+
+/** クォータニオンを YZ 平面でミラー（Y,Z 成分を反転） */
+function mirrorQuatYZ(q: Quaternion): Quaternion {
+  return new Quaternion(q.x, -q.y, -q.z, q.w);
+}
+
+/**
+ * 右側ボーンの対称補正クォータニオンを計算する。
+ *
+ * 問題: 一部のリグでは右ボーンのレスト姿勢が左のミラーと一致しない。
+ *       例: 左膝が前向き、右膝が45°ズレている → 同じオフセットでも見た目が非対称。
+ *
+ * 計算: Q_corr = Q_rest_R⁻¹ × mirror(Q_rest_L)
+ *       → 右レストを左のミラーに変換する回転差分
+ *
+ * 使い方: eulerKeysToQuatKeys() で
+ *   Q_rest × Q_corr × eq(offset) × Q_corr⁻¹
+ *   とサンドイッチ適用することで、オフセットが左右対称に効く。
+ *
+ * ゼロオフセット時は Q_rest がそのまま保持される（スキニング安全）。
+ */
+function computeCorrections(
+  bones: FoundBones,
+  restPoses?: RestPoseCache,
+): Map<Bone, Quaternion> {
+  const corrections = new Map<Bone, Quaternion>();
+
+  for (const [rightKey, leftKey] of CORRECTED_PAIRS) {
+    const rightBone = bones[rightKey];
+    const leftBone = bones[leftKey];
+    if (!rightBone || !leftBone) continue;
+
+    const rightRestQ = restPoses?.get(rightBone) ?? restRotQuat(rightBone);
+    const leftRestQ = restPoses?.get(leftBone) ?? restRotQuat(leftBone);
+    const idealRightQ = mirrorQuatYZ(leftRestQ);
+
+    const corr = Quaternion.Inverse(rightRestQ).multiply(idealRightQ);
+
+    // Identity に近ければスキップ（すでに対称なリグ）
+    if (Math.abs(corr.w) < 0.9999) {
+      corrections.set(rightBone, corr);
+    }
+  }
+
+  return corrections;
+}
+
+/**
+ * オフセット Euler キーフレーム → Quaternion キーフレームに変換する。
+ *
+ * これがパイプラインの核心。旧実装では eq(rest_euler + offset_euler) としていたが、
+ * オイラー角の加算はクォータニオン積と等価ではない（非可換・ジンバルロック）。
+ * 正しくは Q_rest × eq(offset) のクォータニオン積で合成する。
+ *
+ * keys の value は純粋なオフセット（レスト姿勢は含まない）。
+ * restPoses キャッシュの Q_rest には BIND_POSE_CORRECTIONS が反映済み。
+ *
+ * 4パターン:
+ *   絶対モード:         Q_rest × eq(offset)         ... idle 等
+ *   絶対モード(補正有): Q_rest × Q_corr × eq(offset) × Q_corr⁻¹
+ *   デルタモード:       eq(offset)                   ... walk (idle に加算)
+ *   デルタモード(補正有): Q_corr × eq(offset) × Q_corr⁻¹
+ */
+function eulerKeysToQuatKeys(
+  keys: { frame: number; value: Vector3 }[],
+  bone: Bone,
+  corrections: Map<Bone, Quaternion>,
+  restPoses: RestPoseCache | undefined,
+  isDelta: boolean,
+): { frame: number; quat: Quaternion }[] {
+  const corr = corrections.get(bone);
+  // restPoses キャッシュがあればそちらを使う（BIND_POSE_CORRECTIONS 反映済み）
+  // なければ bone.getRestPose() から直接取得（補正なし）
+  const restQ = restPoses?.get(bone) ?? restRotQuat(bone);
+
+  // デルタモード: レスト姿勢は含まない（PoseBlender が idle の上に乗算する）
+  if (isDelta) {
+    if (!corr) {
+      // 補正なし: 純粋なオフセット回転のみ
+      return keys.map((k) => ({ frame: k.frame, quat: eq(k.value) }));
+    }
+    // 補正あり: 左右対称補正フレームでオフセットを適用
+    const corrInv = Quaternion.Inverse(corr);
+    return keys.map((k) => ({
+      frame: k.frame,
+      quat: corr.multiply(eq(k.value)).multiply(corrInv),
+    }));
+  }
+
+  // 絶対モード: Q_rest × eq(offset)
+  // → offset=0 なら Q_rest そのもの（= バインドポーズ維持）
+  // → offset≠0 なら バインドポーズ基準で相対回転
+  if (!corr) {
+    return keys.map((k) => ({
+      frame: k.frame,
+      quat: restQ.multiply(eq(k.value)),
+    }));
+  }
+
+  // 絶対モード(補正有): Q_rest × Q_corr × eq(offset) × Q_corr⁻¹
+  // Q_corr で補正フレームに変換 → オフセット適用 → 元に戻す
+  const corrInv = Quaternion.Inverse(corr);
+  return keys.map((k) => ({
+    frame: k.frame,
+    quat: restQ.multiply(corr).multiply(eq(k.value)).multiply(corrInv),
+  }));
+}
+
+/**
+ * 指定ジョイントの補正クォータニオンを取得する。
+ * インジケータ矢印の軸補正に使用。補正不要なら null。
+ */
+export function getJointCorrection(
+  skeleton: Skeleton,
+  jointName: string,
+  restPoses?: RestPoseCache,
+): Quaternion | null {
+  const rigType = detectRigType(skeleton);
+  const bones = findAllBones(skeleton, rigType);
+  if (!bones) return null;
+
+  const boneKey = JOINT_TO_BONE[jointName];
+  if (!boneKey) return null;
+
+  const bone = bones[boneKey];
+  if (!bone) return null;
+
+  const corrections = computeCorrections(bones, restPoses);
+  return corrections.get(bone) ?? null;
+}
+
+// ─── Motion → Offset Euler Keys 変換 ──────────────────────
+//
+// パイプラインの第1段: MotionDefinition の度数データ → 純粋なオフセット Euler (rad)
+//
+// MotionDefinition.joints のフォーマット:
+//   "leftShoulderX": { 0: 0, 0.733: 5, 1.5: 0, ... }  ← 度数、時間→値のマップ
+//
+// 出力: 各ボーンに対して { frame: number, value: Vector3 } の配列
+//   value は純粋なオフセット（レスト姿勢は含まない）。
+//   後段の eulerKeysToQuatKeys() で Q_rest × eq(offset) として合成する。
+//
+// Rigify の場合: rigifyAdjustments のオフセット（腕を下ろす等）も加算する。
 
 function motionToEulerKeys(
   motion: MotionDefinition,
   bones: FoundBones,
   isRigify: boolean,
-  restPoses?: RestPoseCache,
-  isDelta?: boolean,
 ): { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] {
   const results: { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] = [];
   const processedBones = new Set<Bone>();
@@ -316,30 +603,17 @@ function motionToEulerKeys(
     const adjY = isRigify ? (motion.rigifyAdjustments?.[jointName + "Y"] ?? 0) : 0;
     const adjZ = isRigify ? (motion.rigifyAdjustments?.[jointName + "Z"] ?? 0) : 0;
 
-    if (isDelta) {
-      // デルタモード: レスト姿勢を加算しない（idle との差分のみ）
-      const keys = times.map((time) => ({
-        frame: Math.round(time * FPS),
-        value: new Vector3(
-          ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
-          ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
-          ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
-        ),
-      }));
-      results.push({ bone, keys });
-    } else {
-      // 絶対モード: レスト姿勢 + オフセット
-      const rest = restPoses?.get(bone) ?? restRot(bone);
-      const keys = times.map((time) => ({
-        frame: Math.round(time * FPS),
-        value: new Vector3(
-          rest.x + ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
-          rest.y + ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
-          rest.z + ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
-        ),
-      }));
-      results.push({ bone, keys });
-    }
+    // 純粋なオフセットのみ出力（度→ラジアン変換 + Rigify調整を加算）
+    // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
+    const keys = times.map((time) => ({
+      frame: Math.round(time * FPS),
+      value: new Vector3(
+        ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
+        ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
+        ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
+      ),
+    }));
+    results.push({ bone, keys });
   }
 
   // Rigify 調整のみ（アニメーションデータなし）の関節を処理
@@ -359,65 +633,35 @@ function motionToEulerKeys(
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
-      if (isDelta) {
-        // デルタモード: 調整値のみ
-        const value = new Vector3(
-          adjX * DEG_TO_RAD,
-          adjY * DEG_TO_RAD,
-          adjZ * DEG_TO_RAD,
-        );
-        results.push({
-          bone,
-          keys: [
-            { frame: 0, value: value.clone() },
-            { frame: totalFrames, value: value.clone() },
-          ],
-        });
-      } else {
-        // 絶対モード: レスト + 調整値
-        const rest = restPoses?.get(bone) ?? restRot(bone);
-        const value = new Vector3(
-          rest.x + adjX * DEG_TO_RAD,
-          rest.y + adjY * DEG_TO_RAD,
-          rest.z + adjZ * DEG_TO_RAD,
-        );
-        results.push({
-          bone,
-          keys: [
-            { frame: 0, value: value.clone() },
-            { frame: totalFrames, value: value.clone() },
-          ],
-        });
-      }
+      const value = new Vector3(
+        adjX * DEG_TO_RAD,
+        adjY * DEG_TO_RAD,
+        adjZ * DEG_TO_RAD,
+      );
+      results.push({
+        bone,
+        keys: [
+          { frame: 0, value: value.clone() },
+          { frame: totalFrames, value: value.clone() },
+        ],
+      });
     }
   }
 
-  // 残りのボーン
+  // 残りのボーン: ゼロオフセット（= レスト姿勢維持）
+  // offset=0 なので eulerKeysToQuatKeys で Q_rest × eq(0) = Q_rest になる
   for (const bone of Object.values(bones)) {
     if (!bone || processedBones.has(bone)) continue;
     processedBones.add(bone);
 
-    if (isDelta) {
-      // デルタモード: ゼロ（Identity）= 追加回転なし
-      const zero = Vector3.Zero();
-      results.push({
-        bone,
-        keys: [
-          { frame: 0, value: zero.clone() },
-          { frame: totalFrames, value: zero.clone() },
-        ],
-      });
-    } else {
-      // 絶対モード: レスト姿勢キーフレーム
-      const rest = restPoses?.get(bone) ?? restRot(bone);
-      results.push({
-        bone,
-        keys: [
-          { frame: 0, value: rest.clone() },
-          { frame: totalFrames, value: rest.clone() },
-        ],
-      });
-    }
+    const zero = Vector3.Zero();
+    results.push({
+      bone,
+      keys: [
+        { frame: 0, value: zero.clone() },
+        { frame: totalFrames, value: zero.clone() },
+      ],
+    });
   }
 
   return results;
@@ -428,6 +672,9 @@ function motionToEulerKeys(
 /**
  * スケルトンと MotionDefinition から、MotionPlayer 用のデータを生成する。
  * キーフレーム編集時にも呼び出され、ホットスワップに使用される。
+ *
+ * 変換は createPoseData と同じパイプライン:
+ *   MotionDefinition → motionToEulerKeys() → eulerKeysToQuatKeys() → Quaternion キーフレーム
  *
  * @param restPoses 初期化時に captureRestPoses() で取得したキャッシュ。
  *                  PoseBlender がボーン回転を変更した後でも正しいレスト姿勢を参照できる。
@@ -442,12 +689,13 @@ export function createSingleMotionPoseData(
   if (!bones) return null;
 
   const isRigify = rigType === "rigify";
-  const entries = motionToEulerKeys(motion, bones, isRigify, restPoses, motion.isDelta);
+  const corrections = computeCorrections(bones, restPoses);
+  const entries = motionToEulerKeys(motion, bones, isRigify);
 
   return {
     bones: entries.map(({ bone, keys }) => ({
       bone,
-      keys: keys.map((k) => ({ frame: k.frame, quat: eq(k.value) })),
+      keys: eulerKeysToQuatKeys(keys, bone, corrections, restPoses, motion.isDelta ?? false),
     })),
     frameCount: Math.round(motion.duration * FPS),
     duration: motion.duration,

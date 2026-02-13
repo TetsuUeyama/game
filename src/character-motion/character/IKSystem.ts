@@ -12,14 +12,18 @@ import { CharacterMotionConfig } from "../types/CharacterMotionConfig";
 import { findSkeletonBone } from "./AnimationFactory";
 
 /**
- * 足IKシステム
+ * IKシステム（足IK + 腕IK）
  *
  * Babylon.js 組込み BoneIKController（2ボーンチェーン）を使用。
  *
- * 毎フレームの処理:
+ * 足IK（自動）:
  * 1. 足ボーン位置からレイキャストで接地点を求める
  * 2. IKターゲットを接地点に設定
  * 3. ヒップ補正: 両足の接地差分に基づいてルートボーンYをオフセット
+ *
+ * 腕IK（手動）:
+ * - setArmTarget() で外部オブジェクトをターゲットに指定
+ * - null で解除 → FK姿勢に戻る
  *
  * Blend結果の後に実行すること（IK は Blend を上書きするため）。
  */
@@ -36,6 +40,17 @@ export class IKSystem {
   private _rightTarget: TransformNode | null = null;
   private _leftPole: TransformNode | null = null;
   private _rightPole: TransformNode | null = null;
+
+  // ── 腕IK ──
+  private _leftArmIK: BoneIKController | null = null;
+  private _rightArmIK: BoneIKController | null = null;
+  private _leftArmTarget: TransformNode | null = null;
+  private _rightArmTarget: TransformNode | null = null;
+  private _leftArmPole: TransformNode | null = null;
+  private _rightArmPole: TransformNode | null = null;
+  /** 外部から設定された腕IKターゲット（null=IK無効） */
+  private _leftArmExternalTarget: TransformNode | null = null;
+  private _rightArmExternalTarget: TransformNode | null = null;
 
   /** ヒップ補正のY累積オフセット */
   private _hipOffset = 0;
@@ -91,24 +106,77 @@ export class IKSystem {
       poleAngle: Math.PI,
       slerpAmount: this._config.ikWeight,
     });
+
+    // ── 腕IK初期化 ──
+    const leftForeArm = findSkeletonBone(skeleton, "leftForeArm");
+    const rightForeArm = findSkeletonBone(skeleton, "rightForeArm");
+
+    if (leftForeArm && rightForeArm) {
+      this._leftArmTarget = this._createTargetNode("ik_left_arm_target");
+      this._rightArmTarget = this._createTargetNode("ik_right_arm_target");
+      this._leftArmPole = this._createTargetNode("ik_left_arm_pole");
+      this._rightArmPole = this._createTargetNode("ik_right_arm_pole");
+
+      // BoneIKController: bone に ForeArm を渡すと親の Arm を自動検出して2ボーンチェーン
+      this._leftArmIK = new BoneIKController(mesh, leftForeArm, {
+        targetMesh: this._leftArmTarget,
+        poleTargetMesh: this._leftArmPole,
+        poleAngle: Math.PI,
+        slerpAmount: this._config.ikWeight,
+      });
+
+      this._rightArmIK = new BoneIKController(mesh, rightForeArm, {
+        targetMesh: this._rightArmTarget,
+        poleTargetMesh: this._rightArmPole,
+        poleAngle: Math.PI,
+        slerpAmount: this._config.ikWeight,
+      });
+    }
+  }
+
+  /**
+   * 腕IKターゲットを設定する。
+   * @param side "left" | "right"
+   * @param target シーン内のTransformNode（ボール等）。null で解除 → FK姿勢に戻る。
+   */
+  setArmTarget(side: "left" | "right", target: TransformNode | null): void {
+    if (side === "left") {
+      this._leftArmExternalTarget = target;
+    } else {
+      this._rightArmExternalTarget = target;
+    }
   }
 
   /**
    * 毎フレーム呼び出し。
    * Blend後・レンダリング前に実行すること。
+   * @param speed 現在の移動速度（0=静止）。静止中は足IKをスキップしてFK姿勢を維持する。
    */
-  update(): void {
-    if (!this._skeleton || !this._mesh || !this._leftIK || !this._rightIK) {
+  update(speed = 1): void {
+    if (!this._skeleton || !this._mesh) {
       return;
     }
 
-    const leftFoot = findSkeletonBone(this._skeleton, "leftFoot");
-    const rightFoot = findSkeletonBone(this._skeleton, "rightFoot");
+    // ── 足IK（移動中のみ） ──
+    if (speed >= 0.01 && this._leftIK && this._rightIK) {
+      this._updateFootIK();
+    }
+
+    // ── 腕IK（ターゲットが設定されている腕のみ） ──
+    this._updateArmIK();
+  }
+
+  /** 足IKの更新処理 */
+  private _updateFootIK(): void {
+    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
+    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
     if (!leftFoot || !rightFoot) return;
 
+    const mesh = this._mesh!;
+
     // 各足ボーンの現在ワールド位置を取得
-    const leftFootPos = leftFoot.getAbsolutePosition(this._mesh);
-    const rightFootPos = rightFoot.getAbsolutePosition(this._mesh);
+    const leftFootPos = leftFoot.getAbsolutePosition(mesh);
+    const rightFootPos = rightFoot.getAbsolutePosition(mesh);
 
     // レイキャストで接地点を求める
     const leftGround = this._raycastGround(leftFootPos);
@@ -116,18 +184,14 @@ export class IKSystem {
 
     // IKターゲットを接地点に設定
     if (this._leftTarget) {
-      this._leftTarget.position.copyFrom(
-        leftGround ?? leftFootPos
-      );
+      this._leftTarget.position.copyFrom(leftGround ?? leftFootPos);
     }
     if (this._rightTarget) {
-      this._rightTarget.position.copyFrom(
-        rightGround ?? rightFootPos
-      );
+      this._rightTarget.position.copyFrom(rightGround ?? rightFootPos);
     }
 
     // ポールターゲットを膝の前方に配置（メッシュの前方向）
-    const forward = this._mesh.forward.scale(1.0);
+    const forward = mesh.forward.scale(1.0);
     if (this._leftPole) {
       const leftKneePos = leftFootPos.add(new Vector3(0, 0.5, 0));
       this._leftPole.position.copyFrom(leftKneePos.add(forward));
@@ -139,7 +203,7 @@ export class IKSystem {
 
     // ヒップ補正: 両足の接地差分に基づいてルートボーンYをオフセット
     if (leftGround && rightGround) {
-      const hipBone = findSkeletonBone(this._skeleton, "hips");
+      const hipBone = findSkeletonBone(this._skeleton!, "hips");
       if (hipBone) {
         const leftDelta = leftGround.y - leftFootPos.y;
         const rightDelta = rightGround.y - rightFootPos.y;
@@ -156,9 +220,39 @@ export class IKSystem {
       }
     }
 
-    // IK ソルバーを実行
-    this._leftIK.update();
-    this._rightIK.update();
+    // 足IK ソルバーを実行
+    this._leftIK!.update();
+    this._rightIK!.update();
+  }
+
+  /** 腕IKの更新処理（ターゲットが設定されている腕のみ実行） */
+  private _updateArmIK(): void {
+    const mesh = this._mesh;
+    if (!mesh) return;
+
+    // 左腕
+    if (this._leftArmExternalTarget && this._leftArmIK && this._leftArmTarget && this._leftArmPole) {
+      // ターゲット位置を外部オブジェクトから取得
+      this._leftArmTarget.position.copyFrom(
+        this._leftArmExternalTarget.getAbsolutePosition()
+      );
+      // ポールターゲット: 肘が後方〜下方に曲がるようメッシュ後方に配置
+      const elbowPos = this._leftArmTarget.position.add(new Vector3(0, 0.3, 0));
+      const backward = mesh.forward.scale(-1.0);
+      this._leftArmPole.position.copyFrom(elbowPos.add(backward));
+      this._leftArmIK.update();
+    }
+
+    // 右腕
+    if (this._rightArmExternalTarget && this._rightArmIK && this._rightArmTarget && this._rightArmPole) {
+      this._rightArmTarget.position.copyFrom(
+        this._rightArmExternalTarget.getAbsolutePosition()
+      );
+      const elbowPos = this._rightArmTarget.position.add(new Vector3(0, 0.3, 0));
+      const backward = mesh.forward.scale(-1.0);
+      this._rightArmPole.position.copyFrom(elbowPos.add(backward));
+      this._rightArmIK.update();
+    }
   }
 
   /**
@@ -202,6 +296,16 @@ export class IKSystem {
     this._rightPole?.dispose();
     this._leftIK = null;
     this._rightIK = null;
+
+    this._leftArmTarget?.dispose();
+    this._rightArmTarget?.dispose();
+    this._leftArmPole?.dispose();
+    this._rightArmPole?.dispose();
+    this._leftArmIK = null;
+    this._rightArmIK = null;
+    this._leftArmExternalTarget = null;
+    this._rightArmExternalTarget = null;
+
     this._skeleton = null;
     this._mesh = null;
   }

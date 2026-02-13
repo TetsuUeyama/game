@@ -33,6 +33,7 @@ export default function HumanoidScene() {
     setMotionPlaying,
     setMotionCheckMode,
     getPlaybackTime,
+    setHighlightedJoint,
   } = useHumanoidControl(canvasRef);
 
   const [mode, setMode] = useState<CheckMode>("face");
@@ -130,6 +131,7 @@ export default function HumanoidScene() {
               availableMotions={AVAILABLE_MOTIONS}
               onMotionSelect={handleMotionSelect}
               getPlaybackTime={getPlaybackTime}
+              onJointExpand={setHighlightedJoint}
             />
           )}
         </div>
