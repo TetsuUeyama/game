@@ -14,10 +14,12 @@ import { DEFAULT_CONFIG, SimulationConfig, CourseType } from "../types/MarbleCon
 /**
  * ビー玉シミュレーション統合React Hook
  *
- * コースタイプに応じてカメラ位置を自動調整。
- * パラメータは MarbleConfig.ts で変更する（画面UI なし）。
+ * courseType を受け取り、変更時にシミュレーション全体を再構築する。
  */
-export function useMarbleControl(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
+export function useMarbleControl(
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  courseType: CourseType,
+) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +34,14 @@ export function useMarbleControl(canvasRef: React.RefObject<HTMLCanvasElement | 
     if (!canvas) return;
 
     let mounted = true;
-    const config: SimulationConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    const config: SimulationConfig = { ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)), courseType };
+
+    // ランダムモード: フィールドを狭く、壁を高くして脚付き箱が飛び出さないようにする
+    if (courseType === CourseType.RANDOM) {
+      config.groundSize = 16;
+      config.random.areaSize = 10;
+      config.wallHeight = 12;
+    }
 
     // --- 同期部分: Engine + Scene + RenderLoop ---
     const engine = new Engine(canvas, true, {
@@ -73,6 +82,7 @@ export function useMarbleControl(canvasRef: React.RefObject<HTMLCanvasElement | 
         const forceController = new ForceController(
           entries,
           config,
+          scene,
           () => marbleBody.resetMarbles(config.marble),
         );
         forceControllerRef.current = forceController;
@@ -115,7 +125,7 @@ export function useMarbleControl(canvasRef: React.RefObject<HTMLCanvasElement | 
       engineRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [courseType]);
 
   return { loading, error };
 }
@@ -129,7 +139,6 @@ function createCamera(config: SimulationConfig, scene: Scene, canvas: HTMLCanvas
       return camera;
     }
     case CourseType.LATERAL_SHUTTLE: {
-      // 真上寄りの俯瞰で横移動を見やすく
       const camera = new ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 4, 30, new Vector3(0, 0, 5), scene);
       camera.attachControl(canvas, true);
       return camera;
@@ -137,6 +146,12 @@ function createCamera(config: SimulationConfig, scene: Scene, canvas: HTMLCanvas
     case CourseType.COLLISION: {
       const midZ = config.collision.startDistance / 2;
       const camera = new ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 3.5, 40, new Vector3(0, 0, midZ), scene);
+      camera.attachControl(canvas, true);
+      return camera;
+    }
+    case CourseType.RANDOM: {
+      // 斜め上から俯瞰で狭いフィールドを見渡す
+      const camera = new ArcRotateCamera("cam", -Math.PI / 4, Math.PI / 3, 20, Vector3.Zero(), scene);
       camera.attachControl(canvas, true);
       return camera;
     }

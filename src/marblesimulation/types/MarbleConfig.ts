@@ -52,6 +52,8 @@ export enum CourseType {
   LATERAL_SHUTTLE = "lateralShuttle",
   /** 衝突実験コース: 2つのビー玉を対向発射して衝突させる */
   COLLISION = "collision",
+  /** ランダム移動コース: フィールド内をランダムに動き回り衝突し合う */
+  RANDOM = "random",
 }
 
 // ─── コース別設定 ───
@@ -92,6 +94,18 @@ export interface CollisionConfig {
   waitDuration: number;
 }
 
+/**
+ * ランダム移動コース設定
+ * - areaSize: ビー玉が配置・動き回る範囲の一辺（地面より小さく設定）
+ * - minInterval: 方向転換の最小間隔(秒)
+ * - maxInterval: 方向転換の最大間隔(秒)
+ */
+export interface RandomConfig {
+  areaSize: number;
+  minInterval: number;
+  maxInterval: number;
+}
+
 // ─── シミュレーション全体設定 ───
 
 export interface SimulationConfig {
@@ -102,6 +116,7 @@ export interface SimulationConfig {
   straight: StraightConfig;
   lateralShuttle: LateralShuttleConfig;
   collision: CollisionConfig;
+  random: RandomConfig;
   groundSize: number;
   wallHeight: number;
 }
@@ -112,13 +127,13 @@ export const DEFAULT_CONFIG: SimulationConfig = {
     mass: 0.1,
     radius: 0.5,
     friction: 0.3,
-    restitution: 0.1,
+    restitution: 0,
     linearDamping: 0.5,
     angularDamping: 0.3,
   },
   ground: {
     friction: 0.5,
-    restitution: 0.1,
+    restitution: 0,
   },
   weightPresets: DEFAULT_WEIGHT_PRESETS,
   courseType: CourseType.STRAIGHT,
@@ -135,6 +150,11 @@ export const DEFAULT_CONFIG: SimulationConfig = {
     startDistance: 40,
     waitDuration: 4.0,
   },
+  random: {
+    areaSize: 20,
+    minInterval: 1.0,
+    maxInterval: 3.0,
+  },
   groundSize: 120,
-  wallHeight: 2,
+  wallHeight: 4,
 };
