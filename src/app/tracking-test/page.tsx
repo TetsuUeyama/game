@@ -39,8 +39,14 @@ const OB_C_HOVER_RADIUS = 50;
 
 // --- 向き・視野 ---
 const TURN_RATE = 4.0; // rad/s
-const OB_FOV_HALF = Math.PI / 6; // 視野角の半分 = 30° → 合計60°
-const FOV_VISUAL_LEN = 220; // 視野コーン描画長さ (px)
+const OB_FOV_HALF_NEAR = Math.PI / 6; // 近距離の視野半角 = 30° → 合計60°
+const OB_FOV_HALF_FAR = Math.PI / 18; // 遠距離の視野半角 = 10° → 合計20°
+const FOV_NARROW_DIST = 500; // この距離で最小角度に達する (px)
+const FOV_FULL_LEN = Math.sqrt(BOARD_W * BOARD_W + BOARD_H * BOARD_H); // 検出: フィールド全域
+const FOV_WINDOW_LEN = 220; // 視覚ウィンドウの長さ (px)
+const FOV_FOCUS_SPEED = 400; // フォーカス距離の移動速度 (px/s)
+const SEARCH_SWEEP_SPEED = 1.5; // 捜索時のスイープ速度 (rad/s)
+const SEARCH_SWEEP_MAX = Math.PI / 3; // 捜索スイープ最大角度 ±60°
 
 // --- タイミング ---
 const FIRE_MIN = 1.5;
@@ -77,6 +83,17 @@ interface Ball {
 
 interface HitFx { x: number; y: number; age: number; }
 
+/** 妨害の記憶: 的・発射台の最後に見た位置 + 捜索状態 */
+interface ScanMemory {
+  lastSeenLauncherX: number;
+  lastSeenLauncherY: number;
+  lastSeenTargetX: number;
+  lastSeenTargetY: number;
+  searching: boolean;       // 捜索中か
+  searchSweep: number;      // 現在のスイープ角度オフセット
+  searchDir: 1 | -1;        // スイープ方向
+}
+
 interface PreFireInfo {
   estFlightTime: number;
   estIPx: number;
@@ -107,6 +124,12 @@ function normAngleDiff(a: number, b: number): number {
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
+}
+
+/** 距離に応じた視野半角（近いほど広く、遠いほど狭い） */
+function fovHalfAtDist(dist: number): number {
+  const t = Math.min(dist / FOV_NARROW_DIST, 1);
+  return OB_FOV_HALF_NEAR + (OB_FOV_HALF_FAR - OB_FOV_HALF_NEAR) * t;
 }
 
 /**
@@ -223,9 +246,17 @@ function isPhysicallyClose(
   return dist2d(cx, cy, ob.x, ob.y) < PHYSICAL_MARGIN;
 }
 
-/** 軌道が障害物の視野角(FOV)内を通るか判定 */
+/** 特定のポイントが障害物の視野角(FOV)内にあるか判定 */
+function isPointInFOV(m: Mover, px: number, py: number): boolean {
+  const d = dist2d(m.x, m.y, px, py);
+  const fovHalf = fovHalfAtDist(d);
+  const angle = Math.atan2(py - m.y, px - m.x);
+  return Math.abs(normAngleDiff(m.facing, angle)) <= fovHalf;
+}
+
+/** 軌道が障害物の視野角(FOV)内を通るか判定（距離で角度が狭まる） */
 function isTrajectoryInFOV(
-  m: Mover, fovHalf: number,
+  m: Mover,
   x1: number, y1: number, x2: number, y2: number,
 ): boolean {
   const steps = 12;
@@ -233,6 +264,8 @@ function isTrajectoryInFOV(
     const t = i / steps;
     const px = x1 + (x2 - x1) * t;
     const py = y1 + (y2 - y1) * t;
+    const d = dist2d(m.x, m.y, px, py);
+    const fovHalf = fovHalfAtDist(d);
     const angle = Math.atan2(py - m.y, px - m.x);
     if (Math.abs(normAngleDiff(m.facing, angle)) <= fovHalf) return true;
   }
@@ -274,6 +307,61 @@ function canObIntercept(
     { ...SOLVER_CFG, maxTime },
   );
   return sol !== null && sol.valid;
+}
+
+/** フィールド上のオープンスペースを探索 */
+function findOpenSpace(
+  launcherRef: Mover, obstacles: Mover[],
+): { x: number; y: number } {
+  let bestX = BOARD_W / 2;
+  let bestY = BOARD_H / 2;
+  let bestScore = -Infinity;
+
+  for (let i = 0; i < 30; i++) {
+    const px = MARGIN + Math.random() * (BOARD_W - 2 * MARGIN);
+    const py = MARGIN + Math.random() * (BOARD_H - 2 * MARGIN);
+    let score = 0;
+
+    // 障害物からの距離（近い障害物ほど減点、遠いほど加点）
+    let minObDist = Infinity;
+    for (const ob of obstacles) {
+      const d = dist2d(px, py, ob.x, ob.y);
+      minObDist = Math.min(minObDist, d);
+      score += Math.min(d, 250);
+    }
+    score += minObDist * 2;
+
+    // 障害物のFOV外なら加点（距離依存の角度で判定）
+    for (const ob of obstacles) {
+      const d = dist2d(px, py, ob.x, ob.y);
+      const fovHalf = fovHalfAtDist(d);
+      const angle = Math.atan2(py - ob.y, px - ob.x);
+      if (Math.abs(normAngleDiff(ob.facing, angle)) > fovHalf) {
+        score += 100;
+      }
+    }
+
+    // 発射台からのパスが物理的にブロックされないなら加点
+    let pathClear = true;
+    for (const ob of obstacles) {
+      if (isPhysicallyClose(ob, launcherRef.x, launcherRef.y, px, py)) {
+        pathClear = false;
+        break;
+      }
+    }
+    if (pathClear) score += 150;
+
+    // 発射台から近すぎない
+    const ld = dist2d(px, py, launcherRef.x, launcherRef.y);
+    if (ld > 150) score += 50;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestX = px;
+      bestY = py;
+    }
+  }
+  return { x: bestX, y: bestY };
 }
 
 function restoreRandom(m: Mover, speed: number) {
@@ -352,26 +440,85 @@ function drawTarget(ctx: CanvasRenderingContext2D, m: Mover) {
   ctx.textAlign = "start";
 }
 
-/** 視野コーン（FOV）を描画 */
-function drawFOV(ctx: CanvasRenderingContext2D, m: Mover, fovHalf: number, len: number, inFOV: boolean) {
-  const startAngle = m.facing - fovHalf;
-  const endAngle = m.facing + fovHalf;
-  ctx.fillStyle = inFOV ? "rgba(255,200,100,0.08)" : "rgba(153,102,204,0.04)";
+/** 距離dでのFOVエッジ角度（facing ± fovHalfAtDist(d)） */
+function fovEdgeAngle(facing: number, dist: number, side: -1 | 1): number {
+  return facing + side * fovHalfAtDist(dist);
+}
+
+/** 視野コーン（FOV）をスライディングウィンドウ方式で描画（距離で角度が狭まる） */
+function drawFOV(
+  ctx: CanvasRenderingContext2D, m: Mover,
+  focusDist: number, windowLen: number, inFOV: boolean,
+) {
+  const innerR = Math.max(OBSTACLE_R + 5, focusDist - windowLen / 2);
+  const outerR = focusDist + windowLen / 2;
+  const edgeSteps = 40;
+
+  // 全長の薄いエッジライン（湾曲: 距離で角度が狭まる）
+  ctx.strokeStyle = "rgba(153,102,204,0.06)";
+  ctx.lineWidth = 1;
+  for (const side of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    for (let i = 1; i <= edgeSteps; i++) {
+      const d = (i / edgeSteps) * FOV_FULL_LEN;
+      const a = fovEdgeAngle(m.facing, d, side);
+      ctx.lineTo(m.x + Math.cos(a) * d, m.y + Math.sin(a) * d);
+    }
+    ctx.stroke();
+  }
+
+  // フォーカスウィンドウ（環状扇形・距離依存角度）
+  ctx.fillStyle = inFOV ? "rgba(255,200,100,0.10)" : "rgba(153,102,204,0.05)";
+  const windowSteps = 24;
   ctx.beginPath();
-  ctx.moveTo(m.x, m.y);
-  ctx.arc(m.x, m.y, len, startAngle, endAngle);
+  // 外弧: +side → -side
+  for (let i = 0; i <= windowSteps; i++) {
+    const frac = i / windowSteps;
+    const a = fovEdgeAngle(m.facing, outerR, 1) * (1 - frac) + fovEdgeAngle(m.facing, outerR, -1) * frac;
+    const px = m.x + Math.cos(a) * outerR;
+    const py = m.y + Math.sin(a) * outerR;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  // 内弧: -side → +side
+  for (let i = 0; i <= windowSteps; i++) {
+    const frac = i / windowSteps;
+    const a = fovEdgeAngle(m.facing, innerR, -1) * (1 - frac) + fovEdgeAngle(m.facing, innerR, 1) * frac;
+    ctx.lineTo(m.x + Math.cos(a) * innerR, m.y + Math.sin(a) * innerR);
+  }
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = inFOV ? "rgba(255,200,100,0.25)" : "rgba(153,102,204,0.12)";
+
+  // ウィンドウのエッジ（湾曲ライン）
+  ctx.strokeStyle = inFOV ? "rgba(255,200,100,0.30)" : "rgba(153,102,204,0.15)";
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(m.x, m.y);
-  ctx.lineTo(m.x + Math.cos(startAngle) * len, m.y + Math.sin(startAngle) * len);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(m.x, m.y);
-  ctx.lineTo(m.x + Math.cos(endAngle) * len, m.y + Math.sin(endAngle) * len);
-  ctx.stroke();
+  const sideSteps = 12;
+  for (const side of [-1, 1] as const) {
+    ctx.beginPath();
+    for (let i = 0; i <= sideSteps; i++) {
+      const d = innerR + (outerR - innerR) * (i / sideSteps);
+      const a = fovEdgeAngle(m.facing, d, side);
+      const px = m.x + Math.cos(a) * d;
+      const py = m.y + Math.sin(a) * d;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  // 外弧・内弧（点線）
+  ctx.setLineDash([3, 3]);
+  for (const r of [outerR, innerR]) {
+    ctx.beginPath();
+    for (let i = 0; i <= windowSteps; i++) {
+      const frac = i / windowSteps;
+      const a = fovEdgeAngle(m.facing, r, -1) * (1 - frac) + fovEdgeAngle(m.facing, r, 1) * frac;
+      const px = m.x + Math.cos(a) * r;
+      const py = m.y + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
 }
 
 function drawObstacle(ctx: CanvasRenderingContext2D, m: Mover, label: string) {
@@ -474,6 +621,26 @@ function drawTargetReach(ctx: CanvasRenderingContext2D, m: Mover, baseRadius: nu
     !canReach);
 }
 
+/** 捜索中の記憶位置マーカー（「?」+ 点線円） */
+function drawSearchMarker(
+  ctx: CanvasRenderingContext2D, x: number, y: number, label: string,
+) {
+  ctx.strokeStyle = "rgba(255,200,100,0.35)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(x, y, 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,200,100,0.6)";
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("?", x, y + 4);
+  ctx.font = "9px sans-serif";
+  ctx.fillText(label, x, y + 22);
+  ctx.textAlign = "start";
+}
+
 function drawTrajectoryLine(
   ctx: CanvasRenderingContext2D,
   x1: number, y1: number, x2: number, y2: number, blocked: boolean,
@@ -506,8 +673,30 @@ export default function TrackingTestPage() {
     obCReacting: false,
     obAScanTimer: 2.0,
     obAScanAtLauncher: true,
+    obBScanTimer: 1.5,
+    obBScanAtLauncher: true,
     obCScanTimer: 1.0,
     obCScanAtLauncher: false,
+    targetDest: null as { x: number; y: number } | null,
+    targetReevalTimer: 0.5,
+    obAFocusDist: 300,
+    obBFocusDist: 150,
+    obCFocusDist: 200,
+    obAMem: {
+      lastSeenLauncherX: 80, lastSeenLauncherY: BOARD_H / 2,
+      lastSeenTargetX: 600, lastSeenTargetY: 200,
+      searching: false, searchSweep: 0, searchDir: 1,
+    } as ScanMemory,
+    obBMem: {
+      lastSeenLauncherX: 80, lastSeenLauncherY: BOARD_H / 2,
+      lastSeenTargetX: 600, lastSeenTargetY: 200,
+      searching: false, searchSweep: 0, searchDir: 1,
+    } as ScanMemory,
+    obCMem: {
+      lastSeenLauncherX: 80, lastSeenLauncherY: BOARD_H / 2,
+      lastSeenTargetX: 600, lastSeenTargetY: 200,
+      searching: false, searchSweep: 0, searchDir: 1,
+    } as ScanMemory,
     score: { hit: 0, miss: 0, block: 0 },
     prevTs: 0,
   });
@@ -524,23 +713,47 @@ export default function TrackingTestPage() {
 
       // 発射台: 常にランダム移動
       stepMover(launcher, dt);
-      // 妨害B: 常に発射台を追跡（facing は発射台方向に固定）
-      setChaserVelocity(obB, launcher.x, launcher.y, OB_B_CHASE_SPEED, OB_B_HOVER_RADIUS, dt);
-      moveKeepFacing(obB, OB_B_CHASE_SPEED, dt);
+      // 妨害B: 捜索中でなければ発射台を追跡
+      if (!s.obBMem.searching) {
+        setChaserVelocity(obB, launcher.x, launcher.y, OB_B_CHASE_SPEED, OB_B_HOVER_RADIUS, dt);
+        moveKeepFacing(obB, OB_B_CHASE_SPEED, dt);
+      }
 
       const aimAngle = Math.atan2(target.y - launcher.y, target.x - launcher.x);
 
       if (!ball.active) {
-        // === 的: ランダム移動 ===
-        stepMover(target, dt);
-        // === 妨害A: 発射台と的の中間に位置（facing は外部制御） ===
-        const midX = (launcher.x + target.x) / 2;
-        const midY = (launcher.y + target.y) / 2;
-        setChaserVelocity(obA, midX, midY, OB_A_IDLE_SPEED, OB_A_HOVER_RADIUS, dt);
-        moveKeepFacing(obA, OB_A_IDLE_SPEED, dt);
-        // === 妨害C: 的の周囲（facing は外部制御） ===
-        setChaserVelocity(obC, target.x, target.y, OB_C_IDLE_SPEED, OB_C_HOVER_RADIUS, dt);
-        moveKeepFacing(obC, OB_C_IDLE_SPEED, dt);
+        // === 的: オープンスペースを探して移動 ===
+        s.targetReevalTimer -= dt;
+        const atDest = s.targetDest && dist2d(target.x, target.y, s.targetDest.x, s.targetDest.y) < 20;
+        if (s.targetReevalTimer <= 0 || !s.targetDest || atDest) {
+          s.targetDest = findOpenSpace(launcher, [obA, obB, obC]);
+          s.targetReevalTimer = 1.5 + Math.random();
+        }
+        {
+          const dx = s.targetDest.x - target.x;
+          const dy = s.targetDest.y - target.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d > 5) {
+            target.vx = (dx / d) * TARGET_RANDOM_SPEED;
+            target.vy = (dy / d) * TARGET_RANDOM_SPEED;
+          } else {
+            target.vx = 0;
+            target.vy = 0;
+          }
+        }
+        moveWithFacing(target, TARGET_RANDOM_SPEED, dt);
+        // === 妨害A: 捜索中でなければ中間へ移動 ===
+        if (!s.obAMem.searching) {
+          const midX = (launcher.x + target.x) / 2;
+          const midY = (launcher.y + target.y) / 2;
+          setChaserVelocity(obA, midX, midY, OB_A_IDLE_SPEED, OB_A_HOVER_RADIUS, dt);
+          moveKeepFacing(obA, OB_A_IDLE_SPEED, dt);
+        }
+        // === 妨害C: 捜索中でなければ的を追尾 ===
+        if (!s.obCMem.searching) {
+          setChaserVelocity(obC, target.x, target.y, OB_C_IDLE_SPEED, OB_C_HOVER_RADIUS, dt);
+          moveKeepFacing(obC, OB_C_IDLE_SPEED, dt);
+        }
 
         // === 発射前予測（毎フレーム更新 → 可視化用） ===
         const estDist = dist2d(launcher.x, launcher.y, target.x, target.y);
@@ -556,9 +769,9 @@ export default function TrackingTestPage() {
         const targetCanReach = canTargetReach(target, estIPx, estIPy, targetReach);
 
         // 視野判定: 軌道が妨害のFOV内を通るか
-        const obAInFOV = isTrajectoryInFOV(obA, OB_FOV_HALF, launcher.x, launcher.y, estIPx, estIPy);
-        const obBInFOV = isTrajectoryInFOV(obB, OB_FOV_HALF, launcher.x, launcher.y, estIPx, estIPy);
-        const obCInFOV = isTrajectoryInFOV(obC, OB_FOV_HALF, launcher.x, launcher.y, estIPx, estIPy);
+        const obAInFOV = isTrajectoryInFOV(obA, launcher.x, launcher.y, estIPx, estIPy);
+        const obBInFOV = isTrajectoryInFOV(obB, launcher.x, launcher.y, estIPx, estIPy);
+        const obCInFOV = isTrajectoryInFOV(obC, launcher.x, launcher.y, estIPx, estIPy);
 
         // ブロック判定: (FOV内かつ到達可能) OR (物理的に軌道上にいる)
         const obAClose = (obAInFOV && canReachTrajectory(obA, launcher.x, launcher.y, estIPx, estIPy, obAReach))
@@ -609,9 +822,9 @@ export default function TrackingTestPage() {
             const tCanReach = canTargetReach(target, sol.interceptPos.x, sol.interceptPos.z, tReach);
 
             // 視野+ソルバーで正確に妨害可否を判定
-            const obAInFOV = isTrajectoryInFOV(obA, OB_FOV_HALF, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
-            const obBInFOV = isTrajectoryInFOV(obB, OB_FOV_HALF, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
-            const obCInFOV = isTrajectoryInFOV(obC, OB_FOV_HALF, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
+            const obAInFOV = isTrajectoryInFOV(obA, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
+            const obBInFOV = isTrajectoryInFOV(obB, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
+            const obCInFOV = isTrajectoryInFOV(obC, launcher.x, launcher.y, sol.interceptPos.x, sol.interceptPos.z);
             const ipx2 = sol.interceptPos.x;
             const ipz2 = sol.interceptPos.z;
             const obACanBlock = (obAInFOV && canObIntercept(obA, launcher.x, launcher.y, bvx, bvz, OB_A_INTERCEPT_SPEED, ft))
@@ -724,19 +937,19 @@ export default function TrackingTestPage() {
           }
         }
 
-        // 妨害A: FOVで反応していれば追跡（facing=移動方向）、そうでなければ待機
+        // 妨害A: FOVで反応していれば追跡、捜索中なら停止、それ以外は待機
         if (s.obAReacting) {
           moveWithFacing(obA, OB_A_INTERCEPT_SPEED, dt);
-        } else {
+        } else if (!s.obAMem.searching) {
           const midX = (launcher.x + target.x) / 2;
           const midY = (launcher.y + target.y) / 2;
           setChaserVelocity(obA, midX, midY, OB_A_IDLE_SPEED, OB_A_HOVER_RADIUS, dt);
           moveKeepFacing(obA, OB_A_IDLE_SPEED, dt);
         }
-        // 妨害C: FOVで反応していれば追跡（facing=移動方向）、そうでなければ的を追尾
+        // 妨害C: FOVで反応していれば追跡、捜索中なら停止、それ以外は的を追尾
         if (s.obCReacting) {
           moveWithFacing(obC, OB_C_INTERCEPT_SPEED, dt);
-        } else {
+        } else if (!s.obCMem.searching) {
           setChaserVelocity(obC, target.x, target.y, OB_C_IDLE_SPEED, OB_C_HOVER_RADIUS, dt);
           moveKeepFacing(obC, OB_C_IDLE_SPEED, dt);
         }
@@ -755,6 +968,7 @@ export default function TrackingTestPage() {
             s.interceptPt = null;
             s.obAReacting = false;
             s.obCReacting = false;
+            s.targetDest = null;
             restoreRandom(target, TARGET_RANDOM_SPEED);
             restoreRandom(obA, OB_A_IDLE_SPEED);
             restoreRandom(obC, OB_C_IDLE_SPEED);
@@ -771,6 +985,7 @@ export default function TrackingTestPage() {
           s.interceptPt = null;
           s.obAReacting = false;
           s.obCReacting = false;
+          s.targetDest = null;
           restoreRandom(target, TARGET_RANDOM_SPEED);
           restoreRandom(obA, OB_A_IDLE_SPEED);
           restoreRandom(obC, OB_C_IDLE_SPEED);
@@ -786,6 +1001,7 @@ export default function TrackingTestPage() {
             s.interceptPt = null;
             s.obAReacting = false;
             s.obCReacting = false;
+            s.targetDest = null;
             restoreRandom(target, TARGET_RANDOM_SPEED);
             restoreRandom(obA, OB_A_IDLE_SPEED);
             restoreRandom(obC, OB_C_IDLE_SPEED);
@@ -793,35 +1009,110 @@ export default function TrackingTestPage() {
         }
       }
 
-      // === facing 制御（移動とは独立） ===
+      // === facing + フォーカス距離 制御 ===
 
-      // 妨害B: 常に発射台を視野に入れる
-      obB.facing = turnToward(obB.facing,
-        Math.atan2(launcher.y - obB.y, launcher.x - obB.x), TURN_RATE * dt);
-
-      // 妨害A: スキャン（発射台と的を交互に確認）— 反応中はボール方向
-      if (!ball.active || !s.obAReacting) {
-        s.obAScanTimer -= dt;
-        if (s.obAScanTimer <= 0) {
-          s.obAScanAtLauncher = !s.obAScanAtLauncher;
-          s.obAScanTimer = 1.5 + Math.random();
+      // スキャン更新ヘルパー（記憶ベース）
+      const updateScan = (
+        ob: Mover, atLauncher: boolean, timer: number,
+        focusDist: number, reacting: boolean, mem: ScanMemory,
+      ): { atLauncher: boolean; timer: number; focusDist: number } => {
+        if (ball.active && reacting) {
+          // 反応中 → ボール方向にフォーカス
+          mem.searching = false;
+          const bd = dist2d(ob.x, ob.y, ball.x, ball.y);
+          const delta = Math.min(FOV_FOCUS_SPEED * dt, Math.abs(bd - focusDist));
+          focusDist += Math.sign(bd - focusDist) * delta;
+          return { atLauncher, timer, focusDist };
         }
-        const lookA = s.obAScanAtLauncher ? launcher : target;
-        obA.facing = turnToward(obA.facing,
-          Math.atan2(lookA.y - obA.y, lookA.x - obA.x), TURN_RATE * dt);
-      }
 
-      // 妨害C: スキャン（発射台と的を交互に確認）— 反応中はボール方向
-      if (!ball.active || !s.obCReacting) {
-        s.obCScanTimer -= dt;
-        if (s.obCScanTimer <= 0) {
-          s.obCScanAtLauncher = !s.obCScanAtLauncher;
-          s.obCScanTimer = 1.5 + Math.random();
+        // 注視対象の実体と記憶位置
+        const lookEntity = atLauncher ? launcher : target;
+        const lastX = atLauncher ? mem.lastSeenLauncherX : mem.lastSeenTargetX;
+        const lastY = atLauncher ? mem.lastSeenLauncherY : mem.lastSeenTargetY;
+
+        // 実体が現在FOV内に見えるか
+        const entityVisible = isPointInFOV(ob, lookEntity.x, lookEntity.y);
+
+        if (entityVisible) {
+          // 発見 → 記憶を更新、捜索解除
+          if (atLauncher) {
+            mem.lastSeenLauncherX = lookEntity.x;
+            mem.lastSeenLauncherY = lookEntity.y;
+          } else {
+            mem.lastSeenTargetX = lookEntity.x;
+            mem.lastSeenTargetY = lookEntity.y;
+          }
+          mem.searching = false;
+          mem.searchSweep = 0;
+
+          // 通常スキャン: 対象を注視してタイマーで切り替え
+          timer -= dt;
+          if (timer <= 0) {
+            atLauncher = !atLauncher;
+            timer = 1.5 + Math.random();
+          }
+          ob.facing = turnToward(ob.facing,
+            Math.atan2(lookEntity.y - ob.y, lookEntity.x - ob.x), TURN_RATE * dt);
+          const ld = dist2d(ob.x, ob.y, lookEntity.x, lookEntity.y);
+          const delta = Math.min(FOV_FOCUS_SPEED * dt, Math.abs(ld - focusDist));
+          focusDist += Math.sign(ld - focusDist) * delta;
+        } else if (!mem.searching) {
+          // 見えない → まず記憶位置に視線を向ける
+          const angleToLast = Math.atan2(lastY - ob.y, lastX - ob.x);
+          ob.facing = turnToward(ob.facing, angleToLast, TURN_RATE * dt);
+          const ld = dist2d(ob.x, ob.y, lastX, lastY);
+          const delta = Math.min(FOV_FOCUS_SPEED * dt, Math.abs(ld - focusDist));
+          focusDist += Math.sign(ld - focusDist) * delta;
+
+          // 記憶位置方向にほぼ向いたら捜索開始
+          if (Math.abs(normAngleDiff(ob.facing, angleToLast)) < 0.1) {
+            mem.searching = true;
+            mem.searchSweep = 0;
+            mem.searchDir = 1;
+          }
+        } else {
+          // 捜索中: 記憶位置を中心にスイープ（停止して周囲を見回す）
+          mem.searchSweep += mem.searchDir * SEARCH_SWEEP_SPEED * dt;
+          if (Math.abs(mem.searchSweep) > SEARCH_SWEEP_MAX) {
+            mem.searchDir = (mem.searchDir * -1) as 1 | -1;
+            mem.searchSweep = Math.sign(mem.searchSweep) * SEARCH_SWEEP_MAX;
+          }
+          const baseAngle = Math.atan2(lastY - ob.y, lastX - ob.x);
+          ob.facing = turnToward(ob.facing, baseAngle + mem.searchSweep, TURN_RATE * dt);
+          const ld = dist2d(ob.x, ob.y, lastX, lastY);
+          const delta = Math.min(FOV_FOCUS_SPEED * dt, Math.abs(ld - focusDist));
+          focusDist += Math.sign(ld - focusDist) * delta;
+
+          // 捜索タイムアウト → 諦めて次の対象へ切り替え
+          timer -= dt;
+          if (timer <= 0) {
+            atLauncher = !atLauncher;
+            mem.searching = false;
+            mem.searchSweep = 0;
+            timer = 1.5 + Math.random();
+          }
         }
-        const lookC = s.obCScanAtLauncher ? launcher : target;
-        obC.facing = turnToward(obC.facing,
-          Math.atan2(lookC.y - obC.y, lookC.x - obC.x), TURN_RATE * dt);
-      }
+
+        return { atLauncher, timer, focusDist };
+      };
+
+      // 妨害A
+      const scanA = updateScan(obA, s.obAScanAtLauncher, s.obAScanTimer, s.obAFocusDist, s.obAReacting, s.obAMem);
+      s.obAScanAtLauncher = scanA.atLauncher;
+      s.obAScanTimer = scanA.timer;
+      s.obAFocusDist = scanA.focusDist;
+
+      // 妨害B
+      const scanB = updateScan(obB, s.obBScanAtLauncher, s.obBScanTimer, s.obBFocusDist, false, s.obBMem);
+      s.obBScanAtLauncher = scanB.atLauncher;
+      s.obBScanTimer = scanB.timer;
+      s.obBFocusDist = scanB.focusDist;
+
+      // 妨害C
+      const scanC = updateScan(obC, s.obCScanAtLauncher, s.obCScanTimer, s.obCFocusDist, s.obCReacting, s.obCMem);
+      s.obCScanAtLauncher = scanC.atLauncher;
+      s.obCScanTimer = scanC.timer;
+      s.obCFocusDist = scanC.focusDist;
 
       // エフェクト更新
       if (s.hitFx) { s.hitFx.age += dt; if (s.hitFx.age > 0.6) s.hitFx = null; }
@@ -834,14 +1125,14 @@ export default function TrackingTestPage() {
 
         if (s.interceptPt) drawIntercept(ctx, s.interceptPt.x, s.interceptPt.y);
 
-        // 視野コーン（常時表示）
+        // 視野コーン（常時表示・スライディングウィンドウ）
         const pf = s.preFire;
         const aInFOV = pf?.obAInFOV ?? false;
         const bInFOV = pf?.obBInFOV ?? false;
         const cInFOV = pf?.obCInFOV ?? false;
-        drawFOV(ctx, obA, OB_FOV_HALF, FOV_VISUAL_LEN, aInFOV);
-        drawFOV(ctx, obB, OB_FOV_HALF, FOV_VISUAL_LEN, bInFOV);
-        drawFOV(ctx, obC, OB_FOV_HALF, FOV_VISUAL_LEN, cInFOV);
+        drawFOV(ctx, obA, s.obAFocusDist, FOV_WINDOW_LEN, aInFOV);
+        drawFOV(ctx, obB, s.obBFocusDist, FOV_WINDOW_LEN, bInFOV);
+        drawFOV(ctx, obC, s.obCFocusDist, FOV_WINDOW_LEN, cInFOV);
 
         // 発射前: 到達圏（卵型）+ 予測軌道
         if (pf) {
@@ -852,9 +1143,21 @@ export default function TrackingTestPage() {
           drawTrajectoryLine(ctx, launcher.x, launcher.y, pf.estIPx, pf.estIPy, pf.blocked);
         }
 
-        drawObstacle(ctx, obA, "妨害A(中間)");
-        drawObstacle(ctx, obB, "妨害B(発射台)");
-        drawObstacle(ctx, obC, "妨害C(的)");
+        // 捜索中: 記憶位置に「?」マーカー表示
+        const drawMemMarkers = (mem: ScanMemory, atLauncher: boolean, label: string) => {
+          if (!mem.searching) return;
+          const lx = atLauncher ? mem.lastSeenLauncherX : mem.lastSeenTargetX;
+          const ly = atLauncher ? mem.lastSeenLauncherY : mem.lastSeenTargetY;
+          const what = atLauncher ? "発射台?" : "的?";
+          drawSearchMarker(ctx, lx, ly, `${label}→${what}`);
+        };
+        drawMemMarkers(s.obAMem, s.obAScanAtLauncher, "A");
+        drawMemMarkers(s.obBMem, s.obBScanAtLauncher, "B");
+        drawMemMarkers(s.obCMem, s.obCScanAtLauncher, "C");
+
+        drawObstacle(ctx, obA, s.obAMem.searching ? "妨害A(捜索中)" : "妨害A(中間)");
+        drawObstacle(ctx, obB, s.obBMem.searching ? "妨害B(捜索中)" : "妨害B(発射台)");
+        drawObstacle(ctx, obC, s.obCMem.searching ? "妨害C(捜索中)" : "妨害C(的)");
         drawLauncher(ctx, launcher, aimAngle, pf?.blocked ?? false);
         drawTarget(ctx, target);
 
@@ -881,7 +1184,7 @@ export default function TrackingTestPage() {
       <h1 className="text-2xl font-bold mb-2">ボール迎撃シミュレーター</h1>
       <p className="text-gray-400 text-sm mb-4">
         発射台→的へ発射 | 妨害A=中間 妨害B=発射台 妨害C=的 |
-        向き: 前方1.0 / 左右0.7 / 後方0.5倍速 | 視野角120° — FOV外のボールには反応不可
+        向き: 前方1.0 / 左右0.7 / 後方0.5倍速 | 視野角: 近60°→遠20°（距離で狭まる）— FOV外のボールには反応不可
       </p>
       <canvas
         ref={canvasRef}
