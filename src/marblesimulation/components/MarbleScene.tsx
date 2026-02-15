@@ -1,11 +1,17 @@
 "use client";
 
+// Reactのフック: useRef(DOM参照), useState(状態管理)をインポート
 import { useRef, useState } from "react";
+// ビー玉シミュレーション統合フックをインポート
 import { useMarbleControl } from "../hooks/useMarbleControl";
+// コースタイプのenum定義をインポート
 import { CourseType } from "../types/MarbleConfig";
 
+/** モード選択UIの選択肢定義: コースタイプ・表示ラベル・説明テキスト */
 const MODE_OPTIONS: { type: CourseType; label: string; desc: string }[] = [
+  /** ランダム衝突モード: ヒューマノイドビー玉がフィールド内で衝突し合う */
   { type: CourseType.RANDOM, label: "ランダム衝突", desc: "フィールド内を自由に動き回り衝突し合う" },
+  /** 直線レースモード: ビー玉が直線コースで速さを競う */
   { type: CourseType.STRAIGHT, label: "直線レース", desc: "直線コースで速さを比較" },
 ];
 
@@ -14,18 +20,23 @@ const MODE_OPTIONS: { type: CourseType; label: string; desc: string }[] = [
  * モード選択UIを備え、切替時にシミュレーションを再構築する
  */
 export default function MarbleScene() {
+  /** Babylon.js描画用のcanvas要素への参照 */
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** 現在選択中のコースタイプ（デフォルト: ランダム） */
   const [courseType, setCourseType] = useState<CourseType>(CourseType.RANDOM);
+  /** シミュレーションの読み込み状態とエラー状態を取得 */
   const { loading, error } = useMarbleControl(canvasRef, courseType);
 
   return (
+    /* ルートコンテナ: 全画面表示 */
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+      {/* Babylon.js描画用のcanvas要素 */}
       <canvas
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}
       />
 
-      {/* モード選択UI */}
+      {/* モード選択UI: 画面左上に固定配置 */}
       <div
         style={{
           position: "absolute",
@@ -36,11 +47,15 @@ export default function MarbleScene() {
           zIndex: 10,
         }}
       >
+        {/* 各モードボタンを動的生成 */}
         {MODE_OPTIONS.map((opt) => (
           <button
             key={opt.type}
+            /* クリックでコースタイプを切り替え → シミュレーション再構築 */
             onClick={() => setCourseType(opt.type)}
+            /* ホバー時にコースの説明テキストを表示 */
             title={opt.desc}
+            /* 選択中のモードはハイライト表示 */
             style={{
               padding: "8px 16px",
               border: courseType === opt.type ? "2px solid #4af" : "1px solid #666",
@@ -57,6 +72,7 @@ export default function MarbleScene() {
         ))}
       </div>
 
+      {/* ローディングオーバーレイ: 物理エンジン初期化中に表示 */}
       {loading && (
         <div
           style={{
@@ -76,6 +92,7 @@ export default function MarbleScene() {
           Loading Havok Physics...
         </div>
       )}
+      {/* エラーオーバーレイ: 初期化失敗時にエラーメッセージを表示 */}
       {error && (
         <div
           style={{
