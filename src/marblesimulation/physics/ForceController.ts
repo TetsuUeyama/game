@@ -1,3 +1,4 @@
+// Babylon.js コアモジュール: ベクトル, シーン, メッシュ生成, マテリアル, 色, メッシュ, 物理ボディ, 物理イベント, オブザーバー
 import {
   Vector3,
   Scene,
@@ -9,6 +10,7 @@ import {
   PhysicsEventType,
   Observer,
 } from "@babylonjs/core";
+// 型定義: シミュレーション設定, コースタイプ, 各コース設定
 import {
   SimulationConfig,
   CourseType,
@@ -17,8 +19,10 @@ import {
   CollisionConfig,
   RandomConfig,
 } from "../types/MarbleConfig";
+// ビー玉エントリの型定義
 import { MarbleEntry } from "./MarbleBody";
 
+/** 停止判定の速度閾値: この速度以下で停止とみなす */
 const STOP_THRESHOLD = 0.3;
 
 // ─── 衝突エフェクト ───
@@ -28,8 +32,11 @@ const COLLISION_FX_DURATION = 0.35;
 /** エフェクトの最大スケール倍率 */
 const COLLISION_FX_MAX_SCALE = 2.5;
 
+/** 衝突エフェクトの状態管理 */
 interface CollisionFx {
+  /** エフェクト表示用の球体メッシュ */
   mesh: Mesh;
+  /** エフェクト生成からの経過時間(秒) */
   age: number;
 }
 
@@ -202,7 +209,15 @@ const ARM_PUSH_D = 40;
 /** 復帰中の腕の伸ばし角度（前方に伸ばして地面を押す） */
 const RECOVERY_ARM_EXTEND = Math.PI * 0.4;
 
-enum RecoveryState { NORMAL, FALLEN, GETTING_UP }
+/** 転倒復帰の状態遷移: NORMAL(通常) → FALLEN(転倒) → GETTING_UP(起き上がり中) → NORMAL */
+enum RecoveryState {
+  /** 通常状態: 直立している */
+  NORMAL,
+  /** 転倒状態: 倒れて待機中 */
+  FALLEN,
+  /** 起き上がり中: 腕で地面を押して復帰中 */
+  GETTING_UP,
+}
 
 // ─── 頭部接地制約 ───
 
@@ -230,17 +245,43 @@ const MARBLE_DROP_FALL_RATE = 2.0;
 
 // ─── 直線コース ───
 
-enum StraightPhase { RACING, BRAKE, FINISHED }
+/** 直線コースの各ビー玉の進行フェーズ */
+enum StraightPhase {
+  /** レース中: ゴールに向かって加速 */
+  RACING,
+  /** ブレーキ中: ゴール到達後に減速 */
+  BRAKE,
+  /** 完了: 停止済み */
+  FINISHED,
+}
 
+/**
+ * 直線コースのコントローラー
+ *
+ * 各ビー玉をZ方向に加速し、ゴール到達後にブレーキ、全員停止後にリセット
+ */
 class StraightController {
+  /** 制御対象のビー玉エントリ配列 */
   private entries: MarbleEntry[];
+  /** 直線コースの設定 */
   private config: StraightConfig;
+  /** ビー玉の半径(m) */
   private radius: number;
+  /** リセット時に呼ばれるコールバック */
   private onReset: () => void;
+  /** 各ビー玉の現在のフェーズ */
   private phases: StraightPhase[];
+  /** 全員完了フラグ */
   private allFinished = false;
+  /** 全員完了後の待機タイマー(秒) */
   private waitTimer = 0;
 
+  /**
+   * @param entries - 制御対象のビー玉配列
+   * @param config - 直線コースの設定
+   * @param radius - ビー玉の半径
+   * @param onReset - リセット時のコールバック
+   */
   constructor(entries: MarbleEntry[], config: StraightConfig, radius: number, onReset: () => void) {
     this.entries = entries;
     this.config = config;
@@ -249,7 +290,12 @@ class StraightController {
     this.phases = entries.map(() => StraightPhase.RACING);
   }
 
+  /**
+   * 毎フレーム更新: 各ビー玉のフェーズに応じて力を適用
+   * @param deltaTime - 前フレームからの経過時間(秒)
+   */
   update(deltaTime: number): void {
+    // 全員完了後: 待機タイマーを進め、時間が来たらリセット
     if (this.allFinished) {
       this.waitTimer += deltaTime;
       if (this.waitTimer >= this.config.waitDuration) {
@@ -262,12 +308,16 @@ class StraightController {
     let finishedCount = 0;
     for (let i = 0; i < this.entries.length; i++) {
       const entry = this.entries[i];
+      // ビー玉の物理ボディの重心ワールド座標を取得
       const center = entry.aggregate.body.getObjectCenterWorld();
+      // 現在の速度ベクトルを取得
       const velocity = entry.aggregate.body.getLinearVelocity();
+      // 速度の大きさ(スカラー)
       const speed = velocity.length();
 
       switch (this.phases[i]) {
         case StraightPhase.RACING:
+          // ゴール到達判定: Z位置がゴール距離を超えたらブレーキへ
           if (entry.mesh.position.z >= this.config.goalDistance) {
             this.phases[i] = StraightPhase.BRAKE;
             break;
@@ -279,25 +329,30 @@ class StraightController {
           break;
 
         case StraightPhase.BRAKE:
+          // 停止判定: 速度が閾値以下で完了へ
           if (speed < STOP_THRESHOLD) {
             this.phases[i] = StraightPhase.FINISHED;
             break;
           }
+          // 進行方向と逆向きにブレーキ力を適用
           entry.aggregate.body.applyForce(velocity.normalize().scale(-entry.preset.brakePower), center);
           break;
 
         case StraightPhase.FINISHED:
+          // 完了カウントを増やす
           finishedCount++;
           break;
       }
     }
 
+    // 全員完了したら待機フェーズに移行
     if (finishedCount >= this.entries.length) {
       this.allFinished = true;
       this.waitTimer = 0;
     }
   }
 
+  /** 全ビー玉のフェーズをRACINGに戻し、タイマーをリセット */
   reset(): void {
     this.phases = this.entries.map(() => StraightPhase.RACING);
     this.allFinished = false;
@@ -307,17 +362,35 @@ class StraightController {
 
 // ─── 反復横跳びコース ───
 
-enum ShuttlePhase { SHUTTLING, FINISHED }
+/** 反復横跳びコースの各ビー玉の進行フェーズ */
+enum ShuttlePhase {
+  /** シャトル中: 左右のターゲット間を往復 */
+  SHUTTLING,
+  /** 完了: 全往復を終えて停止 */
+  FINISHED,
+}
 
+/**
+ * 反復横跳びコースのコントローラー
+ *
+ * 各ビー玉を左右のターゲットX座標間で往復させる
+ */
 class LateralShuttleController {
+  /** 制御対象のビー玉エントリ配列 */
   private entries: MarbleEntry[];
+  /** 反復横跳びコースの設定 */
   private config: LateralShuttleConfig;
+  /** リセット時に呼ばれるコールバック */
   private onReset: () => void;
+  /** 各ビー玉の現在のフェーズ */
   private phases: ShuttlePhase[];
   /** 各ビー玉の現在のターゲットX座標リスト（左右交互） */
   private targets: number[][];
+  /** 各ビー玉の現在のターゲットインデックス */
   private targetIndices: number[];
+  /** 全員完了フラグ */
   private allFinished = false;
+  /** 全員完了後の待機タイマー(秒) */
   private waitTimer = 0;
 
   /** Z方向のドリフトを抑制する力 */
@@ -327,6 +400,7 @@ class LateralShuttleController {
   /** 横方向の速度ダンピング（ターゲット近くでオーバーシュート防止） */
   private static readonly X_DAMPING = 5;
 
+  /** ビー玉の半径(m) */
   private radius: number;
 
   constructor(entries: MarbleEntry[], config: LateralShuttleConfig, radius: number, onReset: () => void) {
@@ -339,6 +413,11 @@ class LateralShuttleController {
     this.targetIndices = entries.map(() => 0);
   }
 
+  /**
+   * ターゲットX座標リストを生成（左右交互 + 最後に中央）
+   * @param laneX - レーンの中心X座標
+   * @returns ターゲットX座標の配列
+   */
   private generateTargets(laneX: number): number[] {
     const left = laneX - this.config.shuttleWidth;
     const right = laneX + this.config.shuttleWidth;
@@ -412,6 +491,7 @@ class LateralShuttleController {
     }
   }
 
+  /** 全ビー玉のフェーズをSHUTTLINGに戻し、ターゲットとタイマーをリセット */
   reset(): void {
     this.phases = this.entries.map(() => ShuttlePhase.SHUTTLING);
     this.targetIndices = this.entries.map(() => 0);
@@ -422,17 +502,38 @@ class LateralShuttleController {
 
 // ─── 衝突実験コース ───
 
-enum CollisionPhase { ACCEL, COAST, FINISHED }
+/** 衝突実験コースの各ビー玉の進行フェーズ */
+enum CollisionPhase {
+  /** 加速中: 中央の衝突ポイントに向かって加速 */
+  ACCEL,
+  /** コースト中: 衝突後に減速待ち */
+  COAST,
+  /** 完了: 停止済み */
+  FINISHED,
+}
 
+/**
+ * 衝突実験コースのコントローラー
+ *
+ * 対向配置のビー玉を中央に向かって加速させ、衝突後に停止を待つ
+ */
 class CollisionController {
+  /** 制御対象のビー玉エントリ配列 */
   private entries: MarbleEntry[];
+  /** 衝突実験コースの設定 */
   private config: CollisionConfig;
+  /** リセット時に呼ばれるコールバック */
   private onReset: () => void;
+  /** 各ビー玉の現在のフェーズ */
   private phases: CollisionPhase[];
+  /** 衝突ポイントのZ座標（対向距離の中間点） */
   private midZ: number;
+  /** 全員完了フラグ */
   private allFinished = false;
+  /** 全員完了後の待機タイマー(秒) */
   private waitTimer = 0;
 
+  /** ビー玉の半径(m) */
   private radius: number;
 
   constructor(entries: MarbleEntry[], config: CollisionConfig, radius: number, onReset: () => void) {
@@ -502,6 +603,7 @@ class CollisionController {
     }
   }
 
+  /** 全ビー玉のフェーズをACCELに戻し、タイマーをリセット */
   reset(): void {
     this.phases = this.entries.map(() => CollisionPhase.ACCEL);
     this.allFinished = false;
@@ -521,7 +623,9 @@ class CollisionController {
  *   4. ランダムな横方向の揺らぎで毎回異なる角度から衝突
  */
 class RandomController {
+  /** 制御対象のビー玉エントリ配列 */
   private entries: MarbleEntry[];
+  /** ビー玉の半径(m) */
   private radius: number;
   /** 各ビー玉のランダム揺らぎ方向 */
   private jitterAngles: number[];
@@ -534,8 +638,9 @@ class RandomController {
   private static readonly PULL_STRENGTH = 8;
   /** ランダム揺らぎの力（まっすぐ中央ではなく少しずれた角度で突っ込む） */
   private static readonly JITTER_FORCE = 15;
-  /** 揺らぎ方向の更新間隔 */
+  /** 揺らぎ方向の更新間隔の最小値(秒) */
   private static readonly JITTER_MIN = 0.8;
+  /** 揺らぎ方向の更新間隔の最大値(秒) */
   private static readonly JITTER_MAX = 2.0;
 
   /** この角速度を超えたらよろめき状態に入る (rad/s) */
@@ -553,6 +658,7 @@ class RandomController {
     this.staggering = entries.map(() => false);
   }
 
+  /** ランダムな揺らぎ方向更新間隔を生成(JITTER_MIN〜JITTER_MAX秒) */
   private randomJitterInterval(): number {
     return RandomController.JITTER_MIN
       + Math.random() * (RandomController.JITTER_MAX - RandomController.JITTER_MIN);
@@ -622,6 +728,7 @@ class RandomController {
     }
   }
 
+  /** 全ビー玉の揺らぎ・よろめき状態をリセット */
   reset(): void {
     this.jitterAngles = this.entries.map(() => Math.random() * Math.PI * 2);
     this.jitterTimers = this.entries.map(() => this.randomJitterInterval());
@@ -652,25 +759,54 @@ interface HipRecoil {
 
 // ─── プッシュシステム ───
 
+/** プッシュ発動の射程距離(m): この距離以内に他のビー玉がいるとプッシュを開始 */
 const PUSH_RANGE = 2.5;
+/** プッシュのクールダウン時間(秒): プッシュ完了後、次のプッシュまでの待機時間 */
 const PUSH_COOLDOWN = 2.5;
+/** ワインドアップ（振りかぶり）の所要時間(秒) */
 const PUSH_WINDUP_DUR = 0.15;
+/** ストライク（打撃）の所要時間(秒) */
 const PUSH_STRIKE_DUR = 0.08;
+/** リターン（腕を戻す）の所要時間(秒) */
 const PUSH_RETURN_DUR = 0.3;
 
+/** 腕の休息角度(rad): 自然に下ろした状態 */
 const ARM_REST_ANGLE = 0.15;
+/** 腕のワインドアップ角度(rad): 後方に引いた状態 */
 const ARM_WINDUP_ANGLE = -0.5;
+/** 腕のストライク角度(rad): 前方に突き出した状態 */
 const ARM_STRIKE_ANGLE = 1.4;
 
-enum PushPhase { IDLE, WINDUP, STRIKE, RETURN }
+/** プッシュアクションのフェーズ */
+enum PushPhase {
+  /** 待機中: クールダウン消化・ターゲット探索 */
+  IDLE,
+  /** 振りかぶり中: 腕を後方に引く */
+  WINDUP,
+  /** 打撃中: 腕を前方に突き出し、相手にインパルスを適用 */
+  STRIKE,
+  /** 復帰中: 腕を休息位置に戻す */
+  RETURN,
+}
 
 // ─── 公開クラス: コースタイプに応じて内部コントローラーを切り替え ───
 
+/**
+ * 力の統合制御クラス
+ *
+ * コースタイプに応じた移動力・衝突エフェクト・ヒューマノイド物理
+ * （脚バネ・バランス・転倒復帰・プッシュ・分散重力）を統合管理する
+ */
 export class ForceController {
+  /** コースタイプ別の内部コントローラー（updateメソッドを持つ） */
   private controller: { update(dt: number): void };
+  /** 制御対象のビー玉エントリ配列 */
   private entries: MarbleEntry[];
+  /** ビー玉の半径(m) */
   private radius: number;
+  /** ビー玉の反発係数（プッシュのインパルス計算に使用） */
   private restitution: number;
+  /** Babylon.jsシーンへの参照 */
   private scene: Scene;
 
   /** ビー玉PhysicsBody → MarbleEntry のマップ（衝突判定用） */
@@ -682,10 +818,13 @@ export class ForceController {
   /** 衝突Observable購読の参照（dispose用） */
   private collisionObservers: { entry: MarbleEntry; observer: Observer<unknown> }[] = [];
 
-  /** プッシュ状態（箱ビー玉のみ使用） */
+  /** プッシュ状態（箱ビー玉のみ使用）: 各ビー玉の現在のプッシュフェーズ */
   private pushPhases: PushPhase[];
+  /** プッシュタイマー: 各フェーズの経過時間(秒) */
   private pushTimers: number[];
+  /** プッシュクールダウン: 次のプッシュまでの残り時間(秒) */
   private pushCooldowns: number[];
+  /** プッシュターゲット: プッシュ対象のビー玉インデックス(-1=なし) */
   private pushTargets: number[];
 
   /** ヒップリコイル状態（ヒューマノイドのみ） */
@@ -1212,31 +1351,54 @@ export class ForceController {
   }
 
 
+  /**
+   * メインの物理更新ループ
+   *
+   * 毎フレーム呼ばれ、以下を順番に処理:
+   * 1. ヒューマノイドの脚バネ・バランス・転倒復帰
+   * 2. 通常ビー玉のバウンス処理
+   * 3. 分散重力の適用
+   * 4. コース固有の移動力
+   * 5. プッシュシステム
+   * 6. 腕の地面めり込み防止
+   * 7. 衝突エフェクト更新
+   * 8. ヒップリコイル更新
+   *
+   * @param deltaTime - 前フレームからの経過時間(秒)
+   */
   update(deltaTime: number): void {
+    // 全ビー玉を順番に処理
     for (let ei = 0; ei < this.entries.length; ei++) {
       const entry = this.entries[ei];
+      // ヒューマノイドビー玉の場合（innerMeshが存在）
       if (entry.innerMesh) {
+        // BOXメッシュのワールド変換行列を取得
         const worldMatrix = entry.mesh.getWorldMatrix();
+        // 物理ボディの重心ワールド座標
         const center = entry.aggregate.body.getObjectCenterWorld();
+        // 現在の並進速度
         const bodyVel = entry.aggregate.body.getLinearVelocity();
+        // 現在の角速度
         const bodyAngVel = entry.aggregate.body.getAngularVelocity();
 
-        const boxHalfSize = this.radius * 1.2;   // boxSize / 2
-        const legH = this.radius * 2.14;          // legHeight + footH
-        const legInset = this.radius * 0.72;     // boxSize * 0.3
+        const boxHalfSize = this.radius * 1.2;   // BOXの半分のサイズ (boxSize / 2)
+        const legH = this.radius * 2.14;          // 脚の全高 (legHeight + footH)
+        const legInset = this.radius * 0.72;     // BOX中心からの脚のオフセット (boxSize * 0.3)
         const upperLegH = this.radius * 1.0;     // 上腿の長さ（膝IK用）
         const lowerLegH = this.radius * 1.0;     // 下腿の長さ（膝IK用）
         const footIKH = this.radius * 0.14;      // 足の高さ（膝IK用）
 
-        // localUp を先に計算（バランスアニメで使用）
+        // ローカルUp方向をワールド座標に変換（バランスアニメで使用）
         const localUp = Vector3.TransformNormal(Vector3.Up(), worldMatrix);
 
-        // 直立度(0〜1): 1=直立, 0=横倒し/反転
+        // 直立度(0〜1): 1=完全直立, 0=横倒し/反転
         const uprightness = Math.max(0, localUp.y);
 
-        // 基本スケール: 直立度に基づく脚支持とトルク
+        // 脚支持スケール: 直立度0.2〜0.5の範囲で0→1に変化（傾くと脚の支持力が弱まる）
         const legScale = Math.min(1, Math.max(0, (uprightness - 0.2) / 0.3));
+        // トルクスケール: 直立度0.15〜0.7の範囲で0→1に変化（傾くとトルクが弱まる）
         const torqueScale = Math.min(1, Math.max(0, (uprightness - 0.15) / 0.55));
+        // 転倒復帰トルクの強さ
         const torqueStrength = UPRIGHT_TORQUE;
 
         // ── 転倒復帰状態管理 ──
@@ -1665,6 +1827,11 @@ export class ForceController {
     this.updateHipRecoil(deltaTime);
   }
 
+  /**
+   * 全リソースを破棄してメモリを解放
+   *
+   * 衝突イベント購読・エフェクト・マテリアルを破棄する
+   */
   dispose(): void {
     // 衝突Observable購読を解除
     for (const { entry, observer } of this.collisionObservers) {
@@ -1672,12 +1839,13 @@ export class ForceController {
     }
     this.collisionObservers = [];
 
-    // 衝突エフェクトを破棄
+    // 衝突エフェクトのメッシュを破棄
     for (const fx of this.collisionEffects) {
       fx.mesh.dispose();
     }
     this.collisionEffects = [];
 
+    // エフェクト用マテリアルを破棄
     this.fxMaterial.dispose();
   }
 }
