@@ -14,6 +14,8 @@ import {
   TransformNode,
   Skeleton,
 } from "@babylonjs/core";
+import { Camera, CAMERA_PRESETS } from "@/GamePlay/Object/Entities/Camera";
+import type { FaceCamConfig } from "@/GamePlay/Object/Entities/Camera";
 import "@babylonjs/loaders/glTF";
 import { BlendController } from "@/GamePlay/GameSystem/CharacterMotion/Character/BlendController";
 import { PoseBlender } from "@/GamePlay/GameSystem/CharacterMotion/Character/PoseBlender";
@@ -63,25 +65,10 @@ const APPEARANCES: Partial<AppearanceConfig>[] = [
 /** 初期 FaceParams（新モデルには顔パーツ内蔵のため生成不要だが、UI互換のため保持） */
 const INITIAL_FACE_PARAMS = FACE_CONFIGS.map(faceConfigToParams);
 
-/** 通常時のカメラ設定 */
-const NORMAL_CAM_ALPHA = -Math.PI / 2;
-const NORMAL_CAM_BETA = Math.PI / 3;
-const NORMAL_CAM_RADIUS = 5;
+// FaceCamConfig を re-export（FaceCheckPanel.tsx が依存）
+export type { FaceCamConfig } from "@/GamePlay/Object/Entities/Camera";
 
-/** 顔アップ時のカメラ初期設定 */
-export interface FaceCamConfig {
-  targetY: number;
-  radius: number;
-  alpha: number;
-  beta: number;
-}
-
-const DEFAULT_FACE_CAM: FaceCamConfig = {
-  targetY: 1.6,
-  radius: 1.26,
-  alpha: -Math.PI / 2,
-  beta: Math.PI / 2,
-};
+const DEFAULT_FACE_CAM: FaceCamConfig = { ...CAMERA_PRESETS.humanoidFace };
 
 /** 各キャラクターのリソースをまとめたもの */
 interface CharacterInstance {
@@ -144,13 +131,7 @@ export function useHumanoidControl(
     const scene = new Scene(engine);
     sceneRef.current = scene;
 
-    const camera = new ArcRotateCamera(
-      "cam", NORMAL_CAM_ALPHA, NORMAL_CAM_BETA, NORMAL_CAM_RADIUS,
-      new Vector3(0, 1, 0), scene
-    );
-    camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 0.1;
-    camera.upperRadiusLimit = 30;
+    const camera = Camera.createHumanoidCamera(scene, canvas);
     cameraRef.current = camera;
 
     new HemisphericLight("light", new Vector3(0, 1, 0.3), scene);
@@ -520,9 +501,9 @@ export function useHumanoidControl(
     if (charIndex === null) {
       // 通常モードに復帰（カメラ操作を再有効化）
       camera.attachControl(canvas, true);
-      camera.alpha = NORMAL_CAM_ALPHA;
-      camera.beta = NORMAL_CAM_BETA;
-      camera.radius = NORMAL_CAM_RADIUS;
+      camera.alpha = CAMERA_PRESETS.humanoidNormal.alpha;
+      camera.beta = CAMERA_PRESETS.humanoidNormal.beta;
+      camera.radius = CAMERA_PRESETS.humanoidNormal.radius;
     } else {
       const inst = instancesRef.current[charIndex];
       if (!inst) return;

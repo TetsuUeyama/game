@@ -1,4 +1,4 @@
-import CharacterMove1on1Game from '@/components/CharacterMove/CharacterMove1on1Game';
+import CharacterMove1on1Game from '@/GamePlay/MatchEngine/CharacterMove1on1Game';
 
 /**
  * Character Move 1対1テストページ

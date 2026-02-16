@@ -7,6 +7,7 @@ import {
   Vector3,
   Color4,
 } from "@babylonjs/core";
+import { Camera } from "@/GamePlay/Object/Entities/Camera";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture";
 import { Field } from "@/GamePlay/Object/Entities/Field";
@@ -484,26 +485,7 @@ export class GameScene {
    * カメラを作成
    */
   private createCamera(canvas: HTMLCanvasElement): ArcRotateCamera {
-    // アークローテートカメラ（キャラクターを中心に回転）
-    const camera = new ArcRotateCamera(
-      "camera",
-      -Math.PI / 2, // 初期水平角度（キャラクターの後ろ）
-      Math.PI / 3, // 初期垂直角度（やや上から見下ろす）
-      10, // 初期距離
-      Vector3.Zero(), // 初期ターゲット
-      this.scene
-    );
-
-    // カメラの制限
-    camera.lowerRadiusLimit = 3; // 最小距離
-    camera.upperRadiusLimit = 30; // 最大距離
-    camera.lowerBetaLimit = 0.1; // 最小垂直角度（真上を防ぐ）
-    camera.upperBetaLimit = Math.PI / 2.2; // 最大垂直角度（真下を防ぐ）
-
-    // マウス操作を有効化
-    camera.attachControl(canvas, true);
-
-    return camera;
+    return Camera.createGameCamera(this.scene, canvas);
   }
 
   /**

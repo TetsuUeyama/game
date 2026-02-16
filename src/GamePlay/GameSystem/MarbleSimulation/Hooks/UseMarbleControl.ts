@@ -1,13 +1,13 @@
 // React フック: useEffect(副作用), useRef(参照保持), useState(状態管理)
 import { useEffect, useRef, useState } from "react";
-// Babylon.js コアモジュール: レンダリングエンジン、シーン、カメラ、ライト、ベクトル
+// Babylon.js コアモジュール: レンダリングエンジン、シーン、ライト、ベクトル
 import {
   Engine,
   Scene,
-  ArcRotateCamera,
   HemisphericLight,
   Vector3,
 } from "@babylonjs/core";
+import { Camera } from "@/GamePlay/Object/Entities/Camera";
 // Havok物理エンジン管理クラス
 import { PhysicsWorld } from "@/GamePlay/GameSystem/MarbleSimulation/Physics/PhysicsWorld";
 // ビー玉・地面・壁の生成・管理クラス
@@ -78,11 +78,10 @@ export function useMarbleControl(
     sceneRef.current = scene;
 
     // カメラ: コースタイプに応じた位置・アングルで生成
-    const cam = createCamera(config, scene, canvas);
-    /** カメラの最小ズーム距離 */
-    cam.lowerRadiusLimit = 10;
-    /** カメラの最大ズーム距離 */
-    cam.upperRadiusLimit = 120;
+    Camera.createMarbleCamera(config.courseType, scene, canvas, {
+      goalDistance: config.straight.goalDistance,
+      startDistance: config.collision.startDistance,
+    });
 
     /** 半球ライト: 上方向から照らす環境光を生成 */
     new HemisphericLight("light", new Vector3(0, 1, 0.3), scene);
@@ -170,43 +169,3 @@ export function useMarbleControl(
   return { loading, error };
 }
 
-/**
- * コースタイプに応じたカメラを生成
- *
- * 各コースに最適な視点・距離・注視点でArcRotateCameraを設定する
- *
- * @param config - シミュレーション設定
- * @param scene - Babylon.jsシーン
- * @param canvas - カメラ操作を紐づけるcanvas要素
- * @returns 生成されたArcRotateCamera
- */
-function createCamera(config: SimulationConfig, scene: Scene, canvas: HTMLCanvasElement): ArcRotateCamera {
-  switch (config.courseType) {
-    case CourseType.STRAIGHT: {
-      // 直線コース: コース中央を注視、横から斜め上の視点
-      const midZ = config.straight.goalDistance / 2; // ゴールの中間地点
-      const camera = new ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 3.5, 50, new Vector3(0, 0, midZ), scene);
-      camera.attachControl(canvas, true); // マウス/タッチ操作を有効化
-      return camera;
-    }
-    case CourseType.LATERAL_SHUTTLE: {
-      // 反復横跳びコース: ビー玉のZ位置(5)を注視、やや近い視点
-      const camera = new ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 4, 30, new Vector3(0, 0, 5), scene);
-      camera.attachControl(canvas, true); // マウス/タッチ操作を有効化
-      return camera;
-    }
-    case CourseType.COLLISION: {
-      // 衝突実験コース: 衝突ポイント（中間地点）を注視
-      const midZ = config.collision.startDistance / 2; // 対向の中間地点
-      const camera = new ArcRotateCamera("cam", -Math.PI / 2, Math.PI / 3.5, 40, new Vector3(0, 0, midZ), scene);
-      camera.attachControl(canvas, true); // マウス/タッチ操作を有効化
-      return camera;
-    }
-    case CourseType.RANDOM: {
-      // ランダムコース: 斜め上から俯瞰で狭いフィールドを見渡す
-      const camera = new ArcRotateCamera("cam", -Math.PI / 4, Math.PI / 3, 20, Vector3.Zero(), scene);
-      camera.attachControl(canvas, true); // マウス/タッチ操作を有効化
-      return camera;
-    }
-  }
-}

@@ -8,8 +8,8 @@ import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 import type { MatchConfig } from '@/GamePlay/Management/League/Types';
 import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes';
-import { PlayerFaceAvatar, PlayerGameStatsView } from '../CharacterMove/PlayerFaceAvatar';
-import { PlayerDetailPanel, SelectedPlayerInfo } from '../CharacterMove/PlayerDetailPanel';
+import { PlayerFaceAvatar, PlayerGameStatsView } from '@/GamePlay/MatchEngine/PlayerFaceAvatar';
+import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
 
 /**
  * リーグ試合用ゲームコンポーネント
