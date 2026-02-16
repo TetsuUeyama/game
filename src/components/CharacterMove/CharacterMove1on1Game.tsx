@@ -1,19 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { GameScene } from '@/character-move/scenes/GameScene';
-import { TeamConfigLoader } from '@/character-move/loaders/TeamConfigLoader';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
+import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { TeamConfigLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/TeamConfigLoader';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
 import { HamburgerMenu } from './HamburgerMenu';
 import { PositionBoardPanel } from './PositionBoardPanel';
-import { BoardPlayerPosition } from '@/character-move/types/PositionBoard';
+import { BoardPlayerPosition } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
 import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
 import { MotionCheckModePanel } from './MotionCheckModePanel';
 
-import { FaceAvatarData } from '@/character-move/utils/FaceAvatarCapture';
-import { OffenseRole, DefenseRole } from '@/character-move/state/PlayerStateTypes';
+import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
+import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
 

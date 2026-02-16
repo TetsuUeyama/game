@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/character-move/scenes/GameScene';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { PlayerData } from '@/character-move/types/PlayerData';
-import { ACTION_MOTIONS, ActionType } from '@/character-move/config/action/ActionConfig';
-import { Character } from '@/character-move/entities/Character';
+import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import { ACTION_MOTIONS, ActionType } from '@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig';
+import { Character } from '@/GamePlay/Object/Entities/Character';
 
 interface MotionCheckModePanelProps {
   gameScene: GameScene | null;

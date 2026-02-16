@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 // Babylon.jsはSSR非対応のためdynamic importでクライアント専用にする
 const MarbleScene = dynamic(
-  () => import("@/marblesimulation/components/MarbleScene"),
+  () => import("@/GamePlay/GameSystem/MarbleSimulation/Components/MarbleScene"),
   { ssr: false }
 );
 

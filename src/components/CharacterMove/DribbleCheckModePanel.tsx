@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/character-move/scenes/GameScene';
+import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
 import {
   DribbleCheckController,
   DribbleCheckProgress,
   DribbleCheckResult,
   DribbleCheckConfig,
-} from '@/character-move/controllers/check/DribbleCheckController';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { PlayerData } from '@/character-move/types/PlayerData';
-import { FieldGridUtils } from '@/character-move/config/FieldGridConfig';
-import { FeintController } from '@/character-move/controllers/action/FeintController';
+} from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/DribbleCheckController';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { FeintController } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController';
 
 interface DribbleCheckModePanelProps {
   gameScene: GameScene | null;

@@ -1,18 +1,18 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/character-move/scenes/GameScene';
+import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
 import {
   PassCheckController,
   PassCheckProgress,
   PassCheckResult,
   PassCheckConfig,
   DefenderPlacement,
-} from '@/character-move/controllers/check/PassCheckController';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { PlayerData } from '@/character-move/types/PlayerData';
-import { PassType } from '@/character-move/config/PassTrajectoryConfig';
-import { FieldGridUtils } from '@/character-move/config/FieldGridConfig';
+} from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/PassCheckController';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import { PassType } from '@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
 
 interface PassCheckModePanelProps {
   gameScene: GameScene | null;

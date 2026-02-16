@@ -1,8 +1,8 @@
 "use client";
 import { Theme } from "@chakra-ui/react";
 import { ReactNode } from "react";
-import { Provider as CProvider } from "@/components/ui/provider";
-import { useColorMode } from "@/components/ui/color-mode";
+import { Provider as CProvider } from "@/components/ui/Provider";
+import { useColorMode } from "@/components/ui/ColorMode";
 
 type Props = {
   children: ReactNode;

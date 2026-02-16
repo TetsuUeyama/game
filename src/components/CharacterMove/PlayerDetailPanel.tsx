@@ -1,6 +1,6 @@
 'use client';
 
-import { PlayerStats } from '@/character-move/types/PlayerData';
+import { PlayerStats } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 
 export interface SelectedPlayerInfo {
   playerName: string;

@@ -1,7 +1,7 @@
 'use client';
 
-import type { LeagueState, TeamStanding } from '@/league/types';
-import { LeagueManager } from '@/league/LeagueManager';
+import type { LeagueState, TeamStanding } from '@/GamePlay/Management/League/Types';
+import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 
 interface Props {
   leagueState: LeagueState;
