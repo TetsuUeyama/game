@@ -16,7 +16,7 @@ import {
   BALANCE_COLLISION,
   BALANCE_LIMITS,
   BALANCE_THRESHOLD,
-} from "../config/BalanceConfig";
+} from "./BalanceConfig";
 
 // ============================================================================
 // 型定義

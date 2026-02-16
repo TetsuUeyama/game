@@ -12,7 +12,7 @@ import {
   ACTION_FORCES,
   ACTION_TYPE_FORCES,
   MOVEMENT_BALANCE,
-} from "../config/BalanceConfig";
+} from "@/physics/balance/BalanceConfig";
 import type { ActionType } from "../config/action/ActionConfig";
 import {
   BalanceSphereState,
@@ -32,7 +32,7 @@ import {
   getHorizontalOffset,
   getWeightForceFactor,
   clamp,
-} from "../utils/BalancePhysics";
+} from "@/physics/balance/BalancePhysics";
 
 // 型をre-export
 export type { BalanceSphereState, CollisionResult };

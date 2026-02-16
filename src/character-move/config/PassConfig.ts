@@ -2,7 +2,7 @@
  * パス関連の設定
  */
 
-import { getDistance2DSimple } from "../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 
 /**
  * パス距離設定

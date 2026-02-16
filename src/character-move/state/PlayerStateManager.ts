@@ -3,7 +3,7 @@ import { Character } from "../entities/Character";
 import { Ball } from "../entities/Ball";
 import { CharacterState } from "../types/CharacterState";
 import { PlayerPosition } from "../config/FormationConfig";
-import { getDistance2D } from "../utils/CollisionUtils";
+import { getDistance2D } from "@/physics/spatial/SpatialUtils";
 import { PlayerStateSnapshot, TeamState, RadiusQueryOptions, OffenseRole, DefenseRole, DefenseScheme } from "./PlayerStateTypes";
 
 /**

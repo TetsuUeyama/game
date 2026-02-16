@@ -145,16 +145,17 @@ export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
       let q = restRotQuat(bone);
 
       // Step 2: BIND_POSE_CORRECTIONS に定義があれば、レスト姿勢自体を補正
-      //         例: rLeg に Y=45° → Q_rest = Q_rest × Q(0, 45°, 0)
-      //         これにより、モーションオフセット 0° で膝が正面を向く
-      const corr = BIND_POSE_CORRECTIONS[key as keyof FoundBones];
-      if (corr) {
-        const corrQ = Quaternion.RotationYawPitchRoll(
-          (corr.y ?? 0) * DEG_TO_RAD,
-          (corr.x ?? 0) * DEG_TO_RAD,
-          (corr.z ?? 0) * DEG_TO_RAD,
-        );
-        q = q.multiply(corrQ);
+      //         Rigify専用: Mixamoリグは左右対称なので補正不要
+      if (rigType === "rigify") {
+        const corr = BIND_POSE_CORRECTIONS[key as keyof FoundBones];
+        if (corr) {
+          const corrQ = Quaternion.RotationYawPitchRoll(
+            (corr.y ?? 0) * DEG_TO_RAD,
+            (corr.x ?? 0) * DEG_TO_RAD,
+            (corr.z ?? 0) * DEG_TO_RAD,
+          );
+          q = q.multiply(corrQ);
+        }
       }
       cache.set(bone, q);
     }

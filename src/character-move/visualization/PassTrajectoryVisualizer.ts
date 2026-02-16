@@ -24,7 +24,7 @@ import {
   PassTrajectoryCalculator,
   Vec3,
   ValidPassOption,
-} from "../physics/PassTrajectoryCalculator";
+} from "@/physics/trajectory/PassTrajectoryCalculator";
 import {
   RiskAssessmentSystem,
   TrajectoryRiskAnalysisResult,

@@ -3,7 +3,7 @@
  * 1on1バトル、ディフェンス位置取り、反応時間に関する定数とユーティリティメソッドを提供
  */
 
-import { getDistance2DSimple } from "../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 
 /**
  * ディフェンス距離設定（メートル）

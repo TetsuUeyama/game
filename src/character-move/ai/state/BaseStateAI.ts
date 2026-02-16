@@ -7,7 +7,7 @@ import { IDLE_MOTION } from "../../motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { FIELD_CONFIG } from "../../config/gameConfig";
-import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 import { PlayerStateManager } from "../../state";
 
 /**

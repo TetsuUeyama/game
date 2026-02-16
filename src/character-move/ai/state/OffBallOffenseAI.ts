@@ -9,11 +9,11 @@ import { WALK_FORWARD_MOTION } from "../../motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "../../motion/DashMotion";
 import { Formation, PlayerPosition } from "../../config/FormationConfig";
 import { OffenseRole } from "../../state/PlayerStateTypes";
-import { PassTrajectoryCalculator, Vec3 } from "../../physics/PassTrajectoryCalculator";
+import { PassTrajectoryCalculator, Vec3 } from "@/physics/trajectory/PassTrajectoryCalculator";
 import { RiskAssessmentSystem } from "../../systems/RiskAssessmentSystem";
 import { PassType, PASS_TYPE_CONFIGS } from "../../config/PassTrajectoryConfig";
 import { getTeammates } from "../../utils/TeamUtils";
-import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 import { SAFE_BOUNDARY_CONFIG } from "../../config/gameConfig";
 import {
   TacticalZoneType,

@@ -53,7 +53,7 @@ export default function CharacterMove1on1Game() {
         console.log('[CharacterMove1on1Game] ゲーム初期化開始...');
 
         // 5対5用のチーム設定を読み込む
-        const teamConfig = await TeamConfigLoader.loadTeamConfig('/data/teamConfig5on5.json');
+        const teamConfig = await TeamConfigLoader.loadTeamConfig('teamConfig5on5');
 
         // 選手データを読み込む
         const playerData = await PlayerDataLoader.loadPlayerData();

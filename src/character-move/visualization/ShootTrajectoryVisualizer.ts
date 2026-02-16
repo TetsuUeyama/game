@@ -21,10 +21,10 @@ import {
   SHOOT_TRAJECTORY_CONFIG,
   getSuccessRateColor,
 } from "../config/ShootTrajectoryConfig";
-import { ParabolaUtils } from "../utils/parabolaUtils";
-import { DeterministicTrajectory } from "../utils/DeterministicTrajectory";
+import { ParabolaUtils } from "@/physics/trajectory/ParabolaUtils";
+import { DeterministicTrajectory } from "@/physics/trajectory/DeterministicTrajectory";
 import { SHOOT_RANGE, SHOOT_ANGLE } from "../config/action/ShootingConfig";
-import { normalizeAngle, getDistance2D } from "../utils/CollisionUtils";
+import { normalizeAngle, getDistance2D } from "@/physics/spatial/SpatialUtils";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
 
 /**

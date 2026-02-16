@@ -16,12 +16,12 @@ import {
   SHOOT_COOLDOWN,
   ShootingUtils,
 } from "../../config/action/ShootingConfig";
-import { ParabolaUtils } from "../../utils/parabolaUtils";
+import { ParabolaUtils } from "@/physics/trajectory/ParabolaUtils";
 import {
   getDistance2D,
   getDirection2D,
   isDirectionWithinAngle,
-} from "../../utils/CollisionUtils";
+} from "@/physics/spatial/SpatialUtils";
 import { ActionType, ActionConfigUtils } from "../../config/action/ActionConfig";
 
 /**

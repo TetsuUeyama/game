@@ -9,8 +9,8 @@ import {
   PassTypeConfig,
   PASS_TYPE_CONFIGS,
   INTERCEPTION_CONFIG,
-} from "../config/PassTrajectoryConfig";
-import { PhysicsConstants } from "../../physics/PhysicsConfig";
+} from "@/character-move/config/PassTrajectoryConfig";
+import { PhysicsConstants } from "../PhysicsConfig";
 
 /**
  * 3Dベクトル型（シンプル）

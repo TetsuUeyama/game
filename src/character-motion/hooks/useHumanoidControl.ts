@@ -31,19 +31,20 @@ import {
   BlendInput,
 } from "../types/CharacterMotionConfig";
 import { FaceParams, FACE_CONFIGS, faceConfigToParams } from "../ui/CheckModeTypes";
-import { createFacePartsFromParams } from "../character/FaceFactory";
 import { MotionDefinition } from "../motion/MotionTypes";
 import { IDLE_MOTION } from "../motion/IdleMotion";
 
 const MODEL_PATH = "/";
-const MODEL_FILE = "rigged_clothed_body.glb";
+const MODEL_FILE = "seconf.glb";
 
-/** ── 髪パーツ設定 ── */
-const HAIR_PATH = "/kawaki/";
-const HAIR_FILE = "scene.gltf";
-/** 髪の位置微調整（rootMeshローカル座標） */
-const HAIR_OFFSET = new Vector3(0, 0, 0);
-const HAIR_SCALE = 1.0;
+/** ── 髪差し替え設定 ── */
+const HAIR_MODEL_FILE = "newmodel.glb";
+/** メインモデルで非表示にするメッシュ名 */
+const MAIN_HIDE_MESHES = ["Ch42_Hair1", "Cube"];
+/** 髪モデルで表示するメッシュ名（それ以外は非表示） */
+const HAIR_SHOW_MESHES = ["Hair"];
+/** 髪モデルのスケール補正（seconf Hips高さ / newmodel Hips高さ） */
+const HAIR_SCALE_RATIO = 96.37 / 209.15;
 
 /** ── 身長比較設定（ここを変更して比較） ── */
 const CHARACTER_A_HEIGHT_CM = 170;
@@ -59,7 +60,7 @@ const APPEARANCES: Partial<AppearanceConfig>[] = [
   { shirtColor: new Color3(0.8, 0.2, 0.2), pantsColor: new Color3(0.4, 0.4, 0.4) },
 ];
 
-/** 初期 FaceParams を FACE_CONFIGS から生成 */
+/** 初期 FaceParams（新モデルには顔パーツ内蔵のため生成不要だが、UI互換のため保持） */
 const INITIAL_FACE_PARAMS = FACE_CONFIGS.map(faceConfigToParams);
 
 /** 通常時のカメラ設定 */
@@ -92,6 +93,10 @@ interface CharacterInstance {
   procedural: ProceduralHumanoidResult | null;
   hairMeshes: AbstractMesh[];
   faceMeshes: AbstractMesh[];
+  /** 髪モデルのスケルトン（メインスケルトンと同期させる） */
+  hairSkeleton: Skeleton | null;
+  /** 髪モデルのルートメッシュ（dispose用） */
+  hairRootMesh: AbstractMesh | null;
 }
 
 export function useHumanoidControl(
@@ -172,15 +177,25 @@ export function useHumanoidControl(
 
     const initAsync = async () => {
       try {
-        const results = await Promise.all(
-          HEIGHTS.map(() =>
-            SceneLoader.ImportMeshAsync("", MODEL_PATH, MODEL_FILE, scene)
-          )
-        );
+        // メインモデルと髪モデルを並列読み込み
+        const [results, hairResults] = await Promise.all([
+          Promise.all(
+            HEIGHTS.map(() =>
+              SceneLoader.ImportMeshAsync("", MODEL_PATH, MODEL_FILE, scene)
+            )
+          ),
+          Promise.all(
+            HEIGHTS.map(() =>
+              SceneLoader.ImportMeshAsync("", MODEL_PATH, HAIR_MODEL_FILE, scene)
+            )
+          ),
+        ]);
         if (!mounted) return;
 
+        // 埋め込みアニメーションを停止・破棄（PoseBlenderとの競合を防止）
         for (const ag of scene.animationGroups) {
           ag.stop();
+          ag.dispose();
         }
 
         const instances: CharacterInstance[] = [];
@@ -216,17 +231,34 @@ export function useHumanoidControl(
           const pose = new TargetPose();
           pose.initialize(skeleton);
 
-          const extraMeshes: AbstractMesh[] = [];
-          const hairResult = await SceneLoader.ImportMeshAsync(
-            "", HAIR_PATH, HAIR_FILE, scene
-          );
-          extraMeshes.push(...hairResult.meshes);
-          const hairRoot = hairResult.meshes[0];
-          hairRoot.parent = rootMesh;
-          hairRoot.position.copyFrom(HAIR_OFFSET);
-          hairRoot.scaling.setAll(HAIR_SCALE);
+          // メインモデルの不要メッシュを非表示（元の髪、Cube等）
+          for (const m of result.meshes) {
+            if (MAIN_HIDE_MESHES.includes(m.name)) {
+              m.setEnabled(false);
+            }
+          }
 
-          const faceMeshes = createFacePartsFromParams(scene, rootMesh, INITIAL_FACE_PARAMS[i], i);
+          // ── 髪モデルのセットアップ ──
+          const hairResult = hairResults[i];
+          const hairRootMesh = hairResult.meshes[0];
+          const hairSkeleton = hairResult.skeletons[0] ?? null;
+
+          // 髪モデルのルートをメインモデルと同じ位置に配置し、スケール補正を適用
+          hairRootMesh.position.copyFrom(rootMesh.position);
+          hairRootMesh.scaling.copyFrom(rootMesh.scaling);
+          hairRootMesh.scaling.scaleInPlace(HAIR_SCALE_RATIO);
+
+          // 髪以外のメッシュを非表示
+          for (const m of hairResult.meshes) {
+            if (m !== hairRootMesh && !HAIR_SHOW_MESHES.includes(m.name)) {
+              m.setEnabled(false);
+            }
+          }
+
+          const hairMeshes = hairResult.meshes.filter(
+            m => m !== hairRootMesh && HAIR_SHOW_MESHES.includes(m.name)
+          );
+          const faceMeshes: AbstractMesh[] = [];
 
           instances.push({
             rootMesh,
@@ -235,8 +267,10 @@ export function useHumanoidControl(
             ik,
             pose,
             procedural: null,
-            hairMeshes: extraMeshes,
+            hairMeshes,
             faceMeshes,
+            hairSkeleton,
+            hairRootMesh,
           });
         }
 
@@ -273,9 +307,11 @@ export function useHumanoidControl(
               if (players[i]) {
                 players[i].update(advancing ? dt : 0);
               }
-              instances[i].ik.update();
+              instances[i].ik.update(0);
               instances[i].pose.capture();
             }
+            // 髪スケルトンをメインに同期
+            syncAllHairSkeletons(instances, skeletons);
             // カメラ追従（キャラクター位置は固定）
             const posA = instances[0].rootMesh.position;
             const posB = instances[1].rootMesh.position;
@@ -299,6 +335,11 @@ export function useHumanoidControl(
               }
               if (input.speed > 0) {
                 inst.rootMesh.translate(Vector3.Forward(), input.speed * config.walkSpeed * dt);
+              }
+              // 髪モデルのルートをメインに追従
+              if (inst.hairRootMesh) {
+                inst.hairRootMesh.position.copyFrom(inst.rootMesh.position);
+                inst.hairRootMesh.rotationQuaternion = inst.rootMesh.rotationQuaternion?.clone() ?? null;
               }
               inst.ik.update(input.speed);
               inst.pose.capture();
@@ -332,6 +373,9 @@ export function useHumanoidControl(
               camera.radius = fc.radius;
             }
           }
+
+          // 髪スケルトンをメインに同期（全モード共通）
+          syncAllHairSkeletons(instances, skeletons);
         });
 
         if (mounted) {
@@ -370,6 +414,8 @@ export function useHumanoidControl(
               procedural: humanoid,
               hairMeshes: [],
               faceMeshes: [],
+              hairSkeleton: null,
+              hairRootMesh: null,
             });
           }
 
@@ -439,6 +485,7 @@ export function useHumanoidControl(
         inst.procedural?.dispose();
         for (const m of inst.hairMeshes) m.dispose();
         for (const m of inst.faceMeshes) m.dispose();
+        inst.hairRootMesh?.dispose();
       }
       instancesRef.current = [];
       engine.stopRenderLoop();
@@ -451,7 +498,7 @@ export function useHumanoidControl(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 顔パラメータ更新: メッシュを再生成して即時反映 */
+  /** 顔パラメータ更新（新モデルは顔パーツ内蔵のため状態更新のみ） */
   const updateFaceParams = useCallback(
     (index: number, params: FaceParams) => {
       setFaceParams((prev) => {
@@ -459,15 +506,6 @@ export function useHumanoidControl(
         next[index] = params;
         return next;
       });
-
-      const scene = sceneRef.current;
-      const inst = instancesRef.current[index];
-      if (!scene || !inst) return;
-
-      for (const m of inst.faceMeshes) {
-        m.dispose();
-      }
-      inst.faceMeshes = createFacePartsFromParams(scene, inst.rootMesh, params, index);
     },
     []
   );
@@ -725,4 +763,38 @@ function wasdToBlendInput(keys: Record<string, boolean>): BlendInput {
 
   const clampedSpeed = Math.max(speed, 0);
   return { speed: clampedSpeed, turnRate };
+}
+
+/**
+ * 髪モデルのスケルトンをメインスケルトンに同期する。
+ * 同名ボーンの rotationQuaternion をコピーして、
+ * 髪メッシュがメインキャラクターのポーズに追従するようにする。
+ */
+function syncAllHairSkeletons(
+  instances: CharacterInstance[],
+  mainSkeletons: Skeleton[],
+): void {
+  for (let i = 0; i < instances.length; i++) {
+    const inst = instances[i];
+    const hairSkel = inst.hairSkeleton;
+    const mainSkel = mainSkeletons[i];
+    if (!hairSkel || !mainSkel) continue;
+
+    for (const mainBone of mainSkel.bones) {
+      const srcNode = mainBone.getTransformNode();
+      if (!srcNode?.rotationQuaternion) continue;
+
+      const hairBone = hairSkel.bones.find(b => b.name === mainBone.name);
+      if (!hairBone) continue;
+
+      const tgtNode = hairBone.getTransformNode();
+      if (!tgtNode) continue;
+
+      if (!tgtNode.rotationQuaternion) {
+        tgtNode.rotationQuaternion = srcNode.rotationQuaternion.clone();
+      } else {
+        tgtNode.rotationQuaternion.copyFrom(srcNode.rotationQuaternion);
+      }
+    }
+  }
 }

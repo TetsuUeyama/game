@@ -12,8 +12,8 @@ import {
 } from "@babylonjs/core";
 import type { Character } from "./Character";
 import { PhysicsConstants } from "../../physics/PhysicsConfig";
-import { ParabolaUtils } from "../utils/parabolaUtils";
-import { DeterministicTrajectory, type Vec3 } from "../utils/DeterministicTrajectory";
+import { ParabolaUtils } from "@/physics/trajectory/ParabolaUtils";
+import { DeterministicTrajectory, type Vec3 } from "@/physics/trajectory/DeterministicTrajectory";
 
 /**
  * 3Dバスケットボールエンティティ

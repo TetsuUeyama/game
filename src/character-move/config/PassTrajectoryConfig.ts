@@ -2,7 +2,7 @@
  * パス軌道可視化システムの設定
  */
 
-import { normalizeAngle, getDistance2DSimple } from "../utils/CollisionUtils";
+import { normalizeAngle, getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 
 /**
  * パスタイプ（5種類）
