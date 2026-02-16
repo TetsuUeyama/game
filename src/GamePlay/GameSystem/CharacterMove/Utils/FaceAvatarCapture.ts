@@ -1,5 +1,5 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes";
+import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
 import { FaceAvatarRenderer } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarRenderer";
 

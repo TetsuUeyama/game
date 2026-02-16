@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import {
   DribbleCheckController,
   DribbleCheckProgress,
   DribbleCheckResult,
   DribbleCheckConfig,
-} from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/DribbleCheckController';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+} from '@/GamePlay/MatchEngine/CheckControllers/DribbleCheckController';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
 import { FeintController } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController';

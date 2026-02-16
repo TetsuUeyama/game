@@ -19,8 +19,8 @@ import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/Ch
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
-import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes";
-import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/CharacterMove/Types/BallAction";
+import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
+import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
 import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "@/GamePlay/GameSystem/CharacterMove/Types/OffenseStrategy";
 import { CharacterBodyParts } from "@/GamePlay/Object/Entities/CharacterBodyParts";
 import { DirectionCircle } from "@/GamePlay/Object/Entities/DirectionCircle";

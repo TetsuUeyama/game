@@ -494,10 +494,3 @@ export function isPointInBox(
 export function lerp(from: number, to: number, t: number): number {
   return Scalar.Lerp(from, to, t);
 }
-
-/**
- * 値をクランプ
- */
-export function clamp(value: number, min: number, max: number): number {
-  return Scalar.Clamp(value, min, max);
-}

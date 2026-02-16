@@ -11,14 +11,8 @@
  * 単位系: SI単位（m, kg, s, N）
  */
 
-/**
- * 3次元ベクトル（シンプルな実装、Babylon.jsに依存しない）
- */
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
+import type { Vec3 } from './TrajectoryTypes';
+export type { Vec3 };
 
 /**
  * シミュレーション状態

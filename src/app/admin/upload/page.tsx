@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { uploadPlayers } from '@/GamePlay/Management/Services/PlayerService';
 import { uploadMasterData } from '@/GamePlay/Management/Services/MasterDataService';
 import { uploadDefaultTeamConfig } from '@/GamePlay/Management/Services/UserDataService';
-import { GameTeamConfig } from '@/GamePlay/GameSystem/CharacterMove/Loaders/TeamConfigLoader';
+import { GameTeamConfig } from '@/GamePlay/Management/Services/TeamConfigLoader';
 
 function parseCSV(text: string): string[] {
   return text

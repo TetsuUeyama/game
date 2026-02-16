@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 import type { MatchConfig } from '@/GamePlay/Management/League/Types';
 import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
-import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes';
+import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from '@/GamePlay/MatchEngine/PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
 

@@ -2,12 +2,8 @@
 // Vec3: Babylon.js非依存の3Dベクトル型 + ユーティリティ
 // ============================================================
 
-/** 3Dベクトル（Babylon.js非依存） */
-export interface Vec3 {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-}
+import type { Vec3 } from '@/GamePlay/Object/Physics/Trajectory/TrajectoryTypes';
+export type { Vec3 };
 
 // --- 定数 ---
 

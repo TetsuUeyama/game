@@ -84,19 +84,3 @@ export const LIGHT_CONFIG = {
     color: '#FFFFFF',
   },
 };
-
-// 3Dモデル設定
-export const MODEL_CONFIG = {
-  // デフォルトのモデルパス
-  defaultModelPath: '/models/character.glb',
-
-  // モデルのスケール
-  scale: 1.0,
-
-  // モデルの回転オフセット（度）
-  rotationOffset: {
-    x: 0,
-    y: 0,
-    z: 0,
-  },
-};

@@ -28,7 +28,7 @@ import {
 import {
   RiskAssessmentSystem,
   TrajectoryRiskAnalysisResult,
-} from "@/GamePlay/GameSystem/CharacterMove/Systems/RiskAssessmentSystem";
+} from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
 
 /**

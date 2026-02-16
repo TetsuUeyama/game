@@ -11,7 +11,7 @@ import {
 } from '@/GamePlay/Management/Services/LeagueService';
 import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
 import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { useLeaguePlayers } from '@/GamePlay/Management/Hooks/UseLeaguePlayers';
 import { DocumentData } from 'firebase/firestore';
 

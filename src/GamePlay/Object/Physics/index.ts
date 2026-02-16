@@ -9,7 +9,6 @@ export {
 } from "@/GamePlay/Object/Physics/PhysicsConfig";
 export * from "@/GamePlay/Object/Physics/Trajectory";
 export * from "@/GamePlay/Object/Physics/Spatial";
-// balance exports clamp() which conflicts with spatial's clamp(), so use namespace import
 export {
   BALANCE_PHYSICS,
   BALANCE_SPHERE,

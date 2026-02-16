@@ -1,6 +1,6 @@
 import { db } from '@/GamePlay/Management/Lib/Firebase';
 import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
-import { GameTeamConfig } from '@/GamePlay/GameSystem/CharacterMove/Loaders/TeamConfigLoader';
+import { GameTeamConfig } from '@/GamePlay/Management/Services/TeamConfigLoader';
 
 const USERS_COLLECTION = 'users';
 

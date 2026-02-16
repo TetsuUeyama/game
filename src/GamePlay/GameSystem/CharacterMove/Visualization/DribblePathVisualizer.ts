@@ -16,7 +16,7 @@ import {
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { FACE_ACTIONS, ActionType } from "@/GamePlay/GameSystem/CharacterMove/Types/BallAction";
+import { FACE_ACTIONS, BallActionType } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
 
 /**
  * 方向番号から角度オフセット（ラジアン）への変換
@@ -140,7 +140,7 @@ export class DribblePathVisualizer {
 
     // この面で可能なドリブルアクションを取得
     const faceActions = FACE_ACTIONS[currentFace] || [];
-    const dribbleActions = faceActions.filter(action => action.type === ActionType.DRIBBLE);
+    const dribbleActions = faceActions.filter(action => action.type === BallActionType.DRIBBLE);
 
     if (dribbleActions.length === 0) {
       return; // ドリブル不可

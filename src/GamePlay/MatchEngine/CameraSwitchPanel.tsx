@@ -1,6 +1,6 @@
 'use client';
 
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import { useState, useEffect } from 'react';
 
 interface CameraSwitchPanelProps {
