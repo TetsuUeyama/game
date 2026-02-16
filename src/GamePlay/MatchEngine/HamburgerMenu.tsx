@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
-import type { VisualSettings } from '@/GamePlay/GameSystem/CharacterMove/State';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
+import type { VisualSettings } from '@/GamePlay/GameSystem/StatusCheckSystem';
 
 type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'motion_check';
 type CameraModeType = 'on_ball' | 'manual';

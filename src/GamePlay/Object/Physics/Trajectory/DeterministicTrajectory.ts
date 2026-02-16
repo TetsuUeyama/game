@@ -16,14 +16,8 @@
 // 型定義
 // ============================================================
 
-/**
- * 3次元ベクトル
- */
-export interface Vec3 {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-}
+import type { Vec3 } from './TrajectoryTypes';
+export type { Vec3 };
 
 /**
  * 軌道パラメータ（イミュータブル）

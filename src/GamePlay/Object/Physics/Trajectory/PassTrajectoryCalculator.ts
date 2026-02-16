@@ -12,14 +12,8 @@ import {
 } from "@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 
-/**
- * 3Dベクトル型（シンプル）
- */
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
+import type { Vec3 } from './TrajectoryTypes';
+export type { Vec3 };
 
 /**
  * 軌道上の点

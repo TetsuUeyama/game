@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
-import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/ShootCheckController';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
+import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/GamePlay/MatchEngine/CheckControllers/ShootCheckController';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
 import { ShootCheckResultsTable } from './ShootCheckResultsTable';

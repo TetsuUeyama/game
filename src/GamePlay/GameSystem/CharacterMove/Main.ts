@@ -1,7 +1,7 @@
 /**
  * character-moveゲームのエントリーポイント
  */
-import { GameScene } from "@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene";
+import { GameScene } from "@/GamePlay/MatchEngine/GameScene";
 
 // グローバルスコープの型定義
 declare global {

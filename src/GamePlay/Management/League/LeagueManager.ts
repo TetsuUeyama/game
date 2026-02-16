@@ -12,7 +12,7 @@ import type {
 } from '@/GamePlay/Management/League/Types';
 import { LEAGUE_TEAMS } from '@/GamePlay/Management/League/LeagueTeams';
 import { generateRoundRobinSchedule } from '@/GamePlay/Management/League/RoundRobinScheduler';
-import type { GameTeamConfig } from '@/GamePlay/GameSystem/CharacterMove/Loaders/TeamConfigLoader';
+import type { GameTeamConfig } from '@/GamePlay/Management/Services/TeamConfigLoader';
 
 const STORAGE_KEY_LEAGUE = 'basketball_league_state';
 const STORAGE_KEY_MATCH_CONFIG = 'basketball_match_config';

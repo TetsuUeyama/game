@@ -5,7 +5,7 @@
  * 各シナリオに応じた体距離、手距離、速度チェック、高さチェック、優先度を設定。
  */
 
-import { CatchScenario, type CatchConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/BallCatchTypes";
+import { CatchScenario, type CatchConfig } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchTypes";
 
 /**
  * シナリオ別デフォルトキャッチ設定

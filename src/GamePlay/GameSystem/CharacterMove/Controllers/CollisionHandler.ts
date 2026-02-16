@@ -7,8 +7,8 @@ import {
   resolveCircleCollisionWithPower,
 } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
-import { BallCatchSystem } from "@/GamePlay/GameSystem/CharacterMove/Systems/BallCatchSystem";
-import { LooseBallScrambleSystem } from "@/GamePlay/GameSystem/CharacterMove/Systems/LooseBallScrambleSystem";
+import { BallCatchSystem } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchSystem";
+import { LooseBallScrambleSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallScrambleSystem";
 
 /**
  * 衝突判定コントローラー

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { ACTION_MOTIONS, ActionType } from '@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig';
 import { Character } from '@/GamePlay/Object/Entities/Character';

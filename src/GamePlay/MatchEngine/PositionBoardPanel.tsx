@@ -7,8 +7,8 @@ import {
 } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
 import {
   POSITION_BOARD_UI_CONFIG,
+  createDefaultPositionBoardConfig as createDefaultConfig,
 } from '@/GamePlay/GameSystem/CharacterMove/Config/PositionBoardConfig';
-import { createDefaultConfig } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PositionBoardLoader';
 import { PositionBoardGrid } from './PositionBoardGrid';
 import { PositionBoardToolbar } from './PositionBoardToolbar';
 

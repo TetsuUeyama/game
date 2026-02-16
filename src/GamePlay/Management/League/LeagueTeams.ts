@@ -3,7 +3,7 @@
  * 既存の選手データ(ID 1-40)から5人ずつ構成
  */
 
-import { OffenseRole, DefenseRole, DefenseScheme } from '@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes';
+import { OffenseRole, DefenseRole, DefenseScheme } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 import type { LeagueTeam } from '@/GamePlay/Management/League/Types';
 
 export const LEAGUE_TEAMS: LeagueTeam[] = [

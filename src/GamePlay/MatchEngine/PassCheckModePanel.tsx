@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import {
   PassCheckController,
   PassCheckProgress,
   PassCheckResult,
   PassCheckConfig,
   DefenderPlacement,
-} from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/PassCheckController';
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+} from '@/GamePlay/MatchEngine/CheckControllers/PassCheckController';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { PassType } from '@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';

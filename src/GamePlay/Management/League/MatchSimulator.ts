@@ -3,7 +3,7 @@
  * GameScene を使わず、選手のステータス値から確率的に試合結果を算出する。
  */
 
-import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import type { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 import type { LeagueTeam, MatchResultPayload, LeagueMatch } from '@/GamePlay/Management/League/Types';

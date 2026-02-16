@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/CharacterMove/State/PlayerStateTypes';
+import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 
 export interface PlayerGameStatsView {
   points: number;
