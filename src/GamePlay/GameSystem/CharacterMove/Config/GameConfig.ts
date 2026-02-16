@@ -69,23 +69,6 @@ export const PHYSICS_CONFIG = {
   timeStep: 1 / 60, // 物理演算のタイムステップ
 };
 
-// カメラ設定
-export const CAMERA_CONFIG = {
-  fov: 60, // 視野角（度）
-  minZ: 0.1, // 最小描画距離
-  maxZ: 1000, // 最大描画距離
-
-  // カメラのオフセット（キャラクターからの相対位置）
-  offset: {
-    x: 0,
-    y: 5, // キャラクターの5m上
-    z: -8, // キャラクターの8m後ろ
-  },
-
-  // カメラの追従速度（0-1、1が即座に追従）
-  followSpeed: 0.1,
-};
-
 // ライト設定
 export const LIGHT_CONFIG = {
   // 環境光

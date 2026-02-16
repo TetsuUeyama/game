@@ -2,7 +2,6 @@ import {
   Scene,
   Vector3,
   Color3,
-  FreeCamera,
   HemisphericLight,
   MeshBuilder,
   StandardMaterial,
@@ -11,6 +10,7 @@ import {
   PhysicsMaterialCombineMode,
   Mesh,
 } from "@babylonjs/core";
+import { Camera } from "@/GamePlay/Object/Entities/Camera";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin";
 import HavokPhysics from "@babylonjs/havok";
 import type { Engine } from "@babylonjs/core/Engines/engine";
@@ -585,9 +585,7 @@ export async function createPhysicsScene(engine: Engine): Promise<Scene> {
   const hk = await HavokPhysics();
   scene.enablePhysics(new Vector3(0, GRAVITY, 0), new HavokPlugin(true, hk));
 
-  const camera = new FreeCamera("camera", new Vector3(4, 4, -5), scene);
-  camera.setTarget(new Vector3(0, RIM.HEIGHT - 1, -BACKBOARD.RIM_OFFSET));
-  camera.attachControl(engine.getRenderingCanvas()!, true);
+  Camera.createFallingPointCamera(scene, engine.getRenderingCanvas()!);
   new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
   const ground = MeshBuilder.CreateGround("ground", { width: 10, height: 10 }, scene);

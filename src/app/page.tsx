@@ -10,7 +10,7 @@ import {
   LeaguePlayer,
 } from '@/GamePlay/Management/Services/LeagueService';
 import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
-import { PlayerDetailPanel, SelectedPlayerInfo } from '@/components/CharacterMove/PlayerDetailPanel';
+import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
 import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
 import { useLeaguePlayers } from '@/GamePlay/Management/Hooks/UseLeaguePlayers';
 import { DocumentData } from 'firebase/firestore';

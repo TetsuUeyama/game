@@ -14,3 +14,7 @@ export { CharacterPhysicsManager } from "@/GamePlay/Object/Entities/CharacterPhy
 export type { CharacterPositionInfo } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
 export { CharacterBlockJumpController } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
 export type { BlockTarget, BlockJumpState, ActionPhaseInfo } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
+
+// カメラ
+export { Camera, CameraManager, CAMERA_PRESETS, CAMERA_BEHAVIOR } from "@/GamePlay/Object/Entities/Camera";
+export type { ArcRotateCameraPreset, FreeCameraPreset, FaceCamConfig, CameraManagerContext } from "@/GamePlay/Object/Entities/Camera";
