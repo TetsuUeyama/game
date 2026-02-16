@@ -26,11 +26,11 @@ import { CharacterBodyParts } from "./CharacterBodyParts";
 import { DirectionCircle } from "./DirectionCircle";
 import { DRIBBLE_CONFIG, DribbleUtils } from "../config/DribbleConfig";
 import { BalanceController } from "../controllers/BalanceController";
-import { MOVEMENT_BALANCE } from "../config/BalanceConfig";
+import { MOVEMENT_BALANCE } from "@/physics/balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "../config/BallHoldingConfig";
 import { getBallHoldingMotion } from "../motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "../config/action/OneOnOneBattleConfig";
-import { normalizeAngle, isInFieldOfView2D } from "../utils/CollisionUtils";
+import { normalizeAngle, isInFieldOfView2D } from "@/physics/spatial/SpatialUtils";
 import { FieldGridUtils } from "../config/FieldGridConfig";
 
 /**

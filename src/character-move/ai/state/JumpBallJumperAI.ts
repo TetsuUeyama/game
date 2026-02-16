@@ -9,7 +9,7 @@ import {
   JUMP_BALL_TIMING,
   JUMP_BALL_PHYSICS,
 } from "../../config/JumpBallConfig";
-import { getDistance2DSimple } from "../../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 
 /**
  * ジャンプボール実行コールバック

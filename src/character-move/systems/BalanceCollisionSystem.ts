@@ -8,7 +8,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "../entities/Character";
 import type { CollisionResult } from "../controllers/BalanceController";
-import { BALANCE_COLLISION, CONTACT_PLAY } from "../config/BalanceConfig";
+import { BALANCE_COLLISION, CONTACT_PLAY } from "@/physics/balance/BalanceConfig";
 
 /**
  * 衝突イベント

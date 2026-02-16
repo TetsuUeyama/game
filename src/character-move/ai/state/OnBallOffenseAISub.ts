@@ -12,7 +12,7 @@ import {PassUtils} from "../../config/PassConfig";
 import {DRIBBLE_STANCE_MOTION} from "../../motion/DribbleMotion";
 import {DASH_FORWARD_MOTION} from "../../motion/DashMotion";
 import {RiskAssessmentSystem} from "../../systems/RiskAssessmentSystem";
-import { normalizeAngle, getDistance2D } from "../../utils/CollisionUtils";
+import { normalizeAngle, getDistance2D } from "@/physics/spatial/SpatialUtils";
 import { getTeammates, getOpponents } from "../../utils/TeamUtils";
 import { isInPaintArea } from "../../config/TacticalZoneConfig";
 import { OffenseRole } from "../../state/PlayerStateTypes";

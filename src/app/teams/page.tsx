@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { fetchAllPlayers } from '@/services/playerService';
+import { fetchAllMasterData } from '@/services/masterDataService';
+import { DocumentData } from 'firebase/firestore';
 
 type Rank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 
@@ -127,13 +130,6 @@ const POSITION_LABELS: Record<string, string> = {
   CF: 'CF', WG: 'WG', ST: 'ST', OMF: 'OMF', SMF: 'SMF',
   DMF: 'DMF', CB: 'CB', SB: 'SB', GK: 'GK',
 };
-
-function parseCSV(text: string): string[] {
-  return text
-    .split('\n')
-    .map((line) => line.replace(/\r/g, '').replace(/^\uFEFF/, '').trim())
-    .filter((line) => line.length > 0);
-}
 
 function shuffle<T>(array: T[]): T[] {
   const arr = [...array];
@@ -274,31 +270,20 @@ export default function TeamsPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [uniRes, teamRes, lastRes, firstRes, playerRes] = await Promise.all([
-          fetch('/data/University.csv'),
-          fetch('/data/Team.csv'),
-          fetch('/data/LastName.csv'),
-          fetch('/data/FirstName.csv'),
-          fetch('/data/playerData.json'),
+        const [masterData, playersMap] = await Promise.all([
+          fetchAllMasterData(),
+          fetchAllPlayers(),
         ]);
-        const [uniText, teamText, lastText, firstText] = await Promise.all([
-          uniRes.text(),
-          teamRes.text(),
-          lastRes.text(),
-          firstRes.text(),
-        ]);
-        const playerDataList: PlayerData[] = await playerRes.json();
 
-        const universities = parseCSV(uniText);
-        const teamNames = parseCSV(teamText);
-        const lastNames = parseCSV(lastText);
-        const firstNames = parseCSV(firstText);
+        const playerDataList: PlayerData[] = Object.values(playersMap).map(
+          (d: DocumentData) => d as PlayerData
+        );
 
         const generated = generateTeams(
-          universities,
-          teamNames,
-          lastNames,
-          firstNames,
+          masterData.universities,
+          masterData.teams,
+          masterData.lastNames,
+          masterData.firstNames,
           playerDataList,
           100
         );

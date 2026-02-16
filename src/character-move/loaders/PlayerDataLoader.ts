@@ -1,9 +1,11 @@
 import { PlayerData, PlayerDataJSON, FaceConfigJSON } from "../types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "../types/FaceConfig";
+import { fetchAllPlayers } from "@/services/playerService";
+import { DocumentData } from "firebase/firestore";
 
 /**
  * 選手データローダー
- * JSONファイルから選手データを読み込む
+ * Firestoreから選手データを読み込む
  */
 export class PlayerDataLoader {
   private static cachedPlayers: Record<string, PlayerData> | null = null;
@@ -12,7 +14,7 @@ export class PlayerDataLoader {
   /**
    * JSONデータをPlayerData形式に変換
    */
-  private static convertToPlayerData(data: PlayerDataJSON): PlayerData {
+  static convertToPlayerData(data: PlayerDataJSON): PlayerData {
     return {
       basic: {
         ID: data.ID,
@@ -120,13 +122,10 @@ export class PlayerDataLoader {
   }
 
   /**
-   * 選手データをJSONファイルから読み込む
-   * @param filePath JSONファイルのパス（デフォルト: /data/playerData.json）
+   * 選手データをFirestoreから読み込む
    * @returns 選手ID -> PlayerData のマップ
    */
-  public static async loadPlayerData(
-    filePath: string = "/data/playerData.json"
-  ): Promise<Record<string, PlayerData>> {
+  public static async loadPlayerData(): Promise<Record<string, PlayerData>> {
     // キャッシュがあればそれを返す
     if (this.cachedPlayers) {
       return this.cachedPlayers;
@@ -137,21 +136,15 @@ export class PlayerDataLoader {
       return this.loadPromise;
     }
 
-    // 読み込み開始
+    // Firestoreから読み込み開始
     this.loadPromise = (async () => {
       try {
-        const response = await fetch(filePath);
+        const firestoreData: Record<string, DocumentData> = await fetchAllPlayers();
 
-        if (!response.ok) {
-          throw new Error(`Failed to load player data: ${response.statusText}`);
-        }
-
-        const jsonData: PlayerDataJSON[] = await response.json();
-
-        // JSONデータをPlayerData形式に変換
+        // FirestoreデータをPlayerData形式に変換
         const players: Record<string, PlayerData> = {};
-        for (const data of jsonData) {
-          players[data.ID] = this.convertToPlayerData(data);
+        for (const [id, data] of Object.entries(firestoreData)) {
+          players[id] = this.convertToPlayerData(data as PlayerDataJSON);
         }
 
         // キャッシュに保存

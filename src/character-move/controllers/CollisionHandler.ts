@@ -5,8 +5,8 @@ import {
   getDistance3D,
   getCircleCollisionInfo,
   resolveCircleCollisionWithPower,
-} from "../utils/CollisionUtils";
-import { CHARACTER_COLLISION_CONFIG } from "../config/CollisionConfig";
+} from "@/physics/spatial/SpatialUtils";
+import { CHARACTER_COLLISION_CONFIG } from "@/physics/collision/CollisionConfig";
 import { BallCatchSystem } from "../systems/BallCatchSystem";
 import { LooseBallScrambleSystem } from "../systems/LooseBallScrambleSystem";
 

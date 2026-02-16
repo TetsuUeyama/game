@@ -32,7 +32,7 @@ import {
   LOOSE_BALL_PICKUP,
   PALM_CATCH,
 } from "../config/BallCatchConfig";
-import { getDistance2D, getDistance3D } from "../utils/CollisionUtils";
+import { getDistance2D, getDistance3D } from "@/physics/spatial/SpatialUtils";
 
 /**
  * ボールキャッチシステム

@@ -8,7 +8,7 @@ import {
   PassTrajectoryCalculator,
   TrajectoryResult,
   Vec3,
-} from "../physics/PassTrajectoryCalculator";
+} from "@/physics/trajectory/PassTrajectoryCalculator";
 import {
   InterceptionRiskLevel,
   INTERCEPTION_RISK_COLORS,
@@ -17,7 +17,7 @@ import {
   PASS_TYPE_CONFIGS,
 } from "../config/PassTrajectoryConfig";
 import { getTeammates } from "../utils/TeamUtils";
-import { getDistance2DSimple } from "../utils/CollisionUtils";
+import { getDistance2DSimple } from "@/physics/spatial/SpatialUtils";
 
 /**
  * リスクレベル

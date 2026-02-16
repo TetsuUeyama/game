@@ -1,9 +1,10 @@
 /**
  * チーム設定ローダー
- * teamConfig.jsonからチーム構成と選手割り当てを読み込む
+ * Firestoreからチーム構成と選手割り当てを読み込む
  */
 
 import { OffenseRole, DefenseRole, DefenseScheme } from "../state/PlayerStateTypes";
+import { fetchDefaultTeamConfig } from "@/services/userDataService";
 
 export interface PlayerConfig {
   playerId: string;
@@ -34,18 +35,18 @@ export interface GameTeamConfig {
 
 export class TeamConfigLoader {
   /**
-   * チーム設定を読み込む
-   * @param configPath 設定ファイルのパス（デフォルト: /data/teamConfig.json）
+   * チーム設定をFirestoreから読み込む
+   * @param configKey 設定キー（デフォルト: 'teamConfig1on1'）
    */
-  public static async loadTeamConfig(configPath: string = '/data/teamConfig.json'): Promise<GameTeamConfig> {
+  public static async loadTeamConfig(
+    configKey: 'teamConfig1on1' | 'teamConfig5on5' = 'teamConfig1on1'
+  ): Promise<GameTeamConfig> {
     try {
-      const response = await fetch(configPath);
+      const config = await fetchDefaultTeamConfig(configKey);
 
-      if (!response.ok) {
-        throw new Error(`チーム設定の読み込みに失敗しました: ${response.statusText}`);
+      if (!config) {
+        throw new Error(`チーム設定が見つかりません: ${configKey}`);
       }
-
-      const config: GameTeamConfig = await response.json();
 
       return config;
     } catch (error) {

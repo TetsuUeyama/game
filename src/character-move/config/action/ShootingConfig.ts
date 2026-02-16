@@ -3,7 +3,7 @@
  * シュートレンジ、精度に関する定数とユーティリティメソッドを提供
  */
 
-import { ParabolaUtils, SHOOT_ARC_HEIGHT } from "../../utils/parabolaUtils";
+import { ParabolaUtils, SHOOT_ARC_HEIGHT } from "@/physics/trajectory/ParabolaUtils";
 
 // parabolaUtilsから再エクスポート（既存コードとの互換性のため）
 export { SHOOT_ARC_HEIGHT, ParabolaUtils };
