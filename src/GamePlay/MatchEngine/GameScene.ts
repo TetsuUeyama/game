@@ -7,25 +7,24 @@ import {
   Vector3,
   Color4,
 } from "@babylonjs/core";
-import { Camera } from "@/GamePlay/Object/Entities/Camera";
-import { Character } from "@/GamePlay/Object/Entities/Character";
+import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
 import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture";
-import { Field } from "@/GamePlay/Object/Entities/Field";
-import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { InputController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/InputController";
-import { JointController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/JointController";
-import { CollisionHandler } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CollisionHandler";
+import {
+  InputController,
+  JointController,
+  CollisionHandler,
+  ContestController,
+  CircleSizeController,
+  ShotClockController,
+  OneOnOneBattleController,
+  ShootingController,
+  FeintController,
+  PassController,
+  DribbleController,
+  DefenseActionController,
+  LooseBallController,
+} from "@/GamePlay/GameSystem/CharacterMove/Controllers";
 import { CharacterAI } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/CharacterAI";
-import { OneOnOneBattleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/OneOnOneBattleController";
-import { ShootingController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
-import { ContestController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ContestController";
-import { CircleSizeController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CircleSizeController";
-import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
-import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";
-import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
-import { DefenseActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DefenseActionController";
-import { LooseBallController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/LooseBallController";
-import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
 import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
@@ -38,9 +37,11 @@ import { PhysicsManager } from "@/GamePlay/Object/Physics/PhysicsManager";
 import {
   LIGHT_CONFIG,
 } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
-import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
-import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/ShootTrajectoryVisualizer";
-import { DribblePathVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/DribblePathVisualizer";
+import {
+  PassTrajectoryVisualizer,
+  ShootTrajectoryVisualizer,
+  DribblePathVisualizer,
+} from "@/GamePlay/GameSystem/CharacterMove/Visualization";
 import { PassCheckController, DefenderPlacement } from "@/GamePlay/MatchEngine/CheckControllers/PassCheckController";
 import {
   JumpBallInfo,

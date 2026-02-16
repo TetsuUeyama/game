@@ -346,7 +346,7 @@ export class BallCatchSystem {
    */
   private determineCatchScenario(
     character: Character,
-    ballPosition: Vector3
+    _ballPosition: Vector3
   ): CatchScenario | null {
     const passTarget = this.ball.getPassTarget();
     // playerPositionで比較（オブジェクト参照が異なる場合でも正しく判定）
