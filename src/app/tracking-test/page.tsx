@@ -4,7 +4,7 @@ import { useRef, useEffect, useState } from "react";
 import {
   MinTimeLaunch,
   type SolverConfig,
-} from "@/TargetTrackingAccuracySystem";
+} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem";
 
 // --- 盤面 ---
 const BOARD_W = 800;

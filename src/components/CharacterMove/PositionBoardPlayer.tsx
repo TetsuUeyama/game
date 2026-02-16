@@ -1,7 +1,7 @@
 'use client';
 
-import { BoardPlayerPosition, POSITION_LABELS } from '@/character-move/types/PositionBoard';
-import { POSITION_BOARD_UI_CONFIG } from '@/character-move/config/PositionBoardConfig';
+import { BoardPlayerPosition, POSITION_LABELS } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
+import { POSITION_BOARD_UI_CONFIG } from '@/GamePlay/GameSystem/CharacterMove/Config/PositionBoardConfig';
 
 interface PositionBoardPlayerProps {
   player: BoardPlayerPosition;

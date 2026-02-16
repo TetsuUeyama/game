@@ -1,18 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAllMasterData } from '@/services/masterDataService';
-import { createUserProfile, checkUserExists } from '@/services/userDataService';
+import { fetchAllMasterData } from '@/GamePlay/Management/Services/MasterDataService';
+import { createUserProfile, checkUserExists } from '@/GamePlay/Management/Services/UserDataService';
 import {
   generateLeague,
   fetchLeagueTeams,
   LeagueTeam,
   LeaguePlayer,
-} from '@/services/leagueService';
-import { fetchAllPlayers } from '@/services/playerService';
+} from '@/GamePlay/Management/Services/LeagueService';
+import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
 import { PlayerDetailPanel, SelectedPlayerInfo } from '@/components/CharacterMove/PlayerDetailPanel';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { useLeaguePlayers } from '@/hooks/useLeaguePlayers';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { useLeaguePlayers } from '@/GamePlay/Management/Hooks/UseLeaguePlayers';
 import { DocumentData } from 'firebase/firestore';
 
 type PageState = 'loading' | 'start' | 'register' | 'initializing' | 'menu';

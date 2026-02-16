@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { LeagueManager } from '@/league/LeagueManager';
-import { MatchSimulator } from '@/league/MatchSimulator';
-import { LEAGUE_TEAMS } from '@/league/leagueTeams';
-import type { LeagueState } from '@/league/types';
+import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
+import { MatchSimulator } from '@/GamePlay/Management/League/MatchSimulator';
+import { LEAGUE_TEAMS } from '@/GamePlay/Management/League/LeagueTeams';
+import type { LeagueState } from '@/GamePlay/Management/League/Types';
 import { LeagueSchedule } from './LeagueSchedule';
 import { LeagueStarChart } from './LeagueStarChart';
 import { LeagueStandings } from './LeagueStandings';

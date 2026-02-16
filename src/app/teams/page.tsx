@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { fetchAllPlayers } from '@/services/playerService';
-import { fetchAllMasterData } from '@/services/masterDataService';
+import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
+import { fetchAllMasterData } from '@/GamePlay/Management/Services/MasterDataService';
 import { DocumentData } from 'firebase/firestore';
 
 type Rank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';

@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { uploadPlayers } from '@/services/playerService';
-import { uploadMasterData } from '@/services/masterDataService';
-import { uploadDefaultTeamConfig } from '@/services/userDataService';
-import { GameTeamConfig } from '@/character-move/loaders/TeamConfigLoader';
+import { uploadPlayers } from '@/GamePlay/Management/Services/PlayerService';
+import { uploadMasterData } from '@/GamePlay/Management/Services/MasterDataService';
+import { uploadDefaultTeamConfig } from '@/GamePlay/Management/Services/UserDataService';
+import { GameTeamConfig } from '@/GamePlay/GameSystem/CharacterMove/Loaders/TeamConfigLoader';
 
 function parseCSV(text: string): string[] {
   return text

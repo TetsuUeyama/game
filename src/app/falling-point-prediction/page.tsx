@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 
 const FallingPointPredictionView = dynamic(
-  () => import("@/falling-point-prediction/FallingPointPredictionView"),
+  () => import("@/GamePlay/GameSystem/FallingPointPrediction/FallingPointPredictionView"),
   { ssr: false }
 );
 

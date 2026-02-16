@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameScene } from '@/character-move/scenes/GameScene';
-import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/character-move/controllers/check/ShootCheckController';
-import { PlayerDataLoader } from '@/character-move/loaders/PlayerDataLoader';
-import { PlayerData } from '@/character-move/types/PlayerData';
+import { GameScene } from '@/GamePlay/GameSystem/CharacterMove/Scenes/GameScene';
+import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Check/ShootCheckController';
+import { PlayerDataLoader } from '@/GamePlay/GameSystem/CharacterMove/Loaders/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
 import { ShootCheckResultsTable } from './ShootCheckResultsTable';
-import { FieldGridUtils } from '@/character-move/config/FieldGridConfig';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
 
 interface ShootCheckModePanelProps {
   gameScene: GameScene | null;

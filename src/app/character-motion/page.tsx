@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 // Babylon.jsはSSR非対応のためdynamic importでクライアント専用にする
 const HumanoidScene = dynamic(
-  () => import("@/character-motion/scenes/HumanoidScene"),
+  () => import("@/GamePlay/GameSystem/CharacterMotion/Scenes/HumanoidScene"),
   { ssr: false }
 );
 
