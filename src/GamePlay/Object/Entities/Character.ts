@@ -34,7 +34,8 @@ import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
-import { CharacterBodyParts } from "@/GamePlay/Object/Entities/CharacterBodyParts";
+import { CharacterBodyBuilder } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyBuilder";
+import type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyTypes";
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
 import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
 import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/BalanceController";
@@ -53,45 +54,9 @@ export class Character {
   public mesh: Mesh; // ルートメッシュ（親メッシュ）
   public model: AbstractMesh | null = null; // 読み込んだ3Dモデル
 
-  // 身体パーツ
-  private headMesh: Mesh; // 頭
-  private upperBodyMesh: Mesh; // 胴体上半身
-  private lowerBodyMesh: Mesh; // 胴体下半身
-  private waistJointMesh: Mesh; // 腰関節（上半身と下半身の接続）
-  private lowerBodyConnectionMesh: Mesh; // 下半身の接続点（回転可能）
-  private leftShoulderMesh: Mesh; // 左肩
-  private rightShoulderMesh: Mesh; // 右肩
-  private leftUpperArmMesh: Mesh; // 左上腕
-  private rightUpperArmMesh: Mesh; // 右上腕
-  private leftElbowMesh: Mesh; // 左肘
-  private rightElbowMesh: Mesh; // 右肘
-  private leftForearmMesh: Mesh; // 左前腕
-  private rightForearmMesh: Mesh; // 右前腕
-  private leftHandMesh: Mesh; // 左手のひら
-  private rightHandMesh: Mesh; // 右手のひら
-  private leftHipMesh: Mesh; // 左股関節
-  private rightHipMesh: Mesh; // 右股関節
-  private leftThighMesh: Mesh; // 左太もも
-  private rightThighMesh: Mesh; // 右太もも
-  private leftKneeMesh: Mesh; // 左膝
-  private rightKneeMesh: Mesh; // 右膝
-  private leftShinMesh: Mesh; // 左すね
-  private rightShinMesh: Mesh; // 右すね
-  private leftFootMesh: Mesh; // 左足
-  private rightFootMesh: Mesh; // 右足
-
-  // 顔のパーツ
-  private leftEyeMesh: Mesh; // 左目
-  private rightEyeMesh: Mesh; // 右目
-  private mouthMesh: Mesh; // 口
-  private hairMesh: Mesh | null = null; // 髪
-  private beardMesh: Mesh | null = null; // 髭
-
-  // 状態インジケーター（頭上の球体）
-  private stateIndicator: Mesh;
-
-  // 視野
-  private visionConeMesh: Mesh; // 視野コーン（可視化用）
+  // 身体モデル
+  private body: CharacterBody;
+  private bodyBuilder: CharacterBodyBuilder;
   public visionAngle: number; // 視野角（度）
   public visionRange: number; // 視野範囲（m）
 
@@ -143,8 +108,6 @@ export class Character {
   private footCircle: LinesMesh | null = null;
   private footCircleRadius: number = 1.0; // 足元の円の半径（初期値1m）
 
-  // 身体パーツファクトリー
-  private bodyPartsFactory: CharacterBodyParts;
 
   // ボール保持位置設定
   private ballHoldingFaces: number[] = [0, 1, 2, 6, 7]; // 使用する8角形の面番号（前方5箇所）
@@ -213,100 +176,11 @@ export class Character {
     this.visionAngle = this.config.vision.visionAngle;
     this.visionRange = this.config.vision.visionRange;
 
-    // 身体パーツファクトリーを初期化
-    this.bodyPartsFactory = new CharacterBodyParts(scene, this.config, this.state);
-
-    // ルートメッシュを作成（透明な親メッシュ）
-    this.mesh = this.bodyPartsFactory.createRootMesh(this.position);
-
-    // 身体パーツを作成（ファクトリーを使用）
-    this.headMesh = this.bodyPartsFactory.createHead();
-    this.waistJointMesh = this.bodyPartsFactory.createWaistJoint();
-    this.upperBodyMesh = this.bodyPartsFactory.createUpperBody();
-    this.lowerBodyConnectionMesh = this.bodyPartsFactory.createLowerBodyConnection();
-    this.lowerBodyMesh = this.bodyPartsFactory.createLowerBody();
-    this.leftShoulderMesh = this.bodyPartsFactory.createShoulder("left");
-    this.rightShoulderMesh = this.bodyPartsFactory.createShoulder("right");
-    this.leftUpperArmMesh = this.bodyPartsFactory.createUpperArm("left");
-    this.rightUpperArmMesh = this.bodyPartsFactory.createUpperArm("right");
-    this.leftElbowMesh = this.bodyPartsFactory.createElbow("left");
-    this.rightElbowMesh = this.bodyPartsFactory.createElbow("right");
-    this.leftForearmMesh = this.bodyPartsFactory.createForearm("left");
-    this.rightForearmMesh = this.bodyPartsFactory.createForearm("right");
-    this.leftHandMesh = this.bodyPartsFactory.createHand("left");
-    this.rightHandMesh = this.bodyPartsFactory.createHand("right");
-    this.leftHipMesh = this.bodyPartsFactory.createHip("left");
-    this.rightHipMesh = this.bodyPartsFactory.createHip("right");
-    this.leftThighMesh = this.bodyPartsFactory.createThigh("left");
-    this.rightThighMesh = this.bodyPartsFactory.createThigh("right");
-    this.leftKneeMesh = this.bodyPartsFactory.createKnee("left");
-    this.rightKneeMesh = this.bodyPartsFactory.createKnee("right");
-    this.leftShinMesh = this.bodyPartsFactory.createShin("left");
-    this.rightShinMesh = this.bodyPartsFactory.createShin("right");
-    this.leftFootMesh = this.bodyPartsFactory.createFoot("left");
-    this.rightFootMesh = this.bodyPartsFactory.createFoot("right");
-
-    // 顔のパーツを作成（ファクトリーを使用）
-    this.leftEyeMesh = this.bodyPartsFactory.createEye("left");
-    this.rightEyeMesh = this.bodyPartsFactory.createEye("right");
-    this.mouthMesh = this.bodyPartsFactory.createMouth();
-
-    // パーツの親子関係を設定
-    // 腰関節はルートの子（接続位置、固定）
-    this.waistJointMesh.parent = this.mesh;
-
-    // 上半身は腰関節の子（腰関節を回転すると上半身全体が回転）
-    this.upperBodyMesh.parent = this.waistJointMesh;
-
-    // 下半身の接続点もルートの子（上半身とは独立してY回転可能）
-    this.lowerBodyConnectionMesh.parent = this.mesh;
-
-    // 下半身ボックスは接続点の子（ローカルXでオフセット）
-    this.lowerBodyMesh.parent = this.lowerBodyConnectionMesh;
-
-    // 頭：上半身に固定
-    this.headMesh.parent = this.upperBodyMesh;
-
-    // 顔のパーツ：頭に固定
-    this.leftEyeMesh.parent = this.headMesh;
-    this.rightEyeMesh.parent = this.headMesh;
-    this.mouthMesh.parent = this.headMesh;
-
-    // 左腕：肩を上半身に固定し、肩を基点とした階層構造
-    this.leftShoulderMesh.parent = this.upperBodyMesh; // 上半身の子
-    this.leftUpperArmMesh.parent = this.leftShoulderMesh; // 肩の子
-    this.leftElbowMesh.parent = this.leftShoulderMesh; // 肩の子
-    this.leftForearmMesh.parent = this.leftElbowMesh; // 肘の子
-    this.leftHandMesh.parent = this.leftForearmMesh; // 前腕の子
-
-    // 右腕：肩を上半身に固定し、肩を基点とした階層構造
-    this.rightShoulderMesh.parent = this.upperBodyMesh; // 上半身の子
-    this.rightUpperArmMesh.parent = this.rightShoulderMesh; // 肩の子
-    this.rightElbowMesh.parent = this.rightShoulderMesh; // 肩の子
-    this.rightForearmMesh.parent = this.rightElbowMesh; // 肘の子
-    this.rightHandMesh.parent = this.rightForearmMesh; // 前腕の子
-
-    // 左脚：股関節を下半身に固定し、股関節を基点とした階層構造
-    this.leftHipMesh.parent = this.lowerBodyMesh; // 下半身の子
-    this.leftThighMesh.parent = this.leftHipMesh; // 股関節の子
-    this.leftKneeMesh.parent = this.leftHipMesh; // 股関節の子
-    this.leftShinMesh.parent = this.leftKneeMesh; // 膝の子
-    this.leftFootMesh.parent = this.leftShinMesh; // すねの子
-
-    // 右脚：股関節を下半身に固定し、股関節を基点とした階層構造
-    this.rightHipMesh.parent = this.lowerBodyMesh; // 下半身の子
-    this.rightThighMesh.parent = this.rightHipMesh; // 股関節の子
-    this.rightKneeMesh.parent = this.rightHipMesh; // 股関節の子
-    this.rightShinMesh.parent = this.rightKneeMesh; // 膝の子
-    this.rightFootMesh.parent = this.rightShinMesh; // すねの子
-
-    // 状態インジケーター球体を作成（ファクトリーを使用）
-    this.stateIndicator = this.bodyPartsFactory.createStateIndicator();
-    this.stateIndicator.parent = this.headMesh;
-
-    // 視野コーンを作成（ファクトリーを使用）
-    this.visionConeMesh = this.bodyPartsFactory.createVisionCone();
-    this.visionConeMesh.parent = this.headMesh;
+    // 身体モデルを構築
+    this.bodyBuilder = new CharacterBodyBuilder(scene, this.config, this.state);
+    const { rootMesh, body } = this.bodyBuilder.build(this.position);
+    this.mesh = rootMesh;
+    this.body = body;
 
     // 方向サークルを初期化（8方向ごとに異なる半径を設定）
     this.directionCircle = new DirectionCircle(
@@ -351,33 +225,7 @@ export class Character {
    */
   public setModel(model: AbstractMesh): void {
     // 既存の身体パーツを非表示に
-    this.headMesh.isVisible = false;
-    this.leftEyeMesh.isVisible = false;
-    this.rightEyeMesh.isVisible = false;
-    this.mouthMesh.isVisible = false;
-    this.upperBodyMesh.isVisible = false;
-    this.lowerBodyMesh.isVisible = false;
-    this.waistJointMesh.isVisible = false;
-    this.leftShoulderMesh.isVisible = false;
-    this.rightShoulderMesh.isVisible = false;
-    this.leftUpperArmMesh.isVisible = false;
-    this.rightUpperArmMesh.isVisible = false;
-    this.leftElbowMesh.isVisible = false;
-    this.rightElbowMesh.isVisible = false;
-    this.leftForearmMesh.isVisible = false;
-    this.rightForearmMesh.isVisible = false;
-    this.leftHandMesh.isVisible = false;
-    this.rightHandMesh.isVisible = false;
-    this.leftHipMesh.isVisible = false;
-    this.rightHipMesh.isVisible = false;
-    this.leftThighMesh.isVisible = false;
-    this.rightThighMesh.isVisible = false;
-    this.leftKneeMesh.isVisible = false;
-    this.rightKneeMesh.isVisible = false;
-    this.leftShinMesh.isVisible = false;
-    this.rightShinMesh.isVisible = false;
-    this.leftFootMesh.isVisible = false;
-    this.rightFootMesh.isVisible = false;
+    CharacterBodyBuilder.hideAllParts(this.body);
 
     // モデルをルートメッシュの子として追加
     this.model = model;
@@ -392,41 +240,14 @@ export class Character {
    * 下半身ボックスメッシュを取得（オフセット調整用）
    */
   public getLowerBodyMesh(): Mesh {
-    return this.lowerBodyMesh;
+    return this.body.lowerBody;
   }
 
   /**
    * 関節メッシュを取得
    */
   public getJoint(jointName: string): Mesh | null {
-    switch (jointName) {
-      case "head":
-        return this.headMesh;
-      case "upperBody":
-        // 上半身を動かす = 腰関節を回転させる
-        return this.waistJointMesh;
-      case "lowerBody":
-        // 下半身を動かす = 接続点を回転させる
-        return this.lowerBodyConnectionMesh;
-      case "leftShoulder":
-        return this.leftShoulderMesh;
-      case "rightShoulder":
-        return this.rightShoulderMesh;
-      case "leftElbow":
-        return this.leftElbowMesh;
-      case "rightElbow":
-        return this.rightElbowMesh;
-      case "leftHip":
-        return this.leftHipMesh;
-      case "rightHip":
-        return this.rightHipMesh;
-      case "leftKnee":
-        return this.leftKneeMesh;
-      case "rightKnee":
-        return this.rightKneeMesh;
-      default:
-        return null;
-    }
+    return CharacterBodyBuilder.getJoint(this.body, jointName);
   }
 
   /**
@@ -434,8 +255,8 @@ export class Character {
    * stateIndicator, visionCone は除外
    */
   public getFaceMeshes(): Mesh[] {
-    const meshes: Mesh[] = [this.headMesh];
-    for (const child of this.headMesh.getChildMeshes(false)) {
+    const meshes: Mesh[] = [this.body.head];
+    for (const child of this.body.head.getChildMeshes(false)) {
       if (child.name.includes('eye') || child.name.includes('mouth') ||
           child.name.includes('hair') || child.name.includes('beard')) {
         meshes.push(child as Mesh);
@@ -448,14 +269,14 @@ export class Character {
    * 頭上の状態インジケーターメッシュを取得
    */
   public getStateIndicator(): Mesh {
-    return this.stateIndicator;
+    return this.body.stateIndicator;
   }
 
   /**
    * 視野コーンメッシュを取得
    */
   public getVisionCone(): Mesh {
-    return this.visionConeMesh;
+    return this.body.visionCone;
   }
 
   /**
@@ -899,29 +720,29 @@ export class Character {
 
     // 全ての身体パーツの色を変更
     const bodyParts = [
-      this.headMesh,
-      this.upperBodyMesh,
-      this.lowerBodyMesh,
-      this.leftShoulderMesh,
-      this.rightShoulderMesh,
-      this.leftUpperArmMesh,
-      this.rightUpperArmMesh,
-      this.leftElbowMesh,
-      this.rightElbowMesh,
-      this.leftForearmMesh,
-      this.rightForearmMesh,
-      this.leftHandMesh,
-      this.rightHandMesh,
-      this.leftHipMesh,
-      this.rightHipMesh,
-      this.leftThighMesh,
-      this.rightThighMesh,
-      this.leftKneeMesh,
-      this.rightKneeMesh,
-      this.leftShinMesh,
-      this.rightShinMesh,
-      this.leftFootMesh,
-      this.rightFootMesh,
+      this.body.head,
+      this.body.upperBody,
+      this.body.lowerBody,
+      this.body.leftShoulder,
+      this.body.rightShoulder,
+      this.body.leftUpperArm,
+      this.body.rightUpperArm,
+      this.body.leftElbow,
+      this.body.rightElbow,
+      this.body.leftForearm,
+      this.body.rightForearm,
+      this.body.leftHand,
+      this.body.rightHand,
+      this.body.leftHip,
+      this.body.rightHip,
+      this.body.leftThigh,
+      this.body.rightThigh,
+      this.body.leftKnee,
+      this.body.rightKnee,
+      this.body.leftShin,
+      this.body.rightShin,
+      this.body.leftFoot,
+      this.body.rightFoot,
     ];
 
     bodyParts.forEach((mesh) => {
@@ -942,10 +763,10 @@ export class Character {
 
     // 胴体と肩パーツの色を変更
     const bodyParts = [
-      this.upperBodyMesh,
-      this.lowerBodyMesh,
-      this.leftShoulderMesh,
-      this.rightShoulderMesh,
+      this.body.upperBody,
+      this.body.lowerBody,
+      this.body.leftShoulder,
+      this.body.rightShoulder,
     ];
 
     bodyParts.forEach((mesh) => {
@@ -1006,7 +827,7 @@ export class Character {
    */
   public getRightHandPosition(): Vector3 {
     // 右手のひらのワールド座標を取得
-    const handWorldPosition = this.rightHandMesh.getAbsolutePosition();
+    const handWorldPosition = this.body.rightHand.getAbsolutePosition();
 
     // 手のひらの半径分下に移動（手のひらの先端）
     const handRadius = 0.07;
@@ -1021,7 +842,7 @@ export class Character {
    */
   public getLeftHandPosition(): Vector3 {
     // 左手のひらのワールド座標を取得
-    const handWorldPosition = this.leftHandMesh.getAbsolutePosition();
+    const handWorldPosition = this.body.leftHand.getAbsolutePosition();
 
     // 手のひらの半径分下に移動（手のひらの先端）
     const handRadius = 0.07;
@@ -1082,14 +903,14 @@ export class Character {
     const color = CHARACTER_STATE_COLORS[state];
 
     // 状態インジケーターの色を更新
-    if (this.stateIndicator.material && this.stateIndicator.material instanceof StandardMaterial) {
-      this.stateIndicator.material.diffuseColor = new Color3(color.r, color.g, color.b);
-      this.stateIndicator.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
+    if (this.body.stateIndicator.material && this.body.stateIndicator.material instanceof StandardMaterial) {
+      this.body.stateIndicator.material.diffuseColor = new Color3(color.r, color.g, color.b);
+      this.body.stateIndicator.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
     }
 
     // 視野コーンの色も更新
-    if (this.visionConeMesh.material && this.visionConeMesh.material instanceof StandardMaterial) {
-      this.visionConeMesh.material.diffuseColor = new Color3(color.r, color.g, color.b);
+    if (this.body.visionCone.material && this.body.visionCone.material instanceof StandardMaterial) {
+      this.body.visionCone.material.diffuseColor = new Color3(color.r, color.g, color.b);
     }
 
     // 足元の円の色を更新
@@ -1321,7 +1142,7 @@ export class Character {
 
     // 長さが0の場合は中心位置を返す
     if (vectorLength < 0.001) {
-      const ballY = this.waistJointMesh.getAbsolutePosition().y;
+      const ballY = this.body.waistJoint.getAbsolutePosition().y;
       return new Vector3(this.position.x, ballY, this.position.z);
     }
 
@@ -1335,7 +1156,7 @@ export class Character {
     const ballZ = faceCenter.z + unitZ * insetDistance;
 
     // ボールは腰関節の高さに配置（上半身と下半身の境界）
-    const ballY = this.waistJointMesh.getAbsolutePosition().y;
+    const ballY = this.body.waistJoint.getAbsolutePosition().y;
 
     return new Vector3(ballX, ballY, ballZ);
   }
@@ -1517,7 +1338,7 @@ export class Character {
    * 視野コーンの表示/非表示を切り替え
    */
   public setVisionVisible(visible: boolean): void {
-    this.visionConeMesh.isVisible = visible;
+    this.body.visionCone.isVisible = visible;
   }
 
   /**
@@ -1589,66 +1410,7 @@ export class Character {
    * 顔設定を適用（マテリアル色・位置の更新、髪・髭メッシュの生成）
    */
   public applyFaceConfig(fc: FaceConfig): void {
-    // ファクトリーのFaceConfigを更新（createHair/createBeard用）
-    this.bodyPartsFactory.setFaceConfig(fc);
-
-    // 頭の肌色を更新
-    const headMat = this.headMesh.material as StandardMaterial;
-    if (headMat) {
-      headMat.diffuseColor = new Color3(fc.skinColor.r, fc.skinColor.g, fc.skinColor.b);
-    }
-
-    // 目メッシュを再作成（EyeStyleで形状が変わるため）
-    const leftEyeParent = this.leftEyeMesh.parent;
-    const rightEyeParent = this.rightEyeMesh.parent;
-    this.leftEyeMesh.dispose();
-    this.rightEyeMesh.dispose();
-    this.leftEyeMesh = this.bodyPartsFactory.createEye("left");
-    this.rightEyeMesh = this.bodyPartsFactory.createEye("right");
-    this.leftEyeMesh.parent = leftEyeParent;
-    this.rightEyeMesh.parent = rightEyeParent;
-
-    // 口メッシュを再作成（MouthStyleで形状が変わるため）
-    const mouthParent = this.mouthMesh.parent;
-    this.mouthMesh.dispose();
-    this.mouthMesh = this.bodyPartsFactory.createMouth();
-    this.mouthMesh.parent = mouthParent;
-
-    // 腕・手の肌色を更新
-    const skinMeshes = [
-      this.leftUpperArmMesh, this.rightUpperArmMesh,
-      this.leftElbowMesh, this.rightElbowMesh,
-      this.leftForearmMesh, this.rightForearmMesh,
-      this.leftHandMesh, this.rightHandMesh,
-    ];
-    for (const mesh of skinMeshes) {
-      const mat = mesh.material as StandardMaterial;
-      if (mat) {
-        mat.diffuseColor = new Color3(fc.skinColor.r, fc.skinColor.g, fc.skinColor.b);
-      }
-    }
-
-    // 既存の髪メッシュを削除
-    if (this.hairMesh) {
-      this.hairMesh.dispose();
-      this.hairMesh = null;
-    }
-    // 新しい髪メッシュを生成
-    this.hairMesh = this.bodyPartsFactory.createHair();
-    if (this.hairMesh) {
-      this.hairMesh.parent = this.headMesh;
-    }
-
-    // 既存の髭メッシュを削除
-    if (this.beardMesh) {
-      this.beardMesh.dispose();
-      this.beardMesh = null;
-    }
-    // 新しい髭メッシュを生成
-    this.beardMesh = this.bodyPartsFactory.createBeard();
-    if (this.beardMesh) {
-      this.beardMesh.parent = this.headMesh;
-    }
+    this.bodyBuilder.applyFaceConfig(this.body, fc);
   }
 
   /**
@@ -2106,33 +1868,7 @@ export class Character {
    * すべての身体メッシュを取得
    */
   private getAllBodyMeshes(): Mesh[] {
-    return [
-      this.headMesh,
-      this.upperBodyMesh,
-      this.lowerBodyMesh,
-      this.waistJointMesh,
-      this.lowerBodyConnectionMesh,
-      this.leftShoulderMesh,
-      this.rightShoulderMesh,
-      this.leftUpperArmMesh,
-      this.rightUpperArmMesh,
-      this.leftElbowMesh,
-      this.rightElbowMesh,
-      this.leftForearmMesh,
-      this.rightForearmMesh,
-      this.leftHandMesh,
-      this.rightHandMesh,
-      this.leftHipMesh,
-      this.rightHipMesh,
-      this.leftThighMesh,
-      this.rightThighMesh,
-      this.leftKneeMesh,
-      this.rightKneeMesh,
-      this.leftShinMesh,
-      this.rightShinMesh,
-      this.leftFootMesh,
-      this.rightFootMesh,
-    ];
+    return CharacterBodyBuilder.getAllBodyMeshes(this.body);
   }
 
   // ==========================================================================
@@ -2189,48 +1925,8 @@ export class Character {
     // 物理ボディを破棄
     this.physicsManager.dispose();
 
-    // 身体パーツを破棄
-    this.headMesh.dispose();
-    this.leftEyeMesh.dispose();
-    this.rightEyeMesh.dispose();
-    this.mouthMesh.dispose();
-    if (this.hairMesh) {
-      this.hairMesh.dispose();
-      this.hairMesh = null;
-    }
-    if (this.beardMesh) {
-      this.beardMesh.dispose();
-      this.beardMesh = null;
-    }
-    this.upperBodyMesh.dispose();
-    this.lowerBodyMesh.dispose();
-    this.waistJointMesh.dispose();
-    this.leftShoulderMesh.dispose();
-    this.rightShoulderMesh.dispose();
-    this.leftUpperArmMesh.dispose();
-    this.rightUpperArmMesh.dispose();
-    this.leftElbowMesh.dispose();
-    this.rightElbowMesh.dispose();
-    this.leftForearmMesh.dispose();
-    this.rightForearmMesh.dispose();
-    this.leftHandMesh.dispose();
-    this.rightHandMesh.dispose();
-    this.leftHipMesh.dispose();
-    this.rightHipMesh.dispose();
-    this.leftThighMesh.dispose();
-    this.rightThighMesh.dispose();
-    this.leftKneeMesh.dispose();
-    this.rightKneeMesh.dispose();
-    this.leftShinMesh.dispose();
-    this.rightShinMesh.dispose();
-    this.leftFootMesh.dispose();
-    this.rightFootMesh.dispose();
-
-    // 状態インジケーターを破棄
-    this.stateIndicator.dispose();
-
-    // 視野コーンを破棄
-    this.visionConeMesh.dispose();
+    // 身体パーツ・状態インジケーター・視野コーンを破棄
+    CharacterBodyBuilder.disposeBody(this.body);
 
     // 方向サークルを破棄
     this.directionCircle.dispose();
