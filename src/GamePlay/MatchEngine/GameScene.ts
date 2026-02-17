@@ -5,6 +5,7 @@ import {
   HemisphericLight,
   DirectionalLight,
   Vector3,
+  Color3,
   Color4,
 } from "@babylonjs/core";
 import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
@@ -530,6 +531,7 @@ export class GameScene {
 
       // 味方チームの胴体を青くする
       character.setBodyColor(0.0, 0.4, 1.0);
+      character.applyJerseyNumber(new Color3(0.0, 0.4, 1.0));
 
       this.allyCharacters.push(character);
 
@@ -563,6 +565,7 @@ export class GameScene {
 
       // 敵チームの胴体を赤くする
       character.setBodyColor(1.0, 0.0, 0.0);
+      character.applyJerseyNumber(new Color3(1.0, 0.0, 0.0));
 
       this.enemyCharacters.push(character);
 

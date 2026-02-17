@@ -7,6 +7,7 @@ import { DRIBBLE_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/Drib
 import { JUMP_BALL_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/JumpMotion";
 import { LOOSE_BALL_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/LooseBallMotion";
 import { BALL_CATCH_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallCatchMotion";
+import { JUMP_SHOOT_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/JumpShootMotion";
 
 /**
  * アクションカテゴリ
@@ -25,6 +26,9 @@ export type ActionType =
   | 'shoot_midrange'
   | 'shoot_layup'
   | 'shoot_dunk'      // ダンク（ジャンプ中のみ）
+  | 'jump_shoot_layup'  // ドライブ→ジャンプシュート（レイアップ）
+  | 'jump_shoot_dunk'   // ドライブ→ジャンプシュート（ダンク）
+  | 'jump_shoot_mid'    // ドライブ→ジャンプシュート（ミドル）
   | 'pass_chest'
   | 'pass_bounce'
   | 'pass_overhead'
@@ -167,6 +171,39 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
     priority: 12,          // レイアップより高優先度
     interruptible: false,  // ダンク中はキャンセル不可
     // 重心: しゃがみ→ジャンプ→叩きつけ
+  },
+
+  // ジャンプシュート レイアップ（ドライブからのジャンプシュート）
+  jump_shoot_layup: {
+    type: 'jump_shoot_layup',
+    category: 'offense',
+    motion: 'jump_shoot_layup',
+    startupTime: 100,      // 0.1秒（シュート準備）
+    activeTime: 200,       // 0.2秒（ボールリリース）
+    priority: 45,
+    interruptible: false,
+  },
+
+  // ジャンプシュート ダンク（ドライブからのジャンプダンク）
+  jump_shoot_dunk: {
+    type: 'jump_shoot_dunk',
+    category: 'offense',
+    motion: 'jump_shoot_dunk',
+    startupTime: 100,      // 0.1秒
+    activeTime: 200,       // 0.2秒
+    priority: 45,
+    interruptible: false,
+  },
+
+  // ジャンプシュート ミドル（ドライブからのジャンプシュート）
+  jump_shoot_mid: {
+    type: 'jump_shoot_mid',
+    category: 'offense',
+    motion: 'jump_shoot_mid',
+    startupTime: 100,      // 0.1秒
+    activeTime: 200,       // 0.2秒
+    priority: 45,
+    interruptible: false,
   },
 
   // チェストパス
@@ -434,7 +471,14 @@ export class ActionConfigUtils {
    * シュートアクションかどうか
    */
   public static isShootAction(type: ActionType): boolean {
-    return type.startsWith('shoot_');
+    return type.startsWith('shoot_') || type.startsWith('jump_shoot_');
+  }
+
+  /**
+   * ジャンプシュートアクションかどうか
+   */
+  public static isJumpShootAction(type: ActionType): boolean {
+    return type.startsWith('jump_shoot_');
   }
 
   /**
@@ -494,6 +538,11 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
   shoot_midrange: SHOOT_MOTIONS.shoot_midrange,
   shoot_layup: SHOOT_MOTIONS.shoot_layup,
   shoot_dunk: SHOOT_MOTIONS.shoot_dunk,
+
+  // ジャンプシュートモーション
+  jump_shoot_layup: JUMP_SHOOT_MOTIONS.jump_shoot_layup,
+  jump_shoot_dunk: JUMP_SHOOT_MOTIONS.jump_shoot_dunk,
+  jump_shoot_mid: JUMP_SHOOT_MOTIONS.jump_shoot_mid,
 
   // パスモーション
   pass_chest: PASS_MOTIONS.pass_chest,

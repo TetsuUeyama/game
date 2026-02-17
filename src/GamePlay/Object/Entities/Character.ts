@@ -7,6 +7,7 @@ import {
   Mesh,
   AbstractMesh,
   LinesMesh,
+  DynamicTexture,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
@@ -50,6 +51,11 @@ import { calculateArmReach } from "@/GamePlay/GameSystem/CharacterMove/Systems/A
 import { CharacterSkeletonBridge } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterSkeletonBridge";
 import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
 import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
+
+// ポジション → 背番号マッピング
+const POSITION_NUMBER_MAP: Record<string, number> = {
+  PG: 1, SG: 2, SF: 3, PF: 4, C: 5,
+};
 
 /**
  * 3Dキャラクターエンティティ
@@ -99,6 +105,7 @@ export class Character {
   public offenseRole: OffenseRole | null = null;
   public defenseRole: DefenseRole | null = null;
   public shotPriority: number | null = null;
+  public jerseyNumber: number | null = null;
 
   // 個人ゲームスタッツ（得点・アシスト）
   public gameStats = { points: 0, assists: 0 };
@@ -865,6 +872,56 @@ export class Character {
   }
 
   /**
+   * 背番号を胴体の背面に表示
+   * upperBody の -Z 面（背中側）に平面メッシュを貼り付ける
+   * @param teamColor チームカラー（背景色として使用）
+   */
+  public applyJerseyNumber(teamColor: Color3): void {
+    if (this.jerseyNumber == null) return;
+
+    const upperBody = this.body.upperBody;
+
+    // 背面に番号用の平面メッシュを作成
+    const plane = MeshBuilder.CreatePlane(
+      `jerseyNumber_${this.jerseyNumber}`,
+      { width: 0.28, height: 0.28 },
+      this.scene
+    );
+    plane.parent = upperBody;
+    // 背面（-Z 方向）に配置
+    plane.position = new Vector3(0, 0, -0.11);
+
+    // テクスチャ作成
+    const texSize = 256;
+    const tex = new DynamicTexture(`jerseyTex_${this.jerseyNumber}`, texSize, this.scene, true);
+    const ctx = tex.getContext() as unknown as CanvasRenderingContext2D;
+
+    // チームカラーで背景を塗りつぶし
+    const r = Math.round(teamColor.r * 255);
+    const g = Math.round(teamColor.g * 255);
+    const b = Math.round(teamColor.b * 255);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(0, 0, texSize, texSize);
+
+    // 白文字で番号を中央描画
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 180px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(this.jerseyNumber), texSize / 2, texSize / 2);
+
+    tex.update();
+
+    // 番号用の専用マテリアル（両面描画でカリング問題を回避）
+    const mat = new StandardMaterial(`jerseyMat_${this.jerseyNumber}`, this.scene);
+    mat.diffuseTexture = tex;
+    mat.diffuseColor = Color3.White();
+    mat.specularColor = new Color3(0.2, 0.2, 0.2);
+    mat.backFaceCulling = false;
+    plane.material = mat;
+  }
+
+  /**
    * キャラクターの表示/非表示を切り替え
    * @param visible 表示する場合true
    */
@@ -1510,6 +1567,9 @@ export class Character {
 
     // 名前ラベルを作成
     this.createNameLabel();
+
+    // 背番号を設定（テクスチャ適用はチームカラー設定後に行う）
+    this.jerseyNumber = POSITION_NUMBER_MAP[position] ?? null;
 
     // 顔設定を適用
     const fc = playerData.faceConfig ?? DEFAULT_FACE_CONFIG;

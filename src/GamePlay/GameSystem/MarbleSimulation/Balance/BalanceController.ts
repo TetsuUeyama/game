@@ -264,7 +264,9 @@ export class BalanceController {
     }
 
     // シュートアクションは重心チェックをスキップ（レイアップは走りながら、他は止まった瞬間に打てる）
-    if (actionType === 'shoot_layup' || actionType === 'shoot_3pt' || actionType === 'shoot_midrange') {
+    // ジャンプシュートも同様（ドライブ中に発動するため重心が不安定な状態で打つ）
+    if (actionType === 'shoot_layup' || actionType === 'shoot_3pt' || actionType === 'shoot_midrange' ||
+        actionType === 'jump_shoot_layup' || actionType === 'jump_shoot_dunk' || actionType === 'jump_shoot_mid') {
       return true;
     }
 

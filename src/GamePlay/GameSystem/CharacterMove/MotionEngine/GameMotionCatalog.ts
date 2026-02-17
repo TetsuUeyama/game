@@ -70,6 +70,13 @@ import {
   DRIBBLE_STANCE_MOTION,
 } from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 
+// --- Jump Shoot ---
+import {
+  JUMP_SHOOT_LAYUP_MOTION,
+  JUMP_SHOOT_DUNK_MOTION,
+  JUMP_SHOOT_MID_MOTION,
+} from "@/GamePlay/GameSystem/CharacterMove/Motion/JumpShootMotion";
+
 // --- Other ---
 import {
   LOOSE_BALL_SCRAMBLE_MOTION,
@@ -112,6 +119,11 @@ export const GAME_MOTIONS: GameMotionEntry[] = [
   { name: "game:shoot_layup", motion: motionDataToDefinition(SHOOT_LAYUP_MOTION) },
   { name: "game:shoot_dunk", motion: motionDataToDefinition(SHOOT_DUNK_MOTION) },
   { name: "game:shoot_feint", motion: motionDataToDefinition(SHOOT_FEINT_MOTION) },
+
+  // Jump Shoot
+  { name: "game:jump_shoot_layup", motion: motionDataToDefinition(JUMP_SHOOT_LAYUP_MOTION) },
+  { name: "game:jump_shoot_dunk", motion: motionDataToDefinition(JUMP_SHOOT_DUNK_MOTION) },
+  { name: "game:jump_shoot_mid", motion: motionDataToDefinition(JUMP_SHOOT_MID_MOTION) },
 
   // Pass
   { name: "game:pass_chest", motion: motionDataToDefinition(PASS_CHEST_MOTION) },
