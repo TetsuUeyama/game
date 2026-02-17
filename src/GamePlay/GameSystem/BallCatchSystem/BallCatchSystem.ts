@@ -105,14 +105,15 @@ export class BallCatchSystem {
 
   /**
    * 手のひら接触チェック（最優先判定）
-   * 全キャラクターの両手をチェックし、ボールに触れていたら即キャッチ。
+   * 両手タッチ → 無条件キャッチ、片手タッチ → 衝撃吸収判定。
    * 複数キャラクターが同時に触れている場合はボールを弾く。
    */
   private checkPalmCatch(): { result: BallCatchEvent | null; handled: boolean } {
     const ballPosition = this.ball.getPosition();
     const contactDistance = PALM_CATCH.CONTACT_DISTANCE;
 
-    const touchingCharacters: Character[] = [];
+    const catchCandidates: Character[] = [];
+    let anyTouching = false;
 
     for (const character of this.allCharacters) {
       // ON_BALL_PLAYERは対象外
@@ -128,18 +129,41 @@ export class BallCatchSystem {
       const distRight = getDistance3D(ballPosition, rightHandPos);
       const distLeft = getDistance3D(ballPosition, leftHandPos);
 
-      if (distRight <= contactDistance || distLeft <= contactDistance) {
-        touchingCharacters.push(character);
+      const rightTouch = distRight <= contactDistance;
+      const leftTouch = distLeft <= contactDistance;
+
+      if (!rightTouch && !leftTouch) continue;
+
+      anyTouching = true;
+
+      if (rightTouch && leftTouch) {
+        // 両手タッチ → 無条件でキャッチ候補
+        catchCandidates.push(character);
+      } else {
+        // 片手タッチ → 衝撃吸収判定
+        const ballVelocity = this.ball.getVelocity();
+        const characterVelocity = character.velocity || Vector3.Zero();
+        const relativeSpeed = ballVelocity.subtract(characterVelocity).length();
+        const threshold = this.calculateAbsorptionThreshold(character);
+
+        if (relativeSpeed <= threshold) {
+          catchCandidates.push(character);
+        } else {
+          // 片手で吸収できない → ファンブル
+          const handPosition = character.getBallHoldingPosition();
+          this.executeFumble(character, handPosition, ballPosition);
+          return { result: null, handled: true };
+        }
       }
     }
 
-    if (touchingCharacters.length === 0) {
+    if (!anyTouching) {
       return { result: null, handled: false };
     }
 
-    if (touchingCharacters.length === 1) {
+    if (catchCandidates.length === 1) {
       // 1人だけ → 即キャッチ
-      const catcher = touchingCharacters[0];
+      const catcher = catchCandidates[0];
       const scenario = this.determineCatchScenario(catcher, ballPosition)
         ?? CatchScenario.LOOSE_BALL;
       return {
@@ -148,11 +172,31 @@ export class BallCatchSystem {
       };
     }
 
-    // 複数人 → 弾く
-    const firstToucher = touchingCharacters[0];
-    const handPosition = firstToucher.getBallHoldingPosition();
-    this.executeFumble(firstToucher, handPosition, ballPosition);
+    if (catchCandidates.length > 1) {
+      // 複数人 → 弾く
+      const firstToucher = catchCandidates[0];
+      const handPosition = firstToucher.getBallHoldingPosition();
+      this.executeFumble(firstToucher, handPosition, ballPosition);
+      return { result: null, handled: true };
+    }
+
+    // anyTouching=true だが catchCandidates=0 のケース
+    // （片手タッチで全員ファンブルした場合は上のelse節でreturn済み）
     return { result: null, handled: true };
+  }
+
+  /**
+   * 片手キャッチの衝撃吸収閾値を計算
+   * threshold = clamp(BASE + power × 0.04 + technique × 0.03, BASE, MAX)
+   */
+  private calculateAbsorptionThreshold(character: Character): number {
+    const stats = character.playerData?.stats;
+    const power = stats?.power ?? 50;
+    const technique = stats?.technique ?? 50;
+    const raw = PALM_CATCH.BASE_ABSORPTION_SPEED
+      + power * PALM_CATCH.POWER_COEFFICIENT
+      + technique * PALM_CATCH.TECHNIQUE_COEFFICIENT;
+    return Math.min(raw, PALM_CATCH.MAX_ABSORPTION_SPEED);
   }
 
   /**

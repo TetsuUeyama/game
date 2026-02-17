@@ -290,98 +290,6 @@ export const PASS_OVERHEAD_MOTION_CONFIG: MotionConfig = {
 };
 
 // ==============================
-// パスレシーブ
-// ==============================
-
-/**
- * パスレシーブモーション
- *
- * タイミング（ActionConfigより）:
- * - startupTime: 100ms = 0.1秒
- * - activeTime: 2000ms = 2.0秒
- *
- * 両手を前方に差し出すキャッチ構え
- * - 上半身: 軽い前傾（10-15度）
- * - 両肩: 前方に伸ばす（-60〜-70度）
- * - 両肘: 軽く曲げる（30-40度）
- * - 脚: 軽くしゃがむ安定姿勢
- */
-const PASS_RECEIVE_T0 = 0.0;
-const PASS_RECEIVE_T1 = 0.1;    // startupTime（構え完了）
-const PASS_RECEIVE_T2 = 0.5;    // モーション終了（以降はキャッチ待ち）
-
-const PASS_RECEIVE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  // 上半身：軽い前傾
-  upperBodyX: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 12, [PASS_RECEIVE_T2]: 12},
-  upperBodyY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  upperBodyZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  lowerBodyX: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  lowerBodyY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  lowerBodyZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  headX: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 5, [PASS_RECEIVE_T2]: 5},
-  headY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  headZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  // 両腕：前方に差し出すキャッチ構え
-  rightShoulderX: {[PASS_RECEIVE_T0]: -45, [PASS_RECEIVE_T1]: -65, [PASS_RECEIVE_T2]: -65},
-  rightShoulderY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: -10, [PASS_RECEIVE_T2]: -10},
-  rightShoulderZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  rightElbowX: {[PASS_RECEIVE_T0]: 90, [PASS_RECEIVE_T1]: 35, [PASS_RECEIVE_T2]: 35},
-  rightElbowY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  rightElbowZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  leftShoulderX: {[PASS_RECEIVE_T0]: -45, [PASS_RECEIVE_T1]: -65, [PASS_RECEIVE_T2]: -65},
-  leftShoulderY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 10, [PASS_RECEIVE_T2]: 10},
-  leftShoulderZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  leftElbowX: {[PASS_RECEIVE_T0]: 90, [PASS_RECEIVE_T1]: 35, [PASS_RECEIVE_T2]: 35},
-  leftElbowY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  leftElbowZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  // 脚：軽くしゃがむ安定姿勢
-  leftHipX: {[PASS_RECEIVE_T0]: -20, [PASS_RECEIVE_T1]: -25, [PASS_RECEIVE_T2]: -25},
-  leftHipY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  leftHipZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  rightHipX: {[PASS_RECEIVE_T0]: -20, [PASS_RECEIVE_T1]: -25, [PASS_RECEIVE_T2]: -25},
-  rightHipY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  rightHipZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  leftKneeX: {[PASS_RECEIVE_T0]: 30, [PASS_RECEIVE_T1]: 40, [PASS_RECEIVE_T2]: 40},
-  leftKneeY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  leftKneeZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-
-  rightKneeX: {[PASS_RECEIVE_T0]: 30, [PASS_RECEIVE_T1]: 40, [PASS_RECEIVE_T2]: 40},
-  rightKneeY: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-  rightKneeZ: {[PASS_RECEIVE_T0]: 0, [PASS_RECEIVE_T1]: 0, [PASS_RECEIVE_T2]: 0},
-};
-
-export const PASS_RECEIVE_MOTION: MotionData = {
-  name: "pass_receive",
-  duration: PASS_RECEIVE_T2,
-  loop: false,
-  keyframes: buildKeyframes(PASS_RECEIVE_JOINT_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
-};
-
-export const PASS_RECEIVE_MOTION_CONFIG: MotionConfig = {
-  motionData: PASS_RECEIVE_MOTION,
-  isDefault: false,
-  blendDuration: 0.1,
-  priority: 35,
-  interruptible: true,
-};
-
-// ==============================
 // エクスポート
 // ==============================
 
@@ -392,7 +300,6 @@ export const PASS_MOTIONS = {
   pass_chest: PASS_CHEST_MOTION,
   pass_bounce: PASS_BOUNCE_MOTION,
   pass_overhead: PASS_OVERHEAD_MOTION,
-  pass_receive: PASS_RECEIVE_MOTION,
 };
 
 /**
@@ -402,5 +309,4 @@ export const PASS_MOTION_CONFIGS = {
   pass_chest: PASS_CHEST_MOTION_CONFIG,
   pass_bounce: PASS_BOUNCE_MOTION_CONFIG,
   pass_overhead: PASS_OVERHEAD_MOTION_CONFIG,
-  pass_receive: PASS_RECEIVE_MOTION_CONFIG,
 };

@@ -134,4 +134,14 @@ export const LOOSE_BALL_PICKUP = {
 export const PALM_CATCH = {
   /** 接触判定距離（m）= 手の物理球半径(0.08) + ボール半径(0.12) + バッファ(0.05) */
   CONTACT_DISTANCE: 0.25,
+
+  // === 片手キャッチ衝撃吸収判定 ===
+  /** 基準吸収可能速度 (m/s) — 能力値補正前のベース閾値 */
+  BASE_ABSORPTION_SPEED: 8.0,
+  /** power による吸収閾値ボーナス係数 (power 1あたり m/s) */
+  POWER_COEFFICIENT: 0.04,
+  /** technique による吸収閾値ボーナス係数 */
+  TECHNIQUE_COEFFICIENT: 0.03,
+  /** 最大吸収可能速度 (m/s) — 上限キャップ */
+  MAX_ABSORPTION_SPEED: 14.0,
 } as const;

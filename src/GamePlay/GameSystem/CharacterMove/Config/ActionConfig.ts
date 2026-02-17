@@ -6,6 +6,7 @@ import { DEFENSE_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/Defe
 import { DRIBBLE_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 import { JUMP_BALL_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/JumpMotion";
 import { LOOSE_BALL_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/LooseBallMotion";
+import { BALL_CATCH_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallCatchMotion";
 
 /**
  * アクションカテゴリ
@@ -43,8 +44,8 @@ export type ActionType =
   | 'loose_ball_pickup'     // ルーズボール拾い（非競合時）
   // リバウンド
   | 'rebound_jump'          // リバウンドジャンプ（ゴール下でボールを取る）
-  // パスレシーブ
-  | 'pass_receive';         // パスレシーブ（ボールに向かってダッシュ）
+  // ボールキャッチ
+  | 'ball_catch';           // ボールキャッチ（両手でキャッチする動作）
 
 /**
  * アクションフェーズ
@@ -377,19 +378,19 @@ export const ACTION_DEFINITIONS: Record<ActionType, ActionDefinition> = {
   },
 
   // ==============================
-  // パスレシーブアクション
+  // ボールキャッチアクション
   // ==============================
 
-  // パスレシーブ（ボールに向かってダッシュ）
-  pass_receive: {
-    type: 'pass_receive',
+  // ボールキャッチ（両手でキャッチする動作）
+  ball_catch: {
+    type: 'ball_catch',
     category: 'offense',
-    motion: 'pass_receive',
+    motion: 'ball_catch',
     startupTime: 100,      // 0.1秒（素早く構える）
     activeTime: 2000,      // 2秒（ボール到着を待つ十分な時間）
-    priority: 7,           // パス(8)より低い
-    interruptible: true,   // キャッチ後やインターセプト時にキャンセル可能
-    allowReflexes: true,   // レシーブ待機中もリバウンド等の反射行動を許可
+    priority: 9,
+    interruptible: true,
+    allowReflexes: true,   // キャッチ待機中もリバウンド等の反射行動を許可
   },
 };
 
@@ -438,7 +439,7 @@ export class ActionConfigUtils {
    * パスアクションかどうか
    */
   public static isPassAction(type: ActionType): boolean {
-    return type.startsWith('pass_') && type !== 'pass_intercept' && type !== 'pass_receive';
+    return type.startsWith('pass_') && type !== 'pass_intercept';
   }
 
   /**
@@ -519,6 +520,6 @@ export const ACTION_MOTIONS: Partial<Record<ActionType, MotionData>> = {
   loose_ball_scramble: LOOSE_BALL_MOTIONS.loose_ball_scramble,
   loose_ball_pickup: LOOSE_BALL_MOTIONS.loose_ball_pickup,
 
-  // パスレシーブモーション
-  pass_receive: PASS_MOTIONS.pass_receive,
+  // ボールキャッチモーション
+  ball_catch: BALL_CATCH_MOTIONS.ball_catch,
 };

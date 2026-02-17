@@ -34,7 +34,7 @@ const ACTION_LABELS: Record<string, string> = {
   rebound_jump: 'リバウンドジャンプ',
   loose_ball_scramble: 'ルーズボールスクランブル',
   loose_ball_pickup: 'ルーズボールピックアップ',
-  pass_receive: 'パスレシーブ',
+  ball_catch: 'ボールキャッチ',
 };
 
 /**

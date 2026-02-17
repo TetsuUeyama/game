@@ -376,7 +376,7 @@ export class CharacterAI {
 
   /**
    * ボールキャッチ反射
-   * 自分の方向に飛んでくるボールを検知して pass_receive を自動発動
+   * 自分の方向に飛んでくるボールを検知して ball_catch を自動発動
    */
   private tryReflexCatch(actionController: ReturnType<Character['getActionController']>): boolean {
     const ballPos = this.ball.getPosition();
@@ -417,8 +417,8 @@ export class CharacterAI {
       this.character.setRotation(angle);
     }
 
-    // pass_receive アクション発動
-    const result = actionController.startAction('pass_receive');
+    // ball_catch アクション発動
+    const result = actionController.startAction('ball_catch');
     return result.success;
   }
 
