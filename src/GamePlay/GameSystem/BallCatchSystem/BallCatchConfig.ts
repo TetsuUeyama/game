@@ -110,22 +110,6 @@ export const BALL_CATCH_PHYSICS = {
  */
 export const BALL_RADIUS = 0.15;
 
-/**
- * ルーズボール保持条件設定
- */
-export const LOOSE_BALL_PICKUP = {
-  /** ボールが完全にサークル内にある場合の滞在時間（秒） */
-  REQUIRED_DWELL_TIME_INSIDE: 0.3,
-
-  /** ボールが一部サークルに触れている場合の滞在時間（秒） */
-  REQUIRED_DWELL_TIME_TOUCHING: 1.0,
-
-  /** 高さ判定の追加マージン（m）- 身長に加算 */
-  HEIGHT_MARGIN: 0.5,
-
-  /** 即時保持判定の相手チームプレイヤー不在距離（m） */
-  NO_OPPONENT_RADIUS: 1.0,
-} as const;
 
 /**
  * 手のひらキャッチ設定

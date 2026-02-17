@@ -23,6 +23,5 @@ export {
   CATCH_SCENARIO_CONFIGS,
   BALL_CATCH_PHYSICS,
   BALL_RADIUS,
-  LOOSE_BALL_PICKUP,
   PALM_CATCH,
 } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchConfig";

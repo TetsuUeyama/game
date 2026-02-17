@@ -28,6 +28,7 @@ import {
   ProceduralHumanoidResult,
   AppearanceConfig,
 } from "@/GamePlay/GameSystem/CharacterModel/Character/ProceduralHumanoid";
+import { logBoneOffsetsForProcedural } from "@/GamePlay/GameSystem/CharacterModel/Character/BoneExtractor";
 import {
   DEFAULT_MOTION_CONFIG,
   BlendInput,
@@ -191,6 +192,11 @@ export function useHumanoidControl(
 
           if (!skeleton) {
             throw new Error("GLBにスケルトンが含まれていません");
+          }
+
+          // 最初のキャラクターのみボーン位置をログ出力（C1: GLBボーン位置抽出）
+          if (i === 0) {
+            logBoneOffsetsForProcedural(skeleton);
           }
 
           // PoseBlender 適用前にレスト姿勢をキャッシュ
