@@ -4,7 +4,7 @@ import { DRIBBLE_STANCE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motio
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import { DefenseUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenseConfig";
 import { OnBallOffenseAISub } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/State/OnBallOffenseAISub";
-import { getShootAggressiveness, get1on1ActionProbabilities } from "@/GamePlay/GameSystem/CharacterMove/Config/PositionBehaviorConfig";
+import { getShootAggressiveness, get1on1ActionProbabilities } from "@/GamePlay/GameSystem/DecisionMakingSystem/PositionBehaviorConfig";
 import { CourtZone, ShotClockPhase, detectCourtZone, getShotClockPhase } from "@/GamePlay/GameSystem/DecisionMakingSystem/CourtZoneConfig";
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { getOpponents } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";

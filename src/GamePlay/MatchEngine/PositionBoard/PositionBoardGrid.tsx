@@ -1,12 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BoardPlayerPosition } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
+import { BoardPlayerPosition } from '@/GamePlay/MatchEngine/PositionBoard/PositionBoard';
 import {
   POSITION_BOARD_UI_CONFIG,
   getColumnLabels,
   getRowCount,
-} from '@/GamePlay/GameSystem/CharacterMove/Config/PositionBoardConfig';
+} from '@/GamePlay/MatchEngine/PositionBoard/PositionBoardConfig';
 import { PositionBoardPlayer } from './PositionBoardPlayer';
 
 interface PositionBoardGridProps {

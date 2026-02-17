@@ -19,7 +19,7 @@ import {
   DESTINATION_PREDICTION_THRESHOLD,
   isPassDirectionValid,
   InterceptionRiskLevel,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig";
+} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 import {
   PassTrajectoryCalculator,
   Vec3,

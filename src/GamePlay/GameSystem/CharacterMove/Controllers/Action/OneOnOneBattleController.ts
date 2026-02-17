@@ -9,7 +9,7 @@ import {
   POSITIONING_CONFIG,
   AdvantageStatus,
   AdvantageUtils,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/Action/OneOnOneBattleConfig";
+} from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
 
 // 型をre-export
 export type { OneOnOneResult, AdvantageStatus };

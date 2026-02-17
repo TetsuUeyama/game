@@ -1,6 +1,6 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { PASS_COOLDOWN } from "@/GamePlay/GameSystem/CharacterMove/Config/PassConfig";
+import { PASS_COOLDOWN } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassConfig";
 import { determineCurveDirection, isPassLaneBlocked } from "@/GamePlay/GameSystem/CharacterMove/Utils/CurvePassUtils";
 
 /**

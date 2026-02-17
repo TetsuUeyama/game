@@ -1,6 +1,6 @@
 'use client';
 
-import { PositionBoardType, BOARD_TYPE_LABELS } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
+import { PositionBoardType, BOARD_TYPE_LABELS } from '@/GamePlay/MatchEngine/PositionBoard/PositionBoard';
 
 interface PositionBoardToolbarProps {
   activeBoard: PositionBoardType;

@@ -10,7 +10,7 @@ import { Field } from "@/GamePlay/Object/Entities/Field";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
-import { PassType } from "@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig";
+import { PassType } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 import { DRIBBLE_STANCE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { DEFENSE_STANCE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DefenseMotion";

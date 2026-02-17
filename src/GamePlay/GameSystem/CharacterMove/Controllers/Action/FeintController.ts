@@ -1,6 +1,6 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { FEINT_CONFIG, FeintResult } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/FeintConfig";
+import { FEINT_CONFIG, FeintResult } from "@/GamePlay/GameSystem/CharacterMove/Config/FeintConfig";
 
 // 設定と型をre-export（既存のインポートを壊さないため）
 export { FEINT_CONFIG };

@@ -4,7 +4,7 @@ import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
 import { BaseStateAI } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/State/BaseStateAI";
 import { DEFENSE_PRESSURE, DefenseUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenseConfig";
-import { ActionConfigUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig";
+import { ActionConfigUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import { DEFENSE_STANCE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DefenseMotion";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
