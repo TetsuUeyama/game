@@ -7,7 +7,7 @@ import {
   resolveCircleCollisionWithPower,
 } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
-import { BallCatchSystem } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchSystem";
+import { BallCatchSystem } from "@/GamePlay/GameSystem/BallCatchSystem";
 import { LooseBallScrambleSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallScrambleSystem";
 
 /**

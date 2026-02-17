@@ -102,11 +102,11 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
     setIsPlaying(false);
 
     // モーションを再生（ブレンドなし）
-    character.playMotion(motionData, 1.0, 0);
+    character.getMotionController().play(motionData, 1.0, 0);
     // 即座に一時停止
-    character.pauseMotion();
+    character.getMotionController().pause();
     // 時間を0にセット
-    character.setMotionTime(0);
+    character.getMotionController().setCurrentTime(0);
 
     setCurrentTime(0);
     setDuration(motionData.duration);
@@ -125,9 +125,9 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
     // モーションを適用
     const motionData = ACTION_MOTIONS[selectedAction];
     if (motionData) {
-      character.playMotion(motionData, 1.0, 0);
-      character.pauseMotion();
-      character.setMotionTime(0);
+      character.getMotionController().play(motionData, 1.0, 0);
+      character.getMotionController().pause();
+      character.getMotionController().setCurrentTime(0);
       setCurrentTime(0);
       setDuration(motionData.duration);
     }
@@ -140,12 +140,12 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
 
     if (isPlaying) {
       // 一時停止
-      character.pauseMotion();
+      character.getMotionController().pause();
       stopAnimLoop();
       setIsPlaying(false);
     } else {
       // 再生開始
-      character.resumeMotion();
+      character.getMotionController().resume();
       lastTimeRef.current = performance.now();
       setIsPlaying(true);
     }
@@ -168,7 +168,7 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
 
       // モーション終了チェック
       if (state.currentTime >= duration) {
-        character.pauseMotion();
+        character.getMotionController().pause();
         setIsPlaying(false);
         setCurrentTime(duration);
         return;
@@ -190,7 +190,7 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
     const character = characterRef.current;
     if (!character) return;
 
-    character.setMotionTime(time);
+    character.getMotionController().setCurrentTime(time);
     setCurrentTime(time);
   }, []);
 

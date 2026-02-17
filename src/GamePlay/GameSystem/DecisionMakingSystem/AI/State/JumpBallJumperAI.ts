@@ -159,8 +159,8 @@ export class JumpBallJumperAI extends BaseStateAI {
     // ジャンプボールがアクティブでない場合は待機
     if (!this.isJumpBallActive) {
       // 静止してアイドルモーション
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -187,7 +187,7 @@ export class JumpBallJumperAI extends BaseStateAI {
     this.hasJumped = true;
 
     // ジャンプボールモーションを再生
-    this.character.playMotion(JUMP_BALL_MOTION);
+    this.character.getMotionController().play(JUMP_BALL_MOTION);
 
     // 重心に力を加える（アクションコントローラーがあれば）
     const actionController = this.character.getActionController();

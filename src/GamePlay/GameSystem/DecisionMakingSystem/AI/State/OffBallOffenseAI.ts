@@ -238,32 +238,32 @@ export class OffBallOffenseAI extends BaseStateAI {
 
         if (distanceToBall > 3.0) {
           // ダッシュ
-          if (this.character.getCurrentMotionName() !== 'dash_forward') {
-            this.character.playMotion(DASH_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+            this.character.getMotionController().play(DASH_FORWARD_MOTION);
           }
         } else if (distanceToBall > 1.0) {
           // 歩き
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
         } else {
           // ゆっくり歩き（1.0m以内）
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
         }
       } else {
         // 衝突回避で移動できない場合はアイドル
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       }
     } else {
       // 0.3m以内: 停止してキャッチ待ち
       this.character.velocity = Vector3.Zero();
 
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -306,8 +306,8 @@ export class OffBallOffenseAI extends BaseStateAI {
     // 目標位置がない場合はオンボールプレイヤーを見て待機
     if (!this.mainHandlerTargetPosition) {
       this.faceTowards(onBallPlayer, deltaTime);
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -322,8 +322,8 @@ export class OffBallOffenseAI extends BaseStateAI {
       // パスレーンが安全なら、その場でオンボールプレイヤーの方を向いて待機
       if (currentRisk <= this.maxPassLaneRisk) {
         this.faceTowards(onBallPlayer, deltaTime);
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
         return;
       }
@@ -451,8 +451,8 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     if (!this.secondHandlerTargetPosition) {
       this.faceTowards(onBallPlayer, deltaTime);
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -466,8 +466,8 @@ export class OffBallOffenseAI extends BaseStateAI {
       );
       if (currentRisk <= this.maxPassLaneRisk) {
         this.faceTowards(onBallPlayer, deltaTime);
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
         return;
       }
@@ -645,8 +645,8 @@ export class OffBallOffenseAI extends BaseStateAI {
     const playerPosition = this.character.playerPosition as PlayerPosition;
     if (!playerPosition) {
       // ポジションが設定されていない場合は待機
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -682,8 +682,8 @@ export class OffBallOffenseAI extends BaseStateAI {
     }
 
     if (!this.currentTargetPosition) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -912,8 +912,8 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     // 目標に近い場合は待機
     if (distanceToTarget < 0.5) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -922,8 +922,8 @@ export class OffBallOffenseAI extends BaseStateAI {
 
     const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
     if (!boundaryAdjusted) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -938,17 +938,17 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.character.move(adjustedDirection, deltaTime);
 
       if (distanceToTarget > 3.0) {
-        if (this.character.getCurrentMotionName() !== 'dash_forward') {
-          this.character.playMotion(DASH_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+          this.character.getMotionController().play(DASH_FORWARD_MOTION);
         }
       } else {
-        if (this.character.getCurrentMotionName() !== 'walk_forward') {
-          this.character.playMotion(WALK_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+          this.character.getMotionController().play(WALK_FORWARD_MOTION);
         }
       }
     } else {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -970,8 +970,8 @@ export class OffBallOffenseAI extends BaseStateAI {
 
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
       if (!boundaryAdjusted) {
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
         return;
       }
@@ -983,23 +983,23 @@ export class OffBallOffenseAI extends BaseStateAI {
         this.character.move(adjustedDirection, deltaTime);
 
         if (distanceToTarget > 3.0) {
-          if (this.character.getCurrentMotionName() !== 'dash_forward') {
-            this.character.playMotion(DASH_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+            this.character.getMotionController().play(DASH_FORWARD_MOTION);
           }
         } else {
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
         }
       } else {
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       }
     } else {
       this.faceTowards(lookAtTarget, deltaTime);
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -1050,8 +1050,8 @@ export class OffBallOffenseAI extends BaseStateAI {
         this.character.setRotation(angle);
       }
 
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       return;
     }
@@ -1074,12 +1074,12 @@ export class OffBallOffenseAI extends BaseStateAI {
       this.character.move(adjustedDirection, deltaTime);
 
       // ダッシュで移動
-      if (this.character.getCurrentMotionName() !== 'dash_forward') {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
     } else {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }

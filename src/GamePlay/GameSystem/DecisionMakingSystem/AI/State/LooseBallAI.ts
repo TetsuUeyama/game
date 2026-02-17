@@ -82,17 +82,17 @@ export class LooseBallAI extends BaseStateAI {
       const adjusted = this.adjustDirectionForCollision(toBall.scale(0.5), deltaTime);
       if (adjusted) {
         this.character.move(adjusted, deltaTime);
-        if (this.character.getCurrentMotionName() !== 'walk_forward') {
-          this.character.playMotion(WALK_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+          this.character.getMotionController().play(WALK_FORWARD_MOTION);
         }
-      } else if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      } else if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
 
     } else if (shouldChase && distToBall <= 0.01) {
       // ── ボール追跡: 到着済み → 待機 ──
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
 
     } else if (shouldChase && distToBall > 2.0) {
@@ -102,18 +102,18 @@ export class LooseBallAI extends BaseStateAI {
       const adjusted = this.adjustDirectionForCollision(toBall, deltaTime);
       if (adjusted) {
         this.character.move(adjusted, deltaTime);
-        if (this.character.getCurrentMotionName() !== 'dash_forward') {
-          this.character.playMotion(DASH_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+          this.character.getMotionController().play(DASH_FORWARD_MOTION);
         }
       } else {
         const alt = this.tryAlternativeDirection(toBall, deltaTime);
         if (alt) {
           this.character.move(alt, deltaTime);
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
-        } else if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        } else if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       }
 
@@ -124,18 +124,18 @@ export class LooseBallAI extends BaseStateAI {
       const adjusted = this.adjustDirectionForCollision(toBall.scale(0.5), deltaTime);
       if (adjusted) {
         this.character.move(adjusted, deltaTime);
-        if (this.character.getCurrentMotionName() !== 'walk_forward') {
-          this.character.playMotion(WALK_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+          this.character.getMotionController().play(WALK_FORWARD_MOTION);
         }
       } else {
         const alt = this.tryAlternativeDirection(toBall, deltaTime);
         if (alt) {
           this.character.move(alt, deltaTime);
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
-        } else if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        } else if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       }
 
@@ -154,11 +154,11 @@ export class LooseBallAI extends BaseStateAI {
         const adjusted = this.adjustDirectionForCollision(repulsion, deltaTime);
         if (adjusted) {
           this.character.move(adjusted, deltaTime);
-          if (this.character.getCurrentMotionName() !== 'walk_forward') {
-            this.character.playMotion(WALK_FORWARD_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+            this.character.getMotionController().play(WALK_FORWARD_MOTION);
           }
-        } else if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        } else if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       } else if (targetPos) {
         const distToTarget = Vector3.Distance(myPosition, targetPos);
@@ -169,8 +169,8 @@ export class LooseBallAI extends BaseStateAI {
           if (toBall.length() > 0.01) {
             this.character.setRotation(Math.atan2(toBall.x, toBall.z));
           }
-          if (this.character.getCurrentMotionName() !== 'idle') {
-            this.character.playMotion(IDLE_MOTION);
+          if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+            this.character.getMotionController().play(IDLE_MOTION);
           }
         } else {
           // 目標位置に移動
@@ -180,21 +180,21 @@ export class LooseBallAI extends BaseStateAI {
           if (adjusted) {
             this.character.move(adjusted, deltaTime);
             if (distToTarget > 5.0) {
-              if (this.character.getCurrentMotionName() !== 'dash_forward') {
-                this.character.playMotion(DASH_FORWARD_MOTION);
+              if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+                this.character.getMotionController().play(DASH_FORWARD_MOTION);
               }
-            } else if (this.character.getCurrentMotionName() !== 'walk_forward') {
-              this.character.playMotion(WALK_FORWARD_MOTION);
+            } else if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+              this.character.getMotionController().play(WALK_FORWARD_MOTION);
             }
           } else {
             const alt = this.tryAlternativeDirection(dir, deltaTime);
             if (alt) {
               this.character.move(alt, deltaTime);
-              if (this.character.getCurrentMotionName() !== 'walk_forward') {
-                this.character.playMotion(WALK_FORWARD_MOTION);
+              if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+                this.character.getMotionController().play(WALK_FORWARD_MOTION);
               }
-            } else if (this.character.getCurrentMotionName() !== 'idle') {
-              this.character.playMotion(IDLE_MOTION);
+            } else if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+              this.character.getMotionController().play(IDLE_MOTION);
             }
           }
         }
@@ -203,8 +203,8 @@ export class LooseBallAI extends BaseStateAI {
         if (toBall.length() > 0.01) {
           this.character.setRotation(Math.atan2(toBall.x, toBall.z));
         }
-        if (this.character.getCurrentMotionName() !== 'idle') {
-          this.character.playMotion(IDLE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+          this.character.getMotionController().play(IDLE_MOTION);
         }
       }
     }

@@ -9,8 +9,8 @@ import {
   LinesMesh,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
-import { CharacterPhysicsManager } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
-import { CharacterBlockJumpController } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
+import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
+import { CharacterBlockJumpController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CharacterBlockJumpController";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 
 // キャラクター設定
@@ -27,7 +27,6 @@ export const CHARACTER_CONFIG = {
 };
 import { MotionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/MotionController";
 import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ActionController";
-import { MotionData } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
@@ -38,8 +37,8 @@ import { CharacterBodyBuilder } from "@/GamePlay/GameSystem/CharacterModel/Chara
 import type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyTypes";
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
 import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
-import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/BalanceController";
-import { MOVEMENT_BALANCE } from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
+import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
+import { MOVEMENT_BALANCE } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
@@ -632,70 +631,6 @@ export class Character {
   }
 
   /**
-   * モーションを再生
-   */
-  public playMotion(motion: MotionData, speed: number = 1.0, blendDuration: number = 0.3): void {
-    this.motionController.play(motion, speed, blendDuration);
-  }
-
-  /**
-   * 位置オフセットをスケールしてモーションを再生
-   */
-  public playMotionWithScale(motion: MotionData, positionScale: number, speed: number = 1.0, blendDuration: number = 0.3): void {
-    this.motionController.playWithScale(motion, positionScale, speed, blendDuration);
-  }
-
-  /**
-   * モーションを停止
-   */
-  public stopMotion(): void {
-    this.motionController.stop();
-  }
-
-  /**
-   * モーションを一時停止
-   */
-  public pauseMotion(): void {
-    this.motionController.pause();
-  }
-
-  /**
-   * モーションを再開
-   */
-  public resumeMotion(): void {
-    this.motionController.resume();
-  }
-
-  /**
-   * モーションの再生時間を直接設定
-   * @param time 設定する時間（秒）
-   */
-  public setMotionTime(time: number): void {
-    this.motionController.setCurrentTime(time);
-  }
-
-  /**
-   * モーションの基準位置を更新（ジャンプ中の慣性移動などで使用）
-   */
-  public updateMotionBasePosition(position: Vector3): void {
-    this.motionController.updateBasePosition({x: position.x, y: position.y, z: position.z});
-  }
-
-  /**
-   * モーションが再生中かどうか
-   */
-  public isPlayingMotion(): boolean {
-    return this.motionController.isPlaying();
-  }
-
-  /**
-   * 現在再生中のモーション名を取得
-   */
-  public getCurrentMotionName(): string | null {
-    return this.motionController.getCurrentMotionName();
-  }
-
-  /**
    * モーションコントローラーを取得
    */
   public getMotionController(): MotionController {
@@ -716,40 +651,7 @@ export class Character {
    * @param b 青 (0.0 - 1.0)
    */
   public setColor(r: number, g: number, b: number): void {
-    const color = new Color3(r, g, b);
-
-    // 全ての身体パーツの色を変更
-    const bodyParts = [
-      this.body.head,
-      this.body.upperBody,
-      this.body.lowerBody,
-      this.body.leftShoulder,
-      this.body.rightShoulder,
-      this.body.leftUpperArm,
-      this.body.rightUpperArm,
-      this.body.leftElbow,
-      this.body.rightElbow,
-      this.body.leftForearm,
-      this.body.rightForearm,
-      this.body.leftHand,
-      this.body.rightHand,
-      this.body.leftHip,
-      this.body.rightHip,
-      this.body.leftThigh,
-      this.body.rightThigh,
-      this.body.leftKnee,
-      this.body.rightKnee,
-      this.body.leftShin,
-      this.body.rightShin,
-      this.body.leftFoot,
-      this.body.rightFoot,
-    ];
-
-    bodyParts.forEach((mesh) => {
-      if (mesh.material && mesh.material instanceof StandardMaterial) {
-        mesh.material.diffuseColor = color;
-      }
-    });
+    CharacterBodyBuilder.setColor(this.body, r, g, b);
   }
 
   /**
@@ -759,21 +661,7 @@ export class Character {
    * @param b 青 (0.0 - 1.0)
    */
   public setBodyColor(r: number, g: number, b: number): void {
-    const color = new Color3(r, g, b);
-
-    // 胴体と肩パーツの色を変更
-    const bodyParts = [
-      this.body.upperBody,
-      this.body.lowerBody,
-      this.body.leftShoulder,
-      this.body.rightShoulder,
-    ];
-
-    bodyParts.forEach((mesh) => {
-      if (mesh.material && mesh.material instanceof StandardMaterial) {
-        mesh.material.diffuseColor = color;
-      }
-    });
+    CharacterBodyBuilder.setBodyColor(this.body, r, g, b);
   }
 
   /**
@@ -1091,7 +979,7 @@ export class Character {
 
     // ボール保持モーションを再生
     const motion = getBallHoldingMotion(this.dominantHand, faceIndex);
-    this.playMotion(motion, 1.0, BALL_HOLDING_CONFIG.ARM_BLEND_DURATION);
+    this.motionController.play(motion, 1.0, BALL_HOLDING_CONFIG.ARM_BLEND_DURATION);
   }
 
   /**

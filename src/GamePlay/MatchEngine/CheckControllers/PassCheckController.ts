@@ -186,8 +186,8 @@ export class PassCheckController {
     this.receiver.setState(CharacterState.OFF_BALL_PLAYER);
 
     // モーションを適用（チェックモード中はCharacterAIが動かないため手動で設定）
-    this.passer.playMotion(DRIBBLE_STANCE_MOTION);
-    this.receiver.playMotion(IDLE_MOTION);
+    this.passer.getMotionController().play(DRIBBLE_STANCE_MOTION);
+    this.receiver.getMotionController().play(IDLE_MOTION);
   }
 
   /**
@@ -226,7 +226,7 @@ export class PassCheckController {
         }
 
         // ディフェンダーのモーションを適用（チェックモード中はCharacterAIが動かないため手動で設定）
-        defender.playMotion(DEFENSE_STANCE_MOTION);
+        defender.getMotionController().play(DEFENSE_STANCE_MOTION);
       }
     }
   }
@@ -243,7 +243,7 @@ export class PassCheckController {
 
     // 移動を停止
     character.velocity = Vector3.Zero();
-    character.stopMotion();
+    character.getMotionController().stop();
   }
 
   /**

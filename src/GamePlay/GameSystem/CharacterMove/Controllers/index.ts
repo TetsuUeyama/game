@@ -1,12 +1,12 @@
 // System Controllers
-export { BalanceController } from "./BalanceController";
-export type { BalanceSphereState, CollisionResult } from "./BalanceController";
+export { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
+export type { BalanceSphereState, CollisionResult } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
 export { CircleSizeController } from "@/GamePlay/GameSystem/CircleSystem/CircleSizeController";
-export { CollisionHandler } from "./CollisionHandler";
+export { CollisionHandler } from "@/GamePlay/GameSystem/CircleSystem/CollisionHandler";
 export { ContestController } from "@/GamePlay/GameSystem/CircleSystem/ContestController";
 export { InputController } from "./InputController";
 export { MotionController } from "./MotionController";
-export { ShotClockController } from "./ShotClockController";
+export { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 
 // Action Controllers
 export { ActionController } from "./Action/ActionController";

@@ -155,14 +155,14 @@ export class OnBallDefenseAI extends BaseStateAI {
 
     // 距離が遠い場合はダッシュ
     if (distanceToIdeal > 2.0) {
-      if (this.character.getCurrentMotionName() !== 'dash_forward') {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
       this.character.move(moveDirection, deltaTime);
     } else {
       // 近い場合はディフェンスモーションで微調整
-      if (this.character.getCurrentMotionName() !== 'defense_stance') {
-        this.character.playMotion(DEFENSE_STANCE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'defense_stance') {
+        this.character.getMotionController().play(DEFENSE_STANCE_MOTION);
       }
       const speedMultiplier = Math.min(1.0, distanceToIdeal / 1.0);
       this.character.move(moveDirection.scale(speedMultiplier), deltaTime);
@@ -193,8 +193,8 @@ export class OnBallDefenseAI extends BaseStateAI {
     this.character.setRotation(defenseRotation);
 
     // 1on1時は常にディフェンスモーションを維持
-    if (this.character.getCurrentMotionName() !== 'defense_stance') {
-      this.character.playMotion(DEFENSE_STANCE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'defense_stance') {
+      this.character.getMotionController().play(DEFENSE_STANCE_MOTION);
     }
 
     // サークル半径を取得
@@ -419,8 +419,8 @@ export class OnBallDefenseAI extends BaseStateAI {
     this.character.move(moveDirection, deltaTime);
 
     // 常にダッシュモーション（抜かれた状態なので急ぐ）
-    if (this.character.getCurrentMotionName() !== 'dash_forward') {
-      this.character.playMotion(DASH_FORWARD_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+      this.character.getMotionController().play(DASH_FORWARD_MOTION);
     }
   }
 

@@ -6,7 +6,7 @@ import {BaseStateAI} from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/State/B
 import {PlayerStateManager} from "@/GamePlay/GameSystem/StatusCheckSystem";
 import {ShootingController} from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 import {FeintController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
-import {ShotClockController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
+import {ShotClockController} from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import {ShootingUtils, SHOOT_RANGE} from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
 import {PassUtils} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassConfig";
 import {DRIBBLE_STANCE_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
@@ -318,8 +318,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
     }
 
     // ドリブル構えモーションを維持
-    if (this.character.getCurrentMotionName() !== "dribble_stance") {
-      this.character.playMotion(DRIBBLE_STANCE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== "dribble_stance") {
+      this.character.getMotionController().play(DRIBBLE_STANCE_MOTION);
     }
     // AI移動をクリア（OneOnOneBattleController等との競合を防ぐ）
     this.character.clearAIMovement();
@@ -764,8 +764,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
 
     if (distanceToGoal > 0.5) {
       // ダッシュモーションで突進
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
 
       // 境界チェックのみ行い、全速力でゴールへ
@@ -1065,8 +1065,8 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
 
     if (toTarget.length() > 0.5) {
       // ダッシュモーションで前進
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
 
       const direction = toTarget.normalize();
