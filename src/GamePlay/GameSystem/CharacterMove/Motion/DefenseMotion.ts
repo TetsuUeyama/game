@@ -93,6 +93,12 @@ export const BLOCK_SHOT_MOTION: MotionData = {
   duration: BLOCK_T4,
   loop: false,
   keyframes: buildKeyframes(BLOCK_SHOT_JOINT_ANIMATIONS, BLOCK_SHOT_POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.1,
+    peakTime: 0.30,     // 素早く頂点へ
+    landingTime: 0.9,
+    peakHeight: 1.0,
+  },
   priorities: [
     { jointName: "rightShoulder", priority: 10 },
     { jointName: "leftShoulder", priority: 10 },

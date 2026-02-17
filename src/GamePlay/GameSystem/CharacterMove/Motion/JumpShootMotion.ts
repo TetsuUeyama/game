@@ -96,6 +96,13 @@ export const JUMP_SHOOT_LAYUP_MOTION: MotionData = {
   duration: JS_LAYUP_T3,
   loop: false,
   keyframes: buildKeyframes(JUMP_SHOOT_LAYUP_JOINT_ANIMATIONS, JUMP_SHOOT_LAYUP_POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.0,
+    peakTime: 0.0,       // 頂点から開始（下降のみ）
+    landingTime: 0.55,
+    peakHeight: 1.0,
+    hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
+  },
   priorities: [
     { jointName: "rightShoulder", priority: 10 },
     { jointName: "rightElbow", priority: 10 },
@@ -198,6 +205,13 @@ export const JUMP_SHOOT_DUNK_MOTION: MotionData = {
   duration: JS_DUNK_T3,
   loop: false,
   keyframes: buildKeyframes(JUMP_SHOOT_DUNK_JOINT_ANIMATIONS, JUMP_SHOOT_DUNK_POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.0,
+    peakTime: 0.0,       // 頂点から開始（下降のみ）
+    landingTime: 0.6,
+    peakHeight: 1.5,
+    hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
+  },
   priorities: [
     { jointName: "rightShoulder", priority: 10 },
     { jointName: "rightElbow", priority: 10 },
@@ -302,6 +316,13 @@ export const JUMP_SHOOT_MID_MOTION: MotionData = {
   duration: JS_MID_T3,
   loop: false,
   keyframes: buildKeyframes(JUMP_SHOOT_MID_JOINT_ANIMATIONS, JUMP_SHOOT_MID_POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.0,
+    peakTime: 0.0,       // 頂点から開始（下降のみ）
+    landingTime: 0.5,
+    peakHeight: 0.8,
+    hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
+  },
   priorities: [
     { jointName: "rightShoulder", priority: 10 },
     { jointName: "rightElbow", priority: 10 },

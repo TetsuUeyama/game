@@ -60,6 +60,23 @@ export interface JointPriority {
 }
 
 /**
+ * ジャンプ物理Y軌道設定
+ *
+ * 線形補間の代わりに放物線（2区間パラボラ）でY位置を計算する。
+ * 上昇は速く、頂点付近で滞空し、下降はゆっくり加速する自然な軌道を生成。
+ *
+ * 上昇: y = peakHeight * (2p - p²)    p = (t - liftoffTime) / (peakTime - liftoffTime)
+ * 下降: y = peakHeight * (1 - p²)     p = (t - peakTime) / (landingTime - peakTime)
+ */
+export interface JumpPhysics {
+  liftoffTime: number;  // 離地タイミング（秒）
+  peakTime: number;     // 頂点タイミング（秒）- liftoffTime寄りで上昇が速くなる
+  landingTime: number;  // 着地タイミング（秒）
+  peakHeight: number;   // 頂点の高さ（m）
+  hangTime?: number;    // 頂点での滞空時間（秒）- 下降開始を遅らせる（デフォルト: 0）
+}
+
+/**
  * モーションデータ
  */
 export interface MotionData {
@@ -68,6 +85,7 @@ export interface MotionData {
   loop: boolean; // ループ再生するか
   keyframes: Keyframe[]; // キーフレームの配列
   priorities?: JointPriority[]; // 部位の優先度（オプション）
+  jumpPhysics?: JumpPhysics; // ジャンプ物理Y軌道（設定時はY補間を放物線に置換）
 }
 
 /**
