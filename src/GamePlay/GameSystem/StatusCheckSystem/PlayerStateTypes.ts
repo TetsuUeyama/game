@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
-import { PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /**
  * オフェンス時の役割

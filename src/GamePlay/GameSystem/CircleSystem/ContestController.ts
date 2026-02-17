@@ -1,8 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CONTEST_CONFIG, ContestStatType } from "@/GamePlay/GameSystem/CharacterMove/Config/ContestConfig";
-import { FieldGridUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig";
+import { CONTEST_CONFIG, ContestStatType } from "@/GamePlay/GameSystem/CircleSystem/ContestConfig";
+import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 
 // 設定をre-export（既存のインポートを壊さないため）
 export { CONTEST_CONFIG };

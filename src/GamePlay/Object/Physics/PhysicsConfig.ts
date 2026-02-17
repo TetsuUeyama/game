@@ -15,6 +15,7 @@ export const PhysicsConstants = {
   // 重力
   GRAVITY: new Vector3(0, -9.81, 0),
   GRAVITY_MAGNITUDE: 9.81,
+  TIME_STEP: 1 / 60, // 物理演算のタイムステップ（秒）
 
   // ボール物理パラメータ（character-move用: 実寸）
   // NBA規定: 直径約24cm、質量567-650g、反発係数0.80-0.83（1.8mから落として1.2-1.4mバウンド）

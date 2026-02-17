@@ -8,13 +8,22 @@ import {
   DynamicTexture,
   PhysicsAggregate,
   PhysicsShapeType,
-  PhysicsMaterialCombineMode,
   VertexData,
 } from "@babylonjs/core";
-import { FIELD_CONFIG, GOAL_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
-import { GRID_CONFIG, OUTER_GRID_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig";
+import { Goal, GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
+import { FIELD_CONFIG, GRID_CONFIG, OUTER_GRID_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { Net } from "@/GamePlay/Object/Entities/Net";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
+
+// 安全境界設定（AI移動時のフィールド端からのマージン）
+export const SAFE_BOUNDARY_CONFIG = {
+  margin: 1.5, // フィールド端からのマージン（m）
+  // 計算済みの安全境界（FIELD_CONFIG.width/2 - margin, FIELD_CONFIG.length/2 - margin）
+  minX: -6.0,  // -7.5 + 1.5
+  maxX: 6.0,   // 7.5 - 1.5
+  minZ: -13.5, // -15 + 1.5
+  maxZ: 13.5,  // 15 - 1.5
+} as const;
 
 /**
  * NBA 3ポイントライン設定
@@ -226,14 +235,8 @@ const TACTICAL_ZONE_CONFIG = {
 export class Field {
   private scene: Scene;
   public mesh: Mesh;
-  private goal1Backboard: Mesh; // ゴール1のバックボード
-  private goal1Rim: Mesh; // ゴール1のリム
-  private goal1Net: Net; // ゴール1のネット
-  private goal1TargetMarker: Mesh; // ゴール1のシュート目標マーカー
-  private goal2Backboard: Mesh; // ゴール2のバックボード
-  private goal2Rim: Mesh; // ゴール2のリム
-  private goal2Net: Net; // ゴール2のネット
-  private goal2TargetMarker: Mesh; // ゴール2のシュート目標マーカー
+  private goal1: Goal; // ゴール1（+Z側）
+  private goal2: Goal; // ゴール2（-Z側）
   private centerCircle: Mesh; // センターサークル
   private threePointLines: Mesh[] = []; // 3ポイントライン
   private paintAreaLines: Mesh[] = []; // ペイントエリア（キー）ライン
@@ -244,10 +247,6 @@ export class Field {
 
   // 物理ボディ
   private groundPhysics: PhysicsAggregate | null = null;
-  private backboard1Physics: PhysicsAggregate | null = null;
-  private backboard2Physics: PhysicsAggregate | null = null;
-  private rim1Physics: PhysicsAggregate | null = null;
-  private rim2Physics: PhysicsAggregate | null = null;
   private outerAreaPhysics: PhysicsAggregate[] = []; // 外側マスエリアの物理ボディ
 
   // 境界壁（ボールがフィールド外に出るのを防ぐ）
@@ -280,18 +279,10 @@ export class Field {
     this.createGridLabels();
 
     // ゴール1（奥側、+Z）を作成
-    const goal1 = this.createBasketballGoal(1);
-    this.goal1Backboard = goal1.backboard;
-    this.goal1Rim = goal1.rim;
-    this.goal1Net = goal1.net;
-    this.goal1TargetMarker = goal1.targetMarker;
+    this.goal1 = new Goal(scene, 1);
 
     // ゴール2（手前側、-Z）を作成
-    const goal2 = this.createBasketballGoal(2);
-    this.goal2Backboard = goal2.backboard;
-    this.goal2Rim = goal2.rim;
-    this.goal2Net = goal2.net;
-    this.goal2TargetMarker = goal2.targetMarker;
+    this.goal2 = new Goal(scene, 2);
   }
 
   /**
@@ -1411,140 +1402,45 @@ export class Field {
   }
 
   /**
-   * バスケットゴールを作成
-   * @param goalNumber ゴール番号（1または2）
-   */
-  private createBasketballGoal(goalNumber: number): { backboard: Mesh; rim: Mesh; net: Net; targetMarker: Mesh } {
-    const fieldHalfLength = FIELD_CONFIG.length / 2;
-
-    // ゴール1は+Z側（奥）、ゴール2は-Z側（手前）
-    const zSign = goalNumber === 1 ? 1 : -1;
-    const zPosition = zSign * (fieldHalfLength - GOAL_CONFIG.backboardDistance);
-
-    // バックボード
-    const backboard = MeshBuilder.CreateBox(
-      `backboard-${goalNumber}`,
-      {
-        width: GOAL_CONFIG.backboardWidth,
-        height: GOAL_CONFIG.backboardHeight,
-        depth: GOAL_CONFIG.backboardDepth,
-      },
-      this.scene
-    );
-
-    backboard.position = new Vector3(
-      0,
-      GOAL_CONFIG.rimHeight + GOAL_CONFIG.backboardHeight / 2,
-      zPosition
-    );
-
-    const backboardMaterial = new StandardMaterial(
-      `backboard-material-${goalNumber}`,
-      this.scene
-    );
-    // goal1（+Z側）は青チームが攻める → 青色
-    // goal2（-Z側）は赤チームが攻める → 赤色
-    if (goalNumber === 1) {
-      backboardMaterial.diffuseColor = new Color3(0.3, 0.5, 1); // 青
-      backboardMaterial.emissiveColor = new Color3(0.05, 0.1, 0.3);
-    } else {
-      backboardMaterial.diffuseColor = new Color3(1, 0.3, 0.3); // 赤
-      backboardMaterial.emissiveColor = new Color3(0.3, 0.05, 0.05);
-    }
-    backboardMaterial.alpha = 0.6;
-    backboard.material = backboardMaterial;
-
-    // リム（輪）
-    const rim = MeshBuilder.CreateTorus(
-      `rim-${goalNumber}`,
-      {
-        diameter: GOAL_CONFIG.rimDiameter,
-        thickness: GOAL_CONFIG.rimThickness,
-        tessellation: 32,
-      },
-      this.scene
-    );
-
-    // リムの位置：バックボードからrimOffset分だけコート内側に配置
-    rim.position = new Vector3(
-      0,
-      GOAL_CONFIG.rimHeight,
-      zPosition - zSign * GOAL_CONFIG.rimOffset
-    );
-
-    const rimMaterial = new StandardMaterial(`rim-material-${goalNumber}`, this.scene);
-    rimMaterial.diffuseColor = Color3.FromHexString(GOAL_CONFIG.rimColor);
-    rimMaterial.emissiveColor = Color3.FromHexString(GOAL_CONFIG.rimColor).scale(0.3);
-    rim.material = rimMaterial;
-
-    // シュート目標マーカー（リム中心の、ボール半径分高い位置）
-    const targetMarker = MeshBuilder.CreateSphere(
-      `target-marker-${goalNumber}`,
-      {
-        diameter: 0.08, // 小さな点（直径8cm）
-        segments: 8,
-      },
-      this.scene
-    );
-    targetMarker.position = new Vector3(
-      0,
-      // GOAL_CONFIG.rimHeight + PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
-      GOAL_CONFIG.rimHeight + 10* PhysicsConstants.BALL.RADIUS, // リム高さ + ボール半径
-      zPosition - zSign * GOAL_CONFIG.rimOffset // リムと同じZ位置
-    );
-    const markerMaterial = new StandardMaterial(`marker-material-${goalNumber}`, this.scene);
-    markerMaterial.diffuseColor = new Color3(1, 1, 0); // 黄色
-    markerMaterial.emissiveColor = new Color3(1, 1, 0); // 発光
-    targetMarker.material = markerMaterial;
-    targetMarker.isPickable = false; // クリック判定なし
-
-    // ネット
-    const rimCenter = rim.position.clone();
-    const net = new Net(this.scene, rimCenter, goalNumber === 1 ? "goal1" : "goal2");
-
-    return { backboard, rim, net, targetMarker };
-  }
-
-  /**
    * ゴール1のバックボードを取得
    */
   public getGoal1Backboard(): Mesh {
-    return this.goal1Backboard;
+    return this.goal1.getBackboard();
   }
 
   /**
    * ゴール2のバックボードを取得
    */
   public getGoal2Backboard(): Mesh {
-    return this.goal2Backboard;
+    return this.goal2.getBackboard();
   }
 
   /**
    * ゴール1のリムを取得
    */
   public getGoal1Rim(): Mesh {
-    return this.goal1Rim;
+    return this.goal1.getRim();
   }
 
   /**
    * ゴール2のリムを取得
    */
   public getGoal2Rim(): Mesh {
-    return this.goal2Rim;
+    return this.goal2.getRim();
   }
 
   /**
    * ゴール1のネットを取得
    */
   public getGoal1Net(): Net {
-    return this.goal1Net;
+    return this.goal1.getNet();
   }
 
   /**
    * ゴール2のネットを取得
    */
   public getGoal2Net(): Net {
-    return this.goal2Net;
+    return this.goal2.getNet();
   }
 
   // ============================================
@@ -1559,8 +1455,8 @@ export class Field {
   public getAttackingGoalRim(team: 'ally' | 'enemy'): Vector3 {
     // allyチームはgoal1（+Z方向）を攻撃
     // enemyチームはgoal2（-Z方向）を攻撃
-    const rim = team === 'ally' ? this.goal1Rim : this.goal2Rim;
-    return rim.position.clone();
+    const goal = team === 'ally' ? this.goal1 : this.goal2;
+    return goal.getRimPosition();
   }
 
   /**
@@ -1571,8 +1467,8 @@ export class Field {
   public getDefendingGoalRim(team: 'ally' | 'enemy'): Vector3 {
     // allyチームはgoal2（-Z方向）を守備
     // enemyチームはgoal1（+Z方向）を守備
-    const rim = team === 'ally' ? this.goal2Rim : this.goal1Rim;
-    return rim.position.clone();
+    const goal = team === 'ally' ? this.goal2 : this.goal1;
+    return goal.getRimPosition();
   }
 
   /**
@@ -1581,8 +1477,8 @@ export class Field {
    * @returns バックボードのワールド座標
    */
   public getAttackingBackboard(team: 'ally' | 'enemy'): Vector3 {
-    const backboard = team === 'ally' ? this.goal1Backboard : this.goal2Backboard;
-    return backboard.position.clone();
+    const goal = team === 'ally' ? this.goal1 : this.goal2;
+    return goal.getBackboardPosition();
   }
 
   /**
@@ -1591,8 +1487,8 @@ export class Field {
    * @returns バックボードのワールド座標
    */
   public getDefendingBackboard(team: 'ally' | 'enemy'): Vector3 {
-    const backboard = team === 'ally' ? this.goal2Backboard : this.goal1Backboard;
-    return backboard.position.clone();
+    const goal = team === 'ally' ? this.goal2 : this.goal1;
+    return goal.getBackboardPosition();
   }
 
   /**
@@ -1650,8 +1546,8 @@ export class Field {
    * 更新（ネットの物理シミュレーション）
    */
   public update(deltaTime: number): void {
-    this.goal1Net.update(deltaTime);
-    this.goal2Net.update(deltaTime);
+    this.goal1.update(deltaTime);
+    this.goal2.update(deltaTime);
   }
 
   /**
@@ -1676,71 +1572,9 @@ export class Field {
       this.scene
     );
 
-    // バックボード1の静的物理ボディ
-    this.backboard1Physics = new PhysicsAggregate(
-      this.goal1Backboard,
-      PhysicsShapeType.BOX,
-      {
-        mass: 0,
-        restitution: PhysicsConstants.BACKBOARD.RESTITUTION,
-        friction: PhysicsConstants.BACKBOARD.FRICTION,
-      },
-      this.scene
-    );
-
-    // バックボード2の静的物理ボディ
-    this.backboard2Physics = new PhysicsAggregate(
-      this.goal2Backboard,
-      PhysicsShapeType.BOX,
-      {
-        mass: 0,
-        restitution: PhysicsConstants.BACKBOARD.RESTITUTION,
-        friction: PhysicsConstants.BACKBOARD.FRICTION,
-      },
-      this.scene
-    );
-
-    // リム1の静的物理ボディ（トーラス形状はMESHで近似）
-    this.rim1Physics = new PhysicsAggregate(
-      this.goal1Rim,
-      PhysicsShapeType.MESH,
-      {
-        mass: 0,
-        restitution: PhysicsConstants.RIM.RESTITUTION,
-        friction: PhysicsConstants.RIM.FRICTION,
-      },
-      this.scene
-    );
-    // マテリアル設定: 反発係数を両オブジェクトの積で計算
-    this.rim1Physics.shape.material = {
-      restitution: PhysicsConstants.RIM.RESTITUTION,
-      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-      friction: PhysicsConstants.RIM.FRICTION,
-      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-    };
-
-    // リム2の静的物理ボディ
-    this.rim2Physics = new PhysicsAggregate(
-      this.goal2Rim,
-      PhysicsShapeType.MESH,
-      {
-        mass: 0,
-        restitution: PhysicsConstants.RIM.RESTITUTION,
-        friction: PhysicsConstants.RIM.FRICTION,
-      },
-      this.scene
-    );
-    // マテリアル設定: 反発係数を両オブジェクトの積で計算
-    this.rim2Physics.shape.material = {
-      restitution: PhysicsConstants.RIM.RESTITUTION,
-      restitutionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-      friction: PhysicsConstants.RIM.FRICTION,
-      frictionCombine: PhysicsMaterialCombineMode.MULTIPLY,
-    };
-
-    // ネットの物理を初期化
-    this.goal1Net.initializePhysics();
-    this.goal2Net.initializePhysics();
+    // ゴール1・2の物理を初期化（バックボード、リム、ネット）
+    this.goal1.initializePhysics();
+    this.goal2.initializePhysics();
 
     // 外側マスエリアの静的物理ボディ（スローイン時のボール着地用）
     for (const outerMesh of this.outerAreaMeshes) {
@@ -1779,10 +1613,6 @@ export class Field {
   public dispose(): void {
     // 物理ボディを破棄
     this.groundPhysics?.dispose();
-    this.backboard1Physics?.dispose();
-    this.backboard2Physics?.dispose();
-    this.rim1Physics?.dispose();
-    this.rim2Physics?.dispose();
     for (const physics of this.outerAreaPhysics) {
       physics?.dispose();
     }
@@ -1810,14 +1640,8 @@ export class Field {
       zone.dispose();
     }
     this.tacticalZones = [];
-    this.goal1Backboard.dispose();
-    this.goal1Rim.dispose();
-    this.goal1Net.dispose();
-    this.goal1TargetMarker.dispose();
-    this.goal2Backboard.dispose();
-    this.goal2Rim.dispose();
-    this.goal2Net.dispose();
-    this.goal2TargetMarker.dispose();
+    this.goal1.dispose();
+    this.goal2.dispose();
     // グリッド線を破棄
     for (const line of this.gridLines) {
       line.dispose();

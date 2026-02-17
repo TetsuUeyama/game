@@ -4,7 +4,7 @@ import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateManager";
 import { PlayerStateSnapshot } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
-import { PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /** ルーズボール追跡者の最大人数（チームあたり） */
 const MAX_CHASERS_PER_TEAM = 2;

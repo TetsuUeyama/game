@@ -1,8 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
-import { PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 import { getDistance2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { PlayerStateSnapshot, TeamState, RadiusQueryOptions, OffenseRole, DefenseRole, DefenseScheme } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 

@@ -5,8 +5,9 @@
  * オフェンス判断を構造化するための設定
  */
 
-import { FIELD_CONFIG, GOAL_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
-import { isInPaintArea } from "@/GamePlay/GameSystem/CharacterMove/Config/TacticalZoneConfig";
+import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+import { isInPaintArea } from "@/GamePlay/GameSystem/DecisionMakingSystem/TacticalZoneConfig";
 
 // ==============================
 // Enums

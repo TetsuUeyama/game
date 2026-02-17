@@ -1,4 +1,4 @@
-import { FaceConfig, DEFAULT_FACE_CONFIG, HairStyle, BeardStyle, EyeStyle, MouthStyle } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { FaceConfig, DEFAULT_FACE_CONFIG, HairStyle, BeardStyle, EyeStyle, MouthStyle } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 
 /**
  * FaceConfig から Canvas 2D API で128x128のカートゥーン顔を描画し、data URL を返す

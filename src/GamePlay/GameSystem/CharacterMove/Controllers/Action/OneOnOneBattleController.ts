@@ -1,8 +1,8 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { DRIBBLE_CONFIG, DribbleUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleConfig";
-import { ONE_ON_ONE_BATTLE, DefenseUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DefenseConfig";
+import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
+import { ONE_ON_ONE_BATTLE, DefenseUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenseConfig";
 import {
   OneOnOneResult,
   ONE_ON_ONE_BATTLE_CONFIG,
@@ -195,7 +195,7 @@ export class OneOnOneBattleController {
 
         // DribbleUtilsを使用してドリブル速度を計算
         const offenseData = onBallPlayer.playerData;
-        const moveSpeed = DribbleUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
+        const moveSpeed = DribbleBreakthroughUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
 
         // フェイント判定
         const isFeint = this.checkFeint(onBallPlayer);
@@ -209,7 +209,7 @@ export class OneOnOneBattleController {
         } else {
           // DribbleUtilsを使用してオフェンス側の反応遅延時間を計算（reflexesベース）
           const offensePlayerData = onBallPlayer.playerData;
-          const offenseDelayMs = DribbleUtils.calculateReflexesDelay(offensePlayerData?.stats.reflexes);
+          const offenseDelayMs = DribbleBreakthroughUtils.calculateReflexesDelay(offensePlayerData?.stats.reflexes);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
 
@@ -261,7 +261,7 @@ export class OneOnOneBattleController {
     // ボールが0番面の時、ランダムでドリブル突破を実行（ActionController経由）
     // 有利/不利状態を考慮（前回のサイコロ結果を使用）
     const currentFace = onBallPlayer.getCurrentBallFace();
-    let breakthroughChance: number = DRIBBLE_CONFIG.BREAKTHROUGH_CHANCE;
+    let breakthroughChance: number = DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_CHANCE;
     // オフェンス有利時は突破を試みる確率UP、ディフェンス有利時はDOWN
     breakthroughChance = AdvantageUtils.adjustSuccessRate(
       breakthroughChance,
@@ -293,7 +293,7 @@ export class OneOnOneBattleController {
 
     // DribbleUtilsを使用してオフェンス速度を計算
     const offensePlayerData = onBallPlayer.playerData;
-    const moveSpeed = DribbleUtils.calculateDribblingSpeed(offensePlayerData?.stats.dribblingspeed);
+    const moveSpeed = DribbleBreakthroughUtils.calculateDribblingSpeed(offensePlayerData?.stats.dribblingspeed);
 
     // フェイント判定
     const isFeint = this.checkFeint(onBallPlayer);
@@ -446,7 +446,7 @@ export class OneOnOneBattleController {
     // DribbleUtilsを使用してディフェンダーの反応遅延時間を計算（reflexesベース）
     // 重心が安定してから実行されるため、ここでは純粋な反応時間のみ
     const defenderPlayerData = defender.playerData;
-    const reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
+    const reactionDelayMs = DribbleBreakthroughUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
 
     defender.setAIMovement(normalizedDirection, speed, reactionDelayMs);
   }
@@ -463,10 +463,10 @@ export class OneOnOneBattleController {
     // DribbleUtilsを使用して反応遅延時間を計算（reflexesベース）
     // 重心が安定してから実行されるため、ここでは純粋な反応時間のみ
     const defenderPlayerData = defender.playerData;
-    const reactionDelayMs = DribbleUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
+    const reactionDelayMs = DribbleBreakthroughUtils.calculateReflexesDelay(defenderPlayerData?.stats.reflexes);
 
     const moveDirection = feintDirection.clone().normalize();
-    const feintSpeed = speed * DRIBBLE_CONFIG.FEINT_SPEED_MULTIPLIER;
+    const feintSpeed = speed * DRIBBLE_BREAKTHROUGH_CONFIG.FEINT_SPEED_MULTIPLIER;
     defender.setAIMovement(moveDirection, feintSpeed, reactionDelayMs);
   }
 
@@ -503,7 +503,7 @@ export class OneOnOneBattleController {
   public checkFeint(offensePlayer: Character): boolean {
     const playerData = offensePlayer.playerData;
     // DribbleUtilsを使用してフェイント確率を計算
-    let feintChance = DribbleUtils.calculateFeintChance(playerData?.stats.technique);
+    let feintChance = DribbleBreakthroughUtils.calculateFeintChance(playerData?.stats.technique);
 
     // 有利/不利状態を考慮
     // オフェンス有利時はフェイント成功率UP、ディフェンス有利時はDOWN
@@ -734,8 +734,8 @@ export class OneOnOneBattleController {
 
           // DribbleUtilsを使用して速度と遅延を計算（reflexesベース）
           const offenseData = onBallPlayer.playerData;
-          const moveSpeed = DribbleUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
-          const offenseDelayMs = DribbleUtils.calculateReflexesDelay(offenseData?.stats.reflexes);
+          const moveSpeed = DribbleBreakthroughUtils.calculateDribblingSpeed(offenseData?.stats.dribblingspeed);
+          const offenseDelayMs = DribbleBreakthroughUtils.calculateReflexesDelay(offenseData?.stats.reflexes);
 
           onBallPlayer.setAIMovement(newDirection, moveSpeed, offenseDelayMs);
           this.setDefenderReaction(onBallPlayer, onBallDefender, newDirection, moveSpeed, true);

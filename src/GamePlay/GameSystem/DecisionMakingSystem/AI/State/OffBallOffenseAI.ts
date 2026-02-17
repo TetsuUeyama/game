@@ -7,20 +7,20 @@ import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
-import { Formation, PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { PassTrajectoryCalculator, Vec3 } from "@/GamePlay/Object/Physics/Trajectory/PassTrajectoryCalculator";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { PassType, PASS_TYPE_CONFIGS } from "@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig";
 import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
-import { SAFE_BOUNDARY_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { SAFE_BOUNDARY_CONFIG } from "@/GamePlay/Object/Entities/Field";
 import {
   TacticalZoneType,
   getZonePosition,
   isZonePairOccupied,
   getZonesWithPriority,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/TacticalZoneConfig";
+} from "@/GamePlay/GameSystem/DecisionMakingSystem/TacticalZoneConfig";
 
 /**
  * オフボールオフェンス時のAI
@@ -68,23 +68,6 @@ export class OffBallOffenseAI extends BaseStateAI {
    */
   public setRiskAssessmentSystem(system: RiskAssessmentSystem): void {
     this.riskAssessment = system;
-  }
-
-  /**
-   * フォーメーションを設定（戦術ゾーンベースに移行したためリセットのみ）
-   */
-  public setFormation(_formation: Formation): void {
-    // フォーメーション変更時は目標位置をリセット
-    this.resetTargetPosition();
-  }
-
-  /**
-   * フォーメーション名でフォーメーションを設定（戦術ゾーンベースに移行）
-   */
-  public setFormationByName(_name: string): boolean {
-    // フォーメーション変更時は目標位置をリセット
-    this.resetTargetPosition();
-    return true;
   }
 
   /**

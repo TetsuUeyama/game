@@ -7,10 +7,10 @@ import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
-import { Formation, FormationUtils, PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { Formation, FormationUtils, PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 import { DefenseRole, OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 
-import { TacticalZoneType, getZonePosition } from "@/GamePlay/GameSystem/CharacterMove/Config/TacticalZoneConfig";
+import { TacticalZoneType, getZonePosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/TacticalZoneConfig";
 
 /**
  * オフボールディフェンダー時のAI
@@ -49,25 +49,6 @@ export class OffBallDefenseAI extends BaseStateAI {
   ) {
     super(character, ball, allCharacters, field, playerState);
     this.currentFormation = FormationUtils.getDefaultDefenseFormation();
-  }
-
-  /**
-   * フォーメーションを設定
-   */
-  public setFormation(formation: Formation): void {
-    this.currentFormation = formation;
-  }
-
-  /**
-   * フォーメーション名でフォーメーションを設定
-   */
-  public setFormationByName(name: string): boolean {
-    const formation = FormationUtils.getDefenseFormation(name);
-    if (formation) {
-      this.currentFormation = formation;
-      return true;
-    }
-    return false;
   }
 
   /**

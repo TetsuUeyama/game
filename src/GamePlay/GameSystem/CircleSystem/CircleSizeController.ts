@@ -3,7 +3,7 @@ import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import {
   CircleSituation,
   CircleSizeUtils,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/CircleSizeConfig";
+} from "@/GamePlay/GameSystem/CircleSystem/CircleSizeConfig";
 
 /**
  * キャラクターのサークルサイズ状態

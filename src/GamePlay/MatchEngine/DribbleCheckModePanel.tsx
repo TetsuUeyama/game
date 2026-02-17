@@ -10,7 +10,7 @@ import {
 } from '@/GamePlay/MatchEngine/CheckControllers/DribbleCheckController';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
-import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 import { FeintController } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController';
 
 interface DribbleCheckModePanelProps {

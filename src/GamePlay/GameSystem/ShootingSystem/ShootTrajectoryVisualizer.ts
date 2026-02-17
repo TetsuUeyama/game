@@ -20,10 +20,10 @@ import {
   SHOOT_TYPE_CONFIGS,
   SHOOT_TRAJECTORY_CONFIG,
   getSuccessRateColor,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/ShootTrajectoryConfig";
+} from "@/GamePlay/GameSystem/ShootingSystem/ShootTrajectoryConfig";
 import { ParabolaUtils } from "@/GamePlay/Object/Physics/Trajectory/ParabolaUtils";
 import { DeterministicTrajectory } from "@/GamePlay/Object/Physics/Trajectory/DeterministicTrajectory";
-import { SHOOT_RANGE, SHOOT_ANGLE } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ShootingConfig";
+import { SHOOT_RANGE, SHOOT_ANGLE } from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
 import { normalizeAngle, getDistance2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 

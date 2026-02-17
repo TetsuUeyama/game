@@ -18,7 +18,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import {
   CatchScenario,
   type CatchCandidate,
@@ -31,7 +31,7 @@ import {
   BALL_RADIUS,
   LOOSE_BALL_PICKUP,
   PALM_CATCH,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/BallCatchConfig";
+} from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchConfig";
 import { getDistance2D, getDistance3D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 
 /**

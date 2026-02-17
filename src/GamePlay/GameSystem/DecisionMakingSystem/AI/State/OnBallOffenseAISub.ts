@@ -4,22 +4,22 @@ import {Ball} from "@/GamePlay/Object/Entities/Ball";
 import {Field} from "@/GamePlay/Object/Entities/Field";
 import {BaseStateAI} from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/State/BaseStateAI";
 import {PlayerStateManager} from "@/GamePlay/GameSystem/StatusCheckSystem";
-import {ShootingController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
+import {ShootingController} from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 import {FeintController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 import {ShotClockController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
-import {ShootingUtils, SHOOT_RANGE} from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ShootingConfig";
+import {ShootingUtils, SHOOT_RANGE} from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
 import {PassUtils} from "@/GamePlay/GameSystem/CharacterMove/Config/PassConfig";
 import {DRIBBLE_STANCE_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 import {DASH_FORWARD_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import {RiskAssessmentSystem} from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { normalizeAngle, getDistance2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { getTeammates, getOpponents } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
-import { isInPaintArea } from "@/GamePlay/GameSystem/CharacterMove/Config/TacticalZoneConfig";
+import { isInPaintArea } from "@/GamePlay/GameSystem/DecisionMakingSystem/TacticalZoneConfig";
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";
 import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
 import { PositionBehaviorParams, getPositionBehavior, getShootAggressiveness } from "@/GamePlay/GameSystem/CharacterMove/Config/PositionBehaviorConfig";
-import { PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /**
  * OnBallOffenseAIのベースクラス

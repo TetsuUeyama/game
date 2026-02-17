@@ -5,7 +5,8 @@
  * Field.tsのTACTICAL_ZONE_CONFIGと同じ幾何計算を使用
  */
 
-import { FIELD_CONFIG, GOAL_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 
 /**
  * 3ポイントライン設定（Field.tsと同じ値）

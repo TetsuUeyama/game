@@ -6,7 +6,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import {
   CENTER_CIRCLE,
   JUMP_BALL_POSITIONS,
@@ -15,8 +15,8 @@ import {
   JUMP_BALL_CONTEST,
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/JumpBallConfig";
-import { FIELD_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+} from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 

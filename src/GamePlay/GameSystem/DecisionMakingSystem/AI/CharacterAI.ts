@@ -1,20 +1,19 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { Field } from "@/GamePlay/Object/Entities/Field";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
-import { ShootingController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
+import { ShootingController } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";
 import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
 import { DefenseActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DefenseActionController";
 import { LooseBallController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/LooseBallController";
 import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
-import { FieldGridUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig";
-import { BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/CharacterAIConfig";
+import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
-import { DribbleUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleConfig";
+import { DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
 import {
   LooseBallAI,
   OnBallOffenseAI,
@@ -22,7 +21,6 @@ import {
   OffBallOffenseAI,
   OffBallDefenseAI,
 } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI";
-import { Formation } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
 import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
@@ -65,8 +63,6 @@ export class CharacterAI {
     this.offBallOffenseAI = new OffBallOffenseAI(character, ball, allCharacters, field, playerState);
     this.offBallDefenseAI = new OffBallDefenseAI(character, ball, allCharacters, field, playerState);
 
-    // オフェンス側のボール保持位置を設定
-    this.character.setBallHoldingFaces([...BALL_HOLDING_CONFIG.OFFENSE_HOLDING_FACES]);
   }
 
   /**
@@ -148,33 +144,6 @@ export class CharacterAI {
     this.onBallOffenseAI.setTargetPositionOverride(position);
   }
 
-  /**
-   * オフェンスフォーメーションを設定
-   */
-  public setOffenseFormation(formation: Formation): void {
-    this.offBallOffenseAI.setFormation(formation);
-  }
-
-  /**
-   * オフェンスフォーメーションを名前で設定
-   */
-  public setOffenseFormationByName(name: string): boolean {
-    return this.offBallOffenseAI.setFormationByName(name);
-  }
-
-  /**
-   * ディフェンスフォーメーションを設定
-   */
-  public setDefenseFormation(formation: Formation): void {
-    this.offBallDefenseAI.setFormation(formation);
-  }
-
-  /**
-   * ディフェンスフォーメーションを名前で設定
-   */
-  public setDefenseFormationByName(name: string): boolean {
-    return this.offBallDefenseAI.setFormationByName(name);
-  }
 
   /**
    * パス軌道可視化を設定
@@ -556,7 +525,7 @@ export class CharacterAI {
     } else {
       // 他の状態はreflexesに基づいて反応遅延を設定
       const reflexes = this.character.playerData?.stats.reflexes;
-      const delayMs = DribbleUtils.calculateReflexesDelay(reflexes);
+      const delayMs = DribbleBreakthroughUtils.calculateReflexesDelay(reflexes);
       this.stateTransitionReactionTimer = delayMs / 1000; // ミリ秒→秒
 
       // 遅延が0の場合は即座にonEnterStateを呼び出す

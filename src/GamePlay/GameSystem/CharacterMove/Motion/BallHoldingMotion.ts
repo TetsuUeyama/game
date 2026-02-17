@@ -1,6 +1,6 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
-import { DominantHand } from "@/GamePlay/GameSystem/CharacterMove/Config/BallHoldingConfig";
+import { DominantHand } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 
 /**
  * ボール保持モーション

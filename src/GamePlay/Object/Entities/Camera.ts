@@ -102,7 +102,7 @@ export const CAMERA_PRESETS = {
     } as ArcRotateCameraPreset,
   },
 
-  /** FallingPointPrediction (FreeCamera) */
+  /** JumpBallSystem (FreeCamera) */
   fallingPoint: {
     position: { x: 4, y: 4, z: -5 },
     target: { x: 0, y: 2.05, z: -0.4 },

@@ -1,4 +1,4 @@
-import { PlayerPosition } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /**
  * ポジション別行動パラメータ

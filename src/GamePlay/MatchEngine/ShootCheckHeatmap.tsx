@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { CellShootResult } from '@/GamePlay/MatchEngine/CheckControllers/ShootCheckController';
-import { GRID_CONFIG } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { GRID_CONFIG } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 interface ShootCheckHeatmapProps {
   results: CellShootResult[];

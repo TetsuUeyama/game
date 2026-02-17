@@ -1,5 +1,5 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh, VertexData, LinesMesh } from "@babylonjs/core";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 
 /**
  * 円の描画に使用するセグメント数

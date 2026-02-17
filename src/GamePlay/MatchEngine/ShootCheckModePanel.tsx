@@ -7,7 +7,7 @@ import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoade
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
 import { ShootCheckResultsTable } from './ShootCheckResultsTable';
-import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 interface ShootCheckModePanelProps {
   gameScene: GameScene | null;
