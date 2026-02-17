@@ -232,7 +232,7 @@ export class DribbleCheckController {
 
     // 移動を停止
     character.velocity = Vector3.Zero();
-    character.stopMotion();
+    character.getMotionController().stop();
   }
 
   /**

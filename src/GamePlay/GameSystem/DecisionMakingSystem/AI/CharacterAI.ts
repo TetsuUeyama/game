@@ -10,7 +10,7 @@ import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/
 import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
 import { DefenseActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DefenseActionController";
 import { LooseBallController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/LooseBallController";
-import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
+import { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
@@ -188,7 +188,7 @@ export class CharacterAI {
     this.character.stopMovement();
 
     // モーションをアイドルに
-    this.character.playMotion(IDLE_MOTION);
+    this.character.getMotionController().play(IDLE_MOTION);
 
     // 各状態AIの内部状態をリセット
     // 次フレームでonEnterState()が呼ばれ、サーベイ等の初期化処理が実行される
@@ -232,7 +232,7 @@ export class CharacterAI {
 
       // 移動とモーションをリセット
       this.character.stopMovement();
-      this.character.playMotion(IDLE_MOTION);
+      this.character.getMotionController().play(IDLE_MOTION);
 
       // 周囲確認を開始
       this.onBallOffenseAI.onEnterState();
@@ -486,7 +486,7 @@ export class CharacterAI {
     // キャラクターのモーションと移動状態をリセット
     // 前の状態のアクションが引き継がれないようにする
     this.character.stopMovement();
-    this.character.playMotion(IDLE_MOTION);
+    this.character.getMotionController().play(IDLE_MOTION);
 
     // ボール方向を向く
     this.faceBall();

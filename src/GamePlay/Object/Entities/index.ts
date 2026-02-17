@@ -12,10 +12,10 @@ export { CharacterBodyParts } from "@/GamePlay/GameSystem/CharacterModel/Charact
 export { CharacterBodyBuilder } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyBuilder";
 export type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyTypes";
 export { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
-export { CharacterPhysicsManager } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
-export type { CharacterPositionInfo } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
-export { CharacterBlockJumpController } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
-export type { BlockTarget, BlockJumpState, ActionPhaseInfo } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
+export { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
+export type { CharacterPositionInfo } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
+export { CharacterBlockJumpController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CharacterBlockJumpController";
+export type { BlockTarget, BlockJumpState, ActionPhaseInfo } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CharacterBlockJumpController";
 
 // カメラ
 export { Camera, CameraManager, CAMERA_PRESETS, CAMERA_BEHAVIOR } from "@/GamePlay/Object/Entities/Camera";

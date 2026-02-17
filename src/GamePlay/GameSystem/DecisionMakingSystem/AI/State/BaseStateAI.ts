@@ -71,8 +71,8 @@ export abstract class BaseStateAI {
     const distance = direction.length();
     if (distance < stopDistance) {
       // 停止時は待機モーションを再生し、重心に停止力を適用
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -87,8 +87,8 @@ export abstract class BaseStateAI {
     // 移動できない場合は停止
     if (!adjustedDirection) {
       // 停止時は待機モーションを再生し、重心に停止力を適用
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -108,13 +108,13 @@ export abstract class BaseStateAI {
     // 距離に応じたモーション再生
     if (isDashing) {
       // 遠い場合は走る
-      if (this.character.getCurrentMotionName() !== 'dash_forward') {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
     } else {
       // 近い場合は歩く
-      if (this.character.getCurrentMotionName() !== 'walk_forward') {
-        this.character.playMotion(WALK_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+        this.character.getMotionController().play(WALK_FORWARD_MOTION);
       }
     }
   }
@@ -140,8 +140,8 @@ export abstract class BaseStateAI {
     // 距離が十分近い場合は移動しない
     const distance = direction.length();
     if (distance < stopDistance) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -154,8 +154,8 @@ export abstract class BaseStateAI {
     const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
     if (!boundaryAdjusted) {
       // 境界に達したら停止
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -165,8 +165,8 @@ export abstract class BaseStateAI {
     const adjustedDirection = this.adjustDirectionForCollision(boundaryAdjusted, deltaTime);
 
     if (!adjustedDirection) {
-      if (this.character.getCurrentMotionName() !== 'idle') {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
       this.character.stopMovement();
       return;
@@ -187,12 +187,12 @@ export abstract class BaseStateAI {
 
     // 距離に応じたモーション再生
     if (isDashing) {
-      if (this.character.getCurrentMotionName() !== 'dash_forward') {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
     } else {
-      if (this.character.getCurrentMotionName() !== 'walk_forward') {
-        this.character.playMotion(WALK_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+        this.character.getMotionController().play(WALK_FORWARD_MOTION);
       }
     }
   }
@@ -497,8 +497,8 @@ export abstract class BaseStateAI {
    * 待機モーションを再生
    */
   protected playIdleMotion(): void {
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+      this.character.getMotionController().play(IDLE_MOTION);
     }
   }
 
@@ -506,8 +506,8 @@ export abstract class BaseStateAI {
    * 歩行モーションを再生
    */
   protected playWalkMotion(): void {
-    if (this.character.getCurrentMotionName() !== 'walk_forward') {
-      this.character.playMotion(WALK_FORWARD_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
+      this.character.getMotionController().play(WALK_FORWARD_MOTION);
     }
   }
 
@@ -515,8 +515,8 @@ export abstract class BaseStateAI {
    * ダッシュモーションを再生
    */
   protected playDashMotion(): void {
-    if (this.character.getCurrentMotionName() !== 'dash_forward') {
-      this.character.playMotion(DASH_FORWARD_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
+      this.character.getMotionController().play(DASH_FORWARD_MOTION);
     }
   }
 
@@ -624,8 +624,8 @@ export abstract class BaseStateAI {
     this.character.stopMovement();
 
     // アイドルモーション
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+      this.character.getMotionController().play(IDLE_MOTION);
     }
   }
 }

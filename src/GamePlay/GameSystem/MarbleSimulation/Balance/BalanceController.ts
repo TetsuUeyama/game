@@ -12,7 +12,7 @@ import {
   ACTION_FORCES,
   ACTION_TYPE_FORCES,
   MOVEMENT_BALANCE,
-} from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
+} from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 import type { ActionType } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import {
   BalanceSphereState,
@@ -32,7 +32,7 @@ import {
   getHorizontalOffset,
   getWeightForceFactor,
   clamp,
-} from "@/GamePlay/Object/Physics/Balance/BalancePhysics";
+} from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalancePhysics";
 
 // 型をre-export
 export type { BalanceSphereState, CollisionResult };

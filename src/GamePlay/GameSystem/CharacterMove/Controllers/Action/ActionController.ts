@@ -10,7 +10,7 @@ import {
   ACTION_MOTIONS,
 } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/BalanceController";
+import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
 
 /**
  * アクション実行結果

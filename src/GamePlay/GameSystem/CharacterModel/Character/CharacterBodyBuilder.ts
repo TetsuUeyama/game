@@ -308,6 +308,36 @@ export class CharacterBodyBuilder {
   }
 
   /**
+   * すべての身体パーツの色を変更
+   */
+  static setColor(body: CharacterBody, r: number, g: number, b: number): void {
+    const color = new Color3(r, g, b);
+    for (const mesh of CharacterBodyBuilder.getAllBodyMeshes(body)) {
+      if (mesh.material && mesh.material instanceof StandardMaterial) {
+        mesh.material.diffuseColor = color;
+      }
+    }
+  }
+
+  /**
+   * 胴体の色を変更（肩を含む）
+   */
+  static setBodyColor(body: CharacterBody, r: number, g: number, b: number): void {
+    const color = new Color3(r, g, b);
+    const parts = [
+      body.upperBody,
+      body.lowerBody,
+      body.leftShoulder,
+      body.rightShoulder,
+    ];
+    for (const mesh of parts) {
+      if (mesh.material && mesh.material instanceof StandardMaterial) {
+        mesh.material.diffuseColor = color;
+      }
+    }
+  }
+
+  /**
    * 身体メッシュをすべて破棄する
    */
   static disposeBody(body: CharacterBody): void {

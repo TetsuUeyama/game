@@ -68,8 +68,8 @@ export class JumpBallOtherAI extends BaseStateAI {
     }
 
     // 静止してアイドルモーション
-    if (this.character.getCurrentMotionName() !== 'idle') {
-      this.character.playMotion(IDLE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== 'idle') {
+      this.character.getMotionController().play(IDLE_MOTION);
     }
     this.character.stopMovement();
 

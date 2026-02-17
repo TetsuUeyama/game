@@ -418,13 +418,13 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
 
       if (hasDefenderInFront) {
         // ディフェンダーが正面 → ドリブル構え+低速前進
-        if (this.character.getCurrentMotionName() !== "dribble_stance") {
-          this.character.playMotion(DRIBBLE_STANCE_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== "dribble_stance") {
+          this.character.getMotionController().play(DRIBBLE_STANCE_MOTION);
         }
       } else {
         // ディフェンダーなし or 抜き去った → ダッシュ
-        if (this.character.getCurrentMotionName() !== "dash_forward") {
-          this.character.playMotion(DASH_FORWARD_MOTION);
+        if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+          this.character.getMotionController().play(DASH_FORWARD_MOTION);
         }
       }
 
@@ -440,8 +440,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     } else if (this.tryShoot()) {
       // 目標到達 → シュート再試行
     } else {
-      if (this.character.getCurrentMotionName() !== "idle") {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "idle") {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -488,8 +488,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
 
     if (toTarget.length() > 0.5) {
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
 
       const direction = toTarget.normalize();
@@ -502,8 +502,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
         this.character.move(direction, deltaTime);
       }
     } else {
-      if (this.character.getCurrentMotionName() !== "idle") {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "idle") {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -524,16 +524,16 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const distanceToTarget = toTarget.length();
 
     if (distanceToTarget > 0.5) {
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
       const direction = toTarget.normalize();
       const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
       this.character.move(boundaryAdjusted || direction, deltaTime);
     } else {
       // 到着 → アイドル
-      if (this.character.getCurrentMotionName() !== "idle") {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "idle") {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }
@@ -550,8 +550,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const myPosition = this.character.getPosition();
 
     // 1on1時は常にドリブル構えモーション
-    if (this.character.getCurrentMotionName() !== "dribble_stance") {
-      this.character.playMotion(DRIBBLE_STANCE_MOTION);
+    if (this.character.getMotionController().getCurrentMotionName() !== "dribble_stance") {
+      this.character.getMotionController().play(DRIBBLE_STANCE_MOTION);
     }
 
     const toTarget = new Vector3(targetPosition.x - myPosition.x, 0, targetPosition.z - myPosition.z);
@@ -644,8 +644,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     const distanceToTarget = toTarget.length();
 
     if (distanceToTarget > 0.5) {
-      if (this.character.getCurrentMotionName() !== "dash_forward") {
-        this.character.playMotion(DASH_FORWARD_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
       }
 
       const direction = toTarget.normalize();
@@ -660,8 +660,8 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
     } else if (this.tryShoot()) {
       // 目標至近距離 → シュート再試行
     } else {
-      if (this.character.getCurrentMotionName() !== "idle") {
-        this.character.playMotion(IDLE_MOTION);
+      if (this.character.getMotionController().getCurrentMotionName() !== "idle") {
+        this.character.getMotionController().play(IDLE_MOTION);
       }
     }
   }

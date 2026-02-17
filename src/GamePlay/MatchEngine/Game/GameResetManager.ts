@@ -10,8 +10,9 @@ import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/Characte
 import { CENTER_CIRCLE, JUMP_BALL_POSITIONS } from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
 import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
-import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
+import { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import { FormationUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
+import { BALL_RADIUS } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchConfig";
 
 /**
  * ゲームリセット用コンテキスト
@@ -364,7 +365,7 @@ export class GameResetManager {
     this.context.ball.setHolder(null);
     this.context.ball.setPosition(new Vector3(
       ballHandler.getPosition().x,
-      0.15, // BALL_RADIUS相当（地面レベル）
+      BALL_RADIUS,
       ballHandler.getPosition().z
     ));
 
@@ -431,7 +432,7 @@ export class GameResetManager {
     this.context.ball.setHolder(null);
     this.context.ball.setPosition(new Vector3(
       ballHandlerPos.x,
-      0.15, // BALL_RADIUS相当（地面レベル）
+      BALL_RADIUS,
       ballHandlerPos.z
     ));
 

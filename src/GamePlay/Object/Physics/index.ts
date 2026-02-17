@@ -38,5 +38,5 @@ export {
   type BalanceSphereState,
   type PlayerPhysicsParams,
   type CollisionResult,
-} from "@/GamePlay/Object/Physics/Balance";
+} from "@/GamePlay/GameSystem/MarbleSimulation/Balance";
 export * from "@/GamePlay/Object/Physics/Collision";

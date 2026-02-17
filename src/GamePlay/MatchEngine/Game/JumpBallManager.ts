@@ -17,7 +17,7 @@ import {
   DEFAULT_JUMP_BALL_INFO,
 } from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
-import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
+import { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 
 /**

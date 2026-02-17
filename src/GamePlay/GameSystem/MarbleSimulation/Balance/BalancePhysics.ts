@@ -16,7 +16,7 @@ import {
   BALANCE_COLLISION,
   BALANCE_LIMITS,
   BALANCE_THRESHOLD,
-} from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
+} from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 
 // ============================================================================
 // 型定義

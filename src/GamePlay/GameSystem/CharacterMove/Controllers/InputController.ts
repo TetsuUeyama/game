@@ -211,11 +211,11 @@ export class InputController {
           // ダッシュ中でない場合のみcrouchモーションを再生
           if (!isDashing) {
             // 現在のモーションを停止してからcrouchを再生（ブレンドなしで即座に切り替え）
-            this.character.stopMotion();
+            this.character.getMotionController().stop();
             this.motionController.playByName("crouch", true); // forceで強制再生
             // すぐに一時停止して初期状態（時間0）に設定
-            this.character.pauseMotion();
-            this.character.setMotionTime(0);
+            this.character.getMotionController().pause();
+            this.character.getMotionController().setCurrentTime(0);
           }
 
           // ジャンプチャージゲージを表示
@@ -336,7 +336,7 @@ export class InputController {
    */
   public update(deltaTime: number): void {
     const currentMotion = this.motionController.getCurrentMotionName();
-    const isPlaying = this.character.isPlayingMotion();
+    const isPlaying = this.character.getMotionController().isPlaying();
 
     // ダッシュキーが押されているかチェック
     const isDashPressed = this.inputState.dashForward || this.inputState.dashBackward || this.inputState.dashLeft || this.inputState.dashRight;
@@ -424,8 +424,8 @@ export class InputController {
       // ダッシュ中でない場合のみcrouchモーションを再生
       if (!isDashPressed || isJumping || isLanding) {
         // しゃがみ込みモーションの時間を押下時間に応じて設定（最大0.3秒）
-        this.character.pauseMotion(); // 一時停止
-        this.character.setMotionTime(targetTime);
+        this.character.getMotionController().pause(); // 一時停止
+        this.character.getMotionController().setCurrentTime(targetTime);
       }
 
       // ジャンプチャージゲージを更新
@@ -583,7 +583,7 @@ export class InputController {
 
       // 慣性移動後のX/Z座標だけを基準位置として更新（Y座標はジャンプ開始時のまま）
       const updatedBasePos = new Vector3(finalPos.x, this.jumpStartY, finalPos.z);
-      this.character.updateMotionBasePosition(updatedBasePos);
+      this.character.getMotionController().updateBasePosition(updatedBasePos);
 
       this.handleRotation(deltaTime);
       return;
