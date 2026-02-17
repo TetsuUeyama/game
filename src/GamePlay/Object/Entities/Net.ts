@@ -12,7 +12,7 @@ import {
   Physics6DoFConstraint,
   PhysicsConstraintAxis,
 } from "@babylonjs/core";
-import { GOAL_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
 
 /**
  * ネットノード（紐の結び目）

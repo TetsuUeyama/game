@@ -1,5 +1,5 @@
 import { PlayerData, PlayerDataJSON, FaceConfigJSON } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
-import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { fetchAllPlayers } from "@/GamePlay/Management/Services/PlayerService";
 import { DocumentData } from "firebase/firestore";
 

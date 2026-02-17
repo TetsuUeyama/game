@@ -4,7 +4,19 @@
  * 大枠（ブロック）: 5×5の升目をまとめた単位、3×6=18ブロック
  */
 
-import { FIELD_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+// フィールド設定（バスケットコートサイズ）
+export const FIELD_CONFIG = {
+  length: 30, // コートの長さ（m）- Z軸方向（5×5大枠が6つ並ぶ）
+  width: 15, // コートの幅（m）- X軸方向
+  floorColor: '#8B4513', // 床の色（茶色 - バスケットコート）
+  gridSize: 10, // グリッドのサイズ
+  gridColor: '#6B3510', // グリッドの色（濃い茶色）
+
+  // センターサークル設定
+  centerCircleRadius: 1.8, // センターサークル半径（m）- FIBA基準
+  centerCircleLineWidth: 0.05, // ラインの太さ（m）
+  centerCircleColor: '#FFFFFF', // ラインの色（白）
+};
 
 /**
  * 小升目の座標（例: "A1", "O30"）

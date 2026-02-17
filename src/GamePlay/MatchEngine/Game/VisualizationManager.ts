@@ -4,7 +4,7 @@
  */
 
 import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
-import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/ShootTrajectoryVisualizer";
+import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/ShootingSystem/ShootTrajectoryVisualizer";
 import { DribblePathVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/DribblePathVisualizer";
 
 /**

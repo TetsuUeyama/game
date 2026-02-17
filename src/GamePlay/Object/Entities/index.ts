@@ -9,7 +9,7 @@ export { Field } from "@/GamePlay/Object/Entities/Field";
 
 // キャラクターサブコンポーネント
 export { CharacterBodyParts } from "@/GamePlay/Object/Entities/CharacterBodyParts";
-export { DirectionCircle } from "@/GamePlay/Object/Entities/DirectionCircle";
+export { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
 export { CharacterPhysicsManager } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
 export type { CharacterPositionInfo } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
 export { CharacterBlockJumpController } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";

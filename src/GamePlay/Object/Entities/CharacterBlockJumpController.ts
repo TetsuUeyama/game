@@ -4,7 +4,7 @@
  */
 
 import { Vector3 } from "@babylonjs/core";
-import { BASE_CIRCLE_SIZE } from "@/GamePlay/GameSystem/CharacterMove/Config/CircleSizeConfig";
+import { BASE_CIRCLE_SIZE } from "@/GamePlay/GameSystem/CircleSystem/CircleSizeConfig";
 
 /**
  * ブロック対象のインターフェース（Character依存を避けるため）

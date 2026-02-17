@@ -1,7 +1,7 @@
 import { Scene, MeshBuilder, StandardMaterial, Color3, Vector3, Mesh } from "@babylonjs/core";
-import { CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
-import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
-import { FaceConfig, DEFAULT_FACE_CONFIG, HairStyle, BeardStyle, EyeStyle, MouthStyle } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { CHARACTER_CONFIG } from "@/GamePlay/Object/Entities/Character";
+import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { FaceConfig, DEFAULT_FACE_CONFIG, HairStyle, BeardStyle, EyeStyle, MouthStyle } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 
 /**
  * キャラクターの身体パーツを作成するクラス

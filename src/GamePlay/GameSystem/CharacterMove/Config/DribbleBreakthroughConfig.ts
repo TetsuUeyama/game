@@ -1,12 +1,12 @@
 /**
- * ドリブル関連の設定を一元管理するファイル
- * 1on1バトル時のドリブル動作に関する定数とユーティリティメソッドを提供
+ * ドリブル突破関連の設定を一元管理するファイル
+ * 1on1バトル時のドリブル突破動作に関する定数とユーティリティメソッドを提供
  */
 
 /**
- * ドリブル基本設定
+ * ドリブル突破基本設定
  */
-export const DRIBBLE_CONFIG = {
+export const DRIBBLE_BREAKTHROUGH_CONFIG = {
   // ドリブル移動速度
   BASE_MOVE_SPEED: 3.0,           // 基本移動速度
 
@@ -25,9 +25,9 @@ export const DRIBBLE_CONFIG = {
 } as const;
 
 /**
- * ドリブル関連のユーティリティメソッド
+ * ドリブル突破関連のユーティリティメソッド
  */
-export class DribbleUtils {
+export class DribbleBreakthroughUtils {
   /**
    * dribblingspeedステータスに基づいた移動速度を計算
    * @param dribblingspeed 選手のdribblingspeedステータス値
@@ -35,9 +35,9 @@ export class DribbleUtils {
    */
   public static calculateDribblingSpeed(dribblingspeed: number | undefined): number {
     if (dribblingspeed === undefined) {
-      return DRIBBLE_CONFIG.BASE_MOVE_SPEED;
+      return DRIBBLE_BREAKTHROUGH_CONFIG.BASE_MOVE_SPEED;
     }
-    return DRIBBLE_CONFIG.BASE_MOVE_SPEED * (dribblingspeed / 100);
+    return DRIBBLE_BREAKTHROUGH_CONFIG.BASE_MOVE_SPEED * (dribblingspeed / 100);
   }
 
   /**
@@ -47,7 +47,7 @@ export class DribbleUtils {
    */
   public static calculateQuicknessDelay(quickness: number | undefined): number {
     if (quickness === undefined) {
-      return DRIBBLE_CONFIG.DEFAULT_DELAY_MS;
+      return DRIBBLE_BREAKTHROUGH_CONFIG.DEFAULT_DELAY_MS;
     }
     // (100 - quickness) * 10 ミリ秒
     return Math.max(0, (100 - quickness) * 10);
@@ -60,7 +60,7 @@ export class DribbleUtils {
    */
   public static calculateReflexesDelay(reflexes: number | undefined): number {
     if (reflexes === undefined) {
-      return DRIBBLE_CONFIG.DEFAULT_DELAY_MS;
+      return DRIBBLE_BREAKTHROUGH_CONFIG.DEFAULT_DELAY_MS;
     }
     // 1000 - reflexes ミリ秒
     return Math.max(0, 1000 - reflexes);
@@ -73,7 +73,7 @@ export class DribbleUtils {
    */
   public static calculateFeintChance(technique: number | undefined): number {
     if (technique === undefined) {
-      return DRIBBLE_CONFIG.FEINT_BASE_CHANCE;
+      return DRIBBLE_BREAKTHROUGH_CONFIG.FEINT_BASE_CHANCE;
     }
     // technique / 200
     return technique / 200;
@@ -93,7 +93,7 @@ export class DribbleUtils {
     if (dribblingspeed !== undefined) {
       dribblingSpeedMultiplier = dribblingspeed / 100;
     }
-    return baseSpeed * DRIBBLE_CONFIG.BREAKTHROUGH_SPEED * dribblingSpeedMultiplier;
+    return baseSpeed * DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_SPEED * dribblingSpeedMultiplier;
   }
 
   /**
@@ -115,7 +115,7 @@ export class DribbleUtils {
    * @returns 突破を試みる場合はtrue
    */
   public static shouldAIAttemptBreakthrough(): boolean {
-    return Math.random() < DRIBBLE_CONFIG.BREAKTHROUGH_CHANCE;
+    return Math.random() < DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_CHANCE;
   }
 
   /**
@@ -129,8 +129,8 @@ export class DribbleUtils {
     direction: 'left' | 'right'
   ): number {
     const angleOffset = direction === 'left'
-      ? -DRIBBLE_CONFIG.BREAKTHROUGH_ANGLE
-      : DRIBBLE_CONFIG.BREAKTHROUGH_ANGLE;
+      ? -DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_ANGLE
+      : DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_ANGLE;
     return characterRotation + angleOffset;
   }
 }

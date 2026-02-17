@@ -2,11 +2,11 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { WALK_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/WalkMotion";
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
-import { FIELD_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 

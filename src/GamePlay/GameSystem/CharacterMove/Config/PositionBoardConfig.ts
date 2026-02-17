@@ -7,7 +7,7 @@ import {
   PositionBoardConfig,
   BoardPlayerPosition,
 } from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
-import { GRID_CONFIG } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { GRID_CONFIG } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 /**
  * UI設定

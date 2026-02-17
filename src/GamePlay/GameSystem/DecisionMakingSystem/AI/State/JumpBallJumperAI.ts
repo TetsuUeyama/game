@@ -8,7 +8,7 @@ import { JUMP_BALL_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/Jum
 import {
   JUMP_BALL_TIMING,
   JUMP_BALL_PHYSICS,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/JumpBallConfig";
+} from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 
 /**

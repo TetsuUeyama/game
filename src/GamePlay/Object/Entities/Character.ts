@@ -11,27 +11,39 @@ import {
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CharacterPhysicsManager } from "@/GamePlay/Object/Entities/CharacterPhysicsManager";
 import { CharacterBlockJumpController } from "@/GamePlay/Object/Entities/CharacterBlockJumpController";
-import { CHARACTER_CONFIG, FIELD_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+
+// キャラクター設定
+export const CHARACTER_CONFIG = {
+  height: 1.8, // キャラクターの身長（m）
+  radius: 0.3, // キャラクターの半径（m）
+  speed: 5, // 移動速度（m/s）
+  rotationSpeed: 3, // 回転速度（rad/s）
+  mass: 70, // 質量（kg）
+
+  // 視野設定
+  visionAngle: 60, // 視野角（度）
+  visionRange: 5, // 視野範囲（m）
+};
 import { MotionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/MotionController";
 import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ActionController";
 import { MotionData } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
-import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
-import { OffenseStrategy, OFFENSE_STRATEGY_FACES } from "@/GamePlay/GameSystem/CharacterMove/Types/OffenseStrategy";
 import { CharacterBodyParts } from "@/GamePlay/Object/Entities/CharacterBodyParts";
-import { DirectionCircle } from "@/GamePlay/Object/Entities/DirectionCircle";
-import { DRIBBLE_CONFIG, DribbleUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleConfig";
+import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
+import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
 import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/BalanceController";
 import { MOVEMENT_BALANCE } from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
-import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/BallHoldingConfig";
+import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
-import { FieldGridUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig";
+import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -150,9 +162,6 @@ export class Character {
     difference: 0,
     multiplier: 0,
   };
-
-  // オフェンス戦術
-  private offenseStrategy: OffenseStrategy = OffenseStrategy.HIGH_RISK; // デフォルトはハイリスク
 
   // AI移動制御（1on1バトル中のランダム移動など）
   private aiMovementDirection: Vector3 | null = null; // AI移動方向
@@ -1748,26 +1757,6 @@ export class Character {
   }
 
   /**
-   * オフェンス戦術を設定
-   * @param strategy オフェンス戦術
-   */
-  public setOffenseStrategy(strategy: OffenseStrategy): void {
-    this.offenseStrategy = strategy;
-
-    // 戦術に応じて使用する面を設定
-    const faces = OFFENSE_STRATEGY_FACES[strategy];
-    this.setBallHoldingFaces(faces);
-  }
-
-  /**
-   * 現在のオフェンス戦術を取得
-   * @returns オフェンス戦術
-   */
-  public getOffenseStrategy(): OffenseStrategy {
-    return this.offenseStrategy;
-  }
-
-  /**
    * ボール保持位置をランダムに変更（1on1バトル時）
    */
   public randomizeBallPosition(): void {
@@ -1834,12 +1823,12 @@ export class Character {
     const currentFace = this.getCurrentBallFace();
 
     // DribbleUtilsを使用して突破可能かチェック
-    if (!DribbleUtils.canStartBreakthrough(currentFace, this.isDribbleBreakthrough)) {
+    if (!DribbleBreakthroughUtils.canStartBreakthrough(currentFace, this.isDribbleBreakthrough)) {
       return false;
     }
 
     // DribbleUtilsを使用して突破角度を計算
-    const breakthroughAngle = DribbleUtils.calculateBreakthroughAngle(this.rotation, direction);
+    const breakthroughAngle = DribbleBreakthroughUtils.calculateBreakthroughAngle(this.rotation, direction);
 
     this.breakthroughDirection = new Vector3(
       Math.sin(breakthroughAngle),
@@ -1866,7 +1855,7 @@ export class Character {
   public getBreakthroughRemainingTime(): number {
     if (!this.isDribbleBreakthrough) return 0;
     const elapsed = Date.now() - this.breakthroughStartTime;
-    return Math.max(0, DRIBBLE_CONFIG.BREAKTHROUGH_DURATION - elapsed);
+    return Math.max(0, DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_DURATION - elapsed);
   }
 
   /**
@@ -1889,12 +1878,12 @@ export class Character {
 
     // 突破時間が経過したかチェック
     const elapsed = Date.now() - this.breakthroughStartTime;
-    if (elapsed >= DRIBBLE_CONFIG.BREAKTHROUGH_DURATION) {
+    if (elapsed >= DRIBBLE_BREAKTHROUGH_CONFIG.BREAKTHROUGH_DURATION) {
       return true; // 突破終了
     }
 
     // DribbleUtilsを使用して突破速度を計算
-    const speed = DribbleUtils.calculateBreakthroughSpeed(
+    const speed = DribbleBreakthroughUtils.calculateBreakthroughSpeed(
       CHARACTER_CONFIG.speed,
       this.playerData?.stats.dribblingspeed
     );

@@ -6,11 +6,12 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
-import { CENTER_CIRCLE, JUMP_BALL_POSITIONS } from "@/GamePlay/GameSystem/CharacterMove/Config/JumpBallConfig";
-import { FIELD_CONFIG, GOAL_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { CENTER_CIRCLE, JUMP_BALL_POSITIONS } from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
+import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { ShotClockController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
-import { FormationUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/FormationConfig";
+import { FormationUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /**
  * ゲームリセット用コンテキスト

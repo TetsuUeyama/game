@@ -3,7 +3,7 @@
  * ShootCheckController用の定数と型定義を提供
  */
 
-import { ShootType } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
+import { ShootType } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 
 /**
  * シュートチェックのタイミング設定

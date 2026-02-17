@@ -1,11 +1,13 @@
 
 
 
+
 import { Vector3, Scene, Mesh, VertexData, StandardMaterial, Color3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { GOAL_CONFIG, FIELD_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
+import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 import {
   SHOOT_RANGE,
@@ -15,7 +17,7 @@ import {
   SHOOT_START_OFFSET,
   SHOOT_COOLDOWN,
   ShootingUtils,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ShootingConfig";
+} from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
 import { ParabolaUtils } from "@/GamePlay/Object/Physics/Trajectory/ParabolaUtils";
 import {
   getDistance2D,

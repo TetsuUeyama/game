@@ -1,11 +1,10 @@
 // System Controllers
 export { BalanceController } from "./BalanceController";
 export type { BalanceSphereState, CollisionResult } from "./BalanceController";
-export { CircleSizeController } from "./CircleSizeController";
+export { CircleSizeController } from "@/GamePlay/GameSystem/CircleSystem/CircleSizeController";
 export { CollisionHandler } from "./CollisionHandler";
-export { ContestController } from "./ContestController";
+export { ContestController } from "@/GamePlay/GameSystem/CircleSystem/ContestController";
 export { InputController } from "./InputController";
-export { JointController } from "./JointController";
 export { MotionController } from "./MotionController";
 export { ShotClockController } from "./ShotClockController";
 
@@ -18,5 +17,5 @@ export { FeintController } from "./Action/FeintController";
 export { LooseBallController } from "./Action/LooseBallController";
 export { OneOnOneBattleController } from "./Action/OneOnOneBattleController";
 export { PassController } from "./Action/PassController";
-export { ShootingController } from "./Action/ShootingController";
-export type { ShootType, ShootResult } from "./Action/ShootingController";
+export { ShootingController } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
+export type { ShootType, ShootResult } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";

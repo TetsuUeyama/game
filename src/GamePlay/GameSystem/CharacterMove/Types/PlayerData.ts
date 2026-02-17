@@ -3,7 +3,7 @@
  * playerData.csv から読み込むデータの構造
  */
 
-import { FaceConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { FaceConfig } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 
 /**
  * 選手の基本情報

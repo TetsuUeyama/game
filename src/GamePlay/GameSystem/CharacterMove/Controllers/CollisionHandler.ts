@@ -1,6 +1,6 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import {
   getDistance3D,
   getCircleCollisionInfo,

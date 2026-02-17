@@ -1,3 +1,3 @@
 export { DribblePathVisualizer } from "./DribblePathVisualizer";
 export { PassTrajectoryVisualizer } from "./PassTrajectoryVisualizer";
-export { ShootTrajectoryVisualizer } from "./ShootTrajectoryVisualizer";
+export { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/ShootingSystem/ShootTrajectoryVisualizer";

@@ -2,8 +2,8 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { ShootingController, ShootType } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
-import { GRID_CONFIG, FieldGridUtils, CellCoord } from "@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig";
+import { ShootingController, ShootType } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
+import { GRID_CONFIG, FieldGridUtils, CellCoord } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import {
   SHOOT_CHECK_TIMING,

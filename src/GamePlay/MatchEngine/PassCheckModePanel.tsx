@@ -12,7 +12,7 @@ import {
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
 import { PassType } from '@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig';
-import { FieldGridUtils } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 interface PassCheckModePanelProps {
   gameScene: GameScene | null;

@@ -11,7 +11,6 @@ import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
 import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture";
 import {
   InputController,
-  JointController,
   CollisionHandler,
   ContestController,
   CircleSizeController,
@@ -26,7 +25,7 @@ import {
 } from "@/GamePlay/GameSystem/CharacterMove/Controllers";
 import { CharacterAI } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI/CharacterAI";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
-import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
@@ -34,9 +33,7 @@ import type { VisualSettings } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { GameTeamConfig } from "@/GamePlay/Management/Services/TeamConfigLoader";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
 import { PhysicsManager } from "@/GamePlay/Object/Physics/PhysicsManager";
-import {
-  LIGHT_CONFIG,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/GameConfig";
+import { LIGHT_CONFIG } from "@/GamePlay/Object/Entities/Light";
 import {
   PassTrajectoryVisualizer,
   ShootTrajectoryVisualizer,
@@ -46,7 +43,7 @@ import { PassCheckController, DefenderPlacement } from "@/GamePlay/MatchEngine/C
 import {
   JumpBallInfo,
   DEFAULT_JUMP_BALL_INFO,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/JumpBallConfig";
+} from "@/GamePlay/GameSystem/JumpBallSystem/JumpBallConfig";
 import {
   CheckModeManager,
   CheckModeContext,
@@ -76,7 +73,6 @@ export class GameScene {
   private field: Field;
   private ball: Ball;
   private inputController?: InputController;
-  private jointController?: JointController;
   private collisionHandler?: CollisionHandler;
 
   // ゲームモード
@@ -182,8 +178,6 @@ export class GameScene {
   private savedTeamConfig: GameTeamConfig | null = null;
   private savedPlayerData: Record<string, PlayerData> | null = null;
 
-  // フェイスアバターキャプチャ
-  private faceAvatarCache: FaceAvatarData[] | null = null;
   private characterVersion: number = 0;
 
   // チーム名（リーグ戦で動的に設定可能）
@@ -443,8 +437,6 @@ export class GameScene {
     // 入力コントローラーの初期化
     if (allCharacters.length > 0) {
       this.inputController = new InputController(this.scene, allCharacters[0]);
-      // 関節操作コントローラーの初期化（モーション選択UI含む）
-      this.jointController = new JointController(this.scene, allCharacters[0]);
     }
 
     // チェックモードマネージャーの初期化
@@ -965,11 +957,6 @@ export class GameScene {
 
     // フィールドを更新（ネットの物理シミュレーション）
     this.field.update(deltaTime);
-
-    // 関節操作コントローラーは常に更新（Ctrl+ドラッグ用）
-    if (this.jointController) {
-      this.jointController.update(deltaTime);
-    }
 
     // 1on1状態の変化をチェック
     if (this.oneOnOneBattleController) {
@@ -1547,16 +1534,10 @@ export class GameScene {
    * フェイスアバターをキャプチャ（キャッシュあり）
    */
   public async capturePlayerFaceAvatars(): Promise<FaceAvatarData[]> {
-    if (this.faceAvatarCache) {
-      return this.faceAvatarCache;
-    }
-    const data = await FaceAvatarCapture.captureAll(
-      this.scene,
+    return FaceAvatarCapture.captureAll(
       this.allyCharacters,
       this.enemyCharacters
     );
-    this.faceAvatarCache = data;
-    return data;
   }
 
   /**
@@ -1925,7 +1906,7 @@ export class GameScene {
     this.recreateShootTrajectoryVisualizerInternal(allCharacters);
 
     // フェイスアバターキャッシュを無効化
-    this.faceAvatarCache = null;
+    FaceAvatarCapture.clearCache();
     this.characterVersion++;
   }
 
@@ -2205,9 +2186,6 @@ export class GameScene {
   public dispose(): void {
     if (this.inputController) {
       this.inputController.dispose();
-    }
-    if (this.jointController) {
-      this.jointController.dispose();
     }
     if (this.collisionHandler) {
       this.collisionHandler.dispose();

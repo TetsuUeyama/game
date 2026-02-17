@@ -36,9 +36,38 @@ import {
   JUMP_CONFIG,
   DASH_CONFIG,
   LANDING_CONFIG,
-  InputState,
-  DEFAULT_INPUT_STATE,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/InputConfig";
+} from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
+
+/**
+ * 入力状態
+ */
+interface InputState {
+  forward: boolean;
+  backward: boolean;
+  left: boolean;
+  right: boolean;
+  rotateLeft: boolean;
+  rotateRight: boolean;
+  jump: boolean;
+  dashForward: boolean;
+  dashBackward: boolean;
+  dashLeft: boolean;
+  dashRight: boolean;
+}
+
+const DEFAULT_INPUT_STATE: InputState = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false,
+  rotateLeft: false,
+  rotateRight: false,
+  jump: false,
+  dashForward: false,
+  dashBackward: false,
+  dashLeft: false,
+  dashRight: false,
+};
 
 /**
  * 入力コントローラー

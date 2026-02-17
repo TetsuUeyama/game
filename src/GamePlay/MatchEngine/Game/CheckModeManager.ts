@@ -7,13 +7,13 @@ import { Scene, Vector3, LinesMesh, MeshBuilder, Color3 } from "@babylonjs/core"
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { CharacterState } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterState";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { DribblePathVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/DribblePathVisualizer";
-import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/ShootTrajectoryVisualizer";
+import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/ShootingSystem/ShootTrajectoryVisualizer";
 import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
-import { ShootingController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ShootingController";
+import { ShootingController } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 import { PassCheckController, DefenderPlacement } from "@/GamePlay/MatchEngine/CheckControllers/PassCheckController";
 import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 

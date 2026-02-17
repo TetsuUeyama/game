@@ -1,6 +1,6 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
-import { DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/FaceConfig";
+import { DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { FaceAvatarRenderer } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarRenderer";
 
 export interface FaceAvatarData {
@@ -15,18 +15,22 @@ export interface FaceAvatarData {
 }
 
 /**
- * 各キャラクターの顔アバターを2D Canvas描画で生成するユーティリティ
+ * 各キャラクターの顔アバターを2D Canvas描画で生成するユーティリティ（キャッシュ付き）
  */
 export class FaceAvatarCapture {
+  private static cache: FaceAvatarData[] | null = null;
+
   /**
-   * 全キャラクターの顔アバターを生成
-   * （公開APIシグネチャは維持。sceneパラメータは後方互換のため残す）
+   * 全キャラクターの顔アバターを生成（キャッシュあり）
    */
   static async captureAll(
-    _scene: unknown,
     allyCharacters: Character[],
     enemyCharacters: Character[]
   ): Promise<FaceAvatarData[]> {
+    if (this.cache) {
+      return this.cache;
+    }
+
     const results: FaceAvatarData[] = [];
 
     for (const character of allyCharacters) {
@@ -59,6 +63,14 @@ export class FaceAvatarCapture {
       });
     }
 
+    this.cache = results;
     return results;
+  }
+
+  /**
+   * キャッシュを無効化
+   */
+  static clearCache(): void {
+    this.cache = null;
   }
 }

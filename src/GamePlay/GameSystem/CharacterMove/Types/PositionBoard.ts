@@ -3,7 +3,10 @@
  * サッカーゲームの戦術配置を管理するデータ構造
  */
 
-import { CellCoord } from '@/GamePlay/GameSystem/CharacterMove/Config/FieldGridConfig';
+import { CellCoord } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
+import { PlayerPosition } from '@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig';
+
+export type { PlayerPosition };
 
 /**
  * ボードの種類
@@ -14,11 +17,6 @@ export type PositionBoardType = 'allyOffense' | 'allyDefense' | 'enemyOffense' |
  * チームの種類
  */
 export type TeamType = 'ally' | 'enemy';
-
-/**
- * ポジション種別（バスケットボール）
- */
-export type PlayerPosition = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 
 /**
  * ボード上のプレイヤー位置情報
