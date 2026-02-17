@@ -1200,4 +1200,99 @@ export abstract class OnBallOffenseAISub extends BaseStateAI {
 
     return dist1 < dist2 ? perpDir : perpDir.scale(-1);
   }
+
+  // ==============================
+  // ドライブ→ジャンプシュート
+  // ==============================
+
+  /**
+   * ペイントエリアでのジャンプシュートを試みる（第一候補）
+   *
+   * ペイントエリア内にいれば常にジャンプシュートを最優先で試みる。
+   * シュートレンジ内（ゴール距離 < 5.0m）なら即座にジャンプシュート発動。
+   * レンジ外ならゴールへ前進。
+   *
+   * → 距離に応じてシュートタイプ決定:
+   *   - < 1.5m: dunk（jump >= 70）/ layup
+   *   - 1.5m〜3.5m: layup
+   *   - 3.5m〜: mid
+   *
+   * @param deltaTime フレーム経過時間
+   * @returns ジャンプシュート発動 or ドライブ継続した場合true
+   */
+  protected tryDriveJumpShoot(deltaTime: number): boolean {
+    if (!this.shootingController) {
+      return false;
+    }
+
+    // ボール保持チェック
+    if (this.ball.getHolder() !== this.character) {
+      return false;
+    }
+
+    // ボール飛行中チェック
+    if (this.ball.isInFlight()) {
+      return false;
+    }
+
+    // ゴール位置と距離を計算
+    const goalPosition = this.field.getAttackingGoalRim(this.character.team);
+    const myPos = this.character.getPosition();
+    const distanceToGoal = getDistance2D(myPos, goalPosition);
+
+    // ジャンプシュートレンジ内ならシュート発動
+    if (distanceToGoal < 5.0) {
+      // ゴール方向を向く
+      const angle = Math.atan2(goalPosition.x - myPos.x, goalPosition.z - myPos.z);
+      this.character.setRotationImmediate(angle);
+
+      // 距離に応じてシュートタイプを決定
+      let jumpShootType: 'jump_shoot_layup' | 'jump_shoot_dunk' | 'jump_shoot_mid';
+
+      if (distanceToGoal < 1.5) {
+        // ゴール至近: ダンク条件判定
+        const jumpStat = this.character.playerData?.stats.jump ?? 50;
+        if (jumpStat >= 70) {
+          jumpShootType = 'jump_shoot_dunk';
+        } else {
+          jumpShootType = 'jump_shoot_layup';
+        }
+      } else if (distanceToGoal < 3.5) {
+        jumpShootType = 'jump_shoot_layup';
+      } else {
+        jumpShootType = 'jump_shoot_mid';
+      }
+
+      // ジャンプシュート実行
+      const result = this.shootingController.startJumpShootAction(this.character, jumpShootType);
+      if (result.success) {
+        return true;
+      }
+    }
+
+    // シュートレンジ外 → ゴールへ前進
+    const toGoal = new Vector3(goalPosition.x - myPos.x, 0, goalPosition.z - myPos.z);
+    if (toGoal.length() > 0.5) {
+      // ダッシュモーション維持
+      if (this.character.getMotionController().getCurrentMotionName() !== "dash_forward") {
+        this.character.getMotionController().play(DASH_FORWARD_MOTION);
+      }
+
+      // ゴール方向を向く
+      const angle = Math.atan2(toGoal.x, toGoal.z);
+      this.character.setRotation(angle);
+
+      const direction = toGoal.normalize();
+      const boundaryAdjusted = this.adjustDirectionForBoundary(direction, deltaTime);
+
+      if (boundaryAdjusted) {
+        this.character.move(boundaryAdjusted, deltaTime);
+      } else {
+        this.character.move(direction, deltaTime);
+      }
+      return true;
+    }
+
+    return false;
+  }
 }

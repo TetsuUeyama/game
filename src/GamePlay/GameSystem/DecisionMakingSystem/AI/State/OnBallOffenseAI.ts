@@ -296,8 +296,12 @@ export class OnBallOffenseAI extends OnBallOffenseAISub {
 
   /**
    * ペイントエリア: ゴール下、常にシュート最優先
+   * ドライブ中（ダッシュ加速70%以上 or ドリブル突破中）はジャンプシュートを最優先
    */
   private handlePaintArea(deltaTime: number, phase: ShotClockPhase): void {
+    // ドライブ→ジャンプシュート判定（ダッシュ加速中 or ドリブル突破中に最優先）
+    if (this.tryDriveJumpShoot(deltaTime)) return;
+
     switch (phase) {
       case ShotClockPhase.EARLY:
         if (this.tryPaintAreaShot(deltaTime)) return;

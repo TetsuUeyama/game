@@ -818,6 +818,158 @@ export class ShootingController {
   }
 
   /**
+   * ジャンプシュートアクションを開始（ドライブからのジャンプシュート用）
+   * ActionControllerに直接ジャンプシュートアクションを登録し、
+   * onActiveコールバックでperformShootを呼ぶ。
+   * @param shooter シューター
+   * @param jumpShootType ジャンプシュートタイプ ('jump_shoot_layup' | 'jump_shoot_dunk' | 'jump_shoot_mid')
+   */
+  public startJumpShootAction(shooter: Character, jumpShootType: 'jump_shoot_layup' | 'jump_shoot_dunk' | 'jump_shoot_mid'): ShootResult {
+    if (this.ball.getHolder() !== shooter) {
+      return {
+        success: false,
+        shootType: 'out_of_range',
+        distance: 0,
+        message: 'ボールを保持していません',
+      };
+    }
+
+    if (this.ball.isInFlight()) {
+      return {
+        success: false,
+        shootType: 'out_of_range',
+        distance: 0,
+        message: 'ボールは既に飛行中です',
+      };
+    }
+
+    const actionController = shooter.getActionController();
+    const actionResult = actionController.startAction(jumpShootType);
+
+    if (!actionResult.success) {
+      return {
+        success: false,
+        shootType: 'layup',
+        distance: 0,
+        message: actionResult.message,
+      };
+    }
+
+    // ジャンプシュートタイプ → ShootType マッピング
+    const shootType: ShootType = jumpShootType === 'jump_shoot_dunk' ? 'dunk'
+      : jumpShootType === 'jump_shoot_mid' ? 'midrange'
+      : 'layup';
+
+    actionController.setCallbacks({
+      onActive: (action) => {
+        if (ActionConfigUtils.isShootAction(action)) {
+          // レンジ/向き再チェックをスキップしてボール発射
+          this.performJumpShoot(shooter, shootType);
+        }
+      },
+      onInterrupt: () => {},
+    });
+
+    // シュートクールダウンを記録
+    this.lastShootTime.set(shooter, Date.now() / 1000);
+
+    return {
+      success: true,
+      shootType,
+      distance: 0,
+      message: `${jumpShootType}モーション開始`,
+    };
+  }
+
+  /**
+   * ジャンプシュート用ボール発射（レンジ/向き再チェックなし）
+   * tryDriveJumpShoot で既に向きとレンジは確認済みのため、
+   * ボール保持チェックのみ行ってボールを発射する。
+   */
+  private performJumpShoot(shooter: Character, shootType: ShootType): void {
+    if (this.ball.getHolder() !== shooter) {
+      return;
+    }
+    if (this.ball.isInFlight()) {
+      return;
+    }
+
+    const targetGoal = this.getTargetGoal(shooter);
+    const baseTargetPosition = targetGoal.position;
+
+    // ジャンプ中の実際の高さを使用（ダンク・レイアップ共通）
+    const shooterPos = shooter.getVisualPosition();
+
+    // シューターの頭上前方からボールを発射
+    const shooterHeight = shooter.config.physical.height;
+    const shooterRotation = shooter.getRotation();
+    const forwardOffsetDistance = 0.7;
+    const forwardOffsetX = Math.sin(shooterRotation) * forwardOffsetDistance;
+    const forwardOffsetZ = Math.cos(shooterRotation) * forwardOffsetDistance;
+    const headPosition = new Vector3(
+      shooterPos.x + forwardOffsetX,
+      shooterPos.y + shooterHeight * 0.5 + SHOOT_START_OFFSET.HEAD_OFFSET,
+      shooterPos.z + forwardOffsetZ
+    );
+
+    // シュート精度（レイアップ・ダンク扱い）
+    const accuracy = ShootingUtils.getAccuracyByShootType(shootType);
+    const offset2D = ShootingUtils.generateRandomOffset(accuracy);
+    const offsetX = offset2D.x;
+    const offsetZ = offset2D.z;
+
+    // リング奥側を狙うためのオフセット
+    const toRim = new Vector3(
+      baseTargetPosition.x - shooterPos.x,
+      0,
+      baseTargetPosition.z - shooterPos.z
+    );
+    if (toRim.length() > 0.01) {
+      toRim.normalize();
+    }
+    const backRimOffset = 0.04;
+
+    const targetPosition = new Vector3(
+      baseTargetPosition.x + offsetX + toRim.x * backRimOffset,
+      baseTargetPosition.y,
+      baseTargetPosition.z + offsetZ + toRim.z * backRimOffset
+    );
+
+    const actualHorizontalDistance = Math.sqrt(
+      Math.pow(targetPosition.x - headPosition.x, 2) +
+      Math.pow(targetPosition.z - headPosition.z, 2)
+    );
+
+    // アーチ高さ
+    const baseArcHeight = ParabolaUtils.getArcHeight(shootType, actualHorizontalDistance);
+    let arcHeight: number;
+    if (shootType === 'dunk') {
+      arcHeight = baseArcHeight;
+    } else {
+      const minArcHeight = shootType === 'layup' ? 0.6 : 0.8;
+      arcHeight = Math.max(minArcHeight, baseArcHeight);
+    }
+
+    const curveValue = shooter.playerData?.stats.curve ?? 50;
+    const shootStarted = this.ball.shootWithArcHeight(targetPosition, arcHeight, headPosition, curveValue, 0);
+
+    if (!shootStarted) {
+      return;
+    }
+
+    // ゴール判定の監視を開始
+    this.checkingGoal = true;
+    this.lastBallY = this.ball.getPosition().y;
+    this.currentShooterTeam = shooter.team;
+    this.currentShooterCharacter = shooter;
+
+    // シュート試行をショットクロックに通知
+    if (this.onShotAttemptCallback) {
+      this.onShotAttemptCallback();
+    }
+  }
+
+  /**
    * 破棄
    */
   public dispose(): void {

@@ -290,8 +290,9 @@ export class ActionController {
 
     // 重心に力を適用（アクション開始時）
     if (this.balanceController) {
-      if (action === 'jump_ball' || action === 'rebound_jump') {
-        // jump_ball/rebound_jump: 選手のjump値で物理力をスケール
+      if (action === 'jump_ball' || action === 'rebound_jump' ||
+          action === 'jump_shoot_layup' || action === 'jump_shoot_dunk' || action === 'jump_shoot_mid') {
+        // jump系: 選手のjump値で物理力をスケール
         const jumpStat = this.character.playerData?.stats.jump ?? 70;
         const jumpScale = jumpStat / 70;
         this.balanceController.applyActionTypeForceWithScale(action, jumpScale);
@@ -464,8 +465,9 @@ export class ActionController {
       return;
     }
 
-    // block_shot / jump_ball の場合、jumpパラメーターに基づいてスケールと速度を調整
-    if (type === 'block_shot' || type === 'jump_ball' || type === 'rebound_jump') {
+    // block_shot / jump_ball / jump_shoot の場合、jumpパラメーターに基づいてスケールと速度を調整
+    if (type === 'block_shot' || type === 'jump_ball' || type === 'rebound_jump' ||
+        type === 'jump_shoot_layup' || type === 'jump_shoot_dunk' || type === 'jump_shoot_mid') {
       const jumpStat = this.character.playerData?.stats.jump ?? 70;
       const baseJump = 70; // 基準値
 
