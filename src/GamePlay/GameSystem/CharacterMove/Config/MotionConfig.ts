@@ -74,6 +74,55 @@ export const DASH_SPEED_MULTIPLIERS = {
 } as const;
 
 /**
+ * 移動方向の角度に応じたダッシュ速度乗数を計算（線形補間）
+ * - 0°（前方）→ FORWARD (1.0)
+ * - 90°（横）→ SIDE (0.7)
+ * - 180°（後方）→ BACKWARD (0.4)
+ * 中間角度は隣接する乗数を線形補間する
+ * @param dotForward 前方ベクトルと移動方向の内積（-1.0〜1.0）
+ * @returns 方向別ダッシュ速度乗数
+ */
+export function getDashDirectionMultiplier(dotForward: number): number {
+  const clampedDot = Math.max(-1, Math.min(1, dotForward));
+  const angle = Math.acos(clampedDot); // 0〜PI
+  const halfPI = Math.PI / 2;
+
+  if (angle <= halfPI) {
+    // 0°〜90°: FORWARD → SIDE
+    const t = angle / halfPI;
+    return DASH_SPEED_MULTIPLIERS.FORWARD + (DASH_SPEED_MULTIPLIERS.SIDE - DASH_SPEED_MULTIPLIERS.FORWARD) * t;
+  } else {
+    // 90°〜180°: SIDE → BACKWARD
+    const t = (angle - halfPI) / halfPI;
+    return DASH_SPEED_MULTIPLIERS.SIDE + (DASH_SPEED_MULTIPLIERS.BACKWARD - DASH_SPEED_MULTIPLIERS.SIDE) * t;
+  }
+}
+
+/**
+ * 移動方向の角度に応じた歩行速度乗数を計算（線形補間）
+ * - 0°（前方）→ FORWARD (1.0)
+ * - 90°（横）→ SIDE (0.8)
+ * - 180°（後方）→ BACKWARD (0.5)
+ * @param dotForward 前方ベクトルと移動方向の内積（-1.0〜1.0）
+ * @returns 方向別歩行速度乗数
+ */
+export function getWalkDirectionMultiplier(dotForward: number): number {
+  const clampedDot = Math.max(-1, Math.min(1, dotForward));
+  const angle = Math.acos(clampedDot); // 0〜PI
+  const halfPI = Math.PI / 2;
+
+  if (angle <= halfPI) {
+    // 0°〜90°: FORWARD → SIDE
+    const t = angle / halfPI;
+    return WALK_SPEED_MULTIPLIERS.FORWARD + (WALK_SPEED_MULTIPLIERS.SIDE - WALK_SPEED_MULTIPLIERS.FORWARD) * t;
+  } else {
+    // 90°〜180°: SIDE → BACKWARD
+    const t = (angle - halfPI) / halfPI;
+    return WALK_SPEED_MULTIPLIERS.SIDE + (WALK_SPEED_MULTIPLIERS.BACKWARD - WALK_SPEED_MULTIPLIERS.SIDE) * t;
+  }
+}
+
+/**
  * ジャンプ設定
  */
 export const JUMP_CONFIG = {

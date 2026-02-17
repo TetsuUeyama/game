@@ -36,6 +36,8 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
     gridLines: true,
     gridLabels: false,
     shootRange: false,
+    stateIndicator: false,
+    nameLabel: false,
   });
 
   // 現在のカメラターゲット情報を更新
@@ -295,6 +297,8 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
             <h3 className="text-sm font-bold text-gray-400 mb-3">視覚情報</h3>
             <div className="space-y-2">
               {([
+                { key: 'stateIndicator' as const, label: '状態インジケーター' },
+                { key: 'nameLabel' as const, label: '選手名' },
                 { key: 'shootTrajectory' as const, label: 'シュート軌道' },
                 { key: 'passTrajectory' as const, label: 'パス軌道' },
                 { key: 'dribblePath' as const, label: 'ドリブル導線' },

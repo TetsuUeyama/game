@@ -14,6 +14,8 @@ export interface VisualSettings {
   gridLines: boolean;
   gridLabels: boolean;
   shootRange: boolean;
+  stateIndicator: boolean;
+  nameLabel: boolean;
 }
 
 export class VisualSettingsManager {
@@ -26,6 +28,8 @@ export class VisualSettingsManager {
     gridLines: true,
     gridLabels: false,
     shootRange: false,
+    stateIndicator: false,
+    nameLabel: false,
   };
 
   getAll(): VisualSettings {

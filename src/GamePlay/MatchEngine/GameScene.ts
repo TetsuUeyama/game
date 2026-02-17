@@ -1706,6 +1706,16 @@ export class GameScene {
           }
         }
         break;
+      case 'stateIndicator':
+        for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+          character.setStateIndicatorsEnabled(value);
+        }
+        break;
+      case 'nameLabel':
+        for (const character of [...this.allyCharacters, ...this.enemyCharacters]) {
+          character.setNameLabelEnabled(value);
+        }
+        break;
     }
   }
 

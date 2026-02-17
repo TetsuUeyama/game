@@ -33,7 +33,7 @@ export const SAFE_BOUNDARY_CONFIG = {
 const THREE_POINT_LINE_CONFIG = {
   arcRadius: 7.24,         // アーク半径 (m)
   cornerDistance: 6.71,    // コーナーからバスケットまでの距離 (m)
-  lineColor: '#FFFFFF',    // ライン色（白）
+  lineColor: '#8B4513',    // ライン色（茶色 - 肌色床とのコントラスト確保）
   lineY: 0.02,             // 地面からの高さ
   arcSegments: 48,         // アークのセグメント数
 };
@@ -86,8 +86,8 @@ const PAINT_AREA_CONFIG = {
   /** バックボード→レーン底（ベースライン側）距離 (m) */
   laneBottomOffset: 0.0,  // レーン底はバックボード位置とほぼ一致
 
-  /** ライン色（白） */
-  lineColor: '#FFFFFF',
+  /** ライン色（茶色 - 肌色床とのコントラスト確保） */
+  lineColor: '#8B4513',
 
   /** 地面からの高さ (m) */
   lineY: 0.02,
@@ -556,7 +556,7 @@ export class Field {
     const gridY = 0.01; // 地面より少し上
 
     const minorColor = Color3.FromHexString(FIELD_CONFIG.gridColor);
-    const majorColor = Color3.FromHexString('#4A2508'); // 大枠は濃い色
+    const majorColor = Color3.FromHexString('#C4A882'); // 大枠はやや濃い色
 
     // X方向の線（Z軸に平行な線）
     for (let x = -halfWidth; x <= halfWidth + 0.001; x += cellSize) {
