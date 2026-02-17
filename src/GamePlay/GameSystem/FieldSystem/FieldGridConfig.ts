@@ -8,14 +8,14 @@
 export const FIELD_CONFIG = {
   length: 30, // コートの長さ（m）- Z軸方向（5×5大枠が6つ並ぶ）
   width: 15, // コートの幅（m）- X軸方向
-  floorColor: '#8B4513', // 床の色（茶色 - バスケットコート）
+  floorColor: '#F5D2B0', // 床の色（肌色 - バスケットコート）
   gridSize: 10, // グリッドのサイズ
-  gridColor: '#6B3510', // グリッドの色（濃い茶色）
+  gridColor: '#D4B896', // グリッドの色（薄い茶色）
 
   // センターサークル設定
   centerCircleRadius: 1.8, // センターサークル半径（m）- FIBA基準
   centerCircleLineWidth: 0.05, // ラインの太さ（m）
-  centerCircleColor: '#FFFFFF', // ラインの色（白）
+  centerCircleColor: '#8B4513', // ラインの色（茶色 - 肌色床とのコントラスト確保）
 };
 
 /**

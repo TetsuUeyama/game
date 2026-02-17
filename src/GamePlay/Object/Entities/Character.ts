@@ -38,6 +38,7 @@ import type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Charact
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
 import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
 import { DashSpeedUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DashSpeedConfig";
+import { getDashDirectionMultiplier, getWalkDirectionMultiplier } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
 import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
 import { MOVEMENT_BALANCE } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
@@ -108,6 +109,10 @@ export class Character {
 
   // 表示状態
   private isVisible: boolean = true;
+
+  // メニューからの表示設定（ユーザー操作による非表示が優先される）
+  private _stateIndicatorsEnabled: boolean = false; // 状態インジケーター（球+サークル）
+  private _nameLabelEnabled: boolean = false; // 選手名ラベル
 
   // 足元の円（方向サークル）
   private directionCircle: DirectionCircle;
@@ -213,6 +218,10 @@ export class Character {
 
     // 足元の円の色分けセグメントを作成
     this.directionCircle.createFootCircleFaceSegments();
+
+    // デフォルトで状態インジケーターを非表示（メニューで有効化可能）
+    this.body.stateIndicator.isVisible = this._stateIndicatorsEnabled;
+    this.directionCircle.setFootCircleVisible(this._stateIndicatorsEnabled);
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
@@ -600,9 +609,19 @@ export class Character {
       const elapsed = (now - this.dashStartTime) / 1000;
       this._dashAcceleration = DashSpeedUtils.calculateAcceleration(elapsed);
       speed *= DashSpeedUtils.calculateSpeedMultiplier(this._dashAcceleration);
+
+      // 方向別速度乗数（角度に応じて線形補間）
+      const forward = this.getForwardDirection();
+      const dotForward = forward.x * direction.x + forward.z * direction.z;
+      speed *= getDashDirectionMultiplier(dotForward);
     } else {
       this.dashStartTime = null;
       this._dashAcceleration = 0;
+
+      // 通常移動でも方向別速度乗数を適用（歩行/走行）
+      const forward = this.getForwardDirection();
+      const dotForward = forward.x * direction.x + forward.z * direction.z;
+      speed *= getWalkDirectionMultiplier(dotForward);
     }
 
     // 正規化された方向ベクトルを確保
@@ -995,9 +1014,10 @@ export class Character {
 
   /**
    * 足元の円の表示/非表示を設定
+   * メニューで非表示に設定されている場合は常に非表示
    */
   public setFootCircleVisible(visible: boolean): void {
-    this.directionCircle.setFootCircleVisible(visible);
+    this.directionCircle.setFootCircleVisible(visible && this._stateIndicatorsEnabled);
   }
 
   /**
@@ -1404,6 +1424,27 @@ export class Character {
   }
 
   /**
+   * 状態インジケーター（頭上の球+足元サークル）の表示を有効/無効にする
+   * メニューからのトグル用。無効時はゲームロジックからの表示も抑制される
+   */
+  public setStateIndicatorsEnabled(enabled: boolean): void {
+    this._stateIndicatorsEnabled = enabled;
+    this.body.stateIndicator.isVisible = enabled;
+    this.directionCircle.setFootCircleVisible(enabled);
+  }
+
+  /**
+   * 選手名ラベルの表示を有効/無効にする
+   * メニューからのトグル用
+   */
+  public setNameLabelEnabled(enabled: boolean): void {
+    this._nameLabelEnabled = enabled;
+    if (this.nameLabel) {
+      this.nameLabel.setEnabled(enabled);
+    }
+  }
+
+  /**
    * 視野コーンの表示/非表示を切り替え
    */
   public setVisionVisible(visible: boolean): void {
@@ -1525,6 +1566,9 @@ export class Character {
     textBlock.outlineColor = "black";
 
     this.nameLabelTexture.addControl(textBlock);
+
+    // メニュー設定に従って表示/非表示
+    this.nameLabel.setEnabled(this._nameLabelEnabled);
   }
 
   /**
