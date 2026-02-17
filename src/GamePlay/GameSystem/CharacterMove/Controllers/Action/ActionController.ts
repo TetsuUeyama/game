@@ -11,6 +11,7 @@ import {
 } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
+import { CROUCH_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/CrouchMotion";
 
 /**
  * アクション実行結果
@@ -53,6 +54,7 @@ export class ActionController {
       currentAction: null,
       phase: 'idle',
       phaseStartTime: 0,
+      preparationTime: 0,
     };
     this.callbacks = {};
   }
@@ -110,6 +112,11 @@ export class ActionController {
       const currentDef = ACTION_DEFINITIONS[this.state.currentAction];
       const newDef = ACTION_DEFINITIONS[type];
 
+      // preparation中は常に割り込み可能
+      if (this.state.phase === 'preparation') {
+        return true;
+      }
+
       // startup中かつinterruptibleなら割り込み可能
       if (this.state.phase === 'startup' && currentDef.interruptible) {
         // 新アクションの優先度が高い場合のみ
@@ -125,8 +132,10 @@ export class ActionController {
 
   /**
    * アクションを開始
+   * @param type アクションタイプ
+   * @param options オプション（preparationTime: 溜め時間ms、0ならスキップ）
    */
-  public startAction(type: ActionType): ActionResult {
+  public startAction(type: ActionType, options?: { preparationTime?: number }): ActionResult {
     const now = Date.now();
 
     // 実行可能かチェック
@@ -165,26 +174,43 @@ export class ActionController {
       this.callbacks.onInterrupt?.(interruptedAction, type);
     }
 
+    const prepTime = options?.preparationTime ?? 0;
+
     // 新しいアクションを開始
     this.state.currentAction = type;
-    this.state.phase = 'startup';
-    this.state.phaseStartTime = now;
+    this.state.preparationTime = prepTime;
 
     // 重要: 新しいアクション開始時に古いコールバックをクリア
     this.callbacks = {};
 
-    // モーションを再生
-    this.playActionMotion(type);
+    if (prepTime > 0) {
+      // preparationフェーズから開始（CrouchMotion再生）
+      this.state.phase = 'preparation';
+      this.state.phaseStartTime = now;
+      this.playPreparationMotion();
+    } else {
+      // 従来通りstartupから開始
+      this.state.phase = 'startup';
+      this.state.phaseStartTime = now;
+      this.playActionMotion(type);
+    }
 
     return { success: true, message: `${type}を開始しました` };
   }
 
   /**
-   * アクションをキャンセル（startup中のみ）
+   * アクションをキャンセル（preparation中またはstartup中のみ）
    */
   public cancelAction(): ActionResult {
     if (this.state.currentAction === null) {
       return { success: false, message: 'キャンセルするアクションがありません' };
+    }
+
+    // preparation中は常にキャンセル可能
+    if (this.state.phase === 'preparation') {
+      const cancelledAction = this.state.currentAction;
+      this.resetState();
+      return { success: true, message: `${cancelledAction}をキャンセルしました` };
     }
 
     const def = ACTION_DEFINITIONS[this.state.currentAction];
@@ -216,6 +242,19 @@ export class ActionController {
     const elapsed = now - this.state.phaseStartTime;
 
     switch (this.state.phase) {
+      case 'preparation': {
+        const progress = Math.min(1.0, elapsed / this.state.preparationTime);
+        // CrouchMotion(0.3s)の再生位置を溜め進捗に合わせる
+        const crouchTime = progress * CROUCH_MOTION.duration;
+        const motionController = this.character.getMotionController();
+        motionController?.setCurrentTime(crouchTime);
+
+        if (elapsed >= this.state.preparationTime) {
+          this.transitionToStartup(now);
+        }
+        break;
+      }
+
       case 'startup':
         if (elapsed >= def.startupTime) {
           this.transitionToActive(now);
@@ -229,6 +268,16 @@ export class ActionController {
         }
         break;
     }
+  }
+
+  /**
+   * startupフェーズへ遷移（preparation完了時）
+   */
+  private transitionToStartup(now: number): void {
+    this.state.phase = 'startup';
+    this.state.phaseStartTime = now;
+    this.playActionMotion(this.state.currentAction!);
+    this.callbacks.onStartup?.(this.state.currentAction!);
   }
 
   /**
@@ -274,6 +323,10 @@ export class ActionController {
     this.state.currentAction = null;
     this.state.phase = 'idle';
     this.state.phaseStartTime = 0;
+    this.state.preparationTime = 0;
+
+    // アームリーチIKを確実にクリア（forceResetAction等でコールバックが発火しない場合の安全策）
+    this.character.setArmReachTarget(null);
   }
 
   /**
@@ -339,6 +392,8 @@ export class ActionController {
     const elapsed = this.getPhaseElapsedTime();
 
     switch (this.state.phase) {
+      case 'preparation':
+        return Math.min(1, elapsed / this.state.preparationTime);
       case 'startup':
         return Math.min(1, elapsed / def.startupTime);
       case 'active':
@@ -381,6 +436,18 @@ export class ActionController {
       config: def.hitbox,
       worldPosition,
     };
+  }
+
+  /**
+   * 溜めモーション（CrouchMotion）を再生
+   * play → pause で初期姿勢をセットし、update()でsetCurrentTimeにより進捗制御
+   */
+  private playPreparationMotion(): void {
+    const motionController = this.character.getMotionController();
+    if (!motionController) return;
+
+    motionController.play(CROUCH_MOTION, 1.0, 0.05);
+    motionController.pause();
   }
 
   /**
@@ -456,9 +523,8 @@ export class ActionController {
    * シュートアクションがstartup中かどうか
    */
   public isShootInStartup(): boolean {
-    if (this.state.currentAction === null || this.state.phase !== 'startup') {
-      return false;
-    }
+    if (this.state.currentAction === null) return false;
+    if (this.state.phase !== 'startup' && this.state.phase !== 'preparation') return false;
     return ActionConfigUtils.isShootAction(this.state.currentAction);
   }
 

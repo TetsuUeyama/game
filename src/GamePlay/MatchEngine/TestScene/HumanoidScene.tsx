@@ -7,10 +7,12 @@ import { FaceCheckPanel } from "@/GamePlay/GameSystem/CharacterModel/UI/FaceChec
 import { MotionCheckPanel } from "@/GamePlay/GameSystem/CharacterModel/UI/MotionCheckPanel";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/ViewerIdleMotion";
 import { WALK_MOTION } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/ViewerWalkMotion";
+import { GAME_MOTIONS } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/GameMotionCatalog";
 
 const AVAILABLE_MOTIONS = [
   { name: "idle", motion: IDLE_MOTION },
   { name: "walk", motion: WALK_MOTION },
+  ...GAME_MOTIONS,
 ];
 
 /**
@@ -37,7 +39,8 @@ export default function HumanoidScene() {
   } = useHumanoidControl(canvasRef);
 
   const [mode, setMode] = useState<CheckMode>("face");
-  const [activeCharIndex, setActiveCharIndex] = useState(0);
+  /** Face mode は GLBモデル（index=0）のみ対象 */
+  const activeCharIndex = 0;
 
   const handleModeChange = useCallback((newMode: CheckMode) => {
     setMode(newMode);
@@ -48,12 +51,7 @@ export default function HumanoidScene() {
       setFaceCloseUp(null);
       setMotionCheckMode(true);
     }
-  }, [activeCharIndex, setFaceCloseUp, setMotionCheckMode]);
-
-  const handleCharIndexChange = useCallback((i: number) => {
-    setActiveCharIndex(i);
-    setFaceCloseUp(i);
-  }, [setFaceCloseUp]);
+  }, [setFaceCloseUp, setMotionCheckMode]);
 
   // ロード完了時に Face モードならカメラを顔位置に移動
   useEffect(() => {
@@ -117,7 +115,7 @@ export default function HumanoidScene() {
             <FaceCheckPanel
               faceParams={faceParams}
               activeCharIndex={activeCharIndex}
-              onCharIndexChange={handleCharIndexChange}
+              onCharIndexChange={(i) => setFaceCloseUp(i)}
               onParamsChange={updateFaceParams}
               faceCamConfig={faceCamConfig}
               onFaceCamChange={updateFaceCam}

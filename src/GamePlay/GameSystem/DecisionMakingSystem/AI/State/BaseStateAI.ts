@@ -102,21 +102,11 @@ export abstract class BaseStateAI {
     const isDashing = distance > 5.0;
     const isRunning = distance > 2.0;
 
-    // 移動（重心力も適用）
+    // 移動（重心力も適用、ダッシュ時は加速処理あり）
     this.character.move(adjustedDirection, deltaTime, isRunning, isDashing);
 
-    // 距離に応じたモーション再生
-    if (isDashing) {
-      // 遠い場合は走る
-      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
-        this.character.getMotionController().play(DASH_FORWARD_MOTION);
-      }
-    } else {
-      // 近い場合は歩く
-      if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
-        this.character.getMotionController().play(WALK_FORWARD_MOTION);
-      }
-    }
+    // 距離に応じたモーション再生 + ダッシュ加速に応じたjointScale設定
+    this.applyMovementMotion(isDashing);
   }
 
   /**
@@ -182,18 +172,34 @@ export abstract class BaseStateAI {
     const isDashing = distance > 5.0;
     const isRunning = distance > 2.0;
 
-    // 移動（重心力も適用）
+    // 移動（重心力も適用、ダッシュ時は加速処理あり）
     this.character.move(adjustedDirection, deltaTime, isRunning, isDashing);
 
-    // 距離に応じたモーション再生
+    // 距離に応じたモーション再生 + ダッシュ加速に応じたjointScale設定
+    this.applyMovementMotion(isDashing);
+  }
+
+  /**
+   * 移動モーション適用（ダッシュ/歩行の切替 + 加速率に応じたjointScale）
+   */
+  private applyMovementMotion(isDashing: boolean): void {
+    const mc = this.character.getMotionController();
+
     if (isDashing) {
-      if (this.character.getMotionController().getCurrentMotionName() !== 'dash_forward') {
-        this.character.getMotionController().play(DASH_FORWARD_MOTION);
+      // ダッシュモーション
+      if (mc.getCurrentMotionName() !== 'dash_forward') {
+        mc.play(DASH_FORWARD_MOTION);
       }
+      // 加速率に応じてモーション強度を調整（0.5〜1.0の範囲でスケール）
+      const accel = this.character.getDashAcceleration();
+      const scale = 0.5 + accel * 0.5;
+      mc.setJointScale(scale);
     } else {
-      if (this.character.getMotionController().getCurrentMotionName() !== 'walk_forward') {
-        this.character.getMotionController().play(WALK_FORWARD_MOTION);
+      // 歩行モーション（jointScaleはフル適用に戻す）
+      if (mc.getCurrentMotionName() !== 'walk_forward') {
+        mc.play(WALK_FORWARD_MOTION);
       }
+      mc.setJointScale(1.0);
     }
   }
 

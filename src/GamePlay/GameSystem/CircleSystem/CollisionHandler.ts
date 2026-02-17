@@ -71,6 +71,8 @@ export class CollisionHandler {
    * power値が高い方が低い方を押し出す
    * 8方向ごとの半径を考慮した衝突判定
    *
+   * 高さ優位: ジャンプ等で体が高い位置にあるキャラクターは
+   * power値にボーナスが加算され、下にいる相手を押し返す
    */
   private resolveCharacterCharacterCollision(character1: Character, character2: Character): void {
     const state1 = character1.getState();
@@ -106,8 +108,25 @@ export class CollisionHandler {
     }
 
     // power値を取得（デフォルトは50）
-    const power1 = character1.playerData?.stats.power ?? 50;
-    const power2 = character2.playerData?.stats.power ?? 50;
+    let power1 = character1.playerData?.stats.power ?? 50;
+    let power2 = character2.playerData?.stats.power ?? 50;
+
+    // 体の高さによるpower補正（高い位置にいる方が相手を押し返す）
+    // motionOffsetYは体中心の高さオフセット（手を伸ばした高さは含まない）
+    const bodyHeight1 = character1.getMotionOffsetY();
+    const bodyHeight2 = character2.getMotionOffsetY();
+    const heightDiff = bodyHeight1 - bodyHeight2;
+
+    // 高さの差が閾値（5cm）以上ある場合にボーナスを適用
+    // 高さ差0.1mにつきpower+20（最大+100）
+    if (Math.abs(heightDiff) > 0.05) {
+      const heightBonus = Math.min(100, Math.abs(heightDiff) * 200);
+      if (heightDiff > 0) {
+        power1 += heightBonus;
+      } else {
+        power2 += heightBonus;
+      }
+    }
 
     // パワー値に基づいて衝突を解決（方向ベースの半径を使用）
     const resolution = resolveCircleCollisionWithPower(

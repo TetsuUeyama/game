@@ -49,13 +49,14 @@ const HAIR_SHOW_MESHES = ["Hair"];
 /** 髪モデルのスケール補正（seconf Hips高さ / newmodel Hips高さ） */
 const HAIR_SCALE_RATIO = 96.37 / 209.15;
 
-/** ── 身長比較設定（ここを変更して比較） ── */
-const CHARACTER_A_HEIGHT_CM = 170;
-const CHARACTER_B_HEIGHT_CM = 190;
+/** ── キャラクター配置設定 ── */
 const BASE_HEIGHT_CM = 180;
-
-const HEIGHTS = [CHARACTER_A_HEIGHT_CM, CHARACTER_B_HEIGHT_CM];
-const X_POSITIONS = [-1.0, 1.0];
+/** GLBモデル（左側） */
+const GLB_HEIGHT_CM = 180;
+const GLB_X = -1.0;
+/** ProceduralHumanoid（右側） */
+const PROCEDURAL_HEIGHT_CM = 180;
+const PROCEDURAL_X = 1.0;
 
 /** 各キャラクターの外見設定 */
 const APPEARANCES: Partial<AppearanceConfig>[] = [
@@ -159,18 +160,10 @@ export function useHumanoidControl(
 
     const initAsync = async () => {
       try {
-        // メインモデルと髪モデルを並列読み込み
-        const [results, hairResults] = await Promise.all([
-          Promise.all(
-            HEIGHTS.map(() =>
-              SceneLoader.ImportMeshAsync("", MODEL_PATH, MODEL_FILE, scene)
-            )
-          ),
-          Promise.all(
-            HEIGHTS.map(() =>
-              SceneLoader.ImportMeshAsync("", MODEL_PATH, HAIR_MODEL_FILE, scene)
-            )
-          ),
+        // GLBモデル1体 + 髪モデル1体を並列読み込み
+        const [glbResult, hairResult] = await Promise.all([
+          SceneLoader.ImportMeshAsync("", MODEL_PATH, MODEL_FILE, scene),
+          SceneLoader.ImportMeshAsync("", MODEL_PATH, HAIR_MODEL_FILE, scene),
         ]);
         if (!mounted) return;
 
@@ -184,27 +177,22 @@ export function useHumanoidControl(
         const skeletons: Skeleton[] = [];
         const restCaches: RestPoseCache[] = [];
 
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          const rootMesh = result.meshes[0];
-          const skeleton = result.skeletons[0];
-          skeletons.push(skeleton);
-
+        // ── instance[0]: GLBモデル（左側）──
+        {
+          const rootMesh = glbResult.meshes[0];
+          const skeleton = glbResult.skeletons[0];
           if (!skeleton) {
             throw new Error("GLBにスケルトンが含まれていません");
           }
 
-          // 最初のキャラクターのみボーン位置をログ出力（C1: GLBボーン位置抽出）
-          if (i === 0) {
-            logBoneOffsetsForProcedural(skeleton);
-          }
+          logBoneOffsetsForProcedural(skeleton);
 
-          // PoseBlender 適用前にレスト姿勢をキャッシュ
           const restCache = captureRestPoses(skeleton) ?? new Map();
+          skeletons.push(skeleton);
           restCaches.push(restCache);
 
-          rootMesh.position.x = X_POSITIONS[i];
-          rootMesh.scaling.setAll(HEIGHTS[i] / BASE_HEIGHT_CM);
+          rootMesh.position.x = GLB_X;
+          rootMesh.scaling.setAll(GLB_HEIGHT_CM / BASE_HEIGHT_CM);
 
           const poseData = createPoseData(skeleton, restCache);
           if (!poseData) {
@@ -218,24 +206,21 @@ export function useHumanoidControl(
           const pose = new TargetPose();
           pose.initialize(skeleton);
 
-          // メインモデルの不要メッシュを非表示（元の髪、Cube等）
-          for (const m of result.meshes) {
+          // メインモデルの不要メッシュを非表示
+          for (const m of glbResult.meshes) {
             if (MAIN_HIDE_MESHES.includes(m.name)) {
               m.setEnabled(false);
             }
           }
 
           // ── 髪モデルのセットアップ ──
-          const hairResult = hairResults[i];
           const hairRootMesh = hairResult.meshes[0];
           const hairSkeleton = hairResult.skeletons[0] ?? null;
 
-          // 髪モデルのルートをメインモデルと同じ位置に配置し、スケール補正を適用
           hairRootMesh.position.copyFrom(rootMesh.position);
           hairRootMesh.scaling.copyFrom(rootMesh.scaling);
           hairRootMesh.scaling.scaleInPlace(HAIR_SCALE_RATIO);
 
-          // 髪以外のメッシュを非表示
           for (const m of hairResult.meshes) {
             if (m !== hairRootMesh && !HAIR_SHOW_MESHES.includes(m.name)) {
               m.setEnabled(false);
@@ -245,7 +230,6 @@ export function useHumanoidControl(
           const hairMeshes = hairResult.meshes.filter(
             m => m !== hairRootMesh && HAIR_SHOW_MESHES.includes(m.name)
           );
-          const faceMeshes: AbstractMesh[] = [];
 
           instances.push({
             rootMesh,
@@ -255,9 +239,44 @@ export function useHumanoidControl(
             pose,
             procedural: null,
             hairMeshes,
-            faceMeshes,
+            faceMeshes: [],
             hairSkeleton,
             hairRootMesh,
+          });
+        }
+
+        // ── instance[1]: ProceduralHumanoid（右側）──
+        {
+          const humanoid = createProceduralHumanoid(scene, APPEARANCES[1]);
+          humanoid.rootMesh.position.x = PROCEDURAL_X;
+          humanoid.rootMesh.scaling.setAll(PROCEDURAL_HEIGHT_CM / BASE_HEIGHT_CM);
+
+          // ProceduralHumanoid のアニメーションを停止（MotionPlayer で制御するため）
+          humanoid.idleAnimation.stop();
+          humanoid.walkAnimation.stop();
+
+          const procSkeleton = humanoid.skeleton;
+          const procRestCache = captureRestPoses(procSkeleton) ?? new Map();
+          skeletons.push(procSkeleton);
+          restCaches.push(procRestCache);
+
+          const ik = new IKSystem(scene, config);
+          ik.initialize(procSkeleton, humanoid.rootMesh);
+
+          const pose = new TargetPose();
+          pose.initialize(procSkeleton);
+
+          instances.push({
+            rootMesh: humanoid.rootMesh,
+            poseBlender: null,
+            blendController: null,
+            ik,
+            pose,
+            procedural: humanoid,
+            hairMeshes: [],
+            faceMeshes: [],
+            hairSkeleton: null,
+            hairRootMesh: null,
           });
         }
 
@@ -296,6 +315,8 @@ export function useHumanoidControl(
               }
               instances[i].ik.update(0);
               instances[i].pose.capture();
+              // ProceduralHumanoid のビジュアルをボーン位置に同期
+              instances[i].procedural?.updateVisuals();
             }
             // 髪スケルトンをメインに同期
             syncAllHairSkeletons(instances, skeletons);
@@ -316,7 +337,8 @@ export function useHumanoidControl(
           if (closeUpIdx === null) {
             const input = wasdToBlendInput(keys);
             for (const inst of instances) {
-              inst.poseBlender!.update(input, dt);
+              // GLBモデルは PoseBlender、ProceduralHumanoid はスキップ（モーションチェック専用）
+              inst.poseBlender?.update(input, dt);
               if (input.turnRate !== 0) {
                 inst.rootMesh.rotate(Vector3.Up(), -input.turnRate * config.turnSpeed * dt);
               }
@@ -330,6 +352,7 @@ export function useHumanoidControl(
               }
               inst.ik.update(input.speed);
               inst.pose.capture();
+              inst.procedural?.updateVisuals();
             }
 
             // 通常: カメラ追従
@@ -344,7 +367,7 @@ export function useHumanoidControl(
             // 顔アップ: アニメーションだけ更新（移動なし）
             const idleInput: BlendInput = { speed: 0, turnRate: 0 };
             for (const inst of instances) {
-              inst.poseBlender!.update(idleInput, dt);
+              inst.poseBlender?.update(idleInput, dt);
               inst.ik.update(0);
               inst.pose.capture();
             }
@@ -374,11 +397,13 @@ export function useHumanoidControl(
 
         try {
           const instances: CharacterInstance[] = [];
+          const fallbackHeights = [GLB_HEIGHT_CM, PROCEDURAL_HEIGHT_CM];
+          const fallbackXPositions = [GLB_X, PROCEDURAL_X];
 
-          for (let i = 0; i < HEIGHTS.length; i++) {
+          for (let i = 0; i < 2; i++) {
             const humanoid = createProceduralHumanoid(scene, APPEARANCES[i]);
-            humanoid.rootMesh.position.x = X_POSITIONS[i];
-            humanoid.rootMesh.scaling.setAll(HEIGHTS[i] / BASE_HEIGHT_CM);
+            humanoid.rootMesh.position.x = fallbackXPositions[i];
+            humanoid.rootMesh.scaling.setAll(fallbackHeights[i] / BASE_HEIGHT_CM);
 
             const blend = new BlendController(
               humanoid.idleAnimation,
@@ -566,6 +591,13 @@ export function useHumanoidControl(
   const setMotionCheckMode = useCallback((active: boolean) => {
     motionCheckActiveRef.current = active;
     if (active) {
+      // ProceduralHumanoid のアニメーションを停止（MotionPlayer で制御するため）
+      for (const inst of instancesRef.current) {
+        if (inst.procedural) {
+          inst.procedural.idleAnimation.stop();
+          inst.procedural.walkAnimation.stop();
+        }
+      }
       const motion = currentMotionRef.current;
       const players: MotionPlayer[] = [];
       const skeletons = skeletonsRef.current;

@@ -49,25 +49,25 @@ const DF_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [-27.5, -55, 0, 45, 0],
+  leftHipX: [-27.5, -45, 0, 35, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [0, 45, 0, -55, 0],
+  rightHipX: [0, 35, 0, -45, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [67.5, 20, 67.5, 20, 67.5],
+  leftKneeX: [47.5, 20, 57.5, 20, 57.5],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [20, 65, 20, 65, 20],
+  rightKneeX: [20, 55, 20, 55, 20],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 };
 
 const DF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DF_T0]: 0, [DF_T1]: -0.15, [DF_T2]: 0, [DF_T3]: -0.15, [DF_T4]: 0},
+  y: {[DF_T0]: 0, [DF_T1]: 0, [DF_T2]: 0, [DF_T3]: 0, [DF_T4]: 0},
 };
 
 /**1111
@@ -166,7 +166,7 @@ const DB_ADDITIONS = {
 };
 
 const DB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DB_T0]: 0, [DB_T1]: -0.05, [DB_T2]: 0, [DB_T3]: -0.05, [DB_T4]: 0},
+  y: {[DB_T0]: 0, [DB_T1]: 0, [DB_T2]: 0, [DB_T3]: 0, [DB_T4]: 0},
 };
 
 /**
@@ -265,7 +265,7 @@ const DL_ADDITIONS = {
 };
 
 const DL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DL_T0]: 0, [DL_T1]: -0.05, [DL_T2]: 0, [DL_T3]: -0.05, [DL_T4]: 0},
+  y: {[DL_T0]: 0, [DL_T1]: 0, [DL_T2]: 0, [DL_T3]: 0, [DL_T4]: 0},
 };
 
 /**
@@ -364,7 +364,7 @@ const DR_ADDITIONS = {
 };
 
 const DR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[DR_T0]: 0, [DR_T1]: -0.05, [DR_T2]: 0, [DR_T3]: -0.05, [DR_T4]: 0},
+  y: {[DR_T0]: 0, [DR_T1]: 0, [DR_T2]: 0, [DR_T3]: 0, [DR_T4]: 0},
 };
 
 /**

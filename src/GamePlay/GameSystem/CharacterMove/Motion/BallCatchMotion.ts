@@ -46,7 +46,7 @@ const BALL_CATCH_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightShoulderY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: -10, [BALL_CATCH_T2]: -15, [BALL_CATCH_T3]: -5},
   rightShoulderZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
-  rightElbowX: {[BALL_CATCH_T0]: 90, [BALL_CATCH_T1]: 40, [BALL_CATCH_T2]: 25, [BALL_CATCH_T3]: 70},
+  rightElbowX: {[BALL_CATCH_T0]: -90, [BALL_CATCH_T1]: -40, [BALL_CATCH_T2]: -25, [BALL_CATCH_T3]: -70},
   rightElbowY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
   rightElbowZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
@@ -55,7 +55,7 @@ const BALL_CATCH_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   leftShoulderY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 10, [BALL_CATCH_T2]: 15, [BALL_CATCH_T3]: 5},
   leftShoulderZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
-  leftElbowX: {[BALL_CATCH_T0]: 90, [BALL_CATCH_T1]: 40, [BALL_CATCH_T2]: 25, [BALL_CATCH_T3]: 70},
+  leftElbowX: {[BALL_CATCH_T0]: -90, [BALL_CATCH_T1]:-40, [BALL_CATCH_T2]: -25, [BALL_CATCH_T3]: -70},
   leftElbowY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
   leftElbowZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 

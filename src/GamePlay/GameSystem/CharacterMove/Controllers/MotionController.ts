@@ -15,6 +15,9 @@ export class MotionController {
   private motions: Map<string, MotionConfig> = new Map();
   private defaultMotionName: string | null = null;
 
+  // 関節角度スケール（ダッシュ加速中のモーション強度調整用、1.0 = フル適用）
+  private _jointScale: number = 1.0;
+
   constructor(character: Character) {
     this.character = character;
     this.state = {
@@ -159,6 +162,22 @@ export class MotionController {
    */
   public hasMotion(motionName: string): boolean {
     return this.motions.has(motionName);
+  }
+
+  /**
+   * 関節角度スケールを設定
+   * ダッシュ加速中など、モーションの関節角度を比率で縮小する場合に使用
+   * @param scale スケール値（0.0〜1.0、1.0 = フル適用）
+   */
+  public setJointScale(scale: number): void {
+    this._jointScale = Math.max(0, Math.min(1, scale));
+  }
+
+  /**
+   * 現在の関節角度スケールを取得
+   */
+  public getJointScale(): number {
+    return this._jointScale;
   }
 
   /**
@@ -307,11 +326,9 @@ export class MotionController {
     const currentJoints = this.interpolateKeyframes(this.state.currentMotion.keyframes, this.state.currentTime);
     this.applyJointsWithPriority(currentJoints, this.state.currentMotion.priorities);
 
-    // 位置オフセットも適用
+    // 位置オフセット + 自動接地を適用
     const currentPosition = this.interpolatePosition(this.state.currentMotion.keyframes, this.state.currentTime);
-    if (currentPosition) {
-      this.applyPositionOffset(currentPosition);
-    }
+    this.applyPositionOffset(currentPosition);
   }
 
   /**
@@ -353,14 +370,9 @@ export class MotionController {
         const priorities = this.state.nextMotion.priorities || this.state.currentMotion?.priorities;
         this.applyJointsWithPriority(blendedJoints, priorities);
 
-        // ブレンド中も位置オフセットを適用
+        // ブレンド中も位置オフセット + 自動接地を適用
         const currentPosition = this.interpolatePosition(this.state.nextMotion.keyframes, 0);
-        if (currentPosition) {
-          this.applyPositionOffset(currentPosition);
-        } else if (this.state.lastAppliedPosition) {
-          // 位置オフセットがないモーションの場合、元の位置に戻す
-          this.applyPositionOffset({x: 0, y: 0, z: 0});
-        }
+        this.applyPositionOffset(currentPosition);
         return;
       }
     }
@@ -391,14 +403,9 @@ export class MotionController {
     // 優先度順に関節を適用
     this.applyJointsWithPriority(currentJoints, motion.priorities);
 
-    // 位置オフセットを適用
+    // 位置オフセット + 自動接地を適用
     const currentPosition = this.interpolatePosition(motion.keyframes, this.state.currentTime);
-    if (currentPosition) {
-      this.applyPositionOffset(currentPosition);
-    } else if (this.state.lastAppliedPosition) {
-      // 位置オフセットがないモーションの場合、元の位置に戻す
-      this.applyPositionOffset({x: 0, y: 0, z: 0});
-    }
+    this.applyPositionOffset(currentPosition);
   }
 
   /**
@@ -519,22 +526,30 @@ export class MotionController {
   }
 
   /**
-   * 位置オフセットをキャラクターに適用
-   * Y軸オフセットはCharacterクラス内で管理し、setPosition()時に自動的に加算される
+   * 位置オフセットをキャラクターに適用（自動接地付き）
+   *
+   * 自動接地: 関節回転適用後の足のY座標から、足が地面に着くための補正を自動計算。
+   * position.y の負の値（しゃがみ補正）は自動接地が代替するため無視し、
+   * 正の値（ジャンプ高度）のみ加算する。
    */
-  private applyPositionOffset(offset: PositionOffset): void {
-    // 位置スケールを適用
-    const scaledOffset = {
-      x: offset.x * this.state.positionScale,
-      y: offset.y * this.state.positionScale,
-      z: offset.z * this.state.positionScale,
-    };
+  private applyPositionOffset(offset: PositionOffset | null): void {
+    // 自動接地オフセット（関節回転による足の浮きを補正）
+    const autoGround = this.character.getAutoGroundOffset();
 
-    // Y軸オフセットをキャラクターに設定（clampの影響を受けない）
-    this.character.setMotionOffsetY(scaledOffset.y);
+    // モーションの position.y: 正の値のみ高度として加算（負=しゃがみ補正は自動接地で代替）
+    const scaledY = offset ? offset.y * this.state.positionScale : 0;
+    const elevation = Math.max(0, scaledY);
 
-    // 今回のオフセットを保存（スケール済み）
-    this.state.lastAppliedPosition = {...scaledOffset};
+    this.character.setMotionOffsetY(autoGround + elevation);
+
+    // 今回のオフセットを保存
+    this.state.lastAppliedPosition = offset
+      ? {
+          x: offset.x * this.state.positionScale,
+          y: autoGround + elevation,
+          z: offset.z * this.state.positionScale,
+        }
+      : { x: 0, y: autoGround, z: 0 };
   }
 
   /**
@@ -600,10 +615,12 @@ export class MotionController {
   private applyJointRotation(jointName: keyof KeyframeJoints, rotation: JointRotation): void {
     const joint = this.character.getJoint(jointName);
     if (joint) {
+      // 関節角度スケールを適用（ダッシュ加速中のモーション強度調整）
+      const s = this._jointScale;
       // 度数法からラジアンに変換して適用
-      joint.rotation.x = (rotation.x * Math.PI) / 180;
-      joint.rotation.y = (rotation.y * Math.PI) / 180;
-      joint.rotation.z = (rotation.z * Math.PI) / 180;
+      joint.rotation.x = (rotation.x * s * Math.PI) / 180;
+      joint.rotation.y = (rotation.y * s * Math.PI) / 180;
+      joint.rotation.z = (rotation.z * s * Math.PI) / 180;
 
       // 上半身パス回転オフセットを加算
       if (jointName === 'upperBody') {

@@ -52,7 +52,7 @@ const BLOCK_SHOT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightShoulderY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   rightShoulderZ: {[BLOCK_T0]: 0, [BLOCK_T1]: -15, [BLOCK_T2]: -20, [BLOCK_T3]: -15, [BLOCK_T4]: 0},
 
-  rightElbowX: {[BLOCK_T0]: 30, [BLOCK_T1]: 15, [BLOCK_T2]: 5, [BLOCK_T3]: 10, [BLOCK_T4]: 30},
+  rightElbowX: {[BLOCK_T0]: -30, [BLOCK_T1]: -15, [BLOCK_T2]: -5, [BLOCK_T3]: -10, [BLOCK_T4]: -30},
   rightElbowY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   rightElbowZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
 
@@ -60,7 +60,7 @@ const BLOCK_SHOT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   leftShoulderY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   leftShoulderZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 15, [BLOCK_T2]: 20, [BLOCK_T3]: 15, [BLOCK_T4]: 0},
 
-  leftElbowX: {[BLOCK_T0]: 30, [BLOCK_T1]: 15, [BLOCK_T2]: 5, [BLOCK_T3]: 10, [BLOCK_T4]: 30},
+  leftElbowX: {[BLOCK_T0]: -30, [BLOCK_T1]: -15, [BLOCK_T2]: -5, [BLOCK_T3]: -10, [BLOCK_T4]: -30},
   leftElbowY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   leftElbowZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
 
@@ -84,7 +84,7 @@ const BLOCK_SHOT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const BLOCK_SHOT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
-  y: {[BLOCK_T0]: 0, [BLOCK_T1]: -0.2, [BLOCK_T2]: 1.0, [BLOCK_T3]: 0.6, [BLOCK_T4]: 0},
+  y: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 1.0, [BLOCK_T3]: 0.6, [BLOCK_T4]: 0},
   z: {[BLOCK_T0]: 0, [BLOCK_T1]: 0.1, [BLOCK_T2]: 0.2, [BLOCK_T3]: 0.15, [BLOCK_T4]: 0},
 };
 
@@ -147,7 +147,7 @@ const STEAL_ATTEMPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightShoulderY: {[STEAL_T0]: 0, [STEAL_T1]: -30, [STEAL_T2]: -45, [STEAL_T3]: -30, [STEAL_T4]: 0},
   rightShoulderZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
-  rightElbowX: {[STEAL_T0]: 45, [STEAL_T1]: 25, [STEAL_T2]: 15, [STEAL_T3]: 20, [STEAL_T4]: 45},
+  rightElbowX: {[STEAL_T0]: -45, [STEAL_T1]: -25, [STEAL_T2]: -15, [STEAL_T3]: -20, [STEAL_T4]: -45},
   rightElbowY: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
   rightElbowZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
@@ -156,7 +156,7 @@ const STEAL_ATTEMPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   leftShoulderY: {[STEAL_T0]: 0, [STEAL_T1]: 15, [STEAL_T2]: 20, [STEAL_T3]: 15, [STEAL_T4]: 0},
   leftShoulderZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
-  leftElbowX: {[STEAL_T0]: 45, [STEAL_T1]: 60, [STEAL_T2]: 70, [STEAL_T3]: 60, [STEAL_T4]: 45},
+  leftElbowX: {[STEAL_T0]: -45, [STEAL_T1]: -60, [STEAL_T2]: -70, [STEAL_T3]: -60, [STEAL_T4]: -45},
   leftElbowY: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
   leftElbowZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
@@ -180,7 +180,7 @@ const STEAL_ATTEMPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const STEAL_ATTEMPT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
-  y: {[STEAL_T0]: 0, [STEAL_T1]: -0.1, [STEAL_T2]: -0.15, [STEAL_T3]: -0.1, [STEAL_T4]: 0},
+  y: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
   z: {[STEAL_T0]: 0, [STEAL_T1]: 0.15, [STEAL_T2]: 0.3, [STEAL_T3]: 0.25, [STEAL_T4]: 0},
 };
 
@@ -241,7 +241,7 @@ const PASS_INTERCEPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightShoulderY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: -40, [INTERCEPT_T2]: -50, [INTERCEPT_T3]: -50, [INTERCEPT_T4]: 0},
   rightShoulderZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: -30, [INTERCEPT_T2]: -35, [INTERCEPT_T3]: -35, [INTERCEPT_T4]: 0},
 
-  rightElbowX: {[INTERCEPT_T0]: 45, [INTERCEPT_T1]: 30, [INTERCEPT_T2]: 25, [INTERCEPT_T3]: 25, [INTERCEPT_T4]: 45},
+  rightElbowX: {[INTERCEPT_T0]: -45, [INTERCEPT_T1]: -30, [INTERCEPT_T2]: -25, [INTERCEPT_T3]: -25, [INTERCEPT_T4]: -45},
   rightElbowY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
   rightElbowZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
 
@@ -249,7 +249,7 @@ const PASS_INTERCEPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   leftShoulderY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 40, [INTERCEPT_T2]: 50, [INTERCEPT_T3]: 50, [INTERCEPT_T4]: 0},
   leftShoulderZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 30, [INTERCEPT_T2]: 35, [INTERCEPT_T3]: 35, [INTERCEPT_T4]: 0},
 
-  leftElbowX: {[INTERCEPT_T0]: 45, [INTERCEPT_T1]: 30, [INTERCEPT_T2]: 25, [INTERCEPT_T3]: 25, [INTERCEPT_T4]: 45},
+  leftElbowX: {[INTERCEPT_T0]: -45, [INTERCEPT_T1]: -30, [INTERCEPT_T2]: -25, [INTERCEPT_T3]: -25, [INTERCEPT_T4]: -45},
   leftElbowY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
   leftElbowZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
 
@@ -273,7 +273,7 @@ const PASS_INTERCEPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
 
 const PASS_INTERCEPT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
-  y: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: -0.2, [INTERCEPT_T2]: -0.3, [INTERCEPT_T3]: -0.3, [INTERCEPT_T4]: 0},
+  y: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
   z: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
 };
 
@@ -336,7 +336,7 @@ const DEFENSE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightShoulderY: {[STANCE_T0]: 0, [STANCE_T1]: -30, [STANCE_T2]: -32, [STANCE_T3]: -30},
   rightShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 20, [STANCE_T2]: 22, [STANCE_T3]: 20},
 
-  rightElbowX: {[STANCE_T0]: 45, [STANCE_T1]: 60, [STANCE_T2]: 65, [STANCE_T3]: 60},
+  rightElbowX: {[STANCE_T0]: -45, [STANCE_T1]: -60, [STANCE_T2]: -65, [STANCE_T3]: -60},
   rightElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
   rightElbowZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 
@@ -344,7 +344,7 @@ const DEFENSE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   leftShoulderY: {[STANCE_T0]: 0, [STANCE_T1]: 30, [STANCE_T2]: 28, [STANCE_T3]: 30},
   leftShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: -20, [STANCE_T2]: -18, [STANCE_T3]: -20},
 
-  leftElbowX: {[STANCE_T0]: 45, [STANCE_T1]: 60, [STANCE_T2]: 62, [STANCE_T3]: 60},
+  leftElbowX: {[STANCE_T0]: -45, [STANCE_T1]: -60, [STANCE_T2]: -62, [STANCE_T3]: -60},
   leftElbowY: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
   leftElbowZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 
@@ -368,7 +368,7 @@ const DEFENSE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
 
 const DEFENSE_STANCE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0.03, [STANCE_T3]: 0},
-  y: {[STANCE_T0]: 0, [STANCE_T1]: -0.35, [STANCE_T2]: -0.37, [STANCE_T3]: -0.35},
+  y: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
   z: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 };
 

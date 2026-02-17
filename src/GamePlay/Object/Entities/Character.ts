@@ -37,6 +37,7 @@ import { CharacterBodyBuilder } from "@/GamePlay/GameSystem/CharacterModel/Chara
 import type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyTypes";
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
 import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
+import { DashSpeedUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DashSpeedConfig";
 import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
 import { MOVEMENT_BALANCE } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
@@ -70,6 +71,8 @@ export class Character {
 
   private groundY: number; // 地面のY座標
   private motionOffsetY: number = 0; // モーションによるY軸オフセット
+  /** 自動接地: レスト姿勢（関節回転0）での足のY座標（mesh基準の相対値） */
+  private footRestRelativeY: number | null = null;
   private upperBodyYawOffset: number = 0; // 上半身のYaw回転オフセット（パス時に使用）
 
   // 衝突判定（footCircleRadiusで統一）
@@ -154,6 +157,10 @@ export class Character {
   private previousMoveSpeed: number = 0; // 前回の移動速度
   private lastMoveTime: number = 0; // 最後に移動した時刻（ミリ秒）
 
+  // ダッシュ加速状態
+  private dashStartTime: number | null = null; // ダッシュ開始時刻（null = 非ダッシュ）
+  private _dashAcceleration: number = 0; // 現在の加速率（0.0〜1.0）
+
   // 重心球の可視化
   private balanceSphereMesh: Mesh | null = null;
   private balanceSphereVisible: boolean = false;
@@ -209,6 +216,9 @@ export class Character {
 
     // モーションコントローラーを初期化
     this.motionController = new MotionController(this);
+
+    // 自動接地: レスト姿勢での足の基準Y座標をキャプチャ
+    this.captureFootRestY();
 
     // アクションコントローラーを初期化
     this.actionController = new ActionController(this);
@@ -406,6 +416,14 @@ export class Character {
   }
 
   /**
+   * 現在のダッシュ加速率を取得（0.0〜1.0）
+   * 0 = 非ダッシュまたはダッシュ開始直後、1.0 = トップスピード到達
+   */
+  public getDashAcceleration(): number {
+    return this._dashAcceleration;
+  }
+
+  /**
    * 位置を設定
    * @param position 設定する位置
    * @param skipBoundaryClamp trueの場合、フィールド境界へのクランプをスキップ（スローイン時など）
@@ -463,6 +481,35 @@ export class Character {
     this.motionOffsetY = offset;
     // メッシュのY位置のみを直接更新（境界クランプをトリガーしない）
     this.mesh.position.y = this.position.y + this.motionOffsetY;
+  }
+
+  /**
+   * レスト姿勢（関節回転0）での足のY座標をキャプチャする。
+   * コンストラクタから1回呼ばれる。
+   */
+  private captureFootRestY(): void {
+    this.body.leftFoot.computeWorldMatrix(true);
+    this.body.rightFoot.computeWorldMatrix(true);
+    const meshY = this.mesh.getAbsolutePosition().y;
+    const leftY = this.body.leftFoot.getAbsolutePosition().y - meshY;
+    const rightY = this.body.rightFoot.getAbsolutePosition().y - meshY;
+    this.footRestRelativeY = Math.min(leftY, rightY);
+  }
+
+  /**
+   * 現在の関節回転から、足を地面に着けるために必要なY補正値を計算する。
+   * 関節回転適用後、motionOffsetY設定前に呼ぶこと。
+   * @returns 自動接地オフセット（通常は0以下の値）
+   */
+  public getAutoGroundOffset(): number {
+    if (this.footRestRelativeY === null) return 0;
+    this.body.leftFoot.computeWorldMatrix(true);
+    this.body.rightFoot.computeWorldMatrix(true);
+    const meshY = this.mesh.getAbsolutePosition().y;
+    const leftY = this.body.leftFoot.getAbsolutePosition().y - meshY;
+    const rightY = this.body.rightFoot.getAbsolutePosition().y - meshY;
+    const lowestFootRelY = Math.min(leftY, rightY);
+    return this.footRestRelativeY - lowestFootRelY;
   }
 
   /** 上半身のYaw回転オフセットを設定（ラジアン） */
@@ -543,7 +590,20 @@ export class Character {
     isDashing: boolean = false
   ): void {
     const now = Date.now();
-    const speed = CHARACTER_CONFIG.speed;
+    let speed = CHARACTER_CONFIG.speed;
+
+    // ダッシュ加速の処理
+    if (isDashing) {
+      if (this.dashStartTime === null) {
+        this.dashStartTime = now;
+      }
+      const elapsed = (now - this.dashStartTime) / 1000;
+      this._dashAcceleration = DashSpeedUtils.calculateAcceleration(elapsed);
+      speed *= DashSpeedUtils.calculateSpeedMultiplier(this._dashAcceleration);
+    } else {
+      this.dashStartTime = null;
+      this._dashAcceleration = 0;
+    }
 
     // 正規化された方向ベクトルを確保
     const normalizedDir = direction.length() > 0.01
@@ -571,6 +631,12 @@ export class Character {
           normalizedDir,
           this.previousMoveSpeed
         );
+
+        // 方向転換時はダッシュ加速をリセット（再加速が必要）
+        if (isDashing && this.dashStartTime !== null) {
+          this.dashStartTime = now;
+          this._dashAcceleration = 0;
+        }
       }
     }
 
@@ -616,6 +682,10 @@ export class Character {
     this.previousMoveDirection = null;
     this.previousMoveSpeed = 0;
     this.velocity = Vector3.Zero();
+
+    // ダッシュ加速もリセット
+    this.dashStartTime = null;
+    this._dashAcceleration = 0;
   }
 
   /**

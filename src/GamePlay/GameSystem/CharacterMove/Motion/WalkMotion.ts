@@ -77,7 +77,7 @@ export const WF_JOINT_ANIMATIONS: Record<string, Record<number, number>> = creat
 );
 
 const WF_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WF_T0]: 0, [WF_T1]: -0.05, [WF_T2]: 0, [WF_T3]: -0.05, [WF_T4]: 0},
+  y: {[WF_T0]: 0, [WF_T1]: 0, [WF_T2]: 0, [WF_T3]: 0, [WF_T4]: 0},
 };
 
 export const WALK_FORWARD_MOTION: MotionData = {
@@ -171,7 +171,7 @@ export const WB_JOINT_ANIMATIONS: Record<string, Record<number, number>> = creat
 );
 
 const WB_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WB_T0]: 0, [WB_T1]: -0.05, [WB_T2]: 0, [WB_T3]: -0.05, [WB_T4]: 0},
+  y: {[WB_T0]: 0, [WB_T1]: 0, [WB_T2]: 0, [WB_T3]: 0, [WB_T4]: 0},
 };
 
 export const WALK_BACKWARD_MOTION: MotionData = {
@@ -262,7 +262,7 @@ export const WL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = creat
 );
 
 const WL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WL_T0]: 0, [WL_T1]: -0.05, [WL_T2]: 0, [WL_T3]: -0.05, [WL_T4]: 0},
+  y: {[WL_T0]: 0, [WL_T1]: 0, [WL_T2]: 0, [WL_T3]: 0, [WL_T4]: 0},
 };
 
 export const WALK_LEFT_MOTION: MotionData = {
@@ -351,7 +351,7 @@ export const WR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = creat
 );
 
 const WR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WR_T0]: 0, [WR_T1]: -0.05, [WR_T2]: 0, [WR_T3]: -0.05, [WR_T4]: 0},
+  y: {[WR_T0]: 0, [WR_T1]: 0, [WR_T2]: 0, [WR_T3]: 0, [WR_T4]: 0},
 };
 
 export const WALK_RIGHT_MOTION: MotionData = {
@@ -439,7 +439,7 @@ export const WFL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = crea
 );
 
 const WFL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WFL_T0]: 0, [WFL_T1]: -0.05, [WFL_T2]: 0, [WFL_T3]: -0.05, [WFL_T4]: 0},
+  y: {[WFL_T0]: 0, [WFL_T1]: 0, [WFL_T2]: 0, [WFL_T3]: 0, [WFL_T4]: 0},
 };
 
 export const WALK_FORWARD_LEFT_MOTION: MotionData = {
@@ -529,7 +529,7 @@ export const WFR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = crea
 );
 
 const WFR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WFR_T0]: 0, [WFR_T1]: -0.05, [WFR_T2]: 0, [WFR_T3]: -0.05, [WFR_T4]: 0},
+  y: {[WFR_T0]: 0, [WFR_T1]: 0, [WFR_T2]: 0, [WFR_T3]: 0, [WFR_T4]: 0},
 };
 
 export const WALK_FORWARD_RIGHT_MOTION: MotionData = {
@@ -619,7 +619,7 @@ export const WBL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = crea
 );
 
 const WBL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WBL_T0]: 0, [WBL_T1]: -0.05, [WBL_T2]: 0, [WBL_T3]: -0.05, [WBL_T4]: 0},
+  y: {[WBL_T0]: 0, [WBL_T1]: 0, [WBL_T2]: 0, [WBL_T3]: 0, [WBL_T4]: 0},
 };
 
 export const WALK_BACKWARD_LEFT_MOTION: MotionData = {
@@ -707,7 +707,7 @@ export const WBR_JOINT_ANIMATIONS: Record<string, Record<number, number>> = crea
 );
 
 const WBR_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[WBR_T0]: 0, [WBR_T1]: -0.05, [WBR_T2]: 0, [WBR_T3]: -0.05, [WBR_T4]: 0},
+  y: {[WBR_T0]: 0, [WBR_T1]: 0, [WBR_T2]: 0, [WBR_T3]: 0, [WBR_T4]: 0},
 };
 
 export const WALK_BACKWARD_RIGHT_MOTION: MotionData = {

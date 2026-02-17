@@ -7,9 +7,9 @@ import { Vector3 } from "@babylonjs/core";
 export interface ArmReachAngles {
   upperBodyX: number;      // 上半身前傾（正=前方）
   rightShoulderX: number;  // 右肩ピッチ（負=前方）
-  rightElbowX: number;     // 右肘屈曲（正=曲がり）
+  rightElbowX: number;     // 右肘屈曲（負=曲がり）
   leftShoulderX: number;   // 左肩ピッチ（負=前方）
-  leftElbowX: number;      // 左肘屈曲（正=曲がり）
+  leftElbowX: number;      // 左肘屈曲（負=曲がり）
 }
 
 const DEG = 180 / Math.PI;
@@ -31,9 +31,9 @@ const MAX_LEAN_DEG = 55;
 /** 肩X回転の範囲 */
 const MIN_SHOULDER_X = -120;
 const MAX_SHOULDER_X = -20;
-/** 肘X回転の範囲 */
-const MIN_ELBOW_X = 0;
-const MAX_ELBOW_X = 50;
+/** 肘X回転の範囲（負=屈曲） */
+const MIN_ELBOW_X = -50;
+const MAX_ELBOW_X = 0;
 
 /**
  * ボール位置に手を伸ばすための関節角度を計算する
@@ -131,8 +131,8 @@ export function calculateArmReach(
   // shoulderAngleFromHorizontal: 0=水平前方, π/2=真下
   const shoulderXDeg = shoulderAngleFromHorizontal * DEG - 90;
 
-  // elbowX: 0°=伸展, 正=屈曲
-  const elbowXDeg = (Math.PI - elbowInternalAngle) * DEG;
+  // elbowX: 0°=伸展, 負=屈曲（モーションデータの規約に合わせる）
+  const elbowXDeg = -(Math.PI - elbowInternalAngle) * DEG;
 
   // クランプして返す
   const clampedShoulderX = clamp(shoulderXDeg, MIN_SHOULDER_X, MAX_SHOULDER_X);

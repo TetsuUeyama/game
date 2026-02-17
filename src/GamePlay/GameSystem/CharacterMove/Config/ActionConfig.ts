@@ -54,9 +54,10 @@ export type ActionType =
  *   activeが終了したらidleに戻り、重心が安定するまで次のアクション不可
  */
 export type ActionPhase =
-  | 'idle'       // アクション未実行（重心が安定していれば次のアクション可能）
-  | 'startup'    // 発動前（キャンセル可能区間）
-  | 'active';    // アクティブ（判定が有効な区間、終了後はidleへ）
+  | 'idle'         // アクション未実行（重心が安定していれば次のアクション可能）
+  | 'preparation'  // 溜めフェーズ（CrouchMotion再生中、キャンセル可能）
+  | 'startup'      // 発動前（キャンセル可能区間）
+  | 'active';      // アクティブ（判定が有効な区間、終了後はidleへ）
 
 /**
  * ヒットボックス設定
@@ -104,6 +105,7 @@ export interface ActionState {
   currentAction: ActionType | null;
   phase: ActionPhase;
   phaseStartTime: number;      // 現在フェーズの開始時刻（ミリ秒）
+  preparationTime: number;     // 溜め時間（ms）、0ならpreparationフェーズをスキップ
 }
 
 /**

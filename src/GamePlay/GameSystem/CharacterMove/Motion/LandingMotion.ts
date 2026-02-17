@@ -130,7 +130,7 @@ const L_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const L_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[L_T0]: 0, [L_T1]: 0, [L_T2]: 0},
-  y: {[L_T0]: -0.3, [L_T1]: -0.15, [L_T2]: 0},
+  y: {[L_T0]: 0, [L_T1]: 0, [L_T2]: 0},
   z: {[L_T0]: 0, [L_T1]: 0, [L_T2]: 0},
 };
 
@@ -204,7 +204,7 @@ const LS_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const LS_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[LS_T0]: 0, [LS_T1]: 0},
-  y: {[LS_T0]: -0.15, [LS_T1]: 0},
+  y: {[LS_T0]: 0, [LS_T1]: 0},
   z: {[LS_T0]: 0, [LS_T1]: 0},
 };
 
@@ -280,7 +280,7 @@ const LL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const LL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[LL_T0]: 0, [LL_T1]: 0, [LL_T2]: 0, [LL_T3]: 0},
-  y: {[LL_T0]: -0.5, [LL_T1]: -0.3, [LL_T2]: -0.15, [LL_T3]: 0},
+  y: {[LL_T0]: 0, [LL_T1]: 0, [LL_T2]: 0, [LL_T3]: 0},
   z: {[LL_T0]: 0, [LL_T1]: 0, [LL_T2]: 0, [LL_T3]: 0},
 };
 

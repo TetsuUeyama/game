@@ -434,10 +434,11 @@ export class GameScene {
       this.dribblePathVisualizer.setEnabled(true);
     }
 
-    // 入力コントローラーの初期化
-    if (allCharacters.length > 0) {
-      this.inputController = new InputController(this.scene, allCharacters[0]);
-    }
+    // 入力コントローラーの初期化（現在は全選手AI制御のため無効化）
+    // InputControllerとCharacterAIが同じMotionControllerを二重制御すると挙動が不安定になる
+    // if (allCharacters.length > 0) {
+    //   this.inputController = new InputController(this.scene, allCharacters[0]);
+    // }
 
     // チェックモードマネージャーの初期化
     this._checkModeManager = new CheckModeManager(this.createCheckModeContext());
