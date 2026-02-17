@@ -103,9 +103,9 @@ export class PassController {
               : 'chest';
             ball.passWithArc(targetPosition, passTarget, ballPassType, curveDirection);
 
-            // レシーバーにpass_receiveアクションを開始させる
+            // レシーバーにball_catchアクションを開始させる
             const receiverActionController = passTarget.getActionController();
-            receiverActionController.startAction('pass_receive');
+            receiverActionController.startAction('ball_catch');
           }
         }
       },
