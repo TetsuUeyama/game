@@ -1,6 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
+import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ActionController";
 
 /** アクション開始距離（m） */
 const PICKUP_TRIGGER_DISTANCE = 1.5;
@@ -73,16 +74,7 @@ export class LooseBallController {
     const result = actionController.startAction('loose_ball_pickup');
 
     if (result.success) {
-      // startAction内部でcallbacksがクリアされるため、startActionの後にsetCallbacksを呼ぶ
-      const ball = this.ball;
-      actionController.setCallbacks({
-        onActive: () => {
-          // アクティブ時点でまだボールが未保持なら保持する
-          if (!ball.isHeld()) {
-            ball.setHolder(character);
-          }
-        },
-      });
+      this.setupArmReachIK(character, actionController);
     }
 
     return result.success;
@@ -105,6 +97,7 @@ export class LooseBallController {
 
     if (result.success) {
       this.lastScrambleTime.set(character, now);
+      this.setupArmReachIK(character, actionController);
     }
 
     return result.success;
@@ -115,6 +108,21 @@ export class LooseBallController {
    */
   public reset(): void {
     this.lastScrambleTime.clear();
+  }
+
+  /**
+   * アームリーチIKをセットアップ（pickup/scramble共通）
+   * アクション中は毎フレームボール位置に手を伸ばし、終了/中断時にIKを解除
+   */
+  private setupArmReachIK(character: Character, actionController: ActionController): void {
+    const ball = this.ball;
+    character.setArmReachTarget(() => ball.getPosition());
+
+    const clearIK = () => { character.setArmReachTarget(null); };
+    actionController.setCallbacks({
+      onComplete: clearIK,
+      onInterrupt: clearIK,
+    });
   }
 
   /**

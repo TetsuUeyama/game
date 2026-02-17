@@ -44,6 +44,10 @@ import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+import { calculateArmReach } from "@/GamePlay/GameSystem/CharacterMove/Systems/ArmReachSystem";
+import { CharacterSkeletonBridge } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterSkeletonBridge";
+import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
+import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 
 /**
  * 3Dキャラクターエンティティ
@@ -161,6 +165,14 @@ export class Character {
   // Havok物理ボディマネージャー
   private physicsManager: CharacterPhysicsManager;
 
+  // アームリーチIKターゲット（ボール拾い時にセット、nullでIK無効）
+  private armReachTarget: Vector3 | null = null;
+  private armReachTargetFn: (() => Vector3) | null = null;
+
+  // Skeleton Bridge + IKSystem（遅延初期化、initializeIK() で有効化）
+  private skeletonBridge: CharacterSkeletonBridge | null = null;
+  private ikSystem: IKSystem | null = null;
+
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
     this.scene = scene;
     this.position = position.clone();
@@ -247,6 +259,95 @@ export class Character {
    */
   public getJoint(jointName: string): Mesh | null {
     return CharacterBodyBuilder.getJoint(this.body, jointName);
+  }
+
+  /**
+   * 腕リーチIK: ターゲット位置に手を伸ばすよう関節角度を上書き
+   * @param target ワールド座標のターゲット位置、毎フレーム更新するgetter関数、またはnullでIK解除
+   */
+  public setArmReachTarget(target: Vector3 | (() => Vector3) | null): void {
+    if (target === null) {
+      this.armReachTarget = null;
+      this.armReachTargetFn = null;
+    } else if (target instanceof Vector3) {
+      this.armReachTarget = target;
+      this.armReachTargetFn = null;
+    } else {
+      this.armReachTargetFn = target;
+      this.armReachTarget = target();
+    }
+  }
+
+  /**
+   * 腕リーチIKを適用（MotionController更新後に呼ぶ）
+   */
+  private applyArmReachIK(): void {
+    // getter関数がある場合は毎フレームターゲットを更新
+    if (this.armReachTargetFn) {
+      this.armReachTarget = this.armReachTargetFn();
+    }
+    if (!this.armReachTarget) return;
+
+    const angles = calculateArmReach(
+      this.getPosition(),
+      this.rotation,
+      this.config.physical.height,
+      this.armReachTarget,
+    );
+
+    const toRad = Math.PI / 180;
+
+    // 上半身前傾
+    const upperBody = this.getJoint('upperBody');
+    if (upperBody) {
+      upperBody.rotation.x = angles.upperBodyX * toRad;
+    }
+
+    // 右腕
+    const rightShoulder = this.getJoint('rightShoulder');
+    if (rightShoulder) {
+      rightShoulder.rotation.x = angles.rightShoulderX * toRad;
+    }
+    const rightElbow = this.getJoint('rightElbow');
+    if (rightElbow) {
+      rightElbow.rotation.x = angles.rightElbowX * toRad;
+    }
+
+    // 左腕
+    const leftShoulder = this.getJoint('leftShoulder');
+    if (leftShoulder) {
+      leftShoulder.rotation.x = angles.leftShoulderX * toRad;
+    }
+    const leftElbow = this.getJoint('leftElbow');
+    if (leftElbow) {
+      leftElbow.rotation.x = angles.leftElbowX * toRad;
+    }
+  }
+
+  /**
+   * Skeleton Bridge + IKSystem を初期化する。
+   * Mesh階層と並行してSkeletonを生成し、BoneIKControllerベースのIKを有効化する。
+   * 初回呼び出し時のみ生成される（2回目以降は何もしない）。
+   */
+  public initializeIK(): void {
+    if (this.skeletonBridge) return;
+
+    this.skeletonBridge = CharacterSkeletonBridge.create(
+      this.scene,
+      this.mesh,
+      (name) => this.getJoint(name),
+    );
+
+    this.ikSystem = new IKSystem(this.scene, DEFAULT_MOTION_CONFIG);
+    this.ikSystem.initialize(this.skeletonBridge.skeleton, this.mesh);
+  }
+
+  /**
+   * IKSystem を取得する（initializeIK() 未呼び出しの場合は null）。
+   * 外部から腕IKターゲットを設定する場合などに使用。
+   */
+  public getIKSystem(): IKSystem | null {
+    return this.ikSystem;
   }
 
   /**
@@ -551,6 +652,16 @@ export class Character {
 
     // アクションコントローラーを更新
     this.actionController.update(deltaTime);
+
+    // 腕リーチIKを適用（モーション適用後に上書き）
+    this.applyArmReachIK();
+
+    // Skeleton Bridge IK（有効化されている場合のみ）
+    if (this.skeletonBridge && this.ikSystem) {
+      this.skeletonBridge.syncMeshToSkeleton();
+      this.ikSystem.update(0);
+      this.skeletonBridge.syncSkeletonToMesh();
+    }
 
     // 重心コントローラーを更新
     this.balanceController.update(deltaTime);
@@ -1810,6 +1921,16 @@ export class Character {
    * 破棄
    */
   public dispose(): void {
+    // IKSystem + Skeleton Bridge を破棄
+    if (this.ikSystem) {
+      this.ikSystem.dispose();
+      this.ikSystem = null;
+    }
+    if (this.skeletonBridge) {
+      this.skeletonBridge.dispose();
+      this.skeletonBridge = null;
+    }
+
     // 物理ボディを破棄
     this.physicsManager.dispose();
 

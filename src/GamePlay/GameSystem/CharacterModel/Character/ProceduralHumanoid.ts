@@ -13,8 +13,10 @@ import {
 } from "@babylonjs/core";
 import { MIXAMO_BONE_NAMES } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 import { createAnimationsForSkeleton } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import { BONE_OFFSETS } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonConfig";
 
 const B = MIXAMO_BONE_NAMES;
+const O = BONE_OFFSETS;
 
 /** キャラクター外見設定 */
 export interface AppearanceConfig {
@@ -82,40 +84,40 @@ export function createProceduralHumanoid(
     return bone;
   }
 
-  // Bone hierarchy (positions are local to parent)
+  // Bone hierarchy (positions from SkeletonConfig — GLBモデルと統一)
   const root = makeBone("Root", null, 0, 0, 0);
-  const hips = makeBone(B.hips, root, 0, 0.95, 0);
+  const hips = makeBone(B.hips, root, O.hips.x, O.hips.y, O.hips.z);
 
   // Spine chain
-  const spine = makeBone(B.spine, hips, 0, 0.12, 0);
-  const spine1 = makeBone(B.spine1, spine, 0, 0.12, 0);
-  const spine2 = makeBone(B.spine2, spine1, 0, 0.12, 0);
-  const neck = makeBone(B.neck, spine2, 0, 0.1, 0);
-  makeBone(B.head, neck, 0, 0.15, 0);
+  const spine = makeBone(B.spine, hips, O.spine.x, O.spine.y, O.spine.z);
+  const spine1 = makeBone(B.spine1, spine, O.spine1.x, O.spine1.y, O.spine1.z);
+  const spine2 = makeBone(B.spine2, spine1, O.spine2.x, O.spine2.y, O.spine2.z);
+  const neck = makeBone(B.neck, spine2, O.neck.x, O.neck.y, O.neck.z);
+  makeBone(B.head, neck, O.head.x, O.head.y, O.head.z);
 
   // Left arm（腕を体の横に垂らした状態 — T-ポーズだとX軸回転が効かない）
-  const lShoulder = makeBone(B.leftShoulder, spine2, -0.10, 0.06, 0);
-  const lArm = makeBone(B.leftArm, lShoulder, -0.04, -0.12, 0);
-  const lForeArm = makeBone(B.leftForeArm, lArm, 0, -0.26, 0);
-  makeBone(B.leftHand, lForeArm, 0, -0.20, 0);
+  const lShoulder = makeBone(B.leftShoulder, spine2, O.leftShoulder.x, O.leftShoulder.y, O.leftShoulder.z);
+  const lArm = makeBone(B.leftArm, lShoulder, O.leftArm.x, O.leftArm.y, O.leftArm.z);
+  const lForeArm = makeBone(B.leftForeArm, lArm, O.leftForeArm.x, O.leftForeArm.y, O.leftForeArm.z);
+  makeBone(B.leftHand, lForeArm, O.leftHand.x, O.leftHand.y, O.leftHand.z);
 
   // Right arm（同上）
-  const rShoulder = makeBone(B.rightShoulder, spine2, 0.10, 0.06, 0);
-  const rArm = makeBone(B.rightArm, rShoulder, 0.04, -0.12, 0);
-  const rForeArm = makeBone(B.rightForeArm, rArm, 0, -0.26, 0);
-  makeBone(B.rightHand, rForeArm, 0, -0.20, 0);
+  const rShoulder = makeBone(B.rightShoulder, spine2, O.rightShoulder.x, O.rightShoulder.y, O.rightShoulder.z);
+  const rArm = makeBone(B.rightArm, rShoulder, O.rightArm.x, O.rightArm.y, O.rightArm.z);
+  const rForeArm = makeBone(B.rightForeArm, rArm, O.rightForeArm.x, O.rightForeArm.y, O.rightForeArm.z);
+  makeBone(B.rightHand, rForeArm, O.rightHand.x, O.rightHand.y, O.rightHand.z);
 
   // Left leg（脚を体の外側に離して配置し、胴体との重なりを軽減）
-  const lUpLeg = makeBone(B.leftUpLeg, hips, -0.12, -0.04, 0);
-  const lLeg = makeBone(B.leftLeg, lUpLeg, 0, -0.42, 0);
-  const lFoot = makeBone(B.leftFoot, lLeg, 0, -0.42, 0);
-  makeBone(B.leftToeBase, lFoot, 0, -0.09, 0.12);
+  const lUpLeg = makeBone(B.leftUpLeg, hips, O.leftUpLeg.x, O.leftUpLeg.y, O.leftUpLeg.z);
+  const lLeg = makeBone(B.leftLeg, lUpLeg, O.leftLeg.x, O.leftLeg.y, O.leftLeg.z);
+  const lFoot = makeBone(B.leftFoot, lLeg, O.leftFoot.x, O.leftFoot.y, O.leftFoot.z);
+  makeBone(B.leftToeBase, lFoot, O.leftToeBase.x, O.leftToeBase.y, O.leftToeBase.z);
 
   // Right leg（同上）
-  const rUpLeg = makeBone(B.rightUpLeg, hips, 0.12, -0.04, 0);
-  const rLeg = makeBone(B.rightLeg, rUpLeg, 0, -0.42, 0);
-  const rFoot = makeBone(B.rightFoot, rLeg, 0, -0.42, 0);
-  makeBone(B.rightToeBase, rFoot, 0, -0.09, 0.12);
+  const rUpLeg = makeBone(B.rightUpLeg, hips, O.rightUpLeg.x, O.rightUpLeg.y, O.rightUpLeg.z);
+  const rLeg = makeBone(B.rightLeg, rUpLeg, O.rightLeg.x, O.rightLeg.y, O.rightLeg.z);
+  const rFoot = makeBone(B.rightFoot, rLeg, O.rightFoot.x, O.rightFoot.y, O.rightFoot.z);
+  makeBone(B.rightToeBase, rFoot, O.rightToeBase.x, O.rightToeBase.y, O.rightToeBase.z);
 
   // --- Animations（AnimationFactory に委譲）---
   const anims = createAnimationsForSkeleton(scene, skeleton);
@@ -161,26 +163,38 @@ export function createProceduralHumanoid(
     allMeshes.push(mesh);
   }
 
+  // ボーンオフセットからセグメント長を自動計算するヘルパー
+  function boneLength(key: string): number {
+    const o = BONE_OFFSETS[key];
+    return Math.sqrt(o.x * o.x + o.y * o.y + o.z * o.z);
+  }
+  // 胴体長: spine + spine1 + spine2 + neck の合計
+  const torsoLen = boneLength("spine") + boneLength("spine1") + boneLength("spine2") + boneLength("neck");
+  const upperArmLen = boneLength("leftForeArm");  // arm → foreArm
+  const foreArmLen = boneLength("leftHand");       // foreArm → hand
+  const upperLegLen = boneLength("leftLeg");       // upLeg → leg
+  const lowerLegLen = boneLength("leftFoot");      // leg → foot
+
   // Head
   addPoint("head_vis", B.head, { diameter: 0.2 }, skinMat, new Vector3(0, 0.1, 0));
   // Face
   addPoint("eye_L", B.head, { diameter: 0.03 }, eyeMat, new Vector3(-0.04, 0.13, 0.08));
   addPoint("eye_R", B.head, { diameter: 0.03 }, eyeMat, new Vector3(0.04, 0.13, 0.08));
   addPoint("nose", B.head, { width: 0.02, height: 0.03, depth: 0.03 }, skinMat, new Vector3(0, 0.1, 0.1));
-  // Torso (Hips → Neck) — 幅を縮小して脚との重なりを軽減
-  addSegment("torso_vis", B.hips, B.neck, 0.28, 0.46, 0.18, shirtMat);
+  // Torso (Hips → Neck)
+  addSegment("torso_vis", B.hips, B.neck, 0.28, torsoLen, 0.18, shirtMat);
   // Hip area
   addPoint("hips_vis", B.hips, { width: 0.26, height: 0.08, depth: 0.16 }, pantsMat, Vector3.Zero());
-  // Arms — 腕は下に垂れた状態に合わせたサイズ
-  addSegment("lUpperArm_vis", B.leftArm, B.leftForeArm, 0.08, 0.26, 0.08, shirtMat);
-  addSegment("lForeArm_vis", B.leftForeArm, B.leftHand, 0.07, 0.20, 0.07, skinMat);
-  addSegment("rUpperArm_vis", B.rightArm, B.rightForeArm, 0.08, 0.26, 0.08, shirtMat);
-  addSegment("rForeArm_vis", B.rightForeArm, B.rightHand, 0.07, 0.20, 0.07, skinMat);
-  // Legs — 太もも断面を少し小さく
-  addSegment("lUpperLeg_vis", B.leftUpLeg, B.leftLeg, 0.11, 0.42, 0.11, pantsMat);
-  addSegment("lLowerLeg_vis", B.leftLeg, B.leftFoot, 0.09, 0.42, 0.09, pantsMat);
-  addSegment("rUpperLeg_vis", B.rightUpLeg, B.rightLeg, 0.11, 0.42, 0.11, pantsMat);
-  addSegment("rLowerLeg_vis", B.rightLeg, B.rightFoot, 0.09, 0.42, 0.09, pantsMat);
+  // Arms
+  addSegment("lUpperArm_vis", B.leftArm, B.leftForeArm, 0.08, upperArmLen, 0.08, shirtMat);
+  addSegment("lForeArm_vis", B.leftForeArm, B.leftHand, 0.07, foreArmLen, 0.07, skinMat);
+  addSegment("rUpperArm_vis", B.rightArm, B.rightForeArm, 0.08, upperArmLen, 0.08, shirtMat);
+  addSegment("rForeArm_vis", B.rightForeArm, B.rightHand, 0.07, foreArmLen, 0.07, skinMat);
+  // Legs
+  addSegment("lUpperLeg_vis", B.leftUpLeg, B.leftLeg, 0.11, upperLegLen, 0.11, pantsMat);
+  addSegment("lLowerLeg_vis", B.leftLeg, B.leftFoot, 0.09, lowerLegLen, 0.09, pantsMat);
+  addSegment("rUpperLeg_vis", B.rightUpLeg, B.rightLeg, 0.11, upperLegLen, 0.11, pantsMat);
+  addSegment("rLowerLeg_vis", B.rightLeg, B.rightFoot, 0.09, lowerLegLen, 0.09, pantsMat);
   // Feet
   addPoint("lFoot_vis", B.leftFoot, { width: 0.09, height: 0.06, depth: 0.2 }, shoesMat, new Vector3(0, -0.03, 0.05));
   addPoint("rFoot_vis", B.rightFoot, { width: 0.09, height: 0.06, depth: 0.2 }, shoesMat, new Vector3(0, -0.03, 0.05));
