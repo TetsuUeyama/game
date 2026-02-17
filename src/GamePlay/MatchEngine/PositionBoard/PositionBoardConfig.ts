@@ -6,7 +6,7 @@ import {
   PositionBoardType,
   PositionBoardConfig,
   BoardPlayerPosition,
-} from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
+} from '@/GamePlay/MatchEngine/PositionBoard/PositionBoard';
 import { GRID_CONFIG } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 /**

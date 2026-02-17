@@ -24,7 +24,7 @@ import {
 import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
-import { ACTION_DEFINITIONS } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig";
+import { ACTION_DEFINITIONS } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 
 /**
  * キャラクターAI状態管理

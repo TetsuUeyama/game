@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
-import { ACTION_MOTIONS, ActionType } from '@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig';
+import { ACTION_MOTIONS, ActionType } from '@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig';
 import { Character } from '@/GamePlay/Object/Entities/Character';
 
 interface MotionCheckModePanelProps {

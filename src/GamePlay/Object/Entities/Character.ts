@@ -41,7 +41,7 @@ import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controlle
 import { MOVEMENT_BALANCE } from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
-import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/OneOnOneBattleConfig";
+import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 

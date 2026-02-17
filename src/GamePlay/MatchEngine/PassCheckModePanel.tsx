@@ -11,7 +11,7 @@ import {
 } from '@/GamePlay/MatchEngine/CheckControllers/PassCheckController';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
-import { PassType } from '@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig';
+import { PassType } from '@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 interface PassCheckModePanelProps {

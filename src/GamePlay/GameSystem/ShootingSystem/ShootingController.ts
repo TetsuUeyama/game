@@ -24,7 +24,7 @@ import {
   getDirection2D,
   isDirectionWithinAngle,
 } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
-import { ActionType, ActionConfigUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig";
+import { ActionType, ActionConfigUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 
 /**
  * シュートの種類

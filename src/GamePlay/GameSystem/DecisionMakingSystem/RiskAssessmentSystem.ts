@@ -3,7 +3,7 @@ import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
 import { DefenderStateUtils } from "@/GamePlay/GameSystem/CharacterMove/Utils/DefenderStateUtils";
-import { RISK_ASSESSMENT_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/RiskAssessmentConfig";
+import { RISK_ASSESSMENT_CONFIG } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentConfig";
 import {
   PassTrajectoryCalculator,
   TrajectoryResult,
@@ -15,7 +15,7 @@ import {
   getInterceptionRiskLevel,
   PassType,
   PASS_TYPE_CONFIGS,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/PassTrajectoryConfig";
+} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 

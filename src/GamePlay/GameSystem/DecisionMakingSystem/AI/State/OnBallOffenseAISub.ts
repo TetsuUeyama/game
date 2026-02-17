@@ -8,7 +8,7 @@ import {ShootingController} from "@/GamePlay/GameSystem/ShootingSystem/ShootingC
 import {FeintController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 import {ShotClockController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/ShotClockController";
 import {ShootingUtils, SHOOT_RANGE} from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
-import {PassUtils} from "@/GamePlay/GameSystem/CharacterMove/Config/PassConfig";
+import {PassUtils} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassConfig";
 import {DRIBBLE_STANCE_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 import {DASH_FORWARD_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import {RiskAssessmentSystem} from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
@@ -18,7 +18,7 @@ import { isInPaintArea } from "@/GamePlay/GameSystem/DecisionMakingSystem/Tactic
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";
 import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
-import { PositionBehaviorParams, getPositionBehavior, getShootAggressiveness } from "@/GamePlay/GameSystem/CharacterMove/Config/PositionBehaviorConfig";
+import { PositionBehaviorParams, getPositionBehavior, getShootAggressiveness } from "@/GamePlay/GameSystem/DecisionMakingSystem/PositionBehaviorConfig";
 import { PlayerPosition } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
 
 /**

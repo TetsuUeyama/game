@@ -8,7 +8,7 @@ import {
   ActionConfigUtils,
   HitboxConfig,
   ACTION_MOTIONS,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig";
+} from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { BalanceController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/BalanceController";
 

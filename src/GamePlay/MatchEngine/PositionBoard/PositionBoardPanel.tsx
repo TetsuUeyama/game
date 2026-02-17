@@ -4,11 +4,11 @@ import { useState, useCallback } from 'react';
 import {
   PositionBoardType,
   BoardPlayerPosition,
-} from '@/GamePlay/GameSystem/CharacterMove/Types/PositionBoard';
+} from '@/GamePlay/MatchEngine/PositionBoard/PositionBoard';
 import {
   POSITION_BOARD_UI_CONFIG,
   createDefaultPositionBoardConfig as createDefaultConfig,
-} from '@/GamePlay/GameSystem/CharacterMove/Config/PositionBoardConfig';
+} from '@/GamePlay/MatchEngine/PositionBoard/PositionBoardConfig';
 import { PositionBoardGrid } from './PositionBoardGrid';
 import { PositionBoardToolbar } from './PositionBoardToolbar';
 

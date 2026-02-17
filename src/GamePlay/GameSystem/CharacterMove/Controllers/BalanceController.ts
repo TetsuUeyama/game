@@ -13,7 +13,7 @@ import {
   ACTION_TYPE_FORCES,
   MOVEMENT_BALANCE,
 } from "@/GamePlay/Object/Physics/Balance/BalanceConfig";
-import type { ActionType } from "@/GamePlay/GameSystem/CharacterMove/Config/Action/ActionConfig";
+import type { ActionType } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import {
   BalanceSphereState,
   PlayerPhysicsParams,
