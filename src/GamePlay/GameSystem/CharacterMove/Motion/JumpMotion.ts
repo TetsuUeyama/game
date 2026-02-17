@@ -75,6 +75,12 @@ export const JUMP_MOTION: MotionData = {
   duration: T4,
   loop: false,
   keyframes: buildKeyframes(JOINT_ANIMATIONS, POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.0,
+    peakTime: 0.18,     // 30% 地点で頂点 → 素早い上昇
+    landingTime: 0.6,
+    peakHeight: 1.5,
+  },
   priorities: [
     { jointName: "leftHip", priority: 10 },
     { jointName: "rightHip", priority: 10 },
@@ -196,6 +202,12 @@ export const JUMP_BALL_MOTION: MotionData = {
   duration: JB_T5,
   loop: false,
   keyframes: buildKeyframes(JUMP_BALL_JOINT_ANIMATIONS, JUMP_BALL_POSITION_ANIMATIONS),
+  jumpPhysics: {
+    liftoffTime: 0.1,
+    peakTime: 0.30,     // 地上フェーズ後、素早く頂点へ
+    landingTime: 0.9,
+    peakHeight: 1.0,
+  },
   priorities: [
     { jointName: "rightShoulder", priority: 10 },
     { jointName: "leftShoulder", priority: 10 },

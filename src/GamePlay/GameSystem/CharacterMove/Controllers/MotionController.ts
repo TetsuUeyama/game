@@ -1,6 +1,6 @@
 import { Scalar } from "@babylonjs/core";
 import {Character} from "@/GamePlay/Object/Entities/Character";
-import {MotionData, MotionState, MotionConfig, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
+import {MotionData, MotionState, MotionConfig, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset, JumpPhysics} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { MOTION_BLEND_CONFIG, MOTION_SPEED_CONFIG, MOTION_POSITION_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
 
 /**
@@ -327,7 +327,7 @@ export class MotionController {
     this.applyJointsWithPriority(currentJoints, this.state.currentMotion.priorities);
 
     // 位置オフセット + 自動接地を適用
-    const currentPosition = this.interpolatePosition(this.state.currentMotion.keyframes, this.state.currentTime);
+    const currentPosition = this.interpolatePosition(this.state.currentMotion.keyframes, this.state.currentTime, this.state.currentMotion.jumpPhysics);
     this.applyPositionOffset(currentPosition);
   }
 
@@ -371,7 +371,7 @@ export class MotionController {
         this.applyJointsWithPriority(blendedJoints, priorities);
 
         // ブレンド中も位置オフセット + 自動接地を適用
-        const currentPosition = this.interpolatePosition(this.state.nextMotion.keyframes, 0);
+        const currentPosition = this.interpolatePosition(this.state.nextMotion.keyframes, 0, this.state.nextMotion.jumpPhysics);
         this.applyPositionOffset(currentPosition);
         return;
       }
@@ -404,7 +404,7 @@ export class MotionController {
     this.applyJointsWithPriority(currentJoints, motion.priorities);
 
     // 位置オフセット + 自動接地を適用
-    const currentPosition = this.interpolatePosition(motion.keyframes, this.state.currentTime);
+    const currentPosition = this.interpolatePosition(motion.keyframes, this.state.currentTime, motion.jumpPhysics);
     this.applyPositionOffset(currentPosition);
   }
 
@@ -476,8 +476,9 @@ export class MotionController {
 
   /**
    * キーフレーム間を補間して現在の位置オフセットを取得
+   * jumpPhysics が指定されている場合、Y軸のみ放物線で計算する
    */
-  private interpolatePosition(keyframes: Keyframe[], currentTime: number): PositionOffset | null {
+  private interpolatePosition(keyframes: Keyframe[], currentTime: number, jumpPhysics?: JumpPhysics): PositionOffset | null {
     // 位置オフセットを持つキーフレームを見つける
     const framesWithPosition = keyframes.filter((kf) => kf.position);
 
@@ -486,7 +487,12 @@ export class MotionController {
     }
 
     if (framesWithPosition.length === 1) {
-      return framesWithPosition[0].position!;
+      const pos = framesWithPosition[0].position!;
+      return {
+        x: pos.x,
+        y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : pos.y,
+        z: pos.z,
+      };
     }
 
     // 現在の時間を挟む2つのキーフレームを見つける
@@ -504,9 +510,19 @@ export class MotionController {
     // 範囲外の場合
     if (!prevKeyframe || !nextKeyframe) {
       if (currentTime < framesWithPosition[0].time) {
-        return framesWithPosition[0].position!;
+        const pos = framesWithPosition[0].position!;
+        return {
+          x: pos.x,
+          y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : pos.y,
+          z: pos.z,
+        };
       } else {
-        return framesWithPosition[framesWithPosition.length - 1].position!;
+        const pos = framesWithPosition[framesWithPosition.length - 1].position!;
+        return {
+          x: pos.x,
+          y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : pos.y,
+          z: pos.z,
+        };
       }
     }
 
@@ -514,15 +530,52 @@ export class MotionController {
     const timeDiff = nextKeyframe.time - prevKeyframe.time;
     const t = timeDiff > 0 ? (currentTime - prevKeyframe.time) / timeDiff : 0;
 
-    // 位置を補間
+    // 位置を補間（X, Z は線形、Y は物理 or 線形）
     const prevPos = prevKeyframe.position!;
     const nextPos = nextKeyframe.position!;
 
     return {
       x: this.lerp(prevPos.x, nextPos.x, t),
-      y: this.lerp(prevPos.y, nextPos.y, t),
+      y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : this.lerp(prevPos.y, nextPos.y, t),
       z: this.lerp(prevPos.z, nextPos.z, t),
     };
+  }
+
+  /**
+   * 物理ベースのジャンプY位置を計算（2区間パラボラ）
+   *
+   * 上昇: y = h * (2p - p²)  速い立ち上がり → 頂点で速度0
+   * 下降: y = h * (1 - p²)   頂点で速度0 → 加速しながら着地
+   */
+  private computePhysicsY(t: number, physics: JumpPhysics): number {
+    const { liftoffTime, peakTime, landingTime, peakHeight } = physics;
+    const hang = physics.hangTime ?? 0;
+
+    if (t <= liftoffTime) return 0;
+    if (t >= landingTime) return 0;
+
+    // 実効的な下降開始時刻（peakTime + hangTime）
+    const descentStart = Math.max(peakTime, liftoffTime) + hang;
+
+    if (peakTime <= liftoffTime) {
+      // 下降のみ（JumpShoot系: 頂点から開始）
+      if (t <= descentStart) return peakHeight; // 頂点滞空
+      const p = (t - descentStart) / (landingTime - descentStart);
+      return peakHeight * (1 - p * p);
+    }
+
+    if (t <= peakTime) {
+      // 上昇フェーズ
+      const p = (t - liftoffTime) / (peakTime - liftoffTime);
+      return peakHeight * (2 * p - p * p);
+    } else if (t <= descentStart) {
+      // 頂点滞空
+      return peakHeight;
+    } else {
+      // 下降フェーズ
+      const p = (t - descentStart) / (landingTime - descentStart);
+      return peakHeight * (1 - p * p);
+    }
   }
 
   /**
