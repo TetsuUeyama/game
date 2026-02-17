@@ -87,7 +87,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const SHOOT_3PT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
-  y: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: -0.3, [SHOOT_3PT_T2]: 0.8, [SHOOT_3PT_T3]: 0.3, [SHOOT_3PT_T4]: 0},
+  y: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0.8, [SHOOT_3PT_T3]: 0.3, [SHOOT_3PT_T4]: 0},
   z: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 };
 
@@ -180,7 +180,7 @@ const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
 
 const SHOOT_MIDRANGE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
-  y: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: -0.2, [SHOOT_MID_T2]: 0.6, [SHOOT_MID_T3]: 0.2, [SHOOT_MID_T4]: 0},
+  y: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0.6, [SHOOT_MID_T3]: 0.2, [SHOOT_MID_T4]: 0},
   z: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 };
 
@@ -275,7 +275,7 @@ const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const SHOOT_LAYUP_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
-  y: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: -0.15, [SHOOT_LAYUP_T2]: 1.0, [SHOOT_LAYUP_T3]: 0.5, [SHOOT_LAYUP_T4]: 0},
+  y: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 1.0, [SHOOT_LAYUP_T3]: 0.5, [SHOOT_LAYUP_T4]: 0},
   z: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0.1, [SHOOT_LAYUP_T2]: 0.3, [SHOOT_LAYUP_T3]: 0.2, [SHOOT_LAYUP_T4]: 0},
 };
 
@@ -392,7 +392,7 @@ const SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 const SHOOT_DUNK_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
   // 高くジャンプ（リム高さ3.05mに届くように）
-  y: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: -0.3, [SHOOT_DUNK_T2]: 1.5, [SHOOT_DUNK_T3]: 1.2, [SHOOT_DUNK_T4]: 0.5, [SHOOT_DUNK_T5]: 0},
+  y: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 1.5, [SHOOT_DUNK_T3]: 1.2, [SHOOT_DUNK_T4]: 0.5, [SHOOT_DUNK_T5]: 0},
   // Z方向は実際のキャラクター移動で制御、モーションでは微調整のみ
   z: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
 };
@@ -497,7 +497,7 @@ const SHOOT_FEINT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 // フェイントはジャンプしない（y=0のまま）
 const SHOOT_FEINT_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
-  y: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: -0.1, [SHOOT_FEINT_T2]: -0.05, [SHOOT_FEINT_T3]: 0}, // 膝を曲げた分少し沈む
+  y: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0}, // 膝を曲げた分少し沈む
   z: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
 };
 

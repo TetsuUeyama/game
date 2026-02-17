@@ -70,7 +70,7 @@ export const IDLE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 };
 
 const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
-  y: {[T0]: 0, [T1]: -0.01, [T2]: 0, [T3]: -0.01, [T4]: 0},
+  y: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
 };
 
 export const IDLE_MOTION: MotionData = {

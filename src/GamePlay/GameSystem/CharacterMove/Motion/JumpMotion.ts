@@ -66,7 +66,7 @@ const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 
 const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  y: {[T0]: -0.6, [T1]: 0.5, [T2]: 1.5, [T3]: 0.5, [T4]: 0},
+  y: {[T0]: 0, [T1]: 0.5, [T2]: 1.5, [T3]: 0.5, [T4]: 0},
   z: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
 };
 
@@ -184,7 +184,7 @@ const JUMP_BALL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
 // 位置アニメーション（ジャンプ高さ約1.0m）
 const JUMP_BALL_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0, [JB_T3]: 0, [JB_T4]: 0, [JB_T5]: 0},
-  y: {[JB_T0]: 0, [JB_T1]: -0.25, [JB_T2]: 0.2, [JB_T3]: 1.0, [JB_T4]: 0.6, [JB_T5]: 0},
+  y: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0.2, [JB_T3]: 1.0, [JB_T4]: 0.6, [JB_T5]: 0},
   z: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0.05, [JB_T3]: 0.1, [JB_T4]: 0.05, [JB_T5]: 0},
 };
 

@@ -58,9 +58,10 @@ const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightKneeZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
 };
 
+// position.y: 自動接地が代替するため全て0（以前は -0.2〜-0.3 で手動補正していた）
 const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
-  y: {[T0]: 0, [T1]: -0.2, [T2]: -0.25, [T3]: -0.3},
+  y: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
   z: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
 };
 

@@ -327,7 +327,8 @@ export class ShootingController {
     }
 
     const actionController = shooter.getActionController();
-    const actionResult = actionController.startAction(actionType);
+    const prepTime = this.calculatePreparationTime(shooter, distance, shootType);
+    const actionResult = actionController.startAction(actionType, { preparationTime: prepTime });
 
     if (!actionResult.success) {
       return {
@@ -356,6 +357,42 @@ export class ShootingController {
       distance,
       message: `${ShootingUtils.getShootTypeName(shootType)}モーション開始`,
     };
+  }
+
+  /**
+   * シュートの溜め時間を計算（ms）
+   * 距離成分 + 重心ペナルティ成分
+   */
+  private calculatePreparationTime(shooter: Character, distance: number, shootType: ShootType): number {
+    // 距離成分
+    let distanceComponent = 0;
+    if (shootType === '3pt') {
+      // 6.75m → 200ms, 10.0m → 400ms
+      const t = (distance - SHOOT_RANGE.THREE_POINT_LINE) /
+                (SHOOT_RANGE.THREE_POINT_MAX - SHOOT_RANGE.THREE_POINT_LINE);
+      distanceComponent = 200 + Math.min(1, Math.max(0, t)) * 200;
+    } else if (shootType === 'midrange') {
+      // 2.0m → 0ms, 6.75m → 150ms
+      const t = (distance - SHOOT_RANGE.MIDRANGE_MIN) /
+                (SHOOT_RANGE.MIDRANGE_MAX - SHOOT_RANGE.MIDRANGE_MIN);
+      distanceComponent = Math.min(1, Math.max(0, t)) * 150;
+    }
+    // layup/dunk: distanceComponent = 0
+
+    // 重心ペナルティ成分
+    let balancePenalty = 0;
+    const balanceController = shooter.getBalanceController();
+    if (balanceController) {
+      // 水平オフセット: 0→0ms, 0.1m→200ms
+      const offset = balanceController.getHorizontalOffset();
+      balancePenalty += Math.min(200, offset / 0.1 * 200);
+
+      // 重心速度: recoveryTimeをペナルティに変換
+      const recoveryTime = balanceController.getEstimatedRecoveryTime();
+      balancePenalty += Math.min(100, recoveryTime * 500);
+    }
+
+    return Math.round(distanceComponent + balancePenalty);
   }
 
   /**

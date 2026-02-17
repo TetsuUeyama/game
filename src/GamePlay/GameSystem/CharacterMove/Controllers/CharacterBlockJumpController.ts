@@ -31,7 +31,7 @@ export interface BlockJumpState {
  */
 export interface ActionPhaseInfo {
   currentAction: string | null;
-  currentPhase: 'idle' | 'startup' | 'active';
+  currentPhase: 'idle' | 'preparation' | 'startup' | 'active';
   isBalanceStable: boolean;
 }
 

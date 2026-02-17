@@ -155,9 +155,9 @@ export function createDashStopMotion(accelerationRatio: number): MotionData {
   const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
     x: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},
     y: {
-      [T0]: -0.25 * intensityMultiplier,
-      [T1]: -0.15 * intensityMultiplier,
-      [T2]: -0.05 * intensityMultiplier,
+      [T0]: 0,
+      [T1]: 0,
+      [T2]: 0,
       [T3]: 0,
     },
     z: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0},

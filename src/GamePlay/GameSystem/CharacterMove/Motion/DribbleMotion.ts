@@ -74,7 +74,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
 
 const DRIBBLE_BREAKTHROUGH_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
-  y: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: -0.1, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: -0.05, [DRIBBLE_T4]: 0},
+  y: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   z: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0.1, [DRIBBLE_T2]: 0.3, [DRIBBLE_T3]: 0.2, [DRIBBLE_T4]: 0},
 };
 
@@ -166,7 +166,7 @@ const DRIBBLE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
 
 const DRIBBLE_STANCE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
-  y: {[STANCE_T0]: -0.08, [STANCE_T1]: -0.1, [STANCE_T2]: -0.08, [STANCE_T3]: -0.1},
+  y: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
   z: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 };
 

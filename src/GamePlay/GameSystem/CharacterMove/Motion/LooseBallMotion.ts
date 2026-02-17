@@ -42,7 +42,7 @@ const LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS: Record<string, Record<number, number
   rightShoulderY: {[LB_T0]: 0, [LB_T1]: -10, [LB_T2]: -15, [LB_T3]: -10, [LB_T4]: 0},
   rightShoulderZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
-  rightElbowX: {[LB_T0]: 45, [LB_T1]: 20, [LB_T2]: 10, [LB_T3]: 15, [LB_T4]: 45},
+  rightElbowX: {[LB_T0]: -45, [LB_T1]: -20, [LB_T2]: -10, [LB_T3]: -15, [LB_T4]: -45},
   rightElbowY: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
   rightElbowZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
@@ -50,7 +50,7 @@ const LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS: Record<string, Record<number, number
   leftShoulderY: {[LB_T0]: 0, [LB_T1]: 10, [LB_T2]: 15, [LB_T3]: 10, [LB_T4]: 0},
   leftShoulderZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
-  leftElbowX: {[LB_T0]: 45, [LB_T1]: 20, [LB_T2]: 10, [LB_T3]: 15, [LB_T4]: 45},
+  leftElbowX: {[LB_T0]: -45, [LB_T1]: -20, [LB_T2]: -10, [LB_T3]: -15, [LB_T4]: -45},
   leftElbowY: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
   leftElbowZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
@@ -74,7 +74,7 @@ const LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS: Record<string, Record<number, number
 
 const LOOSE_BALL_SCRAMBLE_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
-  y: {[LB_T0]: 0, [LB_T1]: -0.2, [LB_T2]: -0.4, [LB_T3]: -0.3, [LB_T4]: 0},  // 低い姿勢
+  y: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},  // 低い姿勢
   z: {[LB_T0]: 0, [LB_T1]: 0.15, [LB_T2]: 0.3, [LB_T3]: 0.2, [LB_T4]: 0},    // 前方に突き出す
 };
 
@@ -106,7 +106,7 @@ const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>>
   rightShoulderY: {[PU_T0]: 0, [PU_T1]: -5, [PU_T2]: -10, [PU_T3]: -5, [PU_T4]: 0},
   rightShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
-  rightElbowX: {[PU_T0]: 45, [PU_T1]: 30, [PU_T2]: 15, [PU_T3]: 25, [PU_T4]: 45},
+  rightElbowX: {[PU_T0]: -45, [PU_T1]: -30, [PU_T2]: -15, [PU_T3]: -25, [PU_T4]: -45},
   rightElbowY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
   rightElbowZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
@@ -114,7 +114,7 @@ const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>>
   leftShoulderY: {[PU_T0]: 0, [PU_T1]: 5, [PU_T2]: 10, [PU_T3]: 5, [PU_T4]: 0},
   leftShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
-  leftElbowX: {[PU_T0]: 45, [PU_T1]: 30, [PU_T2]: 15, [PU_T3]: 25, [PU_T4]: 45},
+  leftElbowX: {[PU_T0]: -45, [PU_T1]: -30, [PU_T2]: -15, [PU_T3]: -25, [PU_T4]: -45},
   leftElbowY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
   leftElbowZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
@@ -138,7 +138,7 @@ const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>>
 
 const LOOSE_BALL_PICKUP_POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   x: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
-  y: {[PU_T0]: 0, [PU_T1]: -0.1, [PU_T2]: -0.2, [PU_T3]: -0.1, [PU_T4]: 0},  // 浅い姿勢
+  y: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},  // 浅い姿勢
   z: {[PU_T0]: 0, [PU_T1]: 0.05, [PU_T2]: 0.1, [PU_T3]: 0.05, [PU_T4]: 0},   // 軽く前方
 };
 
