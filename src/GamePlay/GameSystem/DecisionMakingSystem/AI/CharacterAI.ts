@@ -9,11 +9,11 @@ import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";
 import { DribbleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DribbleController";
 import { DefenseActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DefenseActionController";
-import { LooseBallController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/LooseBallController";
+import { LooseBallController } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallController";
 import { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { IDLE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
-import { DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
+import { DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/DribbleBreakthroughConfig";
 import {
   LooseBallAI,
   OnBallOffenseAI,

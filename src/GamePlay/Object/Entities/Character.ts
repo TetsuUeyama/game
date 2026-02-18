@@ -8,6 +8,7 @@ import {
   AbstractMesh,
   LinesMesh,
   DynamicTexture,
+  Bone,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
@@ -38,17 +39,16 @@ import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSyst
 import { CharacterBodyBuilder } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyBuilder";
 import type { CharacterBody } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterBodyTypes";
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
-import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
+import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/DribbleBreakthroughConfig";
 import { DashSpeedUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DashSpeedConfig";
 import { getDashDirectionMultiplier, getWalkDirectionMultiplier } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
 import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
 import { MOVEMENT_BALANCE } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
-import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
+import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
-import { calculateArmReach } from "@/GamePlay/GameSystem/CharacterMove/Systems/ArmReachSystem";
 import { CharacterSkeletonBridge } from "@/GamePlay/GameSystem/CharacterModel/Character/CharacterSkeletonBridge";
 import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
 import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
@@ -185,11 +185,7 @@ export class Character {
   // Havok物理ボディマネージャー
   private physicsManager: CharacterPhysicsManager;
 
-  // アームリーチIKターゲット（ボール拾い時にセット、nullでIK無効）
-  private armReachTarget: Vector3 | null = null;
-  private armReachTargetFn: (() => Vector3) | null = null;
-
-  // Skeleton Bridge + IKSystem（遅延初期化、initializeIK() で有効化）
+  // Skeleton Bridge + IKSystem
   private skeletonBridge: CharacterSkeletonBridge | null = null;
   private ikSystem: IKSystem | null = null;
 
@@ -213,13 +209,19 @@ export class Character {
     this.mesh = rootMesh;
     this.body = body;
 
-    // 方向サークルを初期化（前3方向のみの扇形：方向7=前左, 0=正面, 1=前右）
-    // 方向2〜6は半径0（サークルなし）
+    // スケルトンブリッジを構築（FK/IKの基盤）
+    this.skeletonBridge = CharacterSkeletonBridge.create(
+      this.scene,
+      this.mesh,
+      (name) => this.getJoint(name),
+    );
+
+    // 方向サークルを初期化（均一円形、状況に応じてCircleSizeControllerが比率を変更）
     this.directionCircle = new DirectionCircle(
       scene,
       () => this.getPosition(),
       () => this.getRotation(),
-      [1.0, 1.0, 0, 0, 0, 0, 0, 1.0]
+      1.0
     );
 
     // 足元の円を作成（DirectionCircleを使用）
@@ -290,66 +292,11 @@ export class Character {
   }
 
   /**
-   * 腕リーチIK: ターゲット位置に手を伸ばすよう関節角度を上書き
-   * @param target ワールド座標のターゲット位置、毎フレーム更新するgetter関数、またはnullでIK解除
+   * 関節名に対応するスケルトンボーンを取得
    */
-  public setArmReachTarget(target: Vector3 | (() => Vector3) | null): void {
-    if (target === null) {
-      this.armReachTarget = null;
-      this.armReachTargetFn = null;
-    } else if (target instanceof Vector3) {
-      this.armReachTarget = target;
-      this.armReachTargetFn = null;
-    } else {
-      this.armReachTargetFn = target;
-      this.armReachTarget = target();
-    }
-  }
-
-  /**
-   * 腕リーチIKを適用（MotionController更新後に呼ぶ）
-   */
-  private applyArmReachIK(): void {
-    // getter関数がある場合は毎フレームターゲットを更新
-    if (this.armReachTargetFn) {
-      this.armReachTarget = this.armReachTargetFn();
-    }
-    if (!this.armReachTarget) return;
-
-    const angles = calculateArmReach(
-      this.getPosition(),
-      this.rotation,
-      this.config.physical.height,
-      this.armReachTarget,
-    );
-
-    const toRad = Math.PI / 180;
-
-    // 上半身前傾
-    const upperBody = this.getJoint('upperBody');
-    if (upperBody) {
-      upperBody.rotation.x = angles.upperBodyX * toRad;
-    }
-
-    // 右腕
-    const rightShoulder = this.getJoint('rightShoulder');
-    if (rightShoulder) {
-      rightShoulder.rotation.x = angles.rightShoulderX * toRad;
-    }
-    const rightElbow = this.getJoint('rightElbow');
-    if (rightElbow) {
-      rightElbow.rotation.x = angles.rightElbowX * toRad;
-    }
-
-    // 左腕
-    const leftShoulder = this.getJoint('leftShoulder');
-    if (leftShoulder) {
-      leftShoulder.rotation.x = angles.leftShoulderX * toRad;
-    }
-    const leftElbow = this.getJoint('leftElbow');
-    if (leftElbow) {
-      leftElbow.rotation.x = angles.leftElbowX * toRad;
-    }
+  public getBoneForJoint(jointName: string): Bone | null {
+    if (!this.skeletonBridge) return null;
+    return this.skeletonBridge.getBoneForJoint(jointName);
   }
 
   /**
@@ -358,14 +305,8 @@ export class Character {
    * 初回呼び出し時のみ生成される（2回目以降は何もしない）。
    */
   public initializeIK(): void {
-    if (this.skeletonBridge) return;
-
-    this.skeletonBridge = CharacterSkeletonBridge.create(
-      this.scene,
-      this.mesh,
-      (name) => this.getJoint(name),
-    );
-
+    if (!this.skeletonBridge) return;
+    if (this.ikSystem) return;
     this.ikSystem = new IKSystem(this.scene, DEFAULT_MOTION_CONFIG);
     this.ikSystem.initialize(this.skeletonBridge.skeleton, this.mesh);
   }
@@ -521,6 +462,10 @@ export class Character {
    */
   public getAutoGroundOffset(): number {
     if (this.footRestRelativeY === null) return 0;
+    // ボーン回転をメッシュに反映（足位置の正確な計算のため）
+    if (this.skeletonBridge) {
+      this.skeletonBridge.syncSkeletonToMesh();
+    }
     this.body.leftFoot.computeWorldMatrix(true);
     this.body.rightFoot.computeWorldMatrix(true);
     const meshY = this.mesh.getAbsolutePosition().y;
@@ -745,19 +690,19 @@ export class Character {
    * @param _deltaTime フレーム時間（秒）
    */
   public update(deltaTime: number): void {
-    // モーションコントローラーを更新
+    // FK→ボーン
     this.motionController.update(deltaTime);
 
-    // アクションコントローラーを更新
+    // アクション状態
     this.actionController.update(deltaTime);
 
-    // 腕リーチIKを適用（モーション適用後に上書き）
-    this.applyArmReachIK();
-
-    // Skeleton Bridge IK（有効化されている場合のみ）
-    if (this.skeletonBridge && this.ikSystem) {
-      this.skeletonBridge.syncMeshToSkeleton();
+    // BoneIKController（ボーン上でIK解決）
+    if (this.ikSystem) {
       this.ikSystem.update(0);
+    }
+
+    // ボーン→メッシュ（ビジュアルのみ）
+    if (this.skeletonBridge) {
       this.skeletonBridge.syncSkeletonToMesh();
     }
 
@@ -1086,6 +1031,15 @@ export class Character {
   public setFootCircleRadius(radius: number): void {
     this.footCircleRadius = Math.max(0, radius);
     this.directionCircle.setFootCircleRadius(radius);
+    this.footCircle = this.directionCircle.getFootCircle();
+  }
+
+  /**
+   * 足元の円の8方向比率を設定
+   * @param radii 8方向の比率配列（scale との積が実効半径）
+   */
+  public setAllDirectionRadii(radii: number[]): void {
+    this.directionCircle.setAllDirectionRadii(radii);
     this.footCircle = this.directionCircle.getFootCircle();
   }
 

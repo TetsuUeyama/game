@@ -1,8 +1,11 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import {
   CircleSituation,
   CircleSizeUtils,
+  ON_BALL_SITUATION_RADII,
+  UNIFORM_DIRECTION_RADII,
 } from "@/GamePlay/GameSystem/CircleSystem/CircleSizeConfig";
 
 /**
@@ -36,9 +39,21 @@ export class CircleSizeController {
     const holder = this.ball.getHolder();
     const isHoldingBall = holder === character;
 
-    // ボール保持者のみサークルあり
+    // ボール非保持者: 状態に応じた状況を返す（全て0.5m固定）
     if (!isHoldingBall) {
-      return 'no_circle';
+      const state = character.getState();
+      switch (state) {
+        case CharacterState.OFF_BALL_PLAYER:
+          return 'offense_no_ball';
+        case CharacterState.ON_BALL_DEFENDER:
+          return 'defense_marking';
+        case CharacterState.OFF_BALL_DEFENDER:
+          return 'defense_help';
+        case CharacterState.BALL_LOST:
+          return 'loose_ball';
+        default:
+          return 'no_circle';
+      }
     }
 
     // 以下はボール保持者のみ到達
@@ -96,9 +111,15 @@ export class CircleSizeController {
       // 状況を判定
       const newSituation = this.determineSituation(character);
 
-      // 状況が変わった場合、新しい目標サイズを計算
+      // 状況が変わった場合、方向比率と目標サイズを更新
       if (newSituation !== state.currentSituation) {
         state.currentSituation = newSituation;
+
+        // 方向比率を常に適用（初回・状態遷移ともに確実に反映）
+        // オンボール状況は状況別の扇形比率、それ以外は均一
+        character.setAllDirectionRadii(
+          ON_BALL_SITUATION_RADII[newSituation] ?? UNIFORM_DIRECTION_RADII
+        );
 
         // ステータスを取得
         const stats = character.playerData?.stats;

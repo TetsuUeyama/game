@@ -8,7 +8,7 @@ import { WALK_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
-import { LooseBallController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/LooseBallController";
+import { LooseBallController } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallController";
 
 /**
  * ルーズボール時のAI

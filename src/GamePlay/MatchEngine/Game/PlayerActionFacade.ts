@@ -5,7 +5,7 @@
 
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { OneOnOneBattleController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/OneOnOneBattleController";
+import { OneOnOneBattleController } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/OneOnOneBattleController";
 import { ShootingController } from "@/GamePlay/GameSystem/ShootingSystem/ShootingController";
 import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";

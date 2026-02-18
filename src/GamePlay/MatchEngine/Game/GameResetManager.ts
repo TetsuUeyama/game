@@ -12,7 +12,6 @@ import { GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { ShotClockController } from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import { FormationUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/FormationConfig";
-import { BALL_RADIUS } from "@/GamePlay/GameSystem/BallCatchSystem/BallCatchConfig";
 
 /**
  * ゲームリセット用コンテキスト
@@ -326,6 +325,9 @@ export class GameResetManager {
       ballHandler.config.physical.height / 2,
       ballHandlerZ
     ));
+    // 攻撃方向を向かせる（allyが違反→enemyが受け取り→+Z方向、その逆は-Z方向）
+    const centerFacingAngle = offendingTeam === 'ally' ? 0 : Math.PI;
+    ballHandler.setRotation(centerFacingAngle);
 
     // 他のオフェンスを配置
     let offsetX = -3.0;
@@ -361,12 +363,14 @@ export class GameResetManager {
       offsetX += 1.5;
     }
 
-    // ボールをリリースして足元に配置（ルーズボール状態で開始）
+    // ボールをリリースして正面にずらして配置（ルーズボール状態で開始）
+    const handlerPos = ballHandler.getPosition();
+    const ballOffsetDistance = 0.5;
     this.context.ball.setHolder(null);
     this.context.ball.setPosition(new Vector3(
-      ballHandler.getPosition().x,
-      BALL_RADIUS,
-      ballHandler.getPosition().z
+      handlerPos.x + Math.sin(centerFacingAngle) * ballOffsetDistance,
+      ballHandler.config.physical.height * 0.5,
+      handlerPos.z + Math.cos(centerFacingAngle) * ballOffsetDistance
     ));
 
     // 全員をBALL_LOST状態に設定
@@ -424,16 +428,20 @@ export class GameResetManager {
       return;
     }
 
-    // ボールハンドラーをゴール下に配置
+    // ボールハンドラーをゴール下に配置し、コート中央方向を向かせる
     const ballHandlerPos = new Vector3(0, ballHandler.config.physical.height / 2, goalZ);
     ballHandler.setPosition(ballHandlerPos);
+    // ゴール下からコート中央方向（goalZが正なら-Z方向、負なら+Z方向）
+    const facingAngle = goalZ > 0 ? Math.PI : 0;
+    ballHandler.setRotation(facingAngle);
 
-    // ボールをリリースして足元に配置（ルーズボール状態で開始）
+    // ボールをリリースして正面にずらして配置（ルーズボール状態で開始）
+    const ballOffsetDistance = 1.0;
     this.context.ball.setHolder(null);
     this.context.ball.setPosition(new Vector3(
-      ballHandlerPos.x,
-      BALL_RADIUS,
-      ballHandlerPos.z
+      ballHandlerPos.x + Math.sin(facingAngle) * ballOffsetDistance,
+      ballHandler.config.physical.height * 0.5,
+      ballHandlerPos.z + Math.cos(facingAngle) * ballOffsetDistance
     ));
 
     // 他のオフェンス選手をフォーメーション位置に配置

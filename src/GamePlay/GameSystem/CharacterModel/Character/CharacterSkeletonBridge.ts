@@ -3,7 +3,6 @@ import {
   Skeleton,
   Bone,
   Matrix,
-  Vector3,
   Space,
   Mesh,
   AbstractMesh,
@@ -39,13 +38,11 @@ const JOINT_TO_BONE: Record<string, string> = {
  * 用途:
  * - IKSystem は Skeleton + Bone を必要とする
  * - ゲームのキャラクターは Mesh 階層（CharacterBodyBuilder）で描画
- * - このブリッジが双方向同期を提供する
  *
- * 使い方:
- * 1. create() でスケルトンを生成
- * 2. MotionController 適用後に syncMeshToSkeleton() でメッシュ→ボーンに同期
- * 3. IKSystem.update() 実行
- * 4. syncSkeletonToMesh() でボーン→メッシュに同期
+ * フロー（一方向）:
+ * 1. MotionController が FK 回転をボーンに直接書き込み
+ * 2. IKSystem.update() がボーン上で IK 解決
+ * 3. syncSkeletonToMesh() でボーン→メッシュ（ビジュアルのみ）
  */
 export class CharacterSkeletonBridge {
   public readonly skeleton: Skeleton;
@@ -126,21 +123,6 @@ export class CharacterSkeletonBridge {
   }
 
   /**
-   * メッシュの回転をスケルトンボーンにコピーする。
-   * MotionController 適用後、IKSystem.update() 前に呼ぶ。
-   */
-  syncMeshToSkeleton(): void {
-    this.skeleton.computeAbsoluteMatrices(true);
-    for (const { bone, mesh } of this.syncPairs) {
-      // メッシュの rotation (Euler) をボーンのローカル回転に反映
-      const rx = mesh.rotation.x;
-      const ry = mesh.rotation.y;
-      const rz = mesh.rotation.z;
-      bone.setRotation(new Vector3(rx, ry, rz), Space.LOCAL);
-    }
-  }
-
-  /**
    * スケルトンボーンの回転をメッシュにコピーする。
    * IKSystem.update() 後に呼ぶ。
    */
@@ -158,6 +140,15 @@ export class CharacterSkeletonBridge {
    */
   getBone(name: string): Bone | null {
     return this.boneMap.get(name) ?? null;
+  }
+
+  /**
+   * ジョイント名に対応するボーンを取得
+   */
+  getBoneForJoint(jointName: string): Bone | null {
+    const boneName = JOINT_TO_BONE[jointName];
+    if (!boneName) return null;
+    return this.boneMap.get(boneName) ?? null;
   }
 
   dispose(): void {

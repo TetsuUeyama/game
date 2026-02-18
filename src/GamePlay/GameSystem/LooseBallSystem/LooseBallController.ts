@@ -112,13 +112,21 @@ export class LooseBallController {
 
   /**
    * アームリーチIKをセットアップ（pickup/scramble共通）
-   * アクション中は毎フレームボール位置に手を伸ばし、終了/中断時にIKを解除
+   * BoneIKController経由で現在のポーズからボールに自然に手を伸ばす
+   * アクション終了/中断時にIKを解除
    */
   private setupArmReachIK(character: Character, actionController: ActionController): void {
-    const ball = this.ball;
-    character.setArmReachTarget(() => ball.getPosition());
+    const ikSystem = character.getIKSystem();
+    if (!ikSystem) return;
 
-    const clearIK = () => { character.setArmReachTarget(null); };
+    const ballPos = this.ball.getPosition();
+    const rightDist = Vector3.DistanceSquared(character.getRightHandPosition(), ballPos);
+    const leftDist = Vector3.DistanceSquared(character.getLeftHandPosition(), ballPos);
+    const arm: 'left' | 'right' = rightDist <= leftDist ? 'right' : 'left';
+
+    ikSystem.setArmTarget(arm, this.ball.mesh);
+
+    const clearIK = () => { ikSystem.setArmTarget(arm, null); };
     actionController.setCallbacks({
       onComplete: clearIK,
       onInterrupt: clearIK,

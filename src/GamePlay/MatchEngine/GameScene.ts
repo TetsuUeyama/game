@@ -30,6 +30,7 @@ import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/St
 import { PlayerStateManager, DefenseScheme, VisualSettingsManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
+import { BallReachSystem } from "@/GamePlay/GameSystem/BallReachSystem/BallReachSystem";
 import type { VisualSettings } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { GameTeamConfig } from "@/GamePlay/Management/Services/TeamConfigLoader";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
@@ -150,6 +151,9 @@ export class GameScene {
 
   // ルーズボール確保コントローラー
   private looseBallController?: LooseBallController;
+
+  // ボール自動リーチシステム
+  private ballReachSystem?: BallReachSystem;
 
   // シュートクロックコントローラー
   private shotClockController?: ShotClockController;
@@ -326,6 +330,11 @@ export class GameScene {
         () => [...this.allyCharacters, ...this.enemyCharacters],
         this.ball
       );
+    }
+
+    // ボール自動リーチシステムの初期化
+    if (allCharacters.length > 0) {
+      this.ballReachSystem = new BallReachSystem(this.ball, allCharacters);
     }
 
     // シュートクロックコントローラーの初期化
@@ -641,6 +650,7 @@ export class GameScene {
       const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
       for (const character of allCharacters) {
         character.initializePhysics();
+        character.initializeIK();
       }
 
       // 物理エンジン初期化後、ゲームモードの場合はジャンプボールを開始
@@ -886,6 +896,11 @@ export class GameScene {
       // キャラクターの状態を更新（AI更新前に実行して正しい状態でAIが動作するようにする）
       if (this.collisionHandler) {
         this.collisionHandler.updateStates();
+      }
+
+      // ボール自動リーチ（状態更新後に実行し、正しい状態で判定）
+      if (this.ballReachSystem) {
+        this.ballReachSystem.update();
       }
 
       // 全選手スナップショットを更新（状態更新後、AI更新前）
@@ -2218,6 +2233,9 @@ export class GameScene {
     }
     if (this.feintController) {
       this.feintController.dispose();
+    }
+    if (this.ballReachSystem) {
+      this.ballReachSystem.dispose();
     }
     if (this.passTrajectoryVisualizer) {
       this.passTrajectoryVisualizer.dispose();
