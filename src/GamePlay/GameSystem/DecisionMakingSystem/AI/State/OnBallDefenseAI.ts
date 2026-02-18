@@ -9,6 +9,7 @@ import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/
 import { DEFENSE_STANCE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DefenseMotion";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { DefenseActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/DefenseActionController";
+import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 
 /**
  * オンボールディフェンダー時のAI
@@ -90,8 +91,8 @@ export class OnBallDefenseAI extends BaseStateAI {
     const offensePosition = onBallPlayer.getPosition();
     const goalPosition = this.getDefendingGoalPosition();
 
-    // サークル半径を取得
-    const defenderRadius = this.character.getFootCircleRadius();
+    // 衝突半径を取得（ディフェンダーはボディ半径、オフェンスはサークル半径）
+    const defenderRadius = CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
     const offenseRadius = onBallPlayer.getFootCircleRadius();
     const contactDistance = defenderRadius + offenseRadius;
 
@@ -197,8 +198,8 @@ export class OnBallDefenseAI extends BaseStateAI {
       this.character.getMotionController().play(DEFENSE_STANCE_MOTION);
     }
 
-    // サークル半径を取得
-    const defenderRadius = this.character.getFootCircleRadius();
+    // 衝突半径を取得（ディフェンダーはボディ半径、オフェンスはサークル半径）
+    const defenderRadius = CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
     const offenseRadius = onBallPlayer.getFootCircleRadius();
 
     // ディフェンダーからオフェンスへの方向
@@ -328,8 +329,8 @@ export class OnBallDefenseAI extends BaseStateAI {
       Math.cos(offenseRotation)
     );
 
-    // サークル半径を取得
-    const defenderRadius = this.character.getFootCircleRadius();
+    // 衝突半径を取得（ディフェンダーはボディ半径、オフェンスはサークル半径）
+    const defenderRadius = CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
     const offenseRadius = onBallPlayer.getFootCircleRadius();
 
     // 理想的な位置: ディフェンダーの0番面中心がオフェンスの0番面中心と一致する位置

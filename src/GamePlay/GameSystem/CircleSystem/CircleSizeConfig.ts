@@ -17,23 +17,25 @@ export type CircleSituation =
   | 'shooting'          // シュート中
   | 'shoot_recovery'    // シュート後硬直中（サークル非表示）
   | 'passing'           // パス中
-  | 'blocking';         // ブロック中
+  | 'blocking'          // ブロック中
+  | 'no_circle';        // サークルなし（ON_BALL_PLAYER以外）
 
 /**
  * 基本サークルサイズ設定
  */
 export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   default: 1.0,           // デフォルト: 1.0m
-  offense_with_ball: 1.0, // ボール保持: 1.0m（変更なし）
+  offense_with_ball: 2.0, // ボール保持: 2.0m（扇形、前3方向のみ）
   offense_no_ball: 0.5,   // オフボールオフェンス: 0.5m（半分）
   defense_marking: 1.0,   // マーキング: 1.0m（変更なし）
   defense_help: 0.5,      // オフボールディフェンス: 0.5m（半分）
   loose_ball: 0.5,        // ルーズボール時: 0.5m（半分）
-  dribbling: 0.5,         // ドリブル中: 0.5m（機動力重視で小さく）
-  shooting: 1.0,          // シュート中: 1.0m（変更なし）
-  shoot_recovery: 0.5,    // シュート後硬直中: 0.5m（動けない状態を示すため小さめ）
-  passing: 1.0,           // パス中: 1.0m（変更なし）
+  dribbling: 1.0,         // ドリブル中: 1.0m（旧0.5の倍）
+  shooting: 2.0,          // シュート中: 2.0m（旧1.0の倍）
+  shoot_recovery: 1.0,    // シュート後硬直中: 1.0m（旧0.5の倍）
+  passing: 2.0,           // パス中: 2.0m（旧1.0の倍）
   blocking: 0.3,          // ブロック中: 0.3m（ジャンプ中で動けない、小さく）
+  no_circle: 0,           // サークルなし: 0（ON_BALL_PLAYER以外）
 };
 
 /**
@@ -55,13 +57,14 @@ export const STAT_INFLUENCE: Record<CircleSituation, {
   shoot_recovery: { stat: 'none', multiplier: 0 },     // シュート後硬直中は固定（非表示）
   passing: { stat: 'none', multiplier: 0 },            // 変更なし
   blocking: { stat: 'none', multiplier: 0 },           // ブロック中は固定サイズ
+  no_circle: { stat: 'none', multiplier: 0 },          // サークルなし
 };
 
 /**
  * サークルサイズの最小・最大値
  */
 export const CIRCLE_SIZE_LIMITS = {
-  MIN: 0.3,  // 最小0.3m
+  MIN: 0,    // 最小0（no_circle用）
   MAX: 2.0,  // 最大2.0m
 } as const;
 
@@ -165,6 +168,7 @@ export class CircleSizeUtils {
       shoot_recovery: 'シュート硬直',
       passing: 'パス',
       blocking: 'ブロック',
+      no_circle: 'サークルなし',
     };
     return names[situation];
   }

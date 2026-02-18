@@ -8,6 +8,7 @@ import { WALK_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/
 import { DASH_FORWARD_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
+import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 import { PlayerStateManager } from "@/GamePlay/GameSystem/StatusCheckSystem";
 
 /**
@@ -234,14 +235,20 @@ export abstract class BaseStateAI {
    * @returns 衝突する場合true
    */
   protected checkCollision(newPosition: Vector3): boolean {
-    const myRadius = this.character.getFootCircleRadius();
+    const myState = this.character.getState();
+    const myRadius = myState === CharacterState.ON_BALL_PLAYER
+      ? this.character.getFootCircleRadius()
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
 
     for (const other of this.allCharacters) {
       // 自分自身はスキップ
       if (other === this.character) continue;
 
       const otherPosition = other.getPosition();
-      const otherRadius = other.getFootCircleRadius();
+      const otherState = other.getState();
+      const otherRadius = otherState === CharacterState.ON_BALL_PLAYER
+        ? other.getFootCircleRadius()
+        : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
 
       // XZ平面上での距離を計算
       const distance = getDistance2DSimple(newPosition, otherPosition);

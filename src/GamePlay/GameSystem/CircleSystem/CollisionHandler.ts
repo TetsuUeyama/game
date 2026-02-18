@@ -47,15 +47,15 @@ export class CollisionHandler {
     // ボールとキャラクターの衝突判定（キャッチ）- BallCatchSystem に委譲
     this.ballCatchSystem.update(deltaTime);
 
+    // キャラクターの状態を更新（衝突解決の前に実行し、状態が最新であることを保証）
+    this.updateCharacterStates();
+
     // キャラクター同士の衝突判定（全ペアをチェック）
     for (let i = 0; i < this.allCharacters.length; i++) {
       for (let j = i + 1; j < this.allCharacters.length; j++) {
         this.resolveCharacterCharacterCollision(this.allCharacters[i], this.allCharacters[j]);
       }
     }
-
-    // キャラクターの状態を更新
-    this.updateCharacterStates();
   }
 
   /**
@@ -88,6 +88,13 @@ export class CollisionHandler {
       return;
     }
 
+    // 味方同士でどちらかがON_BALL_PLAYERの場合、衝突をスキップ（味方はサークル内に入れる）
+    if (character1.team === character2.team) {
+      if (state1 === CharacterState.ON_BALL_PLAYER || state2 === CharacterState.ON_BALL_PLAYER) {
+        return;
+      }
+    }
+
     const pos1 = character1.getPosition();
     const pos2 = character2.getPosition();
 
@@ -95,9 +102,14 @@ export class CollisionHandler {
     const dir1to2 = { x: pos2.x - pos1.x, z: pos2.z - pos1.z };
     const dir2to1 = { x: pos1.x - pos2.x, z: pos1.z - pos2.z };
 
-    // 各キャラクターの相手方向での半径を取得（8方向を考慮）
-    const radius1 = character1.getFootCircleRadiusInDirection(dir1to2);
-    const radius2 = character2.getFootCircleRadiusInDirection(dir2to1);
+    // 各キャラクターの衝突半径を状態に応じて決定
+    // ON_BALL_PLAYER → サークル半径（8方向）、その他 → ボディ衝突半径
+    const radius1 = state1 === CharacterState.ON_BALL_PLAYER
+      ? character1.getFootCircleRadiusInDirection(dir1to2)
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+    const radius2 = state2 === CharacterState.ON_BALL_PLAYER
+      ? character2.getFootCircleRadiusInDirection(dir2to1)
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
 
     // 衝突情報を取得
     const collisionInfo = getCircleCollisionInfo(pos1, radius1, pos2, radius2);
