@@ -35,6 +35,13 @@ export class CircleSizeController {
   private determineSituation(character: Character): CircleSituation {
     const holder = this.ball.getHolder();
     const isHoldingBall = holder === character;
+
+    // ボール保持者のみサークルあり
+    if (!isHoldingBall) {
+      return 'no_circle';
+    }
+
+    // 以下はボール保持者のみ到達
     const actionController = character.getActionController();
     const currentAction = actionController.getCurrentAction();
 
@@ -49,54 +56,14 @@ export class CircleSizeController {
       if (currentAction === 'dribble_breakthrough') {
         return 'dribbling';
       }
-      if (currentAction === 'block_shot') {
-        return 'blocking';
-      }
     }
 
-    // シュート後で重心が不安定な場合は硬直状態（重心システムによる判定）
+    // シュート後で重心が不安定な場合は硬直状態
     if (!actionController.isBalanceStable()) {
       return 'shoot_recovery';
     }
 
-    // ボール保持状況による判定
-    if (isHoldingBall) {
-      return 'offense_with_ball';
-    }
-
-    // ボール保持者のチームを確認
-    if (holder) {
-      const holderTeam = holder.team;
-      const characterTeam = character.team;
-
-      if (holderTeam === characterTeam) {
-        // 同じチーム = オフボール
-        return 'offense_no_ball';
-      } else {
-        // 相手チーム = ディフェンス
-        // ボール保持者との距離でマーキングかヘルプか判定
-        const distanceToHolder = this.getDistanceXZ(character, holder);
-        if (distanceToHolder < 3.0) {
-          return 'defense_marking';
-        } else {
-          return 'defense_help';
-        }
-      }
-    }
-
-    // ボール保持者がいない = ルーズボール状態
-    return 'loose_ball';
-  }
-
-  /**
-   * XZ平面上の2キャラクター間の距離を計算
-   */
-  private getDistanceXZ(char1: Character, char2: Character): number {
-    const pos1 = char1.getPosition();
-    const pos2 = char2.getPosition();
-    const dx = pos1.x - pos2.x;
-    const dz = pos1.z - pos2.z;
-    return Math.sqrt(dx * dx + dz * dz);
+    return 'offense_with_ball';
   }
 
   /**

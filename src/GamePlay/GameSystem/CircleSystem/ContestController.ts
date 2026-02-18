@@ -3,6 +3,8 @@ import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { CONTEST_CONFIG, ContestStatType } from "@/GamePlay/GameSystem/CircleSystem/ContestConfig";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 
 // 設定をre-export（既存のインポートを壊さないため）
 export { CONTEST_CONFIG };
@@ -70,8 +72,15 @@ export class ContestController {
     const dz = pos1.z - pos2.z;
     const distance = Math.sqrt(dx * dx + dz * dz);
 
-    const radius1 = char1.getFootCircleRadius();
-    const radius2 = char2.getFootCircleRadius();
+    // ON_BALL_PLAYERはサークル半径、それ以外はボディ衝突半径を使用
+    const state1 = char1.getState();
+    const state2 = char2.getState();
+    const radius1 = state1 === CharacterState.ON_BALL_PLAYER
+      ? char1.getFootCircleRadius()
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+    const radius2 = state2 === CharacterState.ON_BALL_PLAYER
+      ? char2.getFootCircleRadius()
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
     const minDistance = radius1 + radius2;
 
     return Math.max(0, minDistance - distance);
@@ -297,67 +306,74 @@ export class ContestController {
    */
   public update(_deltaTime: number): void {
     const characters = this.allCharacters();
+
+    // ON_BALL_PLAYERとON_BALL_DEFENDERを検索
+    let onBallPlayer: Character | null = null;
+    let onBallDefender: Character | null = null;
+    for (const char of characters) {
+      if (char.getState() === CharacterState.ON_BALL_PLAYER) onBallPlayer = char;
+      if (char.getState() === CharacterState.ON_BALL_DEFENDER) onBallDefender = char;
+    }
+
+    // 競り合い対象がいない場合、既存コンテストをクリア
+    if (!onBallPlayer || !onBallDefender) {
+      this.activeContests.clear();
+      return;
+    }
+
+    // このペアのみ処理
+    const pairKey = this.getPairKey(onBallPlayer, onBallDefender);
     const currentContests = new Set<string>();
     const completedContests: string[] = [];
 
-    // 全キャラクターペアをチェック
-    for (let i = 0; i < characters.length; i++) {
-      for (let j = i + 1; j < characters.length; j++) {
-        const char1 = characters[i];
-        const char2 = characters[j];
-        const pairKey = this.getPairKey(char1, char2);
+    // 既存のコンテストを取得
+    const existingContest = this.activeContests.get(pairKey);
 
-        // 既存のコンテストを取得
-        const existingContest = this.activeContests.get(pairKey);
+    // ノックバックフェーズ中の処理
+    if (existingContest && existingContest.isKnockbackPhase) {
+      currentContests.add(pairKey);
+      const knockbackComplete = this.processKnockback(onBallPlayer, onBallDefender, existingContest);
+      if (knockbackComplete) {
+        completedContests.push(pairKey);
+      }
+    } else if (this.isOverlapping(onBallPlayer, onBallDefender)) {
+      currentContests.add(pairKey);
 
-        // ノックバックフェーズ中の処理
-        if (existingContest && existingContest.isKnockbackPhase) {
-          currentContests.add(pairKey);
-          const knockbackComplete = this.processKnockback(char1, char2, existingContest);
-          if (knockbackComplete) {
-            completedContests.push(pairKey);
-          }
-          continue;
-        }
+      // 新しい競り合いを開始
+      if (!existingContest) {
+        this.activeContests.set(pairKey, {
+          character1: onBallPlayer,
+          character2: onBallDefender,
+          startTime: Date.now(),
+          knockbackRemaining: 0,
+          isKnockbackPhase: false,
+        });
+      }
 
-        if (this.isOverlapping(char1, char2)) {
-          currentContests.add(pairKey);
+      // 押し出し処理を実行
+      const pushComplete = this.processPush(onBallPlayer, onBallDefender);
 
-          // 新しい競り合いを開始
-          if (!existingContest) {
-            this.activeContests.set(pairKey, {
-              character1: char1,
-              character2: char2,
-              startTime: Date.now(),
-              knockbackRemaining: 0,
-              isKnockbackPhase: false,
-            });
-          }
-
-          // 押し出し処理を実行
-          const pushComplete = this.processPush(char1, char2);
-
-          // 押し返しが完了したらノックバックフェーズへ
-          if (pushComplete) {
-            const contest = this.activeContests.get(pairKey);
-            if (contest) {
-              contest.isKnockbackPhase = true;
-              contest.knockbackRemaining = CONTEST_CONFIG.KNOCKBACK_DISTANCE;
-            }
-          }
+      // 押し返しが完了したらノックバックフェーズへ
+      if (pushComplete) {
+        const contest = this.activeContests.get(pairKey);
+        if (contest) {
+          contest.isKnockbackPhase = true;
+          contest.knockbackRemaining = CONTEST_CONFIG.KNOCKBACK_DISTANCE;
         }
       }
     }
 
     // 完了したノックバックを削除
-    for (const pairKey of completedContests) {
-      this.activeContests.delete(pairKey);
+    for (const key of completedContests) {
+      this.activeContests.delete(key);
     }
 
-    // 重なりが解消された競り合いを削除（ノックバック中でないもの）
-    for (const [pairKey, contest] of this.activeContests) {
-      if (!currentContests.has(pairKey) && !contest.isKnockbackPhase) {
-        this.activeContests.delete(pairKey);
+    // このペア以外の古い競り合いを削除、重なりが解消された競り合いも削除
+    for (const [key, contest] of this.activeContests) {
+      if (key !== pairKey) {
+        this.activeContests.delete(key);
+      } else if (!currentContests.has(key) && !contest.isKnockbackPhase) {
+        this.activeContests.delete(key);
       }
     }
   }

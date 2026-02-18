@@ -29,6 +29,7 @@ export const CHARACTER_CONFIG = {
 import { MotionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/MotionController";
 import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/ActionController";
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
+import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
@@ -212,12 +213,13 @@ export class Character {
     this.mesh = rootMesh;
     this.body = body;
 
-    // 方向サークルを初期化（8方向ごとに異なる半径を設定）
+    // 方向サークルを初期化（前3方向のみの扇形：方向7=前左, 0=正面, 1=前右）
+    // 方向2〜6は半径0（サークルなし）
     this.directionCircle = new DirectionCircle(
       scene,
       () => this.getPosition(),
       () => this.getRotation(),
-      [1.0, 0.9, 0.8, 0.6, 0.3, 0.6, 0.8, 0.9]
+      [1.0, 1.0, 0, 0, 0, 0, 0, 1.0]
     );
 
     // 足元の円を作成（DirectionCircleを使用）
@@ -1731,6 +1733,11 @@ export class Character {
    * @returns 衝突する場合はtrue
    */
   public checkCollisionWithCharacters(targetPosition: Vector3, otherCharacters: Character[]): boolean {
+    const myState = this.getState();
+    const myRadius = myState === CharacterState.ON_BALL_PLAYER
+      ? this.footCircleRadius
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+
     for (const other of otherCharacters) {
       if (other === this) continue; // 自分自身は除外
 
@@ -1740,8 +1747,12 @@ export class Character {
         new Vector3(otherPos.x, 0, otherPos.z)
       );
 
-      // footCircleの半径を使った衝突判定
-      const minDistance = this.footCircleRadius + other.getFootCircleRadius();
+      // ON_BALL_PLAYERはサークル半径、それ以外はボディ衝突半径
+      const otherState = other.getState();
+      const otherRadius = otherState === CharacterState.ON_BALL_PLAYER
+        ? other.getFootCircleRadius()
+        : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+      const minDistance = myRadius + otherRadius;
       if (distance < minDistance) {
         return true; // 衝突あり
       }
@@ -1872,7 +1883,14 @@ export class Character {
       new Vector3(myPos.x, 0, myPos.z),
       new Vector3(otherPos.x, 0, otherPos.z)
     );
-    const minDistance = this.footCircleRadius + other.getFootCircleRadius();
+    // ON_BALL_PLAYERはサークル半径、それ以外はボディ衝突半径
+    const myRadius = isOffense
+      ? this.footCircleRadius
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+    const otherRadius = !isOffense
+      ? other.getFootCircleRadius()
+      : CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
+    const minDistance = myRadius + otherRadius;
 
     // 押し返し方向を計算（自分から相手へのベクトル）
     const pushDirection = otherPos.subtract(myPos);

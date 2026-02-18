@@ -10,6 +10,7 @@ import {
   AdvantageStatus,
   AdvantageUtils,
 } from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
+import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 
 // 型をre-export
 export type { OneOnOneResult, AdvantageStatus };
@@ -128,7 +129,7 @@ export class OneOnOneBattleController {
         new Vector3(offensePos.x, 0, offensePos.z),
         new Vector3(defenderPos.x, 0, defenderPos.z)
       );
-      const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+      const contactDistance = onBallPlayer.getFootCircleRadius() + CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
       wasInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
     }
 
@@ -158,7 +159,7 @@ export class OneOnOneBattleController {
         new Vector3(offensePos.x, 0, offensePos.z),
         new Vector3(defenderPos.x, 0, defenderPos.z)
       );
-      const contactDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+      const contactDistance = onBallPlayer.getFootCircleRadius() + CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
       this.circlesInContact = distance <= contactDistance + ONE_ON_ONE_BATTLE_CONFIG.CONTACT_MARGIN;
 
       // 接触中の処理
@@ -420,7 +421,7 @@ export class OneOnOneBattleController {
 
     // 目標位置を計算：オフェンスの正面方向にディフェンダーを配置
     const offenseRadius = offense.getFootCircleRadius();
-    const defenderRadius = defender.getFootCircleRadius();
+    const defenderRadius = CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
     const contactDistance = offenseRadius + defenderRadius;
 
     // オフェンスの正面方向に目標位置を設定（接触距離で配置）
@@ -592,11 +593,7 @@ export class OneOnOneBattleController {
    * 現在のディフェンダーのサークル半径を取得
    */
   public getDefenderCircleRadius(): number {
-    const onBallDefender = this.findOnBallDefender();
-    if (onBallDefender) {
-      return onBallDefender.getFootCircleRadius();
-    }
-    return 1.0;
+    return CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
   }
 
   /**
@@ -715,7 +712,7 @@ export class OneOnOneBattleController {
             new Vector3(defenderPos.x, 0, defenderPos.z)
           );
 
-          const minDistance = onBallPlayer.getFootCircleRadius() + onBallDefender.getFootCircleRadius();
+          const minDistance = onBallPlayer.getFootCircleRadius() + CHARACTER_COLLISION_CONFIG.BODY_COLLISION_RADIUS;
 
           if (distance < minDistance) {
             const { selfPush, otherPush } = onBallPlayer.calculatePushback(onBallDefender);

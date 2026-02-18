@@ -11,10 +11,12 @@
 
 /**
  * キャラクター衝突設定
- * 注意: 選手間衝突はfootCircleRadiusに統一されたため、
- * CHARACTER_RADIUSは削除された。衝突半径はCharacter.getFootCircleRadius()を使用する。
+ * ON_BALL_PLAYERのみcircleRadius（getFootCircleRadius）を使用。
+ * それ以外の選手はBODY_COLLISION_RADIUS（体の物理的な大きさ）で衝突する。
  */
 export const CHARACTER_COLLISION_CONFIG = {
   // 衝突解決時の余裕マージン（m）
   COLLISION_MARGIN: 0.05,
+  // 体の物理的な衝突半径（m）- ON_BALL_PLAYER以外の選手が使用
+  BODY_COLLISION_RADIUS: 0.2,
 } as const;
