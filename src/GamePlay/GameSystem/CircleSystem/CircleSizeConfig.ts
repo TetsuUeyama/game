@@ -25,15 +25,15 @@ export type CircleSituation =
  */
 export const BASE_CIRCLE_SIZE: Record<CircleSituation, number> = {
   default: 1.0,           // デフォルト: 1.0m
-  offense_with_ball: 2.0, // ボール保持: 2.0m（扇形、前3方向のみ）
-  offense_no_ball: 0.5,   // オフボールオフェンス: 0.5m（半分）
-  defense_marking: 1.0,   // マーキング: 1.0m（変更なし）
-  defense_help: 0.5,      // オフボールディフェンス: 0.5m（半分）
-  loose_ball: 0.5,        // ルーズボール時: 0.5m（半分）
-  dribbling: 1.0,         // ドリブル中: 1.0m（旧0.5の倍）
-  shooting: 2.0,          // シュート中: 2.0m（旧1.0の倍）
-  shoot_recovery: 1.0,    // シュート後硬直中: 1.0m（旧0.5の倍）
-  passing: 2.0,           // パス中: 2.0m（旧1.0の倍）
+  offense_with_ball: 0.5, // ボール保持: 0.5m（方向比率で前方のみ延長）
+  offense_no_ball: 0.5,   // オフボールオフェンス: 0.5m
+  defense_marking: 0.5,   // マーキング: 0.5m
+  defense_help: 0.5,      // オフボールディフェンス: 0.5m
+  loose_ball: 0.5,        // ルーズボール時: 0.5m
+  dribbling: 0.5,         // ドリブル中: 0.5m（方向比率で前方のみ延長）
+  shooting: 0.5,          // シュート中: 0.5m（方向比率で前方のみ延長）
+  shoot_recovery: 0.5,    // シュート後硬直中: 0.5m（方向比率で前方のみ延長）
+  passing: 0.5,           // パス中: 0.5m（方向比率で前方のみ延長）
   blocking: 0.3,          // ブロック中: 0.3m（ジャンプ中で動けない、小さく）
   no_circle: 0,           // サークルなし: 0（ON_BALL_PLAYER以外）
 };
@@ -59,6 +59,26 @@ export const STAT_INFLUENCE: Record<CircleSituation, {
   blocking: { stat: 'none', multiplier: 0 },           // ブロック中は固定サイズ
   no_circle: { stat: 'none', multiplier: 0 },          // サークルなし
 };
+
+/**
+ * オンボール状況別の8方向比率（扇形排除ゾーン）
+ * scale（BASE_CIRCLE_SIZE=0.5）と掛け合わせて実効半径になる
+ * 前方扇形（正面+斜め前）のみ延長、側面・背面は0.5mのまま
+ *
+ * 方向: 0=正面, 1=右前, 2=右, 3=右後, 4=背面, 5=左後, 6=左, 7=左前
+ */
+export const ON_BALL_SITUATION_RADII: Partial<Record<CircleSituation, number[]>> = {
+  // ボール保持: 正面・斜め前 0.5×6.0=3.0m / 他 0.5m
+  offense_with_ball: [6.0, 6.0, 1.0, 1.0, 1.0, 1.0, 1.0, 6.0],
+  // パス中: ボール保持と同等
+  passing:           [6.0, 6.0, 1.0, 1.0, 1.0, 1.0, 1.0, 6.0],
+  // shooting, dribbling, shoot_recovery: 排除ゾーンなし（均一0.5m）
+};
+
+/** 均一サークル（非オンボール用） */
+export const UNIFORM_DIRECTION_RADII: number[] = [
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+];
 
 /**
  * サークルサイズの最小・最大値

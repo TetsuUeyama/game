@@ -28,7 +28,6 @@ export interface AdvantageStatus {
 
 /**
  * 1on1バトル設定
- * 注：タイミング設定は DefenseConfig.ONE_ON_ONE_BATTLE を参照
  */
 export const ONE_ON_ONE_BATTLE_CONFIG = {
   // サークル接触判定の余裕（m）
@@ -45,6 +44,28 @@ export const ONE_ON_ONE_BATTLE_CONFIG = {
 
   // ドリブル突破のランダム選択確率（左右）
   BREAKTHROUGH_LEFT_CHANCE: 0.5,
+} as const;
+
+/**
+ * 1on1バトルタイミング・AI行動設定
+ * （旧 DefenseConfig.ONE_ON_ONE_BATTLE から統合）
+ */
+export const ONE_ON_ONE_BATTLE = {
+  // タイミング設定（ミリ秒）
+  DICE_ROLL_INTERVAL: 1000,          // サイコロを振る間隔
+  COLLISION_REDIRECT_INTERVAL: 300,  // 衝突時の方向転換最小間隔
+
+  // ゴール方向行動
+  TURN_TO_GOAL_CHANCE: 0.85,         // ゴール方向を向く確率（85%）
+
+  // AI移動
+  RANDOM_DIRECTION_COUNT: 8,         // ランダム移動の方向数（8方向）
+
+  // オフェンス1on1行動設定
+  OFFENSE_MOVE_DURING_CONTACT: true, // 接触中もオフェンスが動く
+  OFFENSE_ACTION_CHANCE: 0.3,        // アクション実行確率（30%）
+  OFFENSE_FEINT_CHANCE: 0.4,         // フェイント確率（アクション時の40%）
+  OFFENSE_BREAKTHROUGH_CHANCE: 0.6,  // ドリブル突破確率（アクション時の60%）
 } as const;
 
 /**

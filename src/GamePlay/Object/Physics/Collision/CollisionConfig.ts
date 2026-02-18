@@ -20,3 +20,18 @@ export const CHARACTER_COLLISION_CONFIG = {
   // 体の物理的な衝突半径（m）- ON_BALL_PLAYER以外の選手が使用
   BODY_COLLISION_RADIUS: 0.2,
 } as const;
+
+/**
+ * ルーズボールと選手の衝突設定
+ * ボールが選手の足元に入り込まないよう弾き返す
+ */
+export const LOOSE_BALL_DEFLECTION_CONFIG = {
+  // ボール半径（m）
+  BALL_RADIUS: 0.15,
+  // 選手のボール弾き返し半径（m）- BODY_COLLISION_RADIUSより少し大きく
+  DEFLECTION_RADIUS: 0.35,
+  // 弾き返しインパルスの強さ（kg·m/s）
+  DEFLECTION_IMPULSE: 1.5,
+  // ボールの高さ閾値（m）- これ以下の高さで弾き返す（足元レベル）
+  HEIGHT_THRESHOLD: 0.5,
+} as const;

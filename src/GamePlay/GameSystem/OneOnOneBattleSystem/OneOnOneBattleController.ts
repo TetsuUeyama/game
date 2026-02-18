@@ -1,15 +1,16 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DribbleBreakthroughConfig";
-import { ONE_ON_ONE_BATTLE, DefenseUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenseConfig";
+import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "./DribbleBreakthroughConfig";
 import {
   OneOnOneResult,
   ONE_ON_ONE_BATTLE_CONFIG,
+  ONE_ON_ONE_BATTLE,
   POSITIONING_CONFIG,
   AdvantageStatus,
   AdvantageUtils,
-} from "@/GamePlay/GameSystem/CharacterMove/Config/OneOnOneBattleConfig";
+} from "./OneOnOneBattleConfig";
+import { DefenseUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenseConfig";
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 
 // 型をre-export
@@ -23,10 +24,10 @@ export class OneOnOneBattleController {
   private was1on1: boolean = false;
   private in1on1Battle: boolean = false;
   private lastDiceRollTime: number = 0;
-  // ONE_ON_ONE_BATTLE.DICE_ROLL_INTERVALを使用（DefenseConfigから）
+  // ONE_ON_ONE_BATTLE.DICE_ROLL_INTERVALを使用
   private oneononeResult: OneOnOneResult | null = null;
   private lastCollisionRedirectTime: number = 0;
-  // ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVALを使用（DefenseConfigから）
+  // ONE_ON_ONE_BATTLE.COLLISION_REDIRECT_INTERVALを使用
 
   // 有利/不利状態（次のサイコロ勝負まで保持）
   private advantageStatus: AdvantageStatus = {
@@ -259,6 +260,9 @@ export class OneOnOneBattleController {
       return;
     }
 
+    // ドリブル突破前にゴール方向を向く（突破方向をゴール基準にするため）
+    this.turnTowardsGoal(onBallPlayer);
+
     // ボールが0番面の時、ランダムでドリブル突破を実行（ActionController経由）
     // 有利/不利状態を考慮（前回のサイコロ結果を使用）
     const currentFace = onBallPlayer.getCurrentBallFace();
@@ -286,8 +290,8 @@ export class OneOnOneBattleController {
     // オフェンス側：ボール保持位置をランダムに変更
     onBallPlayer.randomizeBallPosition();
 
-    // オフェンス側の行動をランダムに選択（DefenseUtilsを使用）
-    const shouldTurnToGoal = DefenseUtils.shouldTurnToGoal();
+    // オフェンス側の行動をランダムに選択（インライン化）
+    const shouldTurnToGoal = Math.random() < ONE_ON_ONE_BATTLE.TURN_TO_GOAL_CHANCE;
 
     // オフェンス側：8方向のランダムな移動方向を取得
     const randomDirection = this.getRandomDirection8();
@@ -312,6 +316,7 @@ export class OneOnOneBattleController {
         } else {
           // ドリブル突破を試みる（ボールが0番面の場合）
           if (currentFace === 0) {
+            this.turnTowardsGoal(onBallPlayer);
             const direction = Math.random() < ONE_ON_ONE_BATTLE_CONFIG.BREAKTHROUGH_LEFT_CHANCE ? 'left' : 'right';
             this.performDribbleBreakthrough(direction);
           }

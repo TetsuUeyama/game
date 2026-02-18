@@ -46,12 +46,12 @@ export const PhysicsConstants = {
   // キャラクター物理ボディ（Havok用）
   // 胴体はカプセル、手は球体として物理衝突を処理
   CHARACTER: {
-    BODY_CAPSULE_RADIUS: 0.25,      // 胴体の半径（m）
-    BODY_CAPSULE_HEIGHT_RATIO: 0.6, // 身長に対する高さ比率
-    HAND_SPHERE_RADIUS: 0.08,       // 手の半径（m）
-    BODY_RESTITUTION: 0.5,          // 胴体の反発係数
-    HAND_RESTITUTION: 0.6,          // 手の反発係数
-    FRICTION: 0.3,                  // 摩擦係数
+    BODY_CAPSULE_RADIUS: 0.25,       // 胴体の半径（m）
+    BODY_CAPSULE_HEIGHT_RATIO: 0.95, // 身長に対する高さ比率（頭までカバー）
+    HAND_SPHERE_RADIUS: 0.08,        // 手の半径（m）
+    BODY_RESTITUTION: 0.5,           // 胴体の反発係数
+    HAND_RESTITUTION: 0.6,           // 手の反発係数
+    FRICTION: 0.3,                   // 摩擦係数
   },
 
   // 地面・コート

@@ -326,8 +326,12 @@ export class ActionController {
     this.state.phaseStartTime = 0;
     this.state.preparationTime = 0;
 
-    // アームリーチIKを確実にクリア（forceResetAction等でコールバックが発火しない場合の安全策）
-    this.character.setArmReachTarget(null);
+    // IKシステムの腕ターゲットをクリア（forceResetAction等でコールバックが発火しない場合の安全策）
+    const ikSystem = this.character.getIKSystem();
+    if (ikSystem) {
+      ikSystem.setArmTarget('left', null);
+      ikSystem.setArmTarget('right', null);
+    }
   }
 
   /**

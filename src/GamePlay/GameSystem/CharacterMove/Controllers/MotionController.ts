@@ -1,4 +1,4 @@
-import { Scalar } from "@babylonjs/core";
+import { Scalar, Vector3, Space } from "@babylonjs/core";
 import {Character} from "@/GamePlay/Object/Entities/Character";
 import {MotionData, MotionState, MotionConfig, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset, JumpPhysics} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { MOTION_BLEND_CONFIG, MOTION_SPEED_CONFIG, MOTION_POSITION_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
@@ -663,22 +663,21 @@ export class MotionController {
   }
 
   /**
-   * 関節に回転を適用
+   * 関節に回転を適用（スケルトンボーンに書き込み）
    */
   private applyJointRotation(jointName: keyof KeyframeJoints, rotation: JointRotation): void {
-    const joint = this.character.getJoint(jointName);
-    if (joint) {
-      // 関節角度スケールを適用（ダッシュ加速中のモーション強度調整）
+    const bone = this.character.getBoneForJoint(jointName);
+    if (bone) {
       const s = this._jointScale;
-      // 度数法からラジアンに変換して適用
-      joint.rotation.x = (rotation.x * s * Math.PI) / 180;
-      joint.rotation.y = (rotation.y * s * Math.PI) / 180;
-      joint.rotation.z = (rotation.z * s * Math.PI) / 180;
-
-      // 上半身パス回転オフセットを加算
+      let ry = (rotation.y * s * Math.PI) / 180;
       if (jointName === 'upperBody') {
-        joint.rotation.y += this.character.getUpperBodyYawOffset();
+        ry += this.character.getUpperBodyYawOffset();
       }
+      bone.setRotation(new Vector3(
+        (rotation.x * s * Math.PI) / 180,
+        ry,
+        (rotation.z * s * Math.PI) / 180
+      ), Space.LOCAL);
     }
   }
 

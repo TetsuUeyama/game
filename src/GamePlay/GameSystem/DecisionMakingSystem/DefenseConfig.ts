@@ -1,6 +1,7 @@
 /**
  * ディフェンス関連の設定を一元管理するファイル
- * 1on1バトル、ディフェンス位置取り、反応時間に関する定数とユーティリティメソッドを提供
+ * ディフェンス位置取り、反応時間に関する定数とユーティリティメソッドを提供
+ * 注: 1on1バトル設定は OneOnOneBattleSystem/OneOnOneBattleConfig.ts に移動済み
  */
 
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
@@ -20,27 +21,6 @@ export const DEFENSE_DISTANCE = {
   // 射線・検出
   LINE_THRESHOLD: 1.0,               // 射線上の敵検出閾値
   PASS_LINE_TOLERANCE: 0.5,          // パスライン検出許容誤差
-} as const;
-
-/**
- * 1on1バトル設定
- */
-export const ONE_ON_ONE_BATTLE = {
-  // タイミング設定（ミリ秒）
-  DICE_ROLL_INTERVAL: 1000,          // サイコロを振る間隔
-  COLLISION_REDIRECT_INTERVAL: 300,  // 衝突時の方向転換最小間隔
-
-  // ゴール方向行動
-  TURN_TO_GOAL_CHANCE: 0.25,         // ゴール方向を向く確率（25%）
-
-  // AI移動
-  RANDOM_DIRECTION_COUNT: 8,         // ランダム移動の方向数（8方向）
-
-  // オフェンス1on1行動設定
-  OFFENSE_MOVE_DURING_CONTACT: true, // 接触中もオフェンスが動く
-  OFFENSE_ACTION_CHANCE: 0.3,        // アクション実行確率（30%）
-  OFFENSE_FEINT_CHANCE: 0.4,         // フェイント確率（アクション時の40%）
-  OFFENSE_BREAKTHROUGH_CHANCE: 0.6,  // ドリブル突破確率（アクション時の60%）
 } as const;
 
 /**
@@ -214,31 +194,6 @@ export class DefenseUtils {
    */
   public static isOnLineOfFire(distanceFromLine: number): boolean {
     return distanceFromLine < DEFENSE_DISTANCE.LINE_THRESHOLD;
-  }
-
-  /**
-   * AIがゴール方向を向くかどうかを判定
-   * @returns ゴール方向を向く場合true
-   */
-  public static shouldTurnToGoal(): boolean {
-    return Math.random() < ONE_ON_ONE_BATTLE.TURN_TO_GOAL_CHANCE;
-  }
-
-  /**
-   * 8方向のランダムな方向インデックスを取得
-   * @returns 方向インデックス（0-7）
-   */
-  public static getRandomDirectionIndex(): number {
-    return Math.floor(Math.random() * ONE_ON_ONE_BATTLE.RANDOM_DIRECTION_COUNT);
-  }
-
-  /**
-   * 方向インデックスから角度を計算
-   * @param directionIndex 方向インデックス（0-7）
-   * @returns 角度（ラジアン）
-   */
-  public static getAngleFromDirectionIndex(directionIndex: number): number {
-    return (directionIndex * Math.PI) / 4;
   }
 
   /**

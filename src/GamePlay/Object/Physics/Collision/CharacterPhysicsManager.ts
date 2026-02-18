@@ -73,6 +73,7 @@ export class CharacterPhysicsManager {
     const bodyConfig = PhysicsConstants.CHARACTER;
 
     // 胴体用カプセルメッシュを作成（不可視）
+    // 頭までカバーするため身長の95%の高さ。カプセル上部の半球キャップがボールを横に滑らせる
     const capsuleHeight = height * bodyConfig.BODY_CAPSULE_HEIGHT_RATIO;
     this.bodyPhysicsMesh = MeshBuilder.CreateCapsule(
       `${this.team}_body_physics`,
