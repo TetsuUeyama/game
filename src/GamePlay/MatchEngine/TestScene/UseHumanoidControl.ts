@@ -21,7 +21,7 @@ import { BlendController } from "@/GamePlay/GameSystem/CharacterMove/MotionEngin
 import { PoseBlender } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/PoseBlender";
 import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
 import { TargetPose } from "@/GamePlay/GameSystem/CharacterModel/Character/TargetPose";
-import { createPoseData, createSingleMotionPoseData, captureRestPoses, RestPoseCache, findBoneForJoint, getJointCorrection } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import { createPoseData, createSingleMotionPoseData, captureRestPoses, RestPoseCache, findBoneForJoint, getJointCorrection, initPoseSync, syncPoseFromGLB, PoseSyncState } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
 import { MotionPlayer } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionPlayer";
 import {
   createProceduralHumanoid,
@@ -29,7 +29,6 @@ import {
   AppearanceConfig,
 } from "@/GamePlay/GameSystem/CharacterModel/Character/ProceduralHumanoid";
 import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
-import { logBoneOffsetsForProcedural } from "@/GamePlay/GameSystem/CharacterModel/Character/BoneExtractor";
 import {
   DEFAULT_MOTION_CONFIG,
   BlendInput,
@@ -116,6 +115,8 @@ export function useHumanoidControl(
   const motionPlayingRef = useRef(true);
   /** ジョイントインジケータ用（補正ノード含む） */
   const indicatorMeshesRef = useRef<TransformNode[]>([]);
+  /** ランタイムポーズ同期（GLB → proc） */
+  const poseSyncRef = useRef<PoseSyncState | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -174,6 +175,22 @@ export function useHumanoidControl(
           ag.dispose();
         }
 
+        // TransformNode に残った Animation データもクリア
+        // （AnimationGroup.dispose は AnimationGroup を除去するが、
+        //   個々のノード上の Animation 配列は残る場合がある）
+        for (const skeleton of glbResult.skeletons) {
+          for (const bone of skeleton.bones) {
+            const node = bone.getTransformNode();
+            if (node) {
+              node.animations = [];
+              // worldMatrix が freeze されていたら解除（PoseBlender が書き込めるように）
+              if (node.isWorldMatrixFrozen) {
+                node.unfreezeWorldMatrix();
+              }
+            }
+          }
+        }
+
         const instances: CharacterInstance[] = [];
         const skeletons: Skeleton[] = [];
         const restCaches: RestPoseCache[] = [];
@@ -185,8 +202,6 @@ export function useHumanoidControl(
           if (!skeleton) {
             throw new Error("GLBにスケルトンが含まれていません");
           }
-
-          logBoneOffsetsForProcedural(skeleton);
 
           const restCache = captureRestPoses(skeleton) ?? new Map();
           skeletons.push(skeleton);
@@ -251,18 +266,26 @@ export function useHumanoidControl(
           const humanoid = createProceduralHumanoid(scene, APPEARANCES[1]);
           humanoid.rootMesh.position.x = PROCEDURAL_X;
           humanoid.rootMesh.scaling.setAll(PROCEDURAL_HEIGHT_CM / BASE_HEIGHT_CM);
-          humanoid.rootMesh.rotation.y = Math.PI; // GLBはGLTFローダーが座標系変換するため前向き、簡易モデルは手動で回転
 
-          // ProceduralHumanoid のアニメーションを停止（MotionPlayer で制御するため）
+          // ProceduralHumanoid のアニメーションを停止（ランタイムポーズ同期で制御するため）
           humanoid.idleAnimation.stop();
           humanoid.walkAnimation.stop();
 
+          // GLBモデルのrootMesh回転をコピー（RotY(180°)）
+          const glbRootQ = instances[0].rootMesh.rotationQuaternion;
+          if (glbRootQ) {
+            humanoid.rootMesh.rotationQuaternion = glbRootQ.clone();
+          }
+
           const procAdapter = new SkeletonAdapter(humanoid.skeleton, humanoid.rootMesh);
           const procSkeleton = procAdapter.skeleton;
-          const procRestCache = procAdapter.getRestPoseCache();
-          skeletons.push(procSkeleton);
-          restCaches.push(procRestCache);
 
+          skeletons.push(procSkeleton);
+          // ランタイムポーズ同期ではRestPoseCacheは使わないが、
+          // MotionPlayer用に proc 独自のキャッシュを登録
+          restCaches.push(procAdapter.getRestPoseCache());
+
+          // PoseBlender は使わない: ランタイムポーズ同期でGLBから直接コピー
           const ik = new IKSystem(scene, config);
           ik.initialize(procSkeleton, humanoid.rootMesh);
 
@@ -286,6 +309,13 @@ export function useHumanoidControl(
         instancesRef.current = instances;
         skeletonsRef.current = skeletons;
         restPoseCachesRef.current = restCaches;
+
+        // ランタイムポーズ同期を初期化（GLBボーン回転 → proc ボーンに毎フレームコピー）
+        if (skeletons.length >= 2) {
+          poseSyncRef.current = initPoseSync(
+            skeletons[0], instances[0].rootMesh, skeletons[1],
+          );
+        }
 
         // ロード完了時に既にモーションチェックモードなら MotionPlayer を生成
         if (motionCheckActiveRef.current) {
@@ -312,15 +342,20 @@ export function useHumanoidControl(
           if (motionCheckActiveRef.current) {
             const players = motionPlayersRef.current;
             const advancing = motionPlayingRef.current;
-            for (let i = 0; i < instances.length; i++) {
-              if (players[i]) {
-                players[i].update(advancing ? dt : 0);
-              }
-              instances[i].ik.update(false);
-              instances[i].pose.capture();
-              // ProceduralHumanoid のビジュアルをボーン位置に同期
-              instances[i].procedural?.updateVisuals();
+            // GLBモデル（instance[0]）を MotionPlayer で更新
+            if (players[0]) {
+              players[0].update(advancing ? dt : 0);
             }
+            instances[0].ik.update(false);
+            instances[0].pose.capture();
+            // proc モデル（instance[1]）にGLBのポーズをコピー
+            const sync = poseSyncRef.current;
+            if (sync) {
+              syncPoseFromGLB(sync);
+            }
+            instances[1].ik.update(false);
+            instances[1].pose.capture();
+            instances[1].procedural?.updateVisuals();
             // 髪スケルトンをメインに同期
             syncAllHairSkeletons(instances, skeletons);
             // カメラ追従（キャラクター位置は固定）
@@ -339,8 +374,8 @@ export function useHumanoidControl(
           // 顔アップ中は移動を止める
           if (closeUpIdx === null) {
             const input = wasdToBlendInput(keys);
+            // GLBモデル（instance[0]）を PoseBlender で駆動
             for (const inst of instances) {
-              // GLBモデルは PoseBlender、ProceduralHumanoid はスキップ（モーションチェック専用）
               inst.poseBlender?.update(input, dt);
               if (input.turnRate !== 0) {
                 inst.rootMesh.rotate(Vector3.Up(), -input.turnRate * config.turnSpeed * dt);
@@ -348,13 +383,19 @@ export function useHumanoidControl(
               if (input.speed > 0) {
                 inst.rootMesh.translate(Vector3.Forward(), input.speed * config.walkSpeed * dt);
               }
-              // 髪モデルのルートをメインに追従
               if (inst.hairRootMesh) {
                 inst.hairRootMesh.position.copyFrom(inst.rootMesh.position);
                 inst.hairRootMesh.rotationQuaternion = inst.rootMesh.rotationQuaternion?.clone() ?? null;
               }
               inst.ik.update(false);
               inst.pose.capture();
+            }
+            // proc モデルにGLBのポーズをコピー
+            const sync = poseSyncRef.current;
+            if (sync) {
+              syncPoseFromGLB(sync);
+            }
+            for (const inst of instances) {
               inst.procedural?.updateVisuals();
             }
 
@@ -373,6 +414,12 @@ export function useHumanoidControl(
               inst.poseBlender?.update(idleInput, dt);
               inst.ik.update(false);
               inst.pose.capture();
+            }
+            // proc モデルにGLBのポーズをコピー
+            const sync = poseSyncRef.current;
+            if (sync) {
+              syncPoseFromGLB(sync);
+              instances[1].procedural?.updateVisuals();
             }
 
             // カメラを対象キャラクターの顔位置に固定（ref から最新値を参照）
