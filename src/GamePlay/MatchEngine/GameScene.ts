@@ -651,6 +651,10 @@ export class GameScene {
       for (const character of allCharacters) {
         character.initializePhysics();
         character.initializeIK();
+        // 頭部ルックアット: ボールを視線追従ターゲットに設定
+        if (this.ball) {
+          character.setLookAtTarget(this.ball.mesh);
+        }
       }
 
       // 物理エンジン初期化後、ゲームモードの場合はジャンプボールを開始

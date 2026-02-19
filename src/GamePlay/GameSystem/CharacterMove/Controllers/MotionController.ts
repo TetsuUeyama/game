@@ -1,11 +1,24 @@
-import { Scalar, Vector3, Space } from "@babylonjs/core";
-import {Character} from "@/GamePlay/Object/Entities/Character";
-import {MotionData, MotionState, MotionConfig, Keyframe, KeyframeJoints, JointRotation, JointPriority, PositionOffset, JumpPhysics} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
+import { Scalar, Quaternion, Bone, Space } from "@babylonjs/core";
+import { Character } from "@/GamePlay/Object/Entities/Character";
+import { MotionData, MotionState, MotionConfig, Keyframe, PositionOffset, JumpPhysics } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { MOTION_BLEND_CONFIG, MOTION_SPEED_CONFIG, MOTION_POSITION_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
+import { MotionPlayer } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionPlayer";
+import { createSingleMotionPoseData } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import { motionDataToDefinition } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionDataConverter";
+import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 
 /**
  * モーションコントローラー
- * キーフレームアニメーションの実行とモーションの登録・管理を統合
+ *
+ * FK パイプライン:
+ *   MotionData → MotionDefinition → SingleMotionPoseData → MotionPlayer
+ *   → evaluateToMap() で Quaternion 評価 → ポスト処理（JointScale / UpperBodyYaw）→ ボーン書き込み
+ *
+ * テストシーン（AnimationFactory / MotionPlayer）と同一の Quaternion パイプラインを使用。
+ * SkeletonAdapter が restQ × corrQ × eq(offset) × corrQ⁻¹ をベイクし、
+ * MotionPlayer が Quaternion Slerp で補間する。
+ *
+ * 位置オフセット（ジャンプ高さ等）は MotionData の keyframes から直接線形補間する。
  */
 export class MotionController {
   private character: Character;
@@ -17,6 +30,12 @@ export class MotionController {
 
   // 関節角度スケール（ダッシュ加速中のモーション強度調整用、1.0 = フル適用）
   private _jointScale: number = 1.0;
+
+  // Quaternion FK パイプライン
+  private _adapter: SkeletonAdapter | null = null;
+  private _player: MotionPlayer | null = null;
+  private _prevBoneQuats: Map<Bone, Quaternion> | null = null;
+  private _lastBoneQuats: Map<Bone, Quaternion> = new Map();
 
   constructor(character: Character) {
     this.character = character;
@@ -224,20 +243,19 @@ export class MotionController {
    * 既にモーションが再生中の場合は、ブレンドして遷移する
    */
   public play(motion: MotionData, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
-    // 既にモーションが再生中の場合は、ブレンドを開始
     if (this.state.isPlaying && this.state.currentMotion) {
-      // 現在の関節状態を保存
-      const currentJoints = this.interpolateKeyframes(this.state.currentMotion.keyframes, this.state.currentTime);
-      this.state.previousJoints = currentJoints;
+      // ブレンド開始: 現在のボーン Quaternion をスナップショット
+      this._prevBoneQuats = this._cloneBoneQuats(this._lastBoneQuats);
+      this._player = this._createPlayer(motion);
       this.state.nextMotion = motion;
       this.state.isBlending = true;
       this.state.blendTime = 0;
       this.state.blendDuration = blendDuration;
-      // lastAppliedPositionは保持（新しいモーションのオフセットとの差分を取るため）
-      // 位置スケールをリセット
+      this.state.previousJoints = null;
       this.state.positionScale = MOTION_POSITION_CONFIG.DEFAULT_POSITION_SCALE;
     } else {
       // 新規再生
+      this._player = this._createPlayer(motion);
       this.state.currentMotion = motion;
       this.state.currentTime = 0;
       this.state.isPlaying = true;
@@ -246,10 +264,9 @@ export class MotionController {
       this.state.previousJoints = null;
       this.state.previousPosition = null;
       this.state.nextMotion = null;
-      // 初回のみ位置オフセットをリセット
       this.state.lastAppliedPosition = null;
-      // 位置スケールをリセット
       this.state.positionScale = MOTION_POSITION_CONFIG.DEFAULT_POSITION_SCALE;
+      this._prevBoneQuats = null;
     }
   }
 
@@ -258,20 +275,19 @@ export class MotionController {
    * ジャンプの高さを変えるなど、位置オフセットをスケールする場合に使用
    */
   public playWithScale(motion: MotionData, positionScale: number, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
-    // 既にモーションが再生中の場合は、ブレンドを開始
     if (this.state.isPlaying && this.state.currentMotion) {
-      // 現在の関節状態を保存
-      const currentJoints = this.interpolateKeyframes(this.state.currentMotion.keyframes, this.state.currentTime);
-      this.state.previousJoints = currentJoints;
+      // ブレンド開始: 現在のボーン Quaternion をスナップショット
+      this._prevBoneQuats = this._cloneBoneQuats(this._lastBoneQuats);
+      this._player = this._createPlayer(motion);
       this.state.nextMotion = motion;
       this.state.isBlending = true;
       this.state.blendTime = 0;
       this.state.blendDuration = blendDuration;
-      // lastAppliedPositionは保持（新しいモーションのオフセットとの差分を取るため）
-      // 位置スケールを設定
+      this.state.previousJoints = null;
       this.state.positionScale = positionScale;
     } else {
       // 新規再生
+      this._player = this._createPlayer(motion);
       this.state.currentMotion = motion;
       this.state.currentTime = 0;
       this.state.isPlaying = true;
@@ -280,10 +296,9 @@ export class MotionController {
       this.state.previousJoints = null;
       this.state.previousPosition = null;
       this.state.nextMotion = null;
-      // 初回のみ位置オフセットをリセット
       this.state.lastAppliedPosition = null;
-      // 位置スケールを設定
       this.state.positionScale = positionScale;
+      this._prevBoneQuats = null;
     }
   }
 
@@ -319,12 +334,10 @@ export class MotionController {
       return;
     }
 
-    // 時間をモーションの範囲内にクランプ
     this.state.currentTime = Math.max(0, Math.min(time, this.state.currentMotion.duration));
 
-    // 現在の時間に対応する関節の状態を計算して適用
-    const currentJoints = this.interpolateKeyframes(this.state.currentMotion.keyframes, this.state.currentTime);
-    this.applyJointsWithPriority(currentJoints, this.state.currentMotion.priorities);
+    // MotionPlayer で FK 評価
+    this._applyFK(this.state.currentTime);
 
     // 位置オフセット + 自動接地を適用
     const currentPosition = this.interpolatePosition(this.state.currentMotion.keyframes, this.state.currentTime, this.state.currentMotion.jumpPhysics);
@@ -340,10 +353,9 @@ export class MotionController {
     }
 
     // ブレンド中の処理
-    if (this.state.isBlending && this.state.nextMotion && this.state.previousJoints) {
+    if (this.state.isBlending && this.state.nextMotion && this._prevBoneQuats) {
       this.state.blendTime += deltaTime;
 
-      // ブレンド完了チェック
       if (this.state.blendTime >= this.state.blendDuration) {
         // ブレンド完了: 次のモーションに切り替え
         this.state.currentMotion = this.state.nextMotion;
@@ -353,22 +365,11 @@ export class MotionController {
         this.state.previousPosition = null;
         this.state.nextMotion = null;
         this.state.blendTime = 0;
+        this._prevBoneQuats = null;
       } else {
-        // ブレンド中: 前のモーションと次のモーションを補間
+        // ブレンド中: 前のボーン状態と新モーション t=0 を Quaternion Slerp
         const blendRatio = this.state.blendTime / this.state.blendDuration;
-
-        // 次のモーションの現在の状態を取得
-        const nextJoints = this.interpolateKeyframes(
-          this.state.nextMotion.keyframes,
-          0, // 次のモーションは最初から
-        );
-
-        // 前の状態と次の状態をブレンド
-        const blendedJoints = this.blendJoints(this.state.previousJoints, nextJoints, blendRatio);
-
-        // ブレンドした関節を適用
-        const priorities = this.state.nextMotion.priorities || this.state.currentMotion?.priorities;
-        this.applyJointsWithPriority(blendedJoints, priorities);
+        this._applyBlendedFK(blendRatio);
 
         // ブレンド中も位置オフセット + 自動接地を適用
         const currentPosition = this.interpolatePosition(this.state.nextMotion.keyframes, 0, this.state.nextMotion.jumpPhysics);
@@ -397,93 +398,165 @@ export class MotionController {
       }
     }
 
-    // 現在の時間に対応する関節の状態を計算
-    const currentJoints = this.interpolateKeyframes(motion.keyframes, this.state.currentTime);
-
-    // 優先度順に関節を適用
-    this.applyJointsWithPriority(currentJoints, motion.priorities);
+    // MotionPlayer で FK 評価 + ポスト処理
+    this._applyFK(this.state.currentTime);
 
     // 位置オフセット + 自動接地を適用
     const currentPosition = this.interpolatePosition(motion.keyframes, this.state.currentTime, motion.jumpPhysics);
     this.applyPositionOffset(currentPosition);
   }
 
+  // ========================================
+  // Quaternion FK パイプライン
+  // ========================================
+
+  /** SkeletonAdapter を遅延取得 */
+  private _getAdapter(): SkeletonAdapter {
+    if (!this._adapter) {
+      this._adapter = this.character.getSkeletonAdapter();
+    }
+    return this._adapter;
+  }
+
+  /** MotionData → MotionPlayer を生成 */
+  private _createPlayer(motion: MotionData): MotionPlayer | null {
+    const adapter = this._getAdapter();
+    const def = motionDataToDefinition(motion);
+    const poseData = createSingleMotionPoseData(
+      adapter.skeleton, def, adapter.getRestPoseCache(),
+    );
+    if (!poseData) return null;
+    return new MotionPlayer(poseData);
+  }
+
   /**
-   * キーフレーム間を補間して現在の関節状態を取得
+   * 指定時刻で FK を評価し、ポスト処理後にボーンに書き込む。
+   *
+   * パイプライン:
+   *   MotionPlayer.evaluateToMap(time) → Quaternion Map
+   *   → JointScale: Slerp(restQ, animQ, scale)
+   *   → UpperBodyYaw: conjugated yaw rotation on spine2
+   *   → bone.setRotationQuaternion()
    */
-  private interpolateKeyframes(keyframes: Keyframe[], currentTime: number): KeyframeJoints {
-    // キーフレームが1つ以下の場合
-    if (keyframes.length === 0) {
-      return {};
-    }
-    if (keyframes.length === 1) {
-      return keyframes[0].joints;
-    }
+  private _applyFK(time: number): void {
+    if (!this._player) return;
 
-    // 現在の時間を挟む2つのキーフレームを見つける
-    let prevKeyframe: Keyframe = keyframes[0];
-    let nextKeyframe: Keyframe = keyframes[keyframes.length - 1];
+    const boneQuats = this._player.evaluateToMap(time);
+    this._postProcess(boneQuats);
+    this._writeBoneQuats(boneQuats);
+    this._lastBoneQuats = boneQuats;
+  }
 
-    for (let i = 0; i < keyframes.length - 1; i++) {
-      if (keyframes[i].time <= currentTime && currentTime <= keyframes[i + 1].time) {
-        prevKeyframe = keyframes[i];
-        nextKeyframe = keyframes[i + 1];
-        break;
+  /**
+   * ブレンド中の FK 評価。
+   * 前のボーン状態と新モーション t=0 を Quaternion Slerp で補間。
+   */
+  private _applyBlendedFK(blendRatio: number): void {
+    if (!this._player || !this._prevBoneQuats) return;
+
+    // 新モーションを t=0 で評価
+    const newQuats = this._player.evaluateToMap(0);
+    this._postProcess(newQuats);
+
+    // 前のボーン状態と Slerp
+    const blended = new Map<Bone, Quaternion>();
+    for (const [bone, newQ] of newQuats) {
+      const prevQ = this._prevBoneQuats.get(bone);
+      if (prevQ) {
+        blended.set(bone, Quaternion.Slerp(prevQ, newQ, blendRatio));
+      } else {
+        blended.set(bone, newQ.clone());
       }
     }
 
-    // 補間率を計算
-    const timeDiff = nextKeyframe.time - prevKeyframe.time;
-    const t = timeDiff > 0 ? (currentTime - prevKeyframe.time) / timeDiff : 0;
+    this._writeBoneQuats(blended);
+    this._lastBoneQuats = blended;
+  }
 
-    // 各関節を補間
-    const interpolatedJoints: KeyframeJoints = {};
-    const jointNames: (keyof KeyframeJoints)[] = ["upperBody", "lowerBody", "head", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftHip", "rightHip", "leftKnee", "rightKnee"];
+  /** JointScale + UpperBodyYaw のポスト処理 */
+  private _postProcess(boneQuats: Map<Bone, Quaternion>): void {
+    if (this._jointScale < 1.0) {
+      this._applyJointScale(boneQuats);
+    }
+    const yaw = this.character.getUpperBodyYawOffset();
+    if (yaw !== 0) {
+      this._applyUpperBodyYaw(boneQuats, yaw);
+    }
+  }
 
-    for (const jointName of jointNames) {
-      const prevRotation = prevKeyframe.joints[jointName];
-      const nextRotation = nextKeyframe.joints[jointName];
-
-      if (prevRotation && nextRotation) {
-        interpolatedJoints[jointName] = this.lerpRotation(prevRotation, nextRotation, t);
-      } else if (prevRotation) {
-        interpolatedJoints[jointName] = {...prevRotation};
-      } else if (nextRotation) {
-        interpolatedJoints[jointName] = {...nextRotation};
+  /**
+   * 関節角度スケール: Slerp(restQ, animQ, scale)
+   * scale=1.0 → フルアニメーション、scale=0.0 → レストポーズ
+   */
+  private _applyJointScale(boneQuats: Map<Bone, Quaternion>): void {
+    const adapter = this._getAdapter();
+    for (const [bone, animQ] of boneQuats) {
+      const restQ = adapter.getRestQuaternion(bone);
+      if (restQ) {
+        boneQuats.set(bone, Quaternion.Slerp(restQ, animQ, this._jointScale));
       }
     }
-
-    return interpolatedJoints;
   }
 
   /**
-   * 2つの回転を線形補間（Babylon.js Scalar API使用）
+   * 上半身ヨー回転のポスト処理。
+   *
+   * Euler パイプラインでは offset.y += yaw だったが、
+   * Quaternion パイプラインでは共役回転で等価な変換を行う:
+   *   Q_final = (restQ × RotY(yaw) × restQ⁻¹) × Q_anim
+   *
+   * 数学的証明:
+   *   Euler: restQ × RotYPR(ry + yaw, rx, rz)
+   *        = restQ × RotY(yaw) × RotYPR(ry, rx, rz)
+   *        = (restQ × RotY(yaw) × restQ⁻¹) × (restQ × RotYPR(ry, rx, rz))
+   *        = conjugatedYaw × Q_anim
    */
-  private lerpRotation(from: JointRotation, to: JointRotation, t: number): JointRotation {
-    return {
-      x: Scalar.Lerp(from.x, to.x, t),
-      y: Scalar.Lerp(from.y, to.y, t),
-      z: Scalar.Lerp(from.z, to.z, t),
-    };
+  private _applyUpperBodyYaw(boneQuats: Map<Bone, Quaternion>, yaw: number): void {
+    const adapter = this._getAdapter();
+    const spine2Bone = adapter.findBone("spine2");
+    if (!spine2Bone) return;
+
+    const currentQ = boneQuats.get(spine2Bone);
+    if (!currentQ) return;
+
+    const restQ = adapter.getRestQuaternion(spine2Bone);
+    if (!restQ) return;
+
+    const yawQ = Quaternion.FromEulerAngles(0, yaw, 0);
+    const restInv = Quaternion.Inverse(restQ);
+    const conjugatedYaw = restQ.multiply(yawQ).multiply(restInv);
+    boneQuats.set(spine2Bone, conjugatedYaw.multiply(currentQ));
   }
 
-  /**
-   * 線形補間（Babylon.js Scalar API使用）
-   */
-  private lerp(from: number, to: number, t: number): number {
-    return Scalar.Lerp(from, to, t);
+  /** Quaternion Map をボーンに書き込む */
+  private _writeBoneQuats(boneQuats: Map<Bone, Quaternion>): void {
+    for (const [bone, q] of boneQuats) {
+      bone.setRotationQuaternion(q, Space.LOCAL);
+    }
   }
+
+  /** Quaternion Map のディープクローン */
+  private _cloneBoneQuats(source: Map<Bone, Quaternion>): Map<Bone, Quaternion> {
+    const result = new Map<Bone, Quaternion>();
+    for (const [bone, q] of source) {
+      result.set(bone, q.clone());
+    }
+    return result;
+  }
+
+  // ========================================
+  // 位置補間（MotionData keyframes から直接計算）
+  // ========================================
 
   /**
    * キーフレーム間を補間して現在の位置オフセットを取得
    * jumpPhysics が指定されている場合、Y軸のみ放物線で計算する
    */
   private interpolatePosition(keyframes: Keyframe[], currentTime: number, jumpPhysics?: JumpPhysics): PositionOffset | null {
-    // 位置オフセットを持つキーフレームを見つける
     const framesWithPosition = keyframes.filter((kf) => kf.position);
 
     if (framesWithPosition.length === 0) {
-      return null; // 位置オフセットがない
+      return null;
     }
 
     if (framesWithPosition.length === 1) {
@@ -535,9 +608,9 @@ export class MotionController {
     const nextPos = nextKeyframe.position!;
 
     return {
-      x: this.lerp(prevPos.x, nextPos.x, t),
-      y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : this.lerp(prevPos.y, nextPos.y, t),
-      z: this.lerp(prevPos.z, nextPos.z, t),
+      x: Scalar.Lerp(prevPos.x, nextPos.x, t),
+      y: jumpPhysics ? this.computePhysicsY(currentTime, jumpPhysics) : Scalar.Lerp(prevPos.y, nextPos.y, t),
+      z: Scalar.Lerp(prevPos.z, nextPos.z, t),
     };
   }
 
@@ -605,81 +678,9 @@ export class MotionController {
       : { x: 0, y: autoGround, z: 0 };
   }
 
-  /**
-   * 2つの関節状態をブレンド
-   */
-  private blendJoints(fromJoints: KeyframeJoints, toJoints: KeyframeJoints, blendRatio: number): KeyframeJoints {
-    const blendedJoints: KeyframeJoints = {};
-    const jointNames: (keyof KeyframeJoints)[] = ["upperBody", "lowerBody", "head", "leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftHip", "rightHip", "leftKnee", "rightKnee"];
-
-    for (const jointName of jointNames) {
-      const fromRotation = fromJoints[jointName];
-      const toRotation = toJoints[jointName];
-
-      if (fromRotation && toRotation) {
-        // 両方の状態がある場合はブレンド
-        blendedJoints[jointName] = this.lerpRotation(fromRotation, toRotation, blendRatio);
-      } else if (fromRotation) {
-        // fromのみの場合
-        blendedJoints[jointName] = {...fromRotation};
-      } else if (toRotation) {
-        // toのみの場合
-        blendedJoints[jointName] = {...toRotation};
-      }
-    }
-
-    return blendedJoints;
-  }
-
-  /**
-   * 優先度に基づいて関節を適用
-   */
-  private applyJointsWithPriority(joints: KeyframeJoints, priorities?: JointPriority[]): void {
-    // 優先度が指定されている場合は、優先度順にソート
-    const jointNames: (keyof KeyframeJoints)[] = Object.keys(joints) as (keyof KeyframeJoints)[];
-
-    if (priorities && priorities.length > 0) {
-      // 優先度マップを作成
-      const priorityMap = new Map<keyof KeyframeJoints, number>();
-      for (const priority of priorities) {
-        priorityMap.set(priority.jointName, priority.priority);
-      }
-
-      // 優先度順にソート（優先度が高い順）
-      jointNames.sort((a, b) => {
-        const priorityA = priorityMap.get(a) ?? 0;
-        const priorityB = priorityMap.get(b) ?? 0;
-        return priorityB - priorityA; // 降順
-      });
-    }
-
-    // 優先度順に関節を適用
-    for (const jointName of jointNames) {
-      const rotation = joints[jointName];
-      if (rotation) {
-        this.applyJointRotation(jointName, rotation);
-      }
-    }
-  }
-
-  /**
-   * 関節に回転を適用（スケルトンボーンに書き込み）
-   */
-  private applyJointRotation(jointName: keyof KeyframeJoints, rotation: JointRotation): void {
-    const bone = this.character.getBoneForJoint(jointName);
-    if (bone) {
-      const s = this._jointScale;
-      let ry = (rotation.y * s * Math.PI) / 180;
-      if (jointName === 'upperBody') {
-        ry += this.character.getUpperBodyYawOffset();
-      }
-      bone.setRotation(new Vector3(
-        (rotation.x * s * Math.PI) / 180,
-        ry,
-        (rotation.z * s * Math.PI) / 180
-      ), Space.LOCAL);
-    }
-  }
+  // ========================================
+  // 状態取得
+  // ========================================
 
   /**
    * 現在のモーション状態を取得
@@ -700,7 +701,6 @@ export class MotionController {
    * ブレンド中の場合は、ブレンド先のモーション名を返す
    */
   public getCurrentMotionName(): string | null {
-    // ブレンド中の場合は、ブレンド先のモーション名を返す
     if (this.state.isBlending && this.state.nextMotion) {
       return this.state.nextMotion.name;
     }

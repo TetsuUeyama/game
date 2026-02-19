@@ -28,6 +28,7 @@ import {
   ProceduralHumanoidResult,
   AppearanceConfig,
 } from "@/GamePlay/GameSystem/CharacterModel/Character/ProceduralHumanoid";
+import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 import { logBoneOffsetsForProcedural } from "@/GamePlay/GameSystem/CharacterModel/Character/BoneExtractor";
 import {
   DEFAULT_MOTION_CONFIG,
@@ -255,8 +256,9 @@ export function useHumanoidControl(
           humanoid.idleAnimation.stop();
           humanoid.walkAnimation.stop();
 
-          const procSkeleton = humanoid.skeleton;
-          const procRestCache = captureRestPoses(procSkeleton) ?? new Map();
+          const procAdapter = new SkeletonAdapter(humanoid.skeleton, humanoid.rootMesh);
+          const procSkeleton = procAdapter.skeleton;
+          const procRestCache = procAdapter.getRestPoseCache();
           skeletons.push(procSkeleton);
           restCaches.push(procRestCache);
 
@@ -313,7 +315,7 @@ export function useHumanoidControl(
               if (players[i]) {
                 players[i].update(advancing ? dt : 0);
               }
-              instances[i].ik.update(0);
+              instances[i].ik.update(false);
               instances[i].pose.capture();
               // ProceduralHumanoid のビジュアルをボーン位置に同期
               instances[i].procedural?.updateVisuals();
@@ -350,7 +352,7 @@ export function useHumanoidControl(
                 inst.hairRootMesh.position.copyFrom(inst.rootMesh.position);
                 inst.hairRootMesh.rotationQuaternion = inst.rootMesh.rotationQuaternion?.clone() ?? null;
               }
-              inst.ik.update(input.speed);
+              inst.ik.update(false);
               inst.pose.capture();
               inst.procedural?.updateVisuals();
             }
@@ -368,7 +370,7 @@ export function useHumanoidControl(
             const idleInput: BlendInput = { speed: 0, turnRate: 0 };
             for (const inst of instances) {
               inst.poseBlender?.update(idleInput, dt);
-              inst.ik.update(0);
+              inst.ik.update(false);
               inst.pose.capture();
             }
 
@@ -450,7 +452,7 @@ export function useHumanoidControl(
 
           scene.onAfterAnimationsObservable.add(() => {
             for (const inst of instances) {
-              inst.ik.update();
+              inst.ik.update(false);
               inst.pose.capture();
               inst.procedural?.updateVisuals();
             }
