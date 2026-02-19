@@ -223,8 +223,9 @@ export class MotionPlayer {
         this._evaluateTo(tgt.keys, mainFrame, this._frameCount, this._resultQ);
       }
 
-      if (tgt.node && tgt.node.rotationQuaternion) {
-        tgt.node.rotationQuaternion.copyFrom(this._resultQ);
+      if (tgt.node) {
+        // GLTF: プロパティセッター経由で dirty フラグを確実トリガー
+        tgt.node.rotationQuaternion = this._resultQ.clone();
       } else {
         tgt.bone.setRotationQuaternion(this._resultQ, Space.LOCAL);
       }

@@ -135,13 +135,14 @@ export class PoseBlender {
 
   /**
    * ボーンに回転を適用する。
-   * GLTF: linked TransformNode の rotationQuaternion を直接変更。
+   * GLTF: linked TransformNode の rotationQuaternion をプロパティセッター経由で設定。
+   *       copyFrom() だと dirty フラグがトリガーされず worldMatrix が更新されない場合がある。
    * 非GLTF: bone.setRotationQuaternion() を使用。
    */
   private _applyRotation(tgt: BoneTarget, quat: Quaternion): void {
-    if (tgt.node && tgt.node.rotationQuaternion) {
-      // GLTF ボーン: TransformNode を直接制御
-      tgt.node.rotationQuaternion.copyFrom(quat);
+    if (tgt.node) {
+      // GLTF ボーン: プロパティセッター経由で設定（dirty フラグ確実トリガー）
+      tgt.node.rotationQuaternion = quat.clone();
     } else {
       // 非GLTF ボーン: Bone API
       tgt.bone.setRotationQuaternion(quat, Space.LOCAL);
