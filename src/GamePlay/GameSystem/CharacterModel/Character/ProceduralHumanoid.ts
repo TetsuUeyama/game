@@ -231,18 +231,40 @@ export function createProceduralHumanoid(
   addPoint("lFoot_vis", B.leftFoot, { width: 0.09, height: 0.06, depth: 0.2 }, shoesMat, new Vector3(0, -0.03, 0.05));
   addPoint("rFoot_vis", B.rightFoot, { width: 0.09, height: 0.06, depth: 0.2 }, shoesMat, new Vector3(0, -0.03, 0.05));
 
+  // 腕セグメントの反転対象ボーン（肩位置を基準に反転）
+  const LEFT_ARM_REFLECT: Set<string> = new Set([B.leftForeArm, B.leftHand]);
+  const RIGHT_ARM_REFLECT: Set<string> = new Set([B.rightForeArm, B.rightHand]);
+
   // --- Update & Dispose ---
   function updateVisuals() {
     // ボーンの絶対行列を強制再計算
     // rootMesh にジオメトリが無いため skeleton.prepare() が自動で呼ばれない
     skeleton.computeAbsoluteMatrices(true);
 
+    // 腕の反転ピボット（肩位置）
+    const lArmBone = boneMap.get(B.leftArm);
+    const rArmBone = boneMap.get(B.rightArm);
+    const lPivot = lArmBone?.getAbsolutePosition(rootMesh);
+    const rPivot = rArmBone?.getAbsolutePosition(rootMesh);
+
     for (const seg of segments) {
       const b1 = boneMap.get(seg.startBone);
       const b2 = boneMap.get(seg.endBone);
       if (!b1 || !b2) continue;
-      const p1 = b1.getAbsolutePosition(rootMesh);
-      const p2 = b2.getAbsolutePosition(rootMesh);
+      let p1 = b1.getAbsolutePosition(rootMesh);
+      let p2 = b2.getAbsolutePosition(rootMesh);
+
+      // 左腕: ForeArm/Hand のボーン位置を肩位置基準で反転
+      if (lPivot) {
+        if (LEFT_ARM_REFLECT.has(seg.startBone)) p1 = reflectPoint(p1, lPivot);
+        if (LEFT_ARM_REFLECT.has(seg.endBone)) p2 = reflectPoint(p2, lPivot);
+      }
+      // 右腕: 同様
+      if (rPivot) {
+        if (RIGHT_ARM_REFLECT.has(seg.startBone)) p1 = reflectPoint(p1, rPivot);
+        if (RIGHT_ARM_REFLECT.has(seg.endBone)) p2 = reflectPoint(p2, rPivot);
+      }
+
       alignMeshBetween(seg.mesh, p1, p2);
     }
     for (const pt of points) {
@@ -337,3 +359,12 @@ function alignMeshBetween(mesh: Mesh, p1: Vector3, p2: Vector3): void {
 }
 
 const _tmpAxis = new Vector3();
+
+/** 点をピボット基準で反転（ミラー）: reflected = 2 * pivot - point */
+function reflectPoint(point: Vector3, pivot: Vector3): Vector3 {
+  return new Vector3(
+    2 * pivot.x - point.x,
+    2 * pivot.y - point.y,
+    2 * pivot.z - point.z,
+  );
+}

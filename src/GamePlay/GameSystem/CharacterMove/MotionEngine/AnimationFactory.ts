@@ -867,6 +867,9 @@ export interface PoseSyncState {
 /**
  * ランタイムポーズ同期を初期化する。
  * GLBモデルのFK対象ボーンと簡易モデルのボーンを名前でマッピング。
+ *
+ * 腕ボーンの位置ズレは ProceduralHumanoid の updateVisuals() で
+ * 視覚反転（肩位置基準のミラー）により解決する。
  */
 export function initPoseSync(
   glbSkeleton: Skeleton,
@@ -914,9 +917,11 @@ export function initPoseSync(
  * GLBモデルの現在のボーン回転を簡易モデルにコピーする。
  * 毎フレーム、PoseBlender/MotionPlayer の更新後に呼び出す。
  *
- * GLB TransformNode の rotationQuaternion を読み取り、
- * 対応する proc Bone に setRotationQuaternion(q, Space.LOCAL) で書き込む。
- * Hips のみ Armature チェーン回転で補正。
+ * - Hips: Armature チェーン回転で補正（chainQ × glbQ）
+ * - 他ボーン: そのままコピー（glbQ）
+ *
+ * 腕ボーンの位置ズレは ProceduralHumanoid の updateVisuals() で
+ * 視覚反転（肩位置基準のミラー）により解決する。
  */
 export function syncPoseFromGLB(state: PoseSyncState): void {
   const { glbNodeMap, procBoneMap, hipsName, chainQ } = state;
