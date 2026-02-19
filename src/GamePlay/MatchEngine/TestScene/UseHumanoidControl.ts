@@ -251,6 +251,7 @@ export function useHumanoidControl(
           const humanoid = createProceduralHumanoid(scene, APPEARANCES[1]);
           humanoid.rootMesh.position.x = PROCEDURAL_X;
           humanoid.rootMesh.scaling.setAll(PROCEDURAL_HEIGHT_CM / BASE_HEIGHT_CM);
+          humanoid.rootMesh.rotation.y = Math.PI; // GLBはGLTFローダーが座標系変換するため前向き、簡易モデルは手動で回転
 
           // ProceduralHumanoid のアニメーションを停止（MotionPlayer で制御するため）
           humanoid.idleAnimation.stop();
@@ -406,6 +407,7 @@ export function useHumanoidControl(
             const humanoid = createProceduralHumanoid(scene, APPEARANCES[i]);
             humanoid.rootMesh.position.x = fallbackXPositions[i];
             humanoid.rootMesh.scaling.setAll(fallbackHeights[i] / BASE_HEIGHT_CM);
+            humanoid.rootMesh.rotation.y = Math.PI;
 
             const blend = new BlendController(
               humanoid.idleAnimation,

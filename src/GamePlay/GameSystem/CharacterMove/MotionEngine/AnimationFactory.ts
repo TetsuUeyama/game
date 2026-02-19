@@ -9,6 +9,7 @@
  *
  *   2. motionToEulerKeys()      ← 度数 → 純粋オフセット Euler (rad)
  *      MotionDefinition の度数データを、レスト姿勢を含まないオフセットに変換。
+ *      STANDING_POSE_OFFSETS を加算し、0° = 直立姿勢とする。
  *
  *   3. eulerKeysToQuatKeys()    ← オフセット Euler → 最終 Quaternion
  *      Q_rest × eq(offset) でクォータニオン合成。
@@ -108,6 +109,46 @@ const FOUND_TO_LOGICAL: Record<keyof FoundBones, LogicalBoneName> = {
 
 const DEG_TO_RAD = Math.PI / 180;
 const FPS = 30;
+
+/**
+ * 自然な直立姿勢のオフセット（度）。
+ *
+ * レスト姿勢（T/A ポーズ）から自然な直立姿勢への補正値。
+ * ゲーム IdleMotion の全キーフレーム共通定数から抽出。
+ *
+ * パイプライン適用:
+ *   motionToEulerKeys(): MotionDefinition の値に加算 → ボーンへの最終オフセット
+ *   motionDataToDefinition(): MotionData の値から減算 → MotionDefinition の値
+ *   motionDefinitionToData(): MotionDefinition の値に加算 → MotionData の値
+ *
+ * 結果: offset=0 が「自然な直立姿勢」を意味するようになる。
+ */
+export const STANDING_POSE_OFFSETS: Record<string, { x?: number; y?: number; z?: number }> = {
+  leftShoulder:  { z: -6 },
+  rightShoulder: { z: 6 },
+  leftElbow:     { x: -10, z: 6 },
+  rightElbow:    { x: -10, z: -6 },
+  leftHip:       { y: -15, z: -8 },
+  rightHip:      { y: 15, z: 8 },
+  leftKnee:      { x: 5, z: 5 },
+  rightKnee:     { x: 5, z: -5 },
+};
+
+/**
+ * FoundBones キー → 直立オフセット（JOINT_TO_BONE 経由の逆引き）。
+ * motionToEulerKeys() の「残りのボーン」セクションで使用。
+ */
+const BONE_STANDING_OFFSETS: Partial<Record<keyof FoundBones, { x: number; y: number; z: number }>> = {};
+for (const [jointName, offsets] of Object.entries(STANDING_POSE_OFFSETS)) {
+  const boneKey = JOINT_TO_BONE[jointName];
+  if (boneKey) {
+    BONE_STANDING_OFFSETS[boneKey] = {
+      x: offsets.x ?? 0,
+      y: offsets.y ?? 0,
+      z: offsets.z ?? 0,
+    };
+  }
+}
 
 /** ボーンのレスト姿勢キャッシュ（Quaternion で保持） */
 export type RestPoseCache = Map<Bone, Quaternion>;
@@ -564,12 +605,15 @@ export function getJointCorrection(
 //
 // MotionDefinition.joints のフォーマット:
 //   "leftShoulderX": { 0: 0, 0.733: 5, 1.5: 0, ... }  ← 度数、時間→値のマップ
+//   0° = 自然な直立姿勢（STANDING_POSE_OFFSETS がベースレイヤーとして加算される）
 //
 // 出力: 各ボーンに対して { frame: number, value: Vector3 } の配列
-//   value は純粋なオフセット（レスト姿勢は含まない）。
+//   value は純粋なオフセット（レスト姿勢は含まない、直立オフセットは含む）。
 //   後段の eulerKeysToQuatKeys() で Q_rest × eq(offset) として合成する。
 //
-// Rigify の場合: rigifyAdjustments のオフセット（腕を下ろす等）も加算する。
+// 加算される補正:
+//   1. STANDING_POSE_OFFSETS: レスト姿勢→直立姿勢への変換（全リグ共通）
+//   2. rigifyAdjustments: Rigify T-pose 固有の補正（腕を下ろす等）
 
 function motionToEulerKeys(
   motion: MotionDefinition,
@@ -612,14 +656,20 @@ function motionToEulerKeys(
     const adjY = isRigify ? (motion.rigifyAdjustments?.[jointName + "Y"] ?? 0) : 0;
     const adjZ = isRigify ? (motion.rigifyAdjustments?.[jointName + "Z"] ?? 0) : 0;
 
-    // 純粋なオフセットのみ出力（度→ラジアン変換 + Rigify調整を加算）
+    // 直立オフセット: MotionDefinition の 0° を自然な直立姿勢にする
+    const standing = STANDING_POSE_OFFSETS[jointName];
+    const stdX = standing?.x ?? 0;
+    const stdY = standing?.y ?? 0;
+    const stdZ = standing?.z ?? 0;
+
+    // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
     const keys = times.map((time) => ({
       frame: Math.round(time * FPS),
       value: new Vector3(
-        ((axes.get("X")?.[time] ?? 0) + adjX) * DEG_TO_RAD,
-        ((axes.get("Y")?.[time] ?? 0) + adjY) * DEG_TO_RAD,
-        ((axes.get("Z")?.[time] ?? 0) + adjZ) * DEG_TO_RAD,
+        ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD,
+        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD,
+        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD,
       ),
     }));
     results.push({ bone, keys });
@@ -642,10 +692,12 @@ function motionToEulerKeys(
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
+      // 直立オフセットも加算
+      const standing = STANDING_POSE_OFFSETS[jointName];
       const value = new Vector3(
-        adjX * DEG_TO_RAD,
-        adjY * DEG_TO_RAD,
-        adjZ * DEG_TO_RAD,
+        (adjX + (standing?.x ?? 0)) * DEG_TO_RAD,
+        (adjY + (standing?.y ?? 0)) * DEG_TO_RAD,
+        (adjZ + (standing?.z ?? 0)) * DEG_TO_RAD,
       );
       results.push({
         bone,
@@ -657,18 +709,20 @@ function motionToEulerKeys(
     }
   }
 
-  // 残りのボーン: ゼロオフセット（= レスト姿勢維持）
-  // offset=0 なので eulerKeysToQuatKeys で Q_rest × eq(0) = Q_rest になる
-  for (const bone of Object.values(bones)) {
+  // 残りのボーン: 直立オフセットがあれば適用、なければゼロ（= レスト姿勢維持）
+  for (const [key, bone] of Object.entries(bones)) {
     if (!bone || processedBones.has(bone)) continue;
     processedBones.add(bone);
 
-    const zero = Vector3.Zero();
+    const standing = BONE_STANDING_OFFSETS[key as keyof FoundBones];
+    const offset = standing
+      ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD, standing.z * DEG_TO_RAD)
+      : Vector3.Zero();
     results.push({
       bone,
       keys: [
-        { frame: 0, value: zero.clone() },
-        { frame: totalFrames, value: zero.clone() },
+        { frame: 0, value: offset.clone() },
+        { frame: totalFrames, value: offset.clone() },
       ],
     });
   }
