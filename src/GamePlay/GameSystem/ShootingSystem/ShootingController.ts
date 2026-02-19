@@ -72,6 +72,10 @@ export class ShootingController {
   private lastBallY: number = 0;
   private checkingGoal: boolean = false;
 
+  // ゴール通過追跡（中間リング・下部リングを通過して初めてゴール判定）
+  private goalTrackingState: 'idle' | 'entered_rim' | 'passed_mid_ring' = 'idle';
+  private trackedGoalZ: number = 0;
+
   // シュートレンジ可視化用メッシュ
   private threePtRangeMesh: Mesh | null = null;
   private midRangeMesh: Mesh | null = null;
@@ -600,31 +604,69 @@ export class ShootingController {
 
     if (!this.checkingGoal || !this.ball.isInFlight()) {
       this.checkingGoal = false;
+      this.goalTrackingState = 'idle';
       return;
     }
 
     const ballPosition = this.ball.getPosition();
     const ballY = ballPosition.y;
-
     const rimHeight = GOAL_CONFIG.rimHeight;
     const rimRadius = GOAL_CONFIG.rimDiameter / 2;
 
-    if (this.lastBallY > rimHeight && ballY <= rimHeight) {
-      const goals = [
-        { z: GOAL_Z_POSITIONS.GOAL_1, name: 'ゴール1' },
-        { z: GOAL_Z_POSITIONS.GOAL_2, name: 'ゴール2' },
-      ];
+    // ネットのリング高さを取得（どちらのゴールも同じ高さ）
+    const net = this.field.getGoal1Net();
+    const midRingY = net.midRingY;
+    const bottomRingY = net.bottomRingY;
 
-      for (const goal of goals) {
+    if (this.goalTrackingState === 'idle') {
+      // Step 1: リムを通過したか（上から下へ）
+      if (this.lastBallY > rimHeight && ballY <= rimHeight) {
+        const goals = [
+          { z: GOAL_Z_POSITIONS.GOAL_1 },
+          { z: GOAL_Z_POSITIONS.GOAL_2 },
+        ];
+
+        for (const goal of goals) {
+          const distanceFromCenter = Math.sqrt(
+            ballPosition.x * ballPosition.x +
+            (ballPosition.z - goal.z) * (ballPosition.z - goal.z)
+          );
+
+          if (distanceFromCenter <= rimRadius) {
+            this.goalTrackingState = 'entered_rim';
+            this.trackedGoalZ = goal.z;
+            break;
+          }
+        }
+      }
+    } else if (this.goalTrackingState === 'entered_rim') {
+      // Step 2: 中間リングを通過したか
+      if (ballY <= midRingY) {
         const distanceFromCenter = Math.sqrt(
           ballPosition.x * ballPosition.x +
-          (ballPosition.z - goal.z) * (ballPosition.z - goal.z)
+          (ballPosition.z - this.trackedGoalZ) * (ballPosition.z - this.trackedGoalZ)
         );
-
+        if (distanceFromCenter <= rimRadius) {
+          this.goalTrackingState = 'passed_mid_ring';
+        } else {
+          // 横にそれた → リセット
+          this.goalTrackingState = 'idle';
+        }
+      }
+    } else if (this.goalTrackingState === 'passed_mid_ring') {
+      // Step 3: 下部リングを通過したか → ゴール確定
+      if (ballY <= bottomRingY) {
+        const distanceFromCenter = Math.sqrt(
+          ballPosition.x * ballPosition.x +
+          (ballPosition.z - this.trackedGoalZ) * (ballPosition.z - this.trackedGoalZ)
+        );
         if (distanceFromCenter <= rimRadius) {
           this.onGoalScored();
           this.checkingGoal = false;
+          this.goalTrackingState = 'idle';
           return;
+        } else {
+          this.goalTrackingState = 'idle';
         }
       }
     }
@@ -633,6 +675,7 @@ export class ShootingController {
 
     if (!this.ball.isInFlight()) {
       this.checkingGoal = false;
+      this.goalTrackingState = 'idle';
     }
   }
 
