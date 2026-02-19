@@ -134,11 +134,10 @@ function resetFielder(f: FielderState) {
   markerMat.diffuseColor = f.color.scale(1.5);
   markerMat.emissiveColor = f.color.scale(0.8);
 
-  // 肩・肘の回転をリセット
+  // 肩・肘の回転をリセット（ボーン経由）
   const joints = ["leftShoulder", "rightShoulder", "leftElbow", "rightElbow"];
   for (const name of joints) {
-    const joint = f.character.getJoint(name);
-    if (joint) joint.rotation.set(0, 0, 0);
+    f.character.setBoneAnimationRotation(name, Vector3.Zero());
   }
 }
 
@@ -159,19 +158,13 @@ function updateArmVisuals(
     f.character.setRotationImmediate(yawToOpponent);
   }
 
-  const leftShoulder = f.character.getJoint("leftShoulder");
-  const rightShoulder = f.character.getJoint("rightShoulder");
-  const leftElbow = f.character.getJoint("leftElbow");
-  const rightElbow = f.character.getJoint("rightElbow");
-  if (!leftShoulder || !rightShoulder || !leftElbow || !rightElbow) return;
-
   switch (f.armAction) {
     case ArmAction.IDLE: {
       // 腕を下げた状態
-      leftShoulder.rotation.set(0, 0, 0);
-      rightShoulder.rotation.set(0, 0, 0);
-      leftElbow.rotation.set(0, 0, 0);
-      rightElbow.rotation.set(0, 0, 0);
+      f.character.setBoneAnimationRotation("leftShoulder", Vector3.Zero());
+      f.character.setBoneAnimationRotation("rightShoulder", Vector3.Zero());
+      f.character.setBoneAnimationRotation("leftElbow", Vector3.Zero());
+      f.character.setBoneAnimationRotation("rightElbow", Vector3.Zero());
       break;
     }
     case ArmAction.REACH_BALL: {
@@ -179,29 +172,28 @@ function updateArmVisuals(
       const shoulderWorldY = bodyPos.y + SHOULDER_Y_OFFSET;
       const toBall = ballPos.subtract(new Vector3(bodyPos.x, shoulderWorldY, bodyPos.z));
       const hDist = Math.sqrt(toBall.x * toBall.x + toBall.z * toBall.z);
-      const elevation = Math.atan2(toBall.y, hDist); // 水平からの仰角
-      // 肩 rotation.x: 0=下垂, -PI/2=水平前方, -PI=真上
+      const elevation = Math.atan2(toBall.y, hDist);
       const shoulderPitch = -(Math.PI / 2 + elevation);
-      leftShoulder.rotation.set(shoulderPitch, 0, 0);
-      rightShoulder.rotation.set(shoulderPitch, 0, 0);
-      leftElbow.rotation.set(0, 0, 0);
-      rightElbow.rotation.set(0, 0, 0);
+      f.character.setBoneAnimationRotation("leftShoulder", new Vector3(shoulderPitch, 0, 0));
+      f.character.setBoneAnimationRotation("rightShoulder", new Vector3(shoulderPitch, 0, 0));
+      f.character.setBoneAnimationRotation("leftElbow", Vector3.Zero());
+      f.character.setBoneAnimationRotation("rightElbow", Vector3.Zero());
       break;
     }
     case ArmAction.PUSH: {
       // 水平前方に腕を突き出す
-      leftShoulder.rotation.set(-Math.PI / 2, 0, 0);
-      rightShoulder.rotation.set(-Math.PI / 2, 0, 0);
-      leftElbow.rotation.set(0, 0, 0);
-      rightElbow.rotation.set(0, 0, 0);
+      f.character.setBoneAnimationRotation("leftShoulder", new Vector3(-Math.PI / 2, 0, 0));
+      f.character.setBoneAnimationRotation("rightShoulder", new Vector3(-Math.PI / 2, 0, 0));
+      f.character.setBoneAnimationRotation("leftElbow", Vector3.Zero());
+      f.character.setBoneAnimationRotation("rightElbow", Vector3.Zero());
       break;
     }
     case ArmAction.HOLD_DOWN: {
       // 斜め下方向に押さえ込む
-      leftShoulder.rotation.set(-Math.PI / 3, 0, 0);
-      rightShoulder.rotation.set(-Math.PI / 3, 0, 0);
-      leftElbow.rotation.set(0, 0, 0);
-      rightElbow.rotation.set(0, 0, 0);
+      f.character.setBoneAnimationRotation("leftShoulder", new Vector3(-Math.PI / 3, 0, 0));
+      f.character.setBoneAnimationRotation("rightShoulder", new Vector3(-Math.PI / 3, 0, 0));
+      f.character.setBoneAnimationRotation("leftElbow", Vector3.Zero());
+      f.character.setBoneAnimationRotation("rightElbow", Vector3.Zero());
       break;
     }
   }

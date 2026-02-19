@@ -43,9 +43,11 @@ import { IDLE_MOTION } from "./ViewerIdleMotion";
 import { WALK_MOTION } from "./ViewerWalkMotion";
 
 /** ボーン検索結果（hips/spine は Rigify では null になる場合がある） */
-interface FoundBones {
+export interface FoundBones {
   hips: Bone | null;
   spine: Bone | null;
+  spine2: Bone | null;
+  head: Bone | null;
   lUpLeg: Bone | null;
   rUpLeg: Bone | null;
   lLeg: Bone | null;
@@ -59,9 +61,9 @@ interface FoundBones {
 }
 
 /** リグの種類 */
-type RigType = "mixamo" | "rigify" | "unknown";
+export type RigType = "mixamo" | "rigify" | "unknown";
 
-function detectRigType(skeleton: Skeleton): RigType {
+export function detectRigType(skeleton: Skeleton): RigType {
   if (skeleton.bones.some((b) => b.name.includes("mixamorig:"))) return "mixamo";
   if (skeleton.bones.some((b) => b.name.startsWith("DEF-"))) return "rigify";
   return "unknown";
@@ -71,6 +73,9 @@ function detectRigType(skeleton: Skeleton): RigType {
 const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
   hips: "hips",
   spine: "spine",
+  upperBody: "spine2",
+  lowerBody: "hips",
+  head: "head",
   leftShoulder: "lArm",
   rightShoulder: "rArm",
   leftElbow: "lForeArm",
@@ -87,6 +92,8 @@ const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
 const FOUND_TO_LOGICAL: Record<keyof FoundBones, LogicalBoneName> = {
   hips: "hips",
   spine: "spine",
+  spine2: "spine2",
+  head: "head",
   lUpLeg: "leftUpLeg",
   rUpLeg: "rightUpLeg",
   lLeg: "leftLeg",
@@ -253,49 +260,55 @@ export function createPoseData(
 
 /**
  * プロシージャルスケルトン用: AnimationGroup ベースの Idle/Walk アニメーションを生成。
- * rotation (Euler) プロパティをターゲットにする。
- * GLB ボーンには使用しないこと（rotationQuaternion が優先されるため効かない）。
+ * rotationQuaternion プロパティをターゲットにし、Q_rest × eq(offset) でクォータニオン合成。
+ * GLBモデルと同一の変換パイプラインを使用。
+ *
+ * @param restPoses プロシージャルスケルトンの場合、bone.getRestPose() は Translation-only
+ *                  なのでレスト回転を含まない。外部で計算した RestPoseCache を渡すことで
+ *                  GLBモデルと同等の Q_rest × eq(offset) パイプラインが動作する。
  */
 export function createAnimationsForSkeleton(
   scene: Scene,
-  skeleton: Skeleton
+  skeleton: Skeleton,
+  restPoses?: RestPoseCache,
 ): { idle: AnimationGroup; walk: AnimationGroup } | null {
   const rigType = detectRigType(skeleton);
   const bones = findAllBones(skeleton, rigType);
   if (!bones) return null;
 
   const isRigify = rigType === "rigify";
+  const corrections = computeCorrections(bones, restPoses);
 
   const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
   const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
 
-  // プロシージャルスケルトン用: Euler Animation API なので rest + offset に戻す
+  // Quaternionアニメーション: Q_rest × eq(offset)（GLBモデルと同一パイプライン）
   const idleGroup = new AnimationGroup("idle", scene);
   for (const { bone, keys } of idleEntries) {
-    const rest = restRot(bone);
+    const quatKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, false);
     const anim = new Animation(
-      `idle_${bone.name}`, "rotation", FPS,
-      Animation.ANIMATIONTYPE_VECTOR3,
+      `idle_${bone.name}`, "rotationQuaternion", FPS,
+      Animation.ANIMATIONTYPE_QUATERNION,
       Animation.ANIMATIONLOOPMODE_CYCLE
     );
-    anim.setKeys(keys.map((k) => ({
+    anim.setKeys(quatKeys.map((k) => ({
       frame: k.frame,
-      value: new Vector3(rest.x + k.value.x, rest.y + k.value.y, rest.z + k.value.z),
+      value: k.quat,
     })));
     idleGroup.addTargetedAnimation(anim, bone);
   }
 
   const walkGroup = new AnimationGroup("walk", scene);
   for (const { bone, keys } of walkEntries) {
-    const rest = restRot(bone);
+    const quatKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, false);
     const anim = new Animation(
-      `walk_${bone.name}`, "rotation", FPS,
-      Animation.ANIMATIONTYPE_VECTOR3,
+      `walk_${bone.name}`, "rotationQuaternion", FPS,
+      Animation.ANIMATIONTYPE_QUATERNION,
       Animation.ANIMATIONLOOPMODE_CYCLE
     );
-    anim.setKeys(keys.map((k) => ({
+    anim.setKeys(quatKeys.map((k) => ({
       frame: k.frame,
-      value: new Vector3(rest.x + k.value.x, rest.y + k.value.y, rest.z + k.value.z),
+      value: k.quat,
     })));
     walkGroup.addTargetedAnimation(anim, bone);
   }
@@ -309,7 +322,7 @@ export function createAnimationsForSkeleton(
  * 全ボーンを検索して FoundBones を返す。
  * 有効なボーンが1つもなければ null。
  */
-function findAllBones(skeleton: Skeleton, rigType: RigType): FoundBones | null {
+export function findAllBones(skeleton: Skeleton, rigType: RigType): FoundBones | null {
   const hips =
     rigType === "rigify" ? null : findSkeletonBone(skeleton, "hips", rigType);
   const spine =
@@ -320,6 +333,8 @@ function findAllBones(skeleton: Skeleton, rigType: RigType): FoundBones | null {
   const bones: FoundBones = {
     hips,
     spine,
+    spine2: findSkeletonBone(skeleton, "spine2", rigType),
+    head: findSkeletonBone(skeleton, "head", rigType),
     lUpLeg: findSkeletonBone(skeleton, "leftUpLeg", rigType),
     rUpLeg: findSkeletonBone(skeleton, "rightUpLeg", rigType),
     lLeg: findSkeletonBone(skeleton, "leftLeg", rigType),
@@ -383,13 +398,6 @@ export function findSkeletonBone(
 //   bone.getLocalMatrix() は絶対NG — アニメーション適用後に値が変わるため、
 //   PoseBlender がボーン回転を書き換えた後は正しいバインドポーズを返さない。
 
-/** ボーンのバインドポーズを Euler で取得（プロシージャルスケルトン用） */
-function restRot(bone: Bone): Vector3 {
-  const q = new Quaternion();
-  bone.getRestPose().decompose(undefined, q, undefined);
-  return q.toEulerAngles();
-}
-
 /** ボーンのバインドポーズを Quaternion で取得（不変、アニメーション状態に依存しない） */
 function restRotQuat(bone: Bone): Quaternion {
   const q = new Quaternion();
@@ -440,7 +448,7 @@ function mirrorQuatYZ(q: Quaternion): Quaternion {
  *
  * ゼロオフセット時は Q_rest がそのまま保持される（スキニング安全）。
  */
-function computeCorrections(
+export function computeCorrections(
   bones: FoundBones,
   restPoses?: RestPoseCache,
 ): Map<Bone, Quaternion> {

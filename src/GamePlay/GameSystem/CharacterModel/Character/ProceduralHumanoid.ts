@@ -13,10 +13,9 @@ import {
 } from "@babylonjs/core";
 import { MIXAMO_BONE_NAMES } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 import { createAnimationsForSkeleton } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
-import { BONE_OFFSETS } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonConfig";
+import { BONE_OFFSETS, computeBoneRestQuat, worldToParentLocal } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonConfig";
 
 const B = MIXAMO_BONE_NAMES;
-const O = BONE_OFFSETS;
 
 /** キャラクター外見設定 */
 export interface AppearanceConfig {
@@ -54,15 +53,25 @@ export interface ProceduralHumanoidResult {
   skeleton: Skeleton;
   idleAnimation: AnimationGroup;
   walkAnimation: AnimationGroup;
+  /** ボーン名→Bone参照マップ */
+  boneMap: Map<string, Bone>;
+  /** ボーン名→レスト回転マップ */
+  restQuatMap: Map<string, Quaternion>;
   /** 毎フレーム呼び出してビジュアルメッシュをボーン位置に同期 */
   updateVisuals(): void;
+  /** 全ビジュアルメッシュを取得 */
+  getAllVisualMeshes(): Mesh[];
+  /** 名前でセグメントメッシュを取得（torso_vis等） */
+  getSegmentMeshByName(name: string): Mesh | null;
+  /** 名前でポイントメッシュを取得（head_vis等） */
+  getPointMeshByName(name: string): Mesh | null;
   dispose(): void;
 }
 
 /**
  * プロシージャル人型キャラクターを生成する。
  * GLBファイル不要 - スケルトン、ビジュアル、アニメーションを全てコードで生成。
- * アニメーションは AnimationFactory に委譲（コード重複を排除）。
+ * GLBモデルと同一のボーン構造: レスト回転がレストマトリクスに含まれる。
  */
 export function createProceduralHumanoid(
   scene: Scene,
@@ -77,49 +86,72 @@ export function createProceduralHumanoid(
   rootMesh.skeleton = skeleton;
 
   const boneMap = new Map<string, Bone>();
+  const restQuatMap = new Map<string, Quaternion>();
 
-  function makeBone(name: string, parent: Bone | null, x: number, y: number, z: number): Bone {
-    const bone = new Bone(name, skeleton, parent, Matrix.Translation(x, y, z));
-    boneMap.set(name, bone);
-    return bone;
+  /**
+   * ボーンを作成する（GLBと同じ構造: Matrix.Compose(scale, restQuat, parentLocalOffset)）。
+   */
+  function createBone(
+    mixamoName: string,
+    logicalName: string,
+    parent: Bone | null,
+    parentAbsRot: Quaternion,
+  ): { bone: Bone; absRot: Quaternion } {
+    const offset = BONE_OFFSETS[logicalName];
+    const localOffset = offset
+      ? worldToParentLocal(offset, parentAbsRot)
+      : Vector3.Zero();
+
+    const { restQuat, absRot } = computeBoneRestQuat(logicalName, parentAbsRot);
+    const restMatrix = Matrix.Compose(Vector3.One(), restQuat, localOffset);
+    const bone = new Bone(mixamoName, skeleton, parent, restMatrix);
+    boneMap.set(mixamoName, bone);
+    restQuatMap.set(mixamoName, restQuat);
+
+    return { bone, absRot };
   }
 
-  // Bone hierarchy (positions from SkeletonConfig — GLBモデルと統一)
-  const root = makeBone("Root", null, 0, 0, 0);
-  const hips = makeBone(B.hips, root, O.hips.x, O.hips.y, O.hips.z);
+  // Root
+  const rootAbsRot = Quaternion.Identity();
+  const root = new Bone("Root", skeleton, null, Matrix.Identity());
+  boneMap.set("Root", root);
+  restQuatMap.set("Root", Quaternion.Identity());
+
+  // Hips
+  const { bone: hips, absRot: hipsAbs } = createBone(B.hips, "hips", root, rootAbsRot);
 
   // Spine chain
-  const spine = makeBone(B.spine, hips, O.spine.x, O.spine.y, O.spine.z);
-  const spine1 = makeBone(B.spine1, spine, O.spine1.x, O.spine1.y, O.spine1.z);
-  const spine2 = makeBone(B.spine2, spine1, O.spine2.x, O.spine2.y, O.spine2.z);
-  const neck = makeBone(B.neck, spine2, O.neck.x, O.neck.y, O.neck.z);
-  makeBone(B.head, neck, O.head.x, O.head.y, O.head.z);
+  const { bone: spine, absRot: spineAbs } = createBone(B.spine, "spine", hips, hipsAbs);
+  const { bone: spine1, absRot: spine1Abs } = createBone(B.spine1, "spine1", spine, spineAbs);
+  const { bone: spine2, absRot: spine2Abs } = createBone(B.spine2, "spine2", spine1, spine1Abs);
+  const { bone: neck, absRot: neckAbs } = createBone(B.neck, "neck", spine2, spine2Abs);
+  createBone(B.head, "head", neck, neckAbs);
 
-  // Left arm（腕を体の横に垂らした状態 — T-ポーズだとX軸回転が効かない）
-  const lShoulder = makeBone(B.leftShoulder, spine2, O.leftShoulder.x, O.leftShoulder.y, O.leftShoulder.z);
-  const lArm = makeBone(B.leftArm, lShoulder, O.leftArm.x, O.leftArm.y, O.leftArm.z);
-  const lForeArm = makeBone(B.leftForeArm, lArm, O.leftForeArm.x, O.leftForeArm.y, O.leftForeArm.z);
-  makeBone(B.leftHand, lForeArm, O.leftHand.x, O.leftHand.y, O.leftHand.z);
+  // Left arm
+  const { bone: lShoulder, absRot: lShoulderAbs } = createBone(B.leftShoulder, "leftShoulder", spine2, spine2Abs);
+  const { bone: lArm, absRot: lArmAbs } = createBone(B.leftArm, "leftArm", lShoulder, lShoulderAbs);
+  const { bone: lForeArm, absRot: lForeArmAbs } = createBone(B.leftForeArm, "leftForeArm", lArm, lArmAbs);
+  createBone(B.leftHand, "leftHand", lForeArm, lForeArmAbs);
 
-  // Right arm（同上）
-  const rShoulder = makeBone(B.rightShoulder, spine2, O.rightShoulder.x, O.rightShoulder.y, O.rightShoulder.z);
-  const rArm = makeBone(B.rightArm, rShoulder, O.rightArm.x, O.rightArm.y, O.rightArm.z);
-  const rForeArm = makeBone(B.rightForeArm, rArm, O.rightForeArm.x, O.rightForeArm.y, O.rightForeArm.z);
-  makeBone(B.rightHand, rForeArm, O.rightHand.x, O.rightHand.y, O.rightHand.z);
+  // Right arm
+  const { bone: rShoulder, absRot: rShoulderAbs } = createBone(B.rightShoulder, "rightShoulder", spine2, spine2Abs);
+  const { bone: rArm, absRot: rArmAbs } = createBone(B.rightArm, "rightArm", rShoulder, rShoulderAbs);
+  const { bone: rForeArm, absRot: rForeArmAbs } = createBone(B.rightForeArm, "rightForeArm", rArm, rArmAbs);
+  createBone(B.rightHand, "rightHand", rForeArm, rForeArmAbs);
 
-  // Left leg（脚を体の外側に離して配置し、胴体との重なりを軽減）
-  const lUpLeg = makeBone(B.leftUpLeg, hips, O.leftUpLeg.x, O.leftUpLeg.y, O.leftUpLeg.z);
-  const lLeg = makeBone(B.leftLeg, lUpLeg, O.leftLeg.x, O.leftLeg.y, O.leftLeg.z);
-  const lFoot = makeBone(B.leftFoot, lLeg, O.leftFoot.x, O.leftFoot.y, O.leftFoot.z);
-  makeBone(B.leftToeBase, lFoot, O.leftToeBase.x, O.leftToeBase.y, O.leftToeBase.z);
+  // Left leg
+  const { bone: lUpLeg, absRot: lUpLegAbs } = createBone(B.leftUpLeg, "leftUpLeg", hips, hipsAbs);
+  const { bone: lLeg, absRot: lLegAbs } = createBone(B.leftLeg, "leftLeg", lUpLeg, lUpLegAbs);
+  const { bone: lFoot, absRot: lFootAbs } = createBone(B.leftFoot, "leftFoot", lLeg, lLegAbs);
+  createBone(B.leftToeBase, "leftToeBase", lFoot, lFootAbs);
 
-  // Right leg（同上）
-  const rUpLeg = makeBone(B.rightUpLeg, hips, O.rightUpLeg.x, O.rightUpLeg.y, O.rightUpLeg.z);
-  const rLeg = makeBone(B.rightLeg, rUpLeg, O.rightLeg.x, O.rightLeg.y, O.rightLeg.z);
-  const rFoot = makeBone(B.rightFoot, rLeg, O.rightFoot.x, O.rightFoot.y, O.rightFoot.z);
-  makeBone(B.rightToeBase, rFoot, O.rightToeBase.x, O.rightToeBase.y, O.rightToeBase.z);
+  // Right leg
+  const { bone: rUpLeg, absRot: rUpLegAbs } = createBone(B.rightUpLeg, "rightUpLeg", hips, hipsAbs);
+  const { bone: rLeg, absRot: rLegAbs } = createBone(B.rightLeg, "rightLeg", rUpLeg, rUpLegAbs);
+  const { bone: rFoot, absRot: rFootAbs } = createBone(B.rightFoot, "rightFoot", rLeg, rLegAbs);
+  createBone(B.rightToeBase, "rightToeBase", rFoot, rFootAbs);
 
-  // --- Animations（AnimationFactory に委譲）---
+  // --- Animations（captureRestPoses が正しいレスト回転を取得できるため、明示的キャッシュ不要）---
   const anims = createAnimationsForSkeleton(scene, skeleton);
   if (!anims) {
     throw new Error("ProceduralHumanoid: Failed to create animations for skeleton");
@@ -177,7 +209,7 @@ export function createProceduralHumanoid(
 
   // Head
   addPoint("head_vis", B.head, { diameter: 0.2 }, skinMat, new Vector3(0, 0.1, 0));
-  // Face
+  // Face（ボーンローカル空間のオフセット — updateVisualsでワールド変換される）
   addPoint("eye_L", B.head, { diameter: 0.03 }, eyeMat, new Vector3(-0.04, 0.13, 0.08));
   addPoint("eye_R", B.head, { diameter: 0.03 }, eyeMat, new Vector3(0.04, 0.13, 0.08));
   addPoint("nose", B.head, { width: 0.02, height: 0.03, depth: 0.03 }, skinMat, new Vector3(0, 0.1, 0.1));
@@ -217,8 +249,31 @@ export function createProceduralHumanoid(
       const bone = boneMap.get(pt.boneName);
       if (!bone) continue;
       const pos = bone.getAbsolutePosition(rootMesh);
-      pt.mesh.position.set(pos.x + pt.offset.x, pos.y + pt.offset.y, pos.z + pt.offset.z);
+      // オフセットをボーンのワールド回転で変換（顔パーツがキャラクターの向きに追従）
+      const boneAbsMat = bone.getAbsoluteTransform();
+      const rootWorldMat = rootMesh.getWorldMatrix();
+      const worldMat = boneAbsMat.multiply(rootWorldMat);
+      const rotatedOffset = Vector3.TransformNormal(pt.offset, worldMat);
+      pt.mesh.position.set(pos.x + rotatedOffset.x, pos.y + rotatedOffset.y, pos.z + rotatedOffset.z);
     }
+  }
+
+  function getAllVisualMeshes(): Mesh[] {
+    return [...allMeshes];
+  }
+
+  function getSegmentMeshByName(name: string): Mesh | null {
+    for (const seg of segments) {
+      if (seg.mesh.name === name) return seg.mesh;
+    }
+    return null;
+  }
+
+  function getPointMeshByName(name: string): Mesh | null {
+    for (const pt of points) {
+      if (pt.mesh.name === name) return pt.mesh;
+    }
+    return null;
   }
 
   function dispose() {
@@ -230,7 +285,12 @@ export function createProceduralHumanoid(
     rootMesh.dispose();
   }
 
-  return { rootMesh, skeleton, idleAnimation, walkAnimation, updateVisuals, dispose };
+  return {
+    rootMesh, skeleton, idleAnimation, walkAnimation,
+    boneMap, restQuatMap,
+    updateVisuals, getAllVisualMeshes, getSegmentMeshByName, getPointMeshByName,
+    dispose,
+  };
 }
 
 // ─── Helpers ───────────────────────────────────────────────
