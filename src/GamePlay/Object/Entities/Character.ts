@@ -48,6 +48,7 @@ import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/Ga
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 import { MatchCharacterModel } from "@/GamePlay/GameSystem/CharacterModel/Character/MatchCharacterModel";
+import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
 import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
 import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
@@ -202,8 +203,12 @@ export class Character {
     this.visionAngle = this.config.vision.visionAngle;
     this.visionRange = this.config.vision.visionRange;
 
-    // 身体モデルを構築（ProceduralHumanoid ベース）
-    this.characterModel = new MatchCharacterModel(scene, this.config, this.state, this.position);
+    // 身体モデルを構築（GLB ロード済みなら GLB、それ以外は ProceduralHumanoid）
+    if (GLBModelLoader.getInstance().isReady()) {
+      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position);
+    } else {
+      this.characterModel = new MatchCharacterModel(scene, this.config, this.state, this.position);
+    }
     this.mesh = this.characterModel.getRootMesh();
 
     // 方向サークルを初期化（均一円形、状況に応じてCircleSizeControllerが比率を変更）
@@ -452,12 +457,16 @@ export class Character {
 
   /**
    * レスト姿勢（関節回転0）での足のY座標をキャプチャする。
-   * コンストラクタから1回呼ばれる。
+   * コンストラクタおよびスケール変更時（setHeight）から呼ばれる。
    */
   private captureFootRestY(): void {
+    // rootMesh を最新の wrapperMesh トランスフォームに同期してからキャプチャ
+    this.characterModel.prepareFrame();
+    this.characterModel.syncTransform();
     const meshY = this.mesh.getAbsolutePosition().y;
     const { leftY, rightY } = this.characterModel.getFootBonePositions();
     this.footRestRelativeY = Math.min(leftY - meshY, rightY - meshY);
+    this._prevAutoGround = 0;
   }
 
   /**
@@ -1392,6 +1401,11 @@ export class Character {
       // キャラクターの位置を更新（新しいgroundYに合わせる）
       // 現在のXZ座標を保持し、Y座標だけを新しいgroundYに更新
       this.setPosition(new Vector3(this.position.x, this.groundY, this.position.z));
+
+      // スケール変更後に自動接地のベースラインを再キャプチャ
+      // （captureFootRestY はコンストラクタでデフォルトスケールで取得済みだが、
+      //   setHeight でスケールが変わるため再取得が必要）
+      this.captureFootRestY();
     }
 
     // 重心コントローラーを更新（身長変更に伴い重心位置を再計算）

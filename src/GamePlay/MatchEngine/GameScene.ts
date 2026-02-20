@@ -9,6 +9,8 @@ import {
   Color4,
 } from "@babylonjs/core";
 import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
+import "@babylonjs/loaders/glTF";
+import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
 import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture";
 import {
   InputController,
@@ -628,13 +630,19 @@ export class GameScene {
   }
 
   /**
-   * Havok物理エンジンを非同期で初期化
-   * ボールやキャラクターの物理演算に使用される
+   * Havok物理エンジン + GLBモデルを非同期で初期化
+   * GLBロードを物理エンジン初期化と並列実行し、完了後にキャラクターをGLBモデルで再作成する
    */
   private async initializePhysicsAsync(): Promise<void> {
     try {
-      const physicsManager = PhysicsManager.getInstance();
-      await physicsManager.initialize(this.scene);
+      // 物理エンジン初期化とGLBモデルロードを並列実行
+      const glbLoader = GLBModelLoader.getInstance();
+      const [_physicsResult] = await Promise.all([
+        PhysicsManager.getInstance().initialize(this.scene),
+        glbLoader.loadAsync(this.scene).catch((err) => {
+          console.warn("[GameScene] GLBモデルの読み込みに失敗。ProceduralHumanoidで続行:", err);
+        }),
+      ]);
 
       // 地面に静的物理ボディを追加（ボールが床を通り抜けないように）
       if (this.field) {
@@ -644,6 +652,11 @@ export class GameScene {
       // 物理エンジン初期化後にボールの物理を再初期化
       if (this.ball) {
         this.ball.reinitializePhysics();
+      }
+
+      // GLBロード成功時: キャラクターをGLBモデルで再作成
+      if (glbLoader.isReady() && this.savedTeamConfig && this.savedPlayerData) {
+        this.recreateCharactersWithGLB();
       }
 
       // 全キャラクターの物理ボディを初期化（ボールとの衝突用）
@@ -667,6 +680,57 @@ export class GameScene {
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");
+    }
+  }
+
+  /**
+   * GLBモデルロード後にキャラクターを再作成する。
+   * 既にProceduralHumanoidで作成されたキャラクターをGLBモデルベースに置き換える。
+   */
+  private recreateCharactersWithGLB(): void {
+    if (!this.savedTeamConfig || !this.savedPlayerData) return;
+
+    // 既存キャラクターを破棄
+    for (const character of this.allyCharacters) {
+      character.dispose();
+    }
+    for (const character of this.enemyCharacters) {
+      character.dispose();
+    }
+    this.allyCharacters = [];
+    this.enemyCharacters = [];
+    this.characterAIs = [];
+    this.aiCharacterIndices.clear();
+
+    // GLBモデルでチームを再作成
+    this.createTeams(this.savedTeamConfig, this.savedPlayerData);
+
+    // 衝突判定コントローラーを再初期化
+    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+    if (this.collisionHandler) {
+      this.collisionHandler.dispose();
+    }
+    this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
+
+    // リスク判定システムを再初期化
+    this.riskAssessmentSystem = new RiskAssessmentSystem(this.ball, this.field, allCharacters);
+
+    // AIコントローラーを再初期化
+    for (const character of allCharacters) {
+      if (this.aiCharacterIndices.has(character)) {
+        const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager!);
+        if (this.looseBallDecisionSystem) ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
+        if (this.riskAssessmentSystem) ai.setRiskAssessmentSystem(this.riskAssessmentSystem);
+        if (this.shootingController) ai.setShootingController(this.shootingController);
+        if (this.feintController) ai.setFeintController(this.feintController);
+        if (this.shotClockController) ai.setShotClockController(this.shotClockController);
+        if (this.passController) ai.setPassController(this.passController);
+        if (this.dribbleController) ai.setDribbleController(this.dribbleController);
+        if (this.defenseActionController) ai.setDefenseActionController(this.defenseActionController);
+        if (this.looseBallController) ai.setLooseBallController(this.looseBallController);
+        if (this.passTrajectoryVisualizer) ai.setPassTrajectoryVisualizer(this.passTrajectoryVisualizer);
+        this.characterAIs.push(ai);
+      }
     }
   }
 
