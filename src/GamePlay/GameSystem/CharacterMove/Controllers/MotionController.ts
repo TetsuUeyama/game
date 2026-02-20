@@ -528,10 +528,20 @@ export class MotionController {
     boneQuats.set(spine2Bone, conjugatedYaw.multiply(currentQ));
   }
 
-  /** Quaternion Map をボーンに書き込む */
+  /**
+   * Quaternion Map をボーンに書き込む。
+   * GLB: bone.getTransformNode().rotationQuaternion = q （dirty フラグを確実トリガー）
+   * ProceduralHumanoid: bone.setRotationQuaternion(q, Space.LOCAL)
+   * MotionPlayer._applyAtCurrentTime() と同一のデュアルパス。
+   */
   private _writeBoneQuats(boneQuats: Map<Bone, Quaternion>): void {
     for (const [bone, q] of boneQuats) {
-      bone.setRotationQuaternion(q, Space.LOCAL);
+      const node = bone.getTransformNode();
+      if (node) {
+        node.rotationQuaternion = q.clone();
+      } else {
+        bone.setRotationQuaternion(q, Space.LOCAL);
+      }
     }
   }
 
