@@ -688,6 +688,10 @@ function motionToEulerKeys(
     // X-mirror 補正:
     //   Y: 左/センター反転、右そのまま（左右ボーンの Y 軸がミラー）
     //   Z: 腕ジョイントは左右とも反転（Z 軸が非ミラー）、それ以外は Y と同じ
+    // 肩の X 軸方向補正: ボーンのローカル軸は負=上だが、モーション規約は正=上
+    const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
+    const xS = isShoulder ? -1 : 1;
+
     const isRight = jointName.startsWith("right");
     const yS = (mirrorYZ && !isRight) ? -1 : 1;
     const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
@@ -698,7 +702,7 @@ function motionToEulerKeys(
     const keys = times.map((time) => ({
       frame: Math.round(time * FPS),
       value: new Vector3(
-        ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD,
+        ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD * xS,
         ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD * yS,
         ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD * zS,
       ),
@@ -723,12 +727,14 @@ function motionToEulerKeys(
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
+      const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
+      const xS = isShoulder ? -1 : 1;
       const isRight = jointName.startsWith("right");
       const yS = (mirrorYZ && !isRight) ? -1 : 1;
       const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
       const zS = isArm ? 1 : yS;
       const value = new Vector3(
-        adjX * DEG_TO_RAD,
+        adjX * DEG_TO_RAD * xS,
         adjY * DEG_TO_RAD * yS,
         adjZ * DEG_TO_RAD * zS,
       );

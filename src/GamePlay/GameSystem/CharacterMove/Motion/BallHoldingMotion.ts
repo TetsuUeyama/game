@@ -21,7 +21,7 @@ const T1 = 0.1; // ブレンド用の終了時間
 
 /**
  * 腕のポーズ定義
- * - shoulderX: 肩のX軸回転（正=腕を上げる、負=腕を下げる）
+ * - shoulderX: 肩のX軸回転（負=前方へ、腕を下げる）
  * - shoulderY: 肩のY軸回転（負=右へ、正=左へ）
  * - shoulderZ: 肩のZ軸回転（体から離す）
  * - elbowX: 肘のX軸回転（負=曲げる）
@@ -38,24 +38,24 @@ interface ArmPose {
 // 右手で持つときの各方向のポーズ（右利き用）
 const RIGHT_HAND_POSES: Record<number, ArmPose> = {
   // 方向0: 正面 - 右腕を正面に
-  0: { shoulderX: 35, shoulderY: 0, shoulderZ: 15, elbowX: -60, elbowY: 0, elbowZ: -10 },
+  0: { shoulderX: -35, shoulderY: 0, shoulderZ: 15, elbowX: -60, elbowY: 0, elbowZ: -10 },
   // 方向1: 右前 - 右腕を右斜め前に
-  1: { shoulderX: 35, shoulderY: -25, shoulderZ: 20, elbowX: -55, elbowY: 0, elbowZ: -15 },
+  1: { shoulderX: -35, shoulderY: -25, shoulderZ: 20, elbowX: -55, elbowY: 0, elbowZ: -15 },
   // 方向2: 右 - 右腕を右側に
-  2: { shoulderX: 30, shoulderY: -50, shoulderZ: 25, elbowX: -50, elbowY: 0, elbowZ: -20 },
+  2: { shoulderX: -30, shoulderY: -50, shoulderZ: 25, elbowX: -50, elbowY: 0, elbowZ: -20 },
 };
 
 // 左手で持つときの各方向のポーズ（右利き用）
 const LEFT_HAND_POSES: Record<number, ArmPose> = {
   // 方向6: 左 - 左腕を左側に
-  6: { shoulderX: 30, shoulderY: 50, shoulderZ: -25, elbowX: -50, elbowY: 0, elbowZ: 20 },
+  6: { shoulderX: -30, shoulderY: 50, shoulderZ: -25, elbowX: -50, elbowY: 0, elbowZ: 20 },
   // 方向7: 左前 - 左腕を左斜め前に
-  7: { shoulderX: 35, shoulderY: 25, shoulderZ: -20, elbowX: -55, elbowY: 0, elbowZ: 15 },
+  7: { shoulderX: -35, shoulderY: 25, shoulderZ: -20, elbowX: -55, elbowY: 0, elbowZ: 15 },
 };
 
 // ボールを持たない方の腕（リラックス状態）
 const RELAXED_ARM_POSE: ArmPose = {
-  shoulderX: 5,
+  shoulderX: -5,
   shoulderY: 0,
   shoulderZ: 8,
   elbowX: -15,
@@ -165,7 +165,7 @@ function createLeftHandedMotion(faceIndex: number): MotionData {
   if (faceIndex === 0) {
     // 正面 - 左腕を正面に
     rightArmPose = RELAXED_ARM_POSE;
-    leftArmPose = { shoulderX: 35, shoulderY: 0, shoulderZ: -15, elbowX: -60, elbowY: 0, elbowZ: 10 };
+    leftArmPose = { shoulderX: -35, shoulderY: 0, shoulderZ: -15, elbowX: -60, elbowY: 0, elbowZ: 10 };
   } else if (faceIndex === 1) {
     // 右前 - 右手（非利き腕）で持つ
     rightArmPose = RIGHT_HAND_POSES[1];
@@ -185,7 +185,7 @@ function createLeftHandedMotion(faceIndex: number): MotionData {
   } else {
     // デフォルト
     rightArmPose = RELAXED_ARM_POSE;
-    leftArmPose = { shoulderX: 35, shoulderY: 0, shoulderZ: -15, elbowX: -60, elbowY: 0, elbowZ: 10 };
+    leftArmPose = { shoulderX: -35, shoulderY: 0, shoulderZ: -15, elbowX: -60, elbowY: 0, elbowZ: 10 };
   }
 
   const jointAnimations = createBallHoldingJointAnimations(rightArmPose, leftArmPose);

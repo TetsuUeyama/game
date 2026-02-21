@@ -31,11 +31,11 @@ const JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
   headZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
 
-  leftShoulderX: {[T0]: 20, [T1]: 120, [T2]: 130, [T3]: 40, [T4]: 0},
+  leftShoulderX: {[T0]: -20, [T1]: -120, [T2]: -130, [T3]: -40, [T4]: 0},
   leftShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
   leftShoulderZ: {[T0]: 0, [T1]: -20, [T2]: -30, [T3]: -20, [T4]: 0},
 
-  rightShoulderX: {[T0]: 20, [T1]: 120, [T2]: 130, [T3]: 40, [T4]: 0},
+  rightShoulderX: {[T0]: -20, [T1]: -120, [T2]: -130, [T3]: -40, [T4]: 0},
   rightShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
   rightShoulderZ: {[T0]: 0, [T1]: 20, [T2]: 30, [T3]: 20, [T4]: 0},
 
@@ -152,7 +152,7 @@ const JUMP_BALL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0, [JB_T3]: 0, [JB_T4]: 0, [JB_T5]: 0},
 
   // 右腕：真上に伸ばす
-  rightShoulderX: {[JB_T0]: 30, [JB_T1]: 60, [JB_T2]: 140, [JB_T3]: 175, [JB_T4]: 160, [JB_T5]: 30},
+  rightShoulderX: {[JB_T0]: -30, [JB_T1]: -60, [JB_T2]: -140, [JB_T3]: -175, [JB_T4]: -160, [JB_T5]: -30},
   rightShoulderY: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0, [JB_T3]: 0, [JB_T4]: 0, [JB_T5]: 0},
   rightShoulderZ: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: -10, [JB_T3]: -15, [JB_T4]: -10, [JB_T5]: 0},
 
@@ -161,7 +161,7 @@ const JUMP_BALL_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0, [JB_T3]: 0, [JB_T4]: 0, [JB_T5]: 0},
 
   // 左腕：真上に伸ばす（右腕と対称）
-  leftShoulderX: {[JB_T0]: 30, [JB_T1]: 60, [JB_T2]: 140, [JB_T3]: 175, [JB_T4]: 160, [JB_T5]: 30},
+  leftShoulderX: {[JB_T0]: -30, [JB_T1]: -60, [JB_T2]: -140, [JB_T3]: -175, [JB_T4]: -160, [JB_T5]: -30},
   leftShoulderY: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 0, [JB_T3]: 0, [JB_T4]: 0, [JB_T5]: 0},
   leftShoulderZ: {[JB_T0]: 0, [JB_T1]: 0, [JB_T2]: 10, [JB_T3]: 15, [JB_T4]: 10, [JB_T5]: 0},
 

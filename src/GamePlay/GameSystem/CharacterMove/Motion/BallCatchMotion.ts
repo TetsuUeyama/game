@@ -42,7 +42,7 @@ const BALL_CATCH_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
   // 右腕：前方に伸ばし→キャッチ位置→引き寄せ
-  rightShoulderX: {[BALL_CATCH_T0]: 45, [BALL_CATCH_T1]: 75, [BALL_CATCH_T2]: 80, [BALL_CATCH_T3]: 50},
+  rightShoulderX: {[BALL_CATCH_T0]: -45, [BALL_CATCH_T1]: -75, [BALL_CATCH_T2]: -80, [BALL_CATCH_T3]: -50},
   rightShoulderY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: -10, [BALL_CATCH_T2]: -15, [BALL_CATCH_T3]: -5},
   rightShoulderZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
@@ -51,7 +51,7 @@ const BALL_CATCH_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
   // 左腕：前方に伸ばし→キャッチ位置→引き寄せ（右腕とミラー）
-  leftShoulderX: {[BALL_CATCH_T0]: 45, [BALL_CATCH_T1]: 75, [BALL_CATCH_T2]: 80, [BALL_CATCH_T3]: 50},
+  leftShoulderX: {[BALL_CATCH_T0]: -45, [BALL_CATCH_T1]: -75, [BALL_CATCH_T2]: -80, [BALL_CATCH_T3]: -50},
   leftShoulderY: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 10, [BALL_CATCH_T2]: 15, [BALL_CATCH_T3]: 5},
   leftShoulderZ: {[BALL_CATCH_T0]: 0, [BALL_CATCH_T1]: 0, [BALL_CATCH_T2]: 0, [BALL_CATCH_T3]: 0},
 
