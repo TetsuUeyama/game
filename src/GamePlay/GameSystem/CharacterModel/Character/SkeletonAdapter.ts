@@ -155,9 +155,12 @@ export class SkeletonAdapter {
     const bone = this.findBone(logicalName);
     if (!bone) return;
 
-    if (this._mirrorYZ && !jointName.startsWith("right")) {
+    if (this._mirrorYZ) {
+      const isRight = jointName.startsWith("right");
       const corrected = new Vector3(
-        offsetEulerRad.x, -offsetEulerRad.y, -offsetEulerRad.z,
+        offsetEulerRad.x,
+        isRight ? offsetEulerRad.y : -offsetEulerRad.y,
+        isRight ? -offsetEulerRad.z : offsetEulerRad.z,
       );
       this.applyFKRotation(bone, corrected);
     } else {

@@ -685,8 +685,10 @@ function motionToEulerKeys(
     const stdY = standing?.y ?? 0;
     const stdZ = standing?.z ?? 0;
 
-    // X-mirror 補正: 右側ボーンはローカル軸が左の鏡像のため Y/Z 反転不要
-    const yzS = (mirrorYZ && !jointName.startsWith("right")) ? -1 : 1;
+    // X-mirror 補正: Y は左/センターのみ反転、Z は右のみ反転
+    const isRight = jointName.startsWith("right");
+    const yS = (mirrorYZ && !isRight) ? -1 : 1;
+    const zS = (mirrorYZ && isRight) ? -1 : 1;
 
     // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
@@ -694,8 +696,8 @@ function motionToEulerKeys(
       frame: Math.round(time * FPS),
       value: new Vector3(
         ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD,
-        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD * yzS,
-        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD * yzS,
+        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD * yS,
+        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD * zS,
       ),
     }));
     results.push({ bone, keys });
@@ -719,11 +721,13 @@ function motionToEulerKeys(
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
       // Rigify 専用セクション: rigifyAdjustments のみ適用（STANDING_POSE_OFFSETS は不要）
-      const yzS = (mirrorYZ && !jointName.startsWith("right")) ? -1 : 1;
+      const isRight = jointName.startsWith("right");
+      const yS = (mirrorYZ && !isRight) ? -1 : 1;
+      const zS = (mirrorYZ && isRight) ? -1 : 1;
       const value = new Vector3(
         adjX * DEG_TO_RAD,
-        adjY * DEG_TO_RAD * yzS,
-        adjZ * DEG_TO_RAD * yzS,
+        adjY * DEG_TO_RAD * yS,
+        adjZ * DEG_TO_RAD * zS,
       );
       results.push({
         bone,
@@ -741,10 +745,11 @@ function motionToEulerKeys(
     processedBones.add(bone);
 
     const standing = isRigify ? undefined : BONE_STANDING_OFFSETS[key as keyof FoundBones];
-    // 右側ボーン (rArm, rLeg, etc.) は Y/Z 反転不要
-    const yzS = (mirrorYZ && !key.startsWith("r")) ? -1 : 1;
+    const isRight = key.startsWith("r");
+    const yS = (mirrorYZ && !isRight) ? -1 : 1;
+    const zS = (mirrorYZ && isRight) ? -1 : 1;
     const offset = standing
-      ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD * yzS, standing.z * DEG_TO_RAD * yzS)
+      ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD * yS, standing.z * DEG_TO_RAD * zS)
       : Vector3.Zero();
     results.push({
       bone,
