@@ -23,6 +23,7 @@ import {
   FoundBones,
 } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
 import { LogicalBoneName } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
+import { clampJointDegrees } from "@/GamePlay/GameSystem/CharacterMove/Config/JointLimitsConfig";
 
 /**
  * ジョイント名 → LogicalBoneName の統一マッピング。
@@ -158,9 +159,20 @@ export class SkeletonAdapter {
     const bone = this.findBone(logicalName);
     if (!bone) return;
 
-    // 肩の X 符号反転（正=上、負=下 の規約に統一）
+    // ジョイント角度リミット: ラジアン→度数変換 → クランプ → 度数→ラジアン変換
+    const RAD_TO_DEG = 180 / Math.PI;
+    const DEG_TO_RAD = Math.PI / 180;
+    const clampedX = clampJointDegrees(jointName, "X", offsetEulerRad.x * RAD_TO_DEG) * DEG_TO_RAD;
+    const clampedY = clampJointDegrees(jointName, "Y", offsetEulerRad.y * RAD_TO_DEG) * DEG_TO_RAD;
+    const clampedZ = clampJointDegrees(jointName, "Z", offsetEulerRad.z * RAD_TO_DEG) * DEG_TO_RAD;
+
+    // 関節軸方向の補正（ボーンローカル軸と規約の不一致を吸収）
     const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
-    const xVal = isShoulder ? -offsetEulerRad.x : offsetEulerRad.x;
+    const isHip = jointName === "leftHip" || jointName === "rightHip";
+    const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
+    const xVal = isShoulder ? -clampedX : clampedX;
+    const yVal = isFoot ? -clampedY : clampedY;
+    const zVal = (isHip || isFoot) ? -clampedZ : clampedZ;
 
     if (this._mirrorYZ) {
       const isRight = jointName.startsWith("right");
@@ -169,12 +181,12 @@ export class SkeletonAdapter {
       const zSign = isArm ? 1 : ySign;
       const corrected = new Vector3(
         xVal,
-        offsetEulerRad.y * ySign,
-        offsetEulerRad.z * zSign,
+        yVal * ySign,
+        zVal * zSign,
       );
       this.applyFKRotation(bone, corrected);
     } else {
-      this.applyFKRotation(bone, new Vector3(xVal, offsetEulerRad.y, offsetEulerRad.z));
+      this.applyFKRotation(bone, new Vector3(xVal, yVal, zVal));
     }
   }
 
