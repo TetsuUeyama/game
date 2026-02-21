@@ -1,10 +1,12 @@
 import {
   Scene,
   Skeleton,
+  Bone,
   TransformNode,
   AbstractMesh,
   Vector3,
   Quaternion,
+  Matrix,
   Ray,
   Space,
   BoneIKController,
@@ -32,6 +34,18 @@ const AIRBORNE_RAY_MULTIPLIER = 10;
 const GROUNDED_RAY_MULTIPLIER = 4;
 /** ヒップ補正の補間速度 */
 const HIP_CORRECTION_LERP = 0.1;
+/**
+ * IK デッドゾーン（メートル）。
+ * FK 足位置と接地点の垂直距離がこの値以下なら IK ウェイト = 0（FK をそのまま保持）。
+ * 平らなコートで IK ソルバーが FK ボーン角度を不必要に変更するのを防ぐ。
+ */
+const IK_DEAD_ZONE = 0.03;
+/**
+ * IK フルゾーン（メートル）。
+ * FK 足位置と接地点の垂直距離がこの値以上なら IK ウェイト = baseWeight（フル補正）。
+ * デッドゾーンとフルゾーンの間はリニア補間。
+ */
+const IK_FULL_ZONE = 0.15;
 
 /**
  * IKシステム（足IK + 腕IK + 頭部ルックアットIK）
@@ -60,6 +74,21 @@ export class IKSystem {
   private _skeleton: Skeleton | null = null;
   private _mesh: AbstractMesh | null = null;
   private _config: CharacterMotionConfig;
+  /**
+   * GLB モード: ボーンに TransformNode がリンクされている場合 true。
+   * GLB では FK が TransformNode に書き込み、bone._localMatrix は skeleton.prepare() まで
+   * 更新されないため、IK 前後で手動同期が必要。
+   */
+  private _isGLB = false;
+
+  /** IK が変更したボーンのセット（_syncTransformNodesFromBones で使用） */
+  private _modifiedBones: Set<Bone> = new Set();
+
+  /** 足ボーンの FK ローカル回転を保存（IK 後の復元用） */
+  private _savedFootLocalQ: { left: Quaternion | null; right: Quaternion | null } = {
+    left: null,
+    right: null,
+  };
 
   // ── 足IK ──
   private _leftIK: BoneIKController | null = null;
@@ -103,6 +132,10 @@ export class IKSystem {
   initialize(skeleton: Skeleton, mesh: AbstractMesh): void {
     this._skeleton = skeleton;
     this._mesh = mesh;
+
+    // GLB 判定: ボーンに TransformNode がリンクされている場合 GLB モード。
+    // ProceduralHumanoid のボーンには TransformNode がリンクされていない。
+    this._isGLB = skeleton.bones.some((b) => b.getTransformNode() !== null);
 
     // Rigify DEF ボーンは分割セグメント（DEF-thigh.L → DEF-thigh.L.001 → DEF-shin.L）
     // のため BoneIKController の 2 ボーンチェーンに適合しない。IK をスキップ。
@@ -203,6 +236,21 @@ export class IKSystem {
       return;
     }
 
+    // IK 変更ボーンのトラッキングをリセット
+    this._modifiedBones.clear();
+
+    // GLB: FK は TransformNode に書き込むが bone._localMatrix は未同期。
+    // IK 前に bone._localMatrix を TransformNode から同期し、
+    // BoneIKController が正確なボーン位置を読めるようにする。
+    if (this._isGLB) {
+      this._syncBoneMatricesFromTransformNodes();
+    }
+
+    // ── 足 FK ローカル回転を保存（IK 後に復元するため） ──
+    if (this._isGLB) {
+      this._saveFootLocalRotations();
+    }
+
     // ── 足IK（常時実行） ──
     if (this._leftIK && this._rightIK) {
       this._updateFootIK(airborne);
@@ -213,6 +261,113 @@ export class IKSystem {
 
     // ── 頭部ルックアット ──
     this._updateHeadIK();
+
+    // GLB: IK が bone API 経由で書いた回転/位置を TransformNode に反映。
+    // IK が変更したボーンのみ同期する（非 IK ボーンの FK 値を保護するため）。
+    if (this._isGLB) {
+      this._syncTransformNodesFromBones();
+      // 足ボーンの FK ローカル回転を復元（IK が親チェーンを変更しても FK と同一の角度を維持）
+      this._restoreFootLocalRotations();
+    }
+  }
+
+  // ════════════════════════════════════════
+  // GLB ボーン同期
+  // ════════════════════════════════════════
+
+  /**
+   * TransformNode → bone._localMatrix 同期（IK 前に呼ぶ）。
+   * FK が TransformNode.rotationQuaternion / position に書き込んだ値を
+   * bone._localMatrix に反映し、computeAbsoluteMatrices で正確な位置が得られるようにする。
+   */
+  private _syncBoneMatricesFromTransformNodes(): void {
+    const skeleton = this._skeleton!;
+    const mesh = this._mesh!;
+
+    // 全 TransformNode のワールド行列を更新（ルート→リーフ順）
+    mesh.computeWorldMatrix(true);
+    for (const bone of skeleton.bones) {
+      const node = bone.getTransformNode();
+      if (node) node.computeWorldMatrix(true);
+    }
+
+    // TransformNode のローカル変換を bone._localMatrix にコピー
+    for (const bone of skeleton.bones) {
+      const node = bone.getTransformNode();
+      if (!node) continue;
+      const q = node.rotationQuaternion ?? Quaternion.Identity();
+      const p = node.position;
+      const s = node.scaling;
+      const localMatrix = Matrix.Compose(s, q, p);
+      bone.updateMatrix(localMatrix, false, true);
+    }
+
+    // 絶対行列を再計算（BoneIKController が bone.getAbsolutePosition() で使用）
+    skeleton.computeAbsoluteMatrices(true);
+  }
+
+  /**
+   * bone._localMatrix → TransformNode 同期（IK 後に呼ぶ）。
+   * BoneIKController が bone API 経由で書いた回転/位置変更を TransformNode に反映し、
+   * skeleton.prepare()（レンダーループ）で IK 結果が GPU スキニングに適用されるようにする。
+   *
+   * _modifiedBones に登録されたボーンのみ同期する。
+   * IK が変更していないボーン（足ボーン等）は FK が TransformNode に書いた値をそのまま保持し、
+   * bone matrix round-trip による値の変化を防ぐ。
+   */
+  private _syncTransformNodesFromBones(): void {
+    for (const bone of this._modifiedBones) {
+      const node = bone.getTransformNode();
+      if (!node) continue;
+      const s = new Vector3();
+      const q = new Quaternion();
+      const p = new Vector3();
+      bone.getLocalMatrix().decompose(s, q, p);
+      node.rotationQuaternion = q;
+      node.position.copyFrom(p);
+    }
+  }
+
+  /**
+   * 足ボーンの FK ローカル回転を保存する（IK 前に呼ぶ）。
+   * IK は太もも・すねを変更するが足ボーン自体は変更しない。
+   * しかし _syncTransformNodesFromBones 等の間接的影響を防ぐため、
+   * FK が書いたローカル回転を保存して IK 後に復元する。
+   * ローカル回転保存により、モーションチェックモード（純粋FK）と同一の足角度を保証する。
+   */
+  private _saveFootLocalRotations(): void {
+    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
+    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
+
+    this._savedFootLocalQ.left = this._getNodeLocalRotation(leftFoot);
+    this._savedFootLocalQ.right = this._getNodeLocalRotation(rightFoot);
+  }
+
+  /**
+   * 足ボーンの FK ローカル回転を復元する（IK + sync 後に呼ぶ）。
+   * FK が書いたローカル回転をそのまま書き戻すため、
+   * ワールド空間の変換ロスが発生しない。
+   */
+  private _restoreFootLocalRotations(): void {
+    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
+    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
+
+    if (leftFoot && this._savedFootLocalQ.left) {
+      const node = leftFoot.getTransformNode();
+      if (node) node.rotationQuaternion = this._savedFootLocalQ.left;
+    }
+    if (rightFoot && this._savedFootLocalQ.right) {
+      const node = rightFoot.getTransformNode();
+      if (node) node.rotationQuaternion = this._savedFootLocalQ.right;
+    }
+  }
+
+  /** TransformNode のローカル回転を取得 */
+  private _getNodeLocalRotation(bone: Bone | null): Quaternion | null {
+    if (!bone) return null;
+    const node = bone.getTransformNode();
+    if (!node || !node.rotationQuaternion) return null;
+    return node.rotationQuaternion.clone();
   }
 
   // ════════════════════════════════════════
@@ -227,9 +382,9 @@ export class IKSystem {
 
     const mesh = this._mesh!;
 
-    // 各足ボーンの現在ワールド位置を取得
-    const leftFootPos = leftFoot.getAbsolutePosition(mesh);
-    const rightFootPos = rightFoot.getAbsolutePosition(mesh);
+    // 各足ボーンの現在ワールド位置を取得（FK 適用後）
+    const leftFootPos = this._getBoneWorldPos(leftFoot);
+    const rightFootPos = this._getBoneWorldPos(rightFoot);
 
     // レイキャスト距離: 空中時は長めに（ジャンプの高さをカバー）
     const rayMultiplier = airborne ? AIRBORNE_RAY_MULTIPLIER : GROUNDED_RAY_MULTIPLIER;
@@ -238,54 +393,98 @@ export class IKSystem {
     const leftGround = this._raycastGround(leftFootPos, rayMultiplier);
     const rightGround = this._raycastGround(rightFootPos, rayMultiplier);
 
-    // IKターゲットを接地点に設定
-    // 空中: 地面が見つかれば足が地面に向かって自然に伸びる
-    // 接地: 足が正確に地面に着く
-    if (this._leftTarget) {
-      this._leftTarget.position.copyFrom(leftGround ?? leftFootPos);
-    }
-    if (this._rightTarget) {
-      this._rightTarget.position.copyFrom(rightGround ?? rightFootPos);
-    }
+    // ── 足ごとの IK ウェイト計算 ──
+    // FK 足位置と接地点の垂直距離に基づく:
+    // - デッドゾーン内 (< IK_DEAD_ZONE): weight=0 → FK をそのまま保持
+    // - フルゾーン以上 (> IK_FULL_ZONE): weight=baseWeight → フル IK 補正
+    // - 中間: リニア補間
+    // - stepHeight 超（スイング脚）: weight=0 → FK 保持
+    const heightThreshold = this._config.stepHeight;
+    const baseWeight = this._config.ikWeight;
 
-    // ポールターゲットを膝の前方に配置（メッシュの前方向）
-    const forward = mesh.forward.scale(1.0);
-    if (this._leftPole) {
+    const leftDist = leftGround ? Math.abs(leftFootPos.y - leftGround.y) : Infinity;
+    const rightDist = rightGround ? Math.abs(rightFootPos.y - rightGround.y) : Infinity;
+
+    const leftWeight = leftGround
+      ? this._calcIKWeight(leftDist, heightThreshold, baseWeight)
+      : 0;
+    const rightWeight = rightGround
+      ? this._calcIKWeight(rightDist, heightThreshold, baseWeight)
+      : 0;
+
+    const leftActive = leftWeight > 0;
+    const rightActive = rightWeight > 0;
+
+    // IK が必要な脚のみターゲット・ポール設定＆ソルバー実行
+    const forward = mesh.forward;
+
+    if (leftActive && this._leftTarget && this._leftPole) {
+      this._leftTarget.position.copyFrom(leftGround!);
       const leftKneePos = leftFootPos.add(new Vector3(0, 0.5, 0));
       this._leftPole.position.copyFrom(leftKneePos.add(forward));
     }
-    if (this._rightPole) {
+    if (rightActive && this._rightTarget && this._rightPole) {
+      this._rightTarget.position.copyFrom(rightGround!);
       const rightKneePos = rightFootPos.add(new Vector3(0, 0.5, 0));
       this._rightPole.position.copyFrom(rightKneePos.add(forward));
     }
 
-    // ヒップ補正: 接地時のみ（空中ではスキップ）
-    if (!airborne && leftGround && rightGround) {
+    // ヒップ補正: 両足とも IK アクティブな場合のみ
+    if (!airborne && leftActive && rightActive && leftGround && rightGround) {
       const hipBone = findSkeletonBone(this._skeleton!, "hips");
       if (hipBone && this._hipRestPos) {
         const leftDelta = leftGround.y - leftFootPos.y;
         const rightDelta = rightGround.y - rightFootPos.y;
         const targetOffset = Math.min(leftDelta, rightDelta);
 
-        // 滑らかにオフセットを遷移
         this._hipOffset += (targetOffset - this._hipOffset) * HIP_CORRECTION_LERP;
 
-        // レストポーズ位置を基準にオフセットを適用（蓄積防止）
-        // MotionController の setRotationQuaternion(LOCAL) が前フレームの position を
-        // 保持するため、getPosition + add だと毎フレーム蓄積してしまう
         hipBone.setPosition(
           new Vector3(this._hipRestPos.x, this._hipRestPos.y + this._hipOffset, this._hipRestPos.z),
           0
         );
+        this._modifiedBones.add(hipBone);
       }
-    } else if (airborne) {
-      // 空中: ヒップオフセットを0に向かって減衰
+    } else {
       this._hipOffset *= (1 - HIP_CORRECTION_LERP);
     }
 
-    // 足IK ソルバーを実行
-    this._leftIK!.update();
-    this._rightIK!.update();
+    // IK ソルバー実行（アクティブな脚のみ）
+    if (leftActive) {
+      this._leftIK!.slerpAmount = leftWeight;
+      this._leftIK!.update();
+
+      const leftLeg = findSkeletonBone(this._skeleton!, "leftLeg");
+      if (leftLeg) {
+        this._modifiedBones.add(leftLeg);
+        const parent = leftLeg.getParent();
+        if (parent) this._modifiedBones.add(parent);
+      }
+    }
+    if (rightActive) {
+      this._rightIK!.slerpAmount = rightWeight;
+      this._rightIK!.update();
+
+      const rightLeg = findSkeletonBone(this._skeleton!, "rightLeg");
+      if (rightLeg) {
+        this._modifiedBones.add(rightLeg);
+        const parent = rightLeg.getParent();
+        if (parent) this._modifiedBones.add(parent);
+      }
+    }
+  }
+
+  /**
+   * IK ウェイトを計算する。
+   * デッドゾーン内は 0、フルゾーン以上は baseWeight、中間はリニア補間。
+   * stepHeight 超（スイング脚）は 0。
+   */
+  private _calcIKWeight(dist: number, heightThreshold: number, baseWeight: number): number {
+    if (dist >= heightThreshold) return 0; // スイング脚
+    if (dist <= IK_DEAD_ZONE) return 0;    // FK で十分正確
+    if (dist >= IK_FULL_ZONE) return baseWeight; // フル補正
+    // デッドゾーン〜フルゾーン間のリニア補間
+    return ((dist - IK_DEAD_ZONE) / (IK_FULL_ZONE - IK_DEAD_ZONE)) * baseWeight;
   }
 
   /**
@@ -329,6 +528,14 @@ export class IKSystem {
       const backward = mesh.forward.scale(-1.0);
       this._leftArmPole.position.copyFrom(elbowPos.add(backward));
       this._leftArmIK.update();
+
+      // 変更ボーン登録（forearm + parent = upper arm）
+      const leftForeArm = findSkeletonBone(this._skeleton!, "leftForeArm");
+      if (leftForeArm) {
+        this._modifiedBones.add(leftForeArm);
+        const parent = leftForeArm.getParent();
+        if (parent) this._modifiedBones.add(parent);
+      }
     }
 
     // 右腕
@@ -340,6 +547,14 @@ export class IKSystem {
       const backward = mesh.forward.scale(-1.0);
       this._rightArmPole.position.copyFrom(elbowPos.add(backward));
       this._rightArmIK.update();
+
+      // 変更ボーン登録（forearm + parent = upper arm）
+      const rightForeArm = findSkeletonBone(this._skeleton!, "rightForeArm");
+      if (rightForeArm) {
+        this._modifiedBones.add(rightForeArm);
+        const parent = rightForeArm.getParent();
+        if (parent) this._modifiedBones.add(parent);
+      }
     }
   }
 
@@ -368,7 +583,7 @@ export class IKSystem {
 
     if (this._lookAtTarget) {
       // ターゲット方向を計算
-      const headWorldPos = headBone.getAbsolutePosition(this._mesh);
+      const headWorldPos = this._getBoneWorldPos(headBone);
       const targetPos = this._lookAtTarget.getAbsolutePosition();
       const direction = targetPos.subtract(headWorldPos);
 
@@ -424,16 +639,28 @@ export class IKSystem {
     neckBone.getRestPose().decompose(undefined, neckRestQuat, undefined);
     const neckLookQuat = Quaternion.FromEulerAngles(-neckPitch, neckYaw, 0);
     neckBone.setRotationQuaternion(neckRestQuat.multiply(neckLookQuat), Space.LOCAL);
+    this._modifiedBones.add(neckBone);
 
     const headRestQuat = new Quaternion();
     headBone.getRestPose().decompose(undefined, headRestQuat, undefined);
     const headLookQuat = Quaternion.FromEulerAngles(-headPitch, headYaw, 0);
     headBone.setRotationQuaternion(headRestQuat.multiply(headLookQuat), Space.LOCAL);
+    this._modifiedBones.add(headBone);
   }
 
   // ════════════════════════════════════════
   // ユーティリティ
   // ════════════════════════════════════════
+
+  /** ボーンのワールド座標を取得（GLB: TransformNode、Procedural: bone API） */
+  private _getBoneWorldPos(bone: ReturnType<typeof findSkeletonBone>): Vector3 {
+    if (!bone) return Vector3.Zero();
+    if (this._isGLB) {
+      const node = bone.getTransformNode();
+      if (node) return node.absolutePosition.clone();
+    }
+    return bone.getAbsolutePosition(this._mesh!);
+  }
 
   /** IKターゲット用の不可視ノードを作成 */
   private _createTargetNode(name: string): TransformNode {

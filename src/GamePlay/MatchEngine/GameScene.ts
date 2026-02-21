@@ -529,7 +529,7 @@ export class GameScene {
       const config = DEFAULT_CHARACTER_CONFIG;
       const position = new Vector3(playerConfig.x, config.physical.height / 2, playerConfig.z);
 
-      const character = new Character(this.scene, position, config);
+      const character = new Character(this.scene, position, config, "ally");
       character.team = "ally";
       character.setPlayerData(player, playerConfig.position);
       character.offenseRole = playerConfig.offenseRole ?? null;
@@ -563,7 +563,7 @@ export class GameScene {
       const config = DEFAULT_CHARACTER_CONFIG;
       const position = new Vector3(playerConfig.x, config.physical.height / 2, playerConfig.z);
 
-      const character = new Character(this.scene, position, config);
+      const character = new Character(this.scene, position, config, "enemy");
       character.team = "enemy";
       character.setPlayerData(player, playerConfig.position);
       character.offenseRole = playerConfig.offenseRole ?? null;
@@ -597,6 +597,7 @@ export class GameScene {
         teamConfig.enemyTeam.defenseScheme ?? DefenseScheme.DROP
       );
     }
+
   }
 
   /**

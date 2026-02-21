@@ -391,8 +391,6 @@ export function findAllBones(skeleton: Skeleton, rigType: RigType): FoundBones |
   const bones: FoundBones = {
     hips,
     spine,
-    // spine2/head: Rigify では DEF- プレフィックスがないため findSkeletonBone が
-    // null を返す（tweak_spine.004, head）。フォールバックで直接検索する。
     spine2: findSkeletonBone(skeleton, "spine2", rigType)
       ?? (rigType === "rigify" ? findRigifyBone(skeleton, "spine2") : null),
     head: findSkeletonBone(skeleton, "head", rigType)
@@ -641,6 +639,7 @@ function motionToEulerKeys(
   motion: MotionDefinition,
   bones: FoundBones,
   isRigify: boolean,
+  mirrorYZ?: boolean,
 ): { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] {
   const results: { bone: Bone; keys: { frame: number; value: Vector3 }[] }[] = [];
   const processedBones = new Set<Bone>();
@@ -686,14 +685,17 @@ function motionToEulerKeys(
     const stdY = standing?.y ?? 0;
     const stdZ = standing?.z ?? 0;
 
+    // X-mirror 補正: 右側ボーンはローカル軸が左の鏡像のため Y/Z 反転不要
+    const yzS = (mirrorYZ && !jointName.startsWith("right")) ? -1 : 1;
+
     // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
     const keys = times.map((time) => ({
       frame: Math.round(time * FPS),
       value: new Vector3(
         ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD,
-        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD,
-        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD,
+        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD * yzS,
+        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD * yzS,
       ),
     }));
     results.push({ bone, keys });
@@ -717,10 +719,11 @@ function motionToEulerKeys(
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
       // Rigify 専用セクション: rigifyAdjustments のみ適用（STANDING_POSE_OFFSETS は不要）
+      const yzS = (mirrorYZ && !jointName.startsWith("right")) ? -1 : 1;
       const value = new Vector3(
         adjX * DEG_TO_RAD,
-        adjY * DEG_TO_RAD,
-        adjZ * DEG_TO_RAD,
+        adjY * DEG_TO_RAD * yzS,
+        adjZ * DEG_TO_RAD * yzS,
       );
       results.push({
         bone,
@@ -738,8 +741,10 @@ function motionToEulerKeys(
     processedBones.add(bone);
 
     const standing = isRigify ? undefined : BONE_STANDING_OFFSETS[key as keyof FoundBones];
+    // 右側ボーン (rArm, rLeg, etc.) は Y/Z 反転不要
+    const yzS = (mirrorYZ && !key.startsWith("r")) ? -1 : 1;
     const offset = standing
-      ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD, standing.z * DEG_TO_RAD)
+      ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD * yzS, standing.z * DEG_TO_RAD * yzS)
       : Vector3.Zero();
     results.push({
       bone,
@@ -959,6 +964,7 @@ export function createSingleMotionPoseData(
   skeleton: Skeleton,
   motion: MotionDefinition,
   restPoses?: RestPoseCache,
+  mirrorYZ?: boolean,
 ): SingleMotionPoseData | null {
   const rigType = detectRigType(skeleton);
   const bones = findAllBones(skeleton, rigType);
@@ -966,7 +972,7 @@ export function createSingleMotionPoseData(
 
   const isRigify = rigType === "rigify";
   const corrections = computeCorrections(bones, restPoses);
-  const entries = motionToEulerKeys(motion, bones, isRigify);
+  const entries = motionToEulerKeys(motion, bones, isRigify, mirrorYZ);
 
   return {
     bones: entries.map(({ bone, keys }) => ({

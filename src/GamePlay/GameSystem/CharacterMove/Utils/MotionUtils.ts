@@ -77,6 +77,16 @@ export function buildKeyframes(
         y: jointAnimations.rightKneeY?.[time] ?? 0,
         z: jointAnimations.rightKneeZ?.[time] ?? 0,
       },
+      leftFoot: {
+        x: jointAnimations.leftFootX?.[time] ?? 0,
+        y: jointAnimations.leftFootY?.[time] ?? 0,
+        z: jointAnimations.leftFootZ?.[time] ?? 0,
+      },
+      rightFoot: {
+        x: jointAnimations.rightFootX?.[time] ?? 0,
+        y: jointAnimations.rightFootY?.[time] ?? 0,
+        z: jointAnimations.rightFootZ?.[time] ?? 0,
+      },
     };
 
     // 位置アニメーションがある場合は追加

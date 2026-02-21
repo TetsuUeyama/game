@@ -6,6 +6,7 @@ import { motionDataToDefinition } from "@/GamePlay/GameSystem/CharacterMove/Moti
 import { MotionDefinition } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionDefinitionTypes";
 
 // --- Basic ---
+import { BASE_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/BaseMotion";
 import { IDLE_MOTION as GAME_IDLE } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 import { CROUCH_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/CrouchMotion";
 
@@ -94,6 +95,7 @@ export interface GameMotionEntry {
 /** 全ゲームモーション一覧（カテゴリ順） */
 export const GAME_MOTIONS: GameMotionEntry[] = [
   // Basic
+  { name: "game:base_pose", motion: motionDataToDefinition(BASE_MOTION) },
   { name: "game:idle", motion: motionDataToDefinition(GAME_IDLE) },
   { name: "game:crouch", motion: motionDataToDefinition(CROUCH_MOTION) },
 
