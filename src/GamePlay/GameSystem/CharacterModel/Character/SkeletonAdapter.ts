@@ -157,10 +157,13 @@ export class SkeletonAdapter {
 
     if (this._mirrorYZ) {
       const isRight = jointName.startsWith("right");
+      const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
+      const ySign = isRight ? 1 : -1;
+      const zSign = isArm ? 1 : ySign;
       const corrected = new Vector3(
         offsetEulerRad.x,
-        isRight ? offsetEulerRad.y : -offsetEulerRad.y,
-        isRight ? -offsetEulerRad.z : offsetEulerRad.z,
+        offsetEulerRad.y * ySign,
+        offsetEulerRad.z * zSign,
       );
       this.applyFKRotation(bone, corrected);
     } else {
@@ -186,6 +189,32 @@ export class SkeletonAdapter {
   /** X軸ミラーが有効かどうか（GLTF ハンドネス変換による Y/Z 回転反転） */
   get isXMirrored(): boolean {
     return this._mirrorYZ;
+  }
+
+  /**
+   * ボーンのワールド座標を取得する。
+   * GLB（TransformNode あり）: node.absolutePosition を使用。
+   * Procedural: bone.getAbsolutePosition(mesh) を使用。
+   */
+  getBoneWorldPosition(bone: Bone): Vector3 {
+    const node = bone.getTransformNode();
+    if (node) return node.absolutePosition.clone();
+    return bone.getAbsolutePosition(this.mesh);
+  }
+
+  /**
+   * ボーンワールド座標クエリ前に呼ぶ。
+   * GLB: rootMesh + 全 TransformNode のワールド行列を再計算。
+   * Procedural: skeleton の絶対行列を再計算。
+   * 両方とも全行を実行して問題ない（TransformNode なしの場合ループは空振り）。
+   */
+  forceWorldMatrixUpdate(): void {
+    this.mesh.computeWorldMatrix(true);
+    for (const bone of this.skeleton.bones) {
+      const node = bone.getTransformNode();
+      if (node) node.computeWorldMatrix(true);
+    }
+    this.skeleton.computeAbsoluteMatrices(true);
   }
 
   /** FK レスト回転キャッシュ（createSingleMotionPoseData 互換） */

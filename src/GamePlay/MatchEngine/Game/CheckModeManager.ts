@@ -20,7 +20,7 @@ import { FeintController } from "@/GamePlay/GameSystem/CharacterMove/Controllers
 /**
  * ゲームモード
  */
-export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check' | 'motion_check';
+export type GameMode = 'game' | 'dribble_check' | 'shoot_check' | 'pass_check';
 
 /**
  * チェックモード用コンテキスト
@@ -515,35 +515,6 @@ export class CheckModeManager {
       new Vector3(passerPos.x, 0, passerPos.z),
       new Vector3(receiverPos.x, 0, receiverPos.z)
     );
-  }
-
-  // =============================================================================
-  // モーションチェックモード
-  // =============================================================================
-
-  /**
-   * モーションチェックモード用のセットアップ
-   */
-  public setupMotionCheckMode(
-    playerId: string,
-    playerData?: Record<string, PlayerData>
-  ): Character | null {
-    this.resetForCheckMode();
-    this.setGameMode('motion_check');
-
-    const data = playerData || this.context.savedPlayerData;
-    if (!data) return null;
-
-    const pd = data[playerId];
-    if (!pd) return null;
-
-    // キャラクターをフィールド中央に作成
-    const character = this.createCheckModeCharacter('ally', { x: 0, z: 0 }, pd, 'PG');
-
-    this.context.addAllyCharacter(character);
-    this.context.updateCollisionHandler([character]);
-
-    return character;
   }
 
   // =============================================================================

@@ -14,6 +14,7 @@ import {
 } from "@babylonjs/core";
 import { CharacterMotionConfig } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 import { findSkeletonBone } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 
 // ── 頭部ルックアット設定 ──
 /** 水平方向（Yaw）の最大回転角（ラジアン）±70° */
@@ -80,6 +81,8 @@ export class IKSystem {
    * 更新されないため、IK 前後で手動同期が必要。
    */
   private _isGLB = false;
+  /** SkeletonAdapter（外部から渡された場合、ボーンワールド座標取得に使用） */
+  private _adapter: SkeletonAdapter | null = null;
 
   /** IK が変更したボーンのセット（_syncTransformNodesFromBones で使用） */
   private _modifiedBones: Set<Bone> = new Set();
@@ -120,6 +123,17 @@ export class IKSystem {
   /** 補間済みのPitch回転量（ラジアン） */
   private _currentLookPitch = 0;
 
+  // ── キャッシュ済みボーン参照（initialize で設定） ──
+  private _hipBone: Bone | null = null;
+  private _leftFootBone: Bone | null = null;
+  private _rightFootBone: Bone | null = null;
+  private _leftLegBone: Bone | null = null;
+  private _rightLegBone: Bone | null = null;
+  private _leftForeArmBone: Bone | null = null;
+  private _rightForeArmBone: Bone | null = null;
+  private _neckBone: Bone | null = null;
+  private _headBone: Bone | null = null;
+
   constructor(scene: Scene, config: CharacterMotionConfig) {
     this._scene = scene;
     this._config = config;
@@ -129,9 +143,10 @@ export class IKSystem {
    * スケルトンとメッシュを受け取り、IKコントローラーを初期化する。
    * GLBロード完了後に呼ぶこと。
    */
-  initialize(skeleton: Skeleton, mesh: AbstractMesh): void {
+  initialize(skeleton: Skeleton, mesh: AbstractMesh, hipRestPos?: Vector3, adapter?: SkeletonAdapter): void {
     this._skeleton = skeleton;
     this._mesh = mesh;
+    this._adapter = adapter ?? null;
 
     // GLB 判定: ボーンに TransformNode がリンクされている場合 GLB モード。
     // ProceduralHumanoid のボーンには TransformNode がリンクされていない。
@@ -143,31 +158,40 @@ export class IKSystem {
       return;
     }
 
+    // ── ボーン参照をキャッシュ（毎フレームの検索を排除） ──
+    this._hipBone = findSkeletonBone(skeleton, "hips");
+    this._leftFootBone = findSkeletonBone(skeleton, "leftFoot");
+    this._rightFootBone = findSkeletonBone(skeleton, "rightFoot");
+    this._leftLegBone = findSkeletonBone(skeleton, "leftLeg");
+    this._rightLegBone = findSkeletonBone(skeleton, "rightLeg");
+    this._leftForeArmBone = findSkeletonBone(skeleton, "leftForeArm");
+    this._rightForeArmBone = findSkeletonBone(skeleton, "rightForeArm");
+    this._neckBone = findSkeletonBone(skeleton, "neck");
+    this._headBone = findSkeletonBone(skeleton, "head");
+
     // ── ヒップレスト位置キャッシュ（足IKヒップ補正の蓄積防止用） ──
-    const hipBone = findSkeletonBone(skeleton, "hips");
-    if (hipBone) {
+    if (hipRestPos) {
+      this._hipRestPos = hipRestPos.clone();
+    } else if (this._hipBone) {
       this._hipRestPos = new Vector3();
-      hipBone.getRestPose().decompose(undefined, undefined, this._hipRestPos);
+      this._hipBone.getRestPose().decompose(undefined, undefined, this._hipRestPos);
     }
 
     // ── 足IK初期化 ──
-    const leftLeg = findSkeletonBone(skeleton, "leftLeg");
-    const rightLeg = findSkeletonBone(skeleton, "rightLeg");
-
-    if (leftLeg && rightLeg) {
+    if (this._leftLegBone && this._rightLegBone) {
       this._leftTarget = this._createTargetNode("ik_left_target");
       this._rightTarget = this._createTargetNode("ik_right_target");
       this._leftPole = this._createTargetNode("ik_left_pole");
       this._rightPole = this._createTargetNode("ik_right_pole");
 
-      this._leftIK = new BoneIKController(mesh, leftLeg, {
+      this._leftIK = new BoneIKController(mesh, this._leftLegBone, {
         targetMesh: this._leftTarget,
         poleTargetMesh: this._leftPole,
         poleAngle: 0,
         slerpAmount: this._config.ikWeight,
       });
 
-      this._rightIK = new BoneIKController(mesh, rightLeg, {
+      this._rightIK = new BoneIKController(mesh, this._rightLegBone, {
         targetMesh: this._rightTarget,
         poleTargetMesh: this._rightPole,
         poleAngle: 0,
@@ -176,23 +200,20 @@ export class IKSystem {
     }
 
     // ── 腕IK初期化 ──
-    const leftForeArm = findSkeletonBone(skeleton, "leftForeArm");
-    const rightForeArm = findSkeletonBone(skeleton, "rightForeArm");
-
-    if (leftForeArm && rightForeArm) {
+    if (this._leftForeArmBone && this._rightForeArmBone) {
       this._leftArmTarget = this._createTargetNode("ik_left_arm_target");
       this._rightArmTarget = this._createTargetNode("ik_right_arm_target");
       this._leftArmPole = this._createTargetNode("ik_left_arm_pole");
       this._rightArmPole = this._createTargetNode("ik_right_arm_pole");
 
-      this._leftArmIK = new BoneIKController(mesh, leftForeArm, {
+      this._leftArmIK = new BoneIKController(mesh, this._leftForeArmBone, {
         targetMesh: this._leftArmTarget,
         poleTargetMesh: this._leftArmPole,
         poleAngle: Math.PI,
         slerpAmount: this._config.ikWeight,
       });
 
-      this._rightArmIK = new BoneIKController(mesh, rightForeArm, {
+      this._rightArmIK = new BoneIKController(mesh, this._rightForeArmBone, {
         targetMesh: this._rightArmTarget,
         poleTargetMesh: this._rightArmPole,
         poleAngle: Math.PI,
@@ -336,11 +357,8 @@ export class IKSystem {
    * ローカル回転保存により、モーションチェックモード（純粋FK）と同一の足角度を保証する。
    */
   private _saveFootLocalRotations(): void {
-    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
-    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
-
-    this._savedFootLocalQ.left = this._getNodeLocalRotation(leftFoot);
-    this._savedFootLocalQ.right = this._getNodeLocalRotation(rightFoot);
+    this._savedFootLocalQ.left = this._getNodeLocalRotation(this._leftFootBone);
+    this._savedFootLocalQ.right = this._getNodeLocalRotation(this._rightFootBone);
   }
 
   /**
@@ -349,15 +367,12 @@ export class IKSystem {
    * ワールド空間の変換ロスが発生しない。
    */
   private _restoreFootLocalRotations(): void {
-    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
-    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
-
-    if (leftFoot && this._savedFootLocalQ.left) {
-      const node = leftFoot.getTransformNode();
+    if (this._leftFootBone && this._savedFootLocalQ.left) {
+      const node = this._leftFootBone.getTransformNode();
       if (node) node.rotationQuaternion = this._savedFootLocalQ.left;
     }
-    if (rightFoot && this._savedFootLocalQ.right) {
-      const node = rightFoot.getTransformNode();
+    if (this._rightFootBone && this._savedFootLocalQ.right) {
+      const node = this._rightFootBone.getTransformNode();
       if (node) node.rotationQuaternion = this._savedFootLocalQ.right;
     }
   }
@@ -376,15 +391,13 @@ export class IKSystem {
 
   /** 足IKの更新処理 */
   private _updateFootIK(airborne: boolean): void {
-    const leftFoot = findSkeletonBone(this._skeleton!, "leftFoot");
-    const rightFoot = findSkeletonBone(this._skeleton!, "rightFoot");
-    if (!leftFoot || !rightFoot) return;
+    if (!this._leftFootBone || !this._rightFootBone) return;
 
     const mesh = this._mesh!;
 
     // 各足ボーンの現在ワールド位置を取得（FK 適用後）
-    const leftFootPos = this._getBoneWorldPos(leftFoot);
-    const rightFootPos = this._getBoneWorldPos(rightFoot);
+    const leftFootPos = this._getBoneWorldPos(this._leftFootBone);
+    const rightFootPos = this._getBoneWorldPos(this._rightFootBone);
 
     // レイキャスト距離: 空中時は長めに（ジャンプの高さをカバー）
     const rayMultiplier = airborne ? AIRBORNE_RAY_MULTIPLIER : GROUNDED_RAY_MULTIPLIER;
@@ -431,19 +444,18 @@ export class IKSystem {
 
     // ヒップ補正: 両足とも IK アクティブな場合のみ
     if (!airborne && leftActive && rightActive && leftGround && rightGround) {
-      const hipBone = findSkeletonBone(this._skeleton!, "hips");
-      if (hipBone && this._hipRestPos) {
+      if (this._hipBone && this._hipRestPos) {
         const leftDelta = leftGround.y - leftFootPos.y;
         const rightDelta = rightGround.y - rightFootPos.y;
         const targetOffset = Math.min(leftDelta, rightDelta);
 
         this._hipOffset += (targetOffset - this._hipOffset) * HIP_CORRECTION_LERP;
 
-        hipBone.setPosition(
+        this._hipBone.setPosition(
           new Vector3(this._hipRestPos.x, this._hipRestPos.y + this._hipOffset, this._hipRestPos.z),
           0
         );
-        this._modifiedBones.add(hipBone);
+        this._modifiedBones.add(this._hipBone);
       }
     } else {
       this._hipOffset *= (1 - HIP_CORRECTION_LERP);
@@ -454,10 +466,9 @@ export class IKSystem {
       this._leftIK!.slerpAmount = leftWeight;
       this._leftIK!.update();
 
-      const leftLeg = findSkeletonBone(this._skeleton!, "leftLeg");
-      if (leftLeg) {
-        this._modifiedBones.add(leftLeg);
-        const parent = leftLeg.getParent();
+      if (this._leftLegBone) {
+        this._modifiedBones.add(this._leftLegBone);
+        const parent = this._leftLegBone.getParent();
         if (parent) this._modifiedBones.add(parent);
       }
     }
@@ -465,10 +476,9 @@ export class IKSystem {
       this._rightIK!.slerpAmount = rightWeight;
       this._rightIK!.update();
 
-      const rightLeg = findSkeletonBone(this._skeleton!, "rightLeg");
-      if (rightLeg) {
-        this._modifiedBones.add(rightLeg);
-        const parent = rightLeg.getParent();
+      if (this._rightLegBone) {
+        this._modifiedBones.add(this._rightLegBone);
+        const parent = this._rightLegBone.getParent();
         if (parent) this._modifiedBones.add(parent);
       }
     }
@@ -529,11 +539,9 @@ export class IKSystem {
       this._leftArmPole.position.copyFrom(elbowPos.add(backward));
       this._leftArmIK.update();
 
-      // 変更ボーン登録（forearm + parent = upper arm）
-      const leftForeArm = findSkeletonBone(this._skeleton!, "leftForeArm");
-      if (leftForeArm) {
-        this._modifiedBones.add(leftForeArm);
-        const parent = leftForeArm.getParent();
+      if (this._leftForeArmBone) {
+        this._modifiedBones.add(this._leftForeArmBone);
+        const parent = this._leftForeArmBone.getParent();
         if (parent) this._modifiedBones.add(parent);
       }
     }
@@ -548,11 +556,9 @@ export class IKSystem {
       this._rightArmPole.position.copyFrom(elbowPos.add(backward));
       this._rightArmIK.update();
 
-      // 変更ボーン登録（forearm + parent = upper arm）
-      const rightForeArm = findSkeletonBone(this._skeleton!, "rightForeArm");
-      if (rightForeArm) {
-        this._modifiedBones.add(rightForeArm);
-        const parent = rightForeArm.getParent();
+      if (this._rightForeArmBone) {
+        this._modifiedBones.add(this._rightForeArmBone);
+        const parent = this._rightForeArmBone.getParent();
         if (parent) this._modifiedBones.add(parent);
       }
     }
@@ -576,14 +582,11 @@ export class IKSystem {
    */
   private _updateHeadIK(): void {
     if (!this._skeleton || !this._mesh) return;
-
-    const neckBone = findSkeletonBone(this._skeleton, "neck");
-    const headBone = findSkeletonBone(this._skeleton, "head");
-    if (!neckBone || !headBone) return;
+    if (!this._neckBone || !this._headBone) return;
 
     if (this._lookAtTarget) {
       // ターゲット方向を計算
-      const headWorldPos = this._getBoneWorldPos(headBone);
+      const headWorldPos = this._getBoneWorldPos(this._headBone);
       const targetPos = this._lookAtTarget.getAbsolutePosition();
       const direction = targetPos.subtract(headWorldPos);
 
@@ -636,25 +639,27 @@ export class IKSystem {
     // getRotationQuaternionを読み戻すと前フレームの回転が残り毎フレーム蓄積してしまう。
     // 不変のレストポーズを基準にすることで蓄積を防止する。
     const neckRestQuat = new Quaternion();
-    neckBone.getRestPose().decompose(undefined, neckRestQuat, undefined);
+    this._neckBone.getRestPose().decompose(undefined, neckRestQuat, undefined);
     const neckLookQuat = Quaternion.FromEulerAngles(-neckPitch, neckYaw, 0);
-    neckBone.setRotationQuaternion(neckRestQuat.multiply(neckLookQuat), Space.LOCAL);
-    this._modifiedBones.add(neckBone);
+    this._neckBone.setRotationQuaternion(neckRestQuat.multiply(neckLookQuat), Space.LOCAL);
+    this._modifiedBones.add(this._neckBone);
 
     const headRestQuat = new Quaternion();
-    headBone.getRestPose().decompose(undefined, headRestQuat, undefined);
+    this._headBone.getRestPose().decompose(undefined, headRestQuat, undefined);
     const headLookQuat = Quaternion.FromEulerAngles(-headPitch, headYaw, 0);
-    headBone.setRotationQuaternion(headRestQuat.multiply(headLookQuat), Space.LOCAL);
-    this._modifiedBones.add(headBone);
+    this._headBone.setRotationQuaternion(headRestQuat.multiply(headLookQuat), Space.LOCAL);
+    this._modifiedBones.add(this._headBone);
   }
 
   // ════════════════════════════════════════
   // ユーティリティ
   // ════════════════════════════════════════
 
-  /** ボーンのワールド座標を取得（GLB: TransformNode、Procedural: bone API） */
-  private _getBoneWorldPos(bone: ReturnType<typeof findSkeletonBone>): Vector3 {
+  /** ボーンのワールド座標を取得（adapter 経由で GLB/Procedural を自動判別） */
+  private _getBoneWorldPos(bone: Bone | null): Vector3 {
     if (!bone) return Vector3.Zero();
+    if (this._adapter) return this._adapter.getBoneWorldPosition(bone);
+    // adapter なし（テストシーン等）: 従来のフォールバック
     if (this._isGLB) {
       const node = bone.getTransformNode();
       if (node) return node.absolutePosition.clone();
@@ -694,5 +699,6 @@ export class IKSystem {
 
     this._skeleton = null;
     this._mesh = null;
+    this._adapter = null;
   }
 }

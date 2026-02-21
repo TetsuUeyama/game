@@ -2,7 +2,6 @@
  * GLBModelLoader — seconf.glb + newmodel.glb（髪）を1回だけ読み込み、
  * 10体分のクローンを生成するシングルトンローダー。
  *
- * テストシーン（UseHumanoidControl.ts）と同じ読み込み・髪差し替えパターンを踏襲。
  * AssetContainer.instantiateModelsToScene() でクローンごとに独立したスケルトンを生成し、
  * AnimationGroup 停止・破棄、TransformNode.animations クリア、worldMatrix unfreeze を行う。
  */
@@ -13,6 +12,7 @@ import {
   AbstractMesh,
   Skeleton,
   AssetContainer,
+  InstantiatedEntries,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 
@@ -20,12 +20,11 @@ import "@babylonjs/loaders/glTF";
 const MODEL_PATH = "/";
 const MODEL_FILE = "seconf.glb";
 const HAIR_MODEL_FILE = "newmodel.glb";
-const ENEMY_MODEL_FILE = "rigged_clothed_body.glb";
 
-/** 髪差し替え設定（UseHumanoidControl.ts と同じ値） */
+/** 髪差し替え設定 */
 const MAIN_HIDE_MESHES = ["Ch42_Hair1", "Cube"];
 const HAIR_SHOW_MESHES = ["Hair"];
-const HAIR_SCALE_RATIO = 96.37 / 209.15;
+export const HAIR_SCALE_RATIO = 96.37 / 209.15;
 
 /** クローン1体分のデータ */
 export interface GLBCloneData {
@@ -42,7 +41,6 @@ export class GLBModelLoader {
   private _ready = false;
   private _mainContainer: AssetContainer | null = null;
   private _hairContainer: AssetContainer | null = null;
-  private _enemyContainer: AssetContainer | null = null;
 
   private constructor() {}
 
@@ -65,15 +63,13 @@ export class GLBModelLoader {
   async loadAsync(scene: Scene): Promise<void> {
     if (this._ready) return;
 
-    const [mainContainer, hairContainer, enemyContainer] = await Promise.all([
+    const [mainContainer, hairContainer] = await Promise.all([
       SceneLoader.LoadAssetContainerAsync(MODEL_PATH, MODEL_FILE, scene),
       SceneLoader.LoadAssetContainerAsync(MODEL_PATH, HAIR_MODEL_FILE, scene),
-      SceneLoader.LoadAssetContainerAsync(MODEL_PATH, ENEMY_MODEL_FILE, scene),
     ]);
 
     this._mainContainer = mainContainer;
     this._hairContainer = hairContainer;
-    this._enemyContainer = enemyContainer;
     this._ready = true;
   }
 
@@ -81,18 +77,12 @@ export class GLBModelLoader {
    * クローンを1体生成する。
    * instantiateModelsToScene() でコンテナからクローンし、
    * AnimationGroup 停止・破棄、TransformNode.animations クリア、worldMatrix unfreeze を行う。
-   *
-   * @param team 'ally' → seconf.glb + newmodel.glb（髪）、'enemy' → rigged_clothed_body.glb
    */
-  createClone(scene: Scene, team: 'ally' | 'enemy' = 'ally'): GLBCloneData {
-    if (!this._mainContainer || !this._hairContainer || !this._enemyContainer) {
+  createClone(_scene: Scene): GLBCloneData {
+    if (!this._mainContainer || !this._hairContainer) {
       throw new Error("[GLBModelLoader] loadAsync() が未完了です");
     }
 
-    // 一旦両チームとも seconf.glb + newmodel.glb（髪）に統一
-    // チーム別モード復活時: if (team === 'enemy') return this._createEnemyClone();
-    void team;
-    void this._createEnemyClone;
     return this._createAllyClone();
   }
 
@@ -103,26 +93,7 @@ export class GLBModelLoader {
       (name) => `${name}_clone_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     );
 
-    // AnimationGroup を停止・破棄
-    for (const ag of mainInstance.animationGroups) {
-      ag.stop();
-      ag.dispose();
-    }
-
-    // TransformNode.animations クリア + worldMatrix unfreeze
-    const mainSkeleton = mainInstance.skeletons[0];
-    if (mainSkeleton) {
-      for (const bone of mainSkeleton.bones) {
-        const node = bone.getTransformNode();
-        if (node) {
-          node.animations = [];
-          if (node.isWorldMatrixFrozen) {
-            node.unfreezeWorldMatrix();
-          }
-        }
-      }
-    }
-
+    const mainSkeleton = this._cleanupInstance(mainInstance);
     const mainRootMesh = mainInstance.rootNodes[0] as Mesh;
 
     // メインモデルの不要メッシュを非表示
@@ -138,26 +109,7 @@ export class GLBModelLoader {
       (name) => `${name}_hair_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     );
 
-    // 髪の AnimationGroup を停止・破棄
-    for (const ag of hairInstance.animationGroups) {
-      ag.stop();
-      ag.dispose();
-    }
-
-    // 髪の TransformNode.animations クリア + worldMatrix unfreeze
-    const hairSkeleton = hairInstance.skeletons[0];
-    if (hairSkeleton) {
-      for (const bone of hairSkeleton.bones) {
-        const node = bone.getTransformNode();
-        if (node) {
-          node.animations = [];
-          if (node.isWorldMatrixFrozen) {
-            node.unfreezeWorldMatrix();
-          }
-        }
-      }
-    }
-
+    this._cleanupInstance(hairInstance);
     const hairRootMesh = hairInstance.rootNodes[0] as Mesh;
 
     // 髪モデルの位置・スケールをメインモデルに合わせる
@@ -186,19 +138,12 @@ export class GLBModelLoader {
     };
   }
 
-  /** 敵チーム用クローン（rigged_clothed_body.glb、髪差し替えなし） */
-  private _createEnemyClone(): GLBCloneData {
-    const instance = this._enemyContainer!.instantiateModelsToScene(
-      (name) => `${name}_enemy_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    );
-
-    // AnimationGroup を停止・破棄
+  /** クローンインスタンスの初期化（AnimationGroup破棄、animations クリア、worldMatrix unfreeze） */
+  private _cleanupInstance(instance: InstantiatedEntries): Skeleton | undefined {
     for (const ag of instance.animationGroups) {
       ag.stop();
       ag.dispose();
     }
-
-    // TransformNode.animations クリア + worldMatrix unfreeze
     const skeleton = instance.skeletons[0];
     if (skeleton) {
       for (const bone of skeleton.bones) {
@@ -211,17 +156,7 @@ export class GLBModelLoader {
         }
       }
     }
-
-    const rootMesh = instance.rootNodes[0] as Mesh;
-    const allMeshes = rootMesh.getChildMeshes(false) as AbstractMesh[];
-
-    return {
-      rootMesh,
-      allMeshes: [rootMesh, ...allMeshes],
-      skeleton: skeleton!,
-      hairRootMesh: null,
-      hairMeshes: [],
-    };
+    return skeleton;
   }
 
   /**
@@ -231,11 +166,9 @@ export class GLBModelLoader {
     if (GLBModelLoader._instance) {
       GLBModelLoader._instance._mainContainer?.dispose();
       GLBModelLoader._instance._hairContainer?.dispose();
-      GLBModelLoader._instance._enemyContainer?.dispose();
       GLBModelLoader._instance._ready = false;
       GLBModelLoader._instance._mainContainer = null;
       GLBModelLoader._instance._hairContainer = null;
-      GLBModelLoader._instance._enemyContainer = null;
     }
   }
 }
