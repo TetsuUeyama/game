@@ -44,6 +44,7 @@ import { SingleMotionPoseData } from "./MotionPlayer";
 import { MotionDefinition } from "./MotionDefinitionTypes";
 import { IDLE_MOTION } from "./ViewerIdleMotion";
 import { WALK_MOTION } from "./ViewerWalkMotion";
+import { clampJointDegrees } from "@/GamePlay/GameSystem/CharacterMove/Config/JointLimitsConfig";
 
 /** ボーン検索結果（hips/spine は Rigify では null になる場合がある） */
 export interface FoundBones {
@@ -688,9 +689,13 @@ function motionToEulerKeys(
     // X-mirror 補正:
     //   Y: 左/センター反転、右そのまま（左右ボーンの Y 軸がミラー）
     //   Z: 腕ジョイントは左右とも反転（Z 軸が非ミラー）、それ以外は Y と同じ
-    // 肩の X 軸方向補正: ボーンのローカル軸は負=上だが、モーション規約は正=上
+    // 関節軸方向の補正（ボーンローカル軸と規約の不一致を吸収）
     const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
+    const isHip = jointName === "leftHip" || jointName === "rightHip";
+    const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
     const xS = isShoulder ? -1 : 1;
+    const yFootS = isFoot ? -1 : 1;
+    const zJointS = (isHip || isFoot) ? -1 : 1;
 
     const isRight = jointName.startsWith("right");
     const yS = (mirrorYZ && !isRight) ? -1 : 1;
@@ -699,14 +704,19 @@ function motionToEulerKeys(
 
     // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
-    const keys = times.map((time) => ({
-      frame: Math.round(time * FPS),
-      value: new Vector3(
-        ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * DEG_TO_RAD * xS,
-        ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * DEG_TO_RAD * yS,
-        ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * DEG_TO_RAD * zS,
-      ),
-    }));
+    const keys = times.map((time) => {
+      const rawX = clampJointDegrees(jointName, "X", axes.get("X")?.[time] ?? 0);
+      const rawY = clampJointDegrees(jointName, "Y", axes.get("Y")?.[time] ?? 0);
+      const rawZ = clampJointDegrees(jointName, "Z", axes.get("Z")?.[time] ?? 0);
+      return {
+        frame: Math.round(time * FPS),
+        value: new Vector3(
+          (rawX + stdX + adjX) * DEG_TO_RAD * xS,
+          (rawY + stdY + adjY) * DEG_TO_RAD * yS * yFootS,
+          (rawZ + stdZ + adjZ) * DEG_TO_RAD * zS * zJointS,
+        ),
+      };
+    });
     results.push({ bone, keys });
   }
 
@@ -723,20 +733,24 @@ function motionToEulerKeys(
       if (!bone || processedBones.has(bone)) continue;
 
       processedBones.add(bone);
-      const adjX = motion.rigifyAdjustments[jointName + "X"] ?? 0;
-      const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
-      const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
+      const adjX = clampJointDegrees(jointName, "X", motion.rigifyAdjustments[jointName + "X"] ?? 0);
+      const adjY = clampJointDegrees(jointName, "Y", motion.rigifyAdjustments[jointName + "Y"] ?? 0);
+      const adjZ = clampJointDegrees(jointName, "Z", motion.rigifyAdjustments[jointName + "Z"] ?? 0);
 
       const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
+      const isHip = jointName === "leftHip" || jointName === "rightHip";
+      const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
       const xS = isShoulder ? -1 : 1;
+      const yFootS = isFoot ? -1 : 1;
+      const zJointS = (isHip || isFoot) ? -1 : 1;
       const isRight = jointName.startsWith("right");
       const yS = (mirrorYZ && !isRight) ? -1 : 1;
       const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
       const zS = isArm ? 1 : yS;
       const value = new Vector3(
         adjX * DEG_TO_RAD * xS,
-        adjY * DEG_TO_RAD * yS,
-        adjZ * DEG_TO_RAD * zS,
+        adjY * DEG_TO_RAD * yS * yFootS,
+        adjZ * DEG_TO_RAD * zS * zJointS,
       );
       results.push({
         bone,
