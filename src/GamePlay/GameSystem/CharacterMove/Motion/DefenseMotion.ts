@@ -48,7 +48,7 @@ const BLOCK_SHOT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
 
   // 両腕：真上に伸ばす
-  rightShoulderX: {[BLOCK_T0]: 30, [BLOCK_T1]: 150, [BLOCK_T2]: 175, [BLOCK_T3]: 170, [BLOCK_T4]: 30},
+  rightShoulderX: {[BLOCK_T0]: -30, [BLOCK_T1]: -150, [BLOCK_T2]: -175, [BLOCK_T3]: -170, [BLOCK_T4]: -30},
   rightShoulderY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   rightShoulderZ: {[BLOCK_T0]: 0, [BLOCK_T1]: -15, [BLOCK_T2]: -20, [BLOCK_T3]: -15, [BLOCK_T4]: 0},
 
@@ -56,7 +56,7 @@ const BLOCK_SHOT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   rightElbowZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
 
-  leftShoulderX: {[BLOCK_T0]: 30, [BLOCK_T1]: 150, [BLOCK_T2]: 175, [BLOCK_T3]: 170, [BLOCK_T4]: 30},
+  leftShoulderX: {[BLOCK_T0]: -30, [BLOCK_T1]: -150, [BLOCK_T2]: -175, [BLOCK_T3]: -170, [BLOCK_T4]: -30},
   leftShoulderY: {[BLOCK_T0]: 0, [BLOCK_T1]: 0, [BLOCK_T2]: 0, [BLOCK_T3]: 0, [BLOCK_T4]: 0},
   leftShoulderZ: {[BLOCK_T0]: 0, [BLOCK_T1]: 15, [BLOCK_T2]: 20, [BLOCK_T3]: 15, [BLOCK_T4]: 0},
 
@@ -149,7 +149,7 @@ const STEAL_ATTEMPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
   // 右腕：前方に伸ばしてスワイプ
-  rightShoulderX: {[STEAL_T0]: 45, [STEAL_T1]: 70, [STEAL_T2]: 80, [STEAL_T3]: 60, [STEAL_T4]: 45},
+  rightShoulderX: {[STEAL_T0]: -45, [STEAL_T1]: -70, [STEAL_T2]: -80, [STEAL_T3]: -60, [STEAL_T4]: -45},
   rightShoulderY: {[STEAL_T0]: 0, [STEAL_T1]: -30, [STEAL_T2]: -45, [STEAL_T3]: -30, [STEAL_T4]: 0},
   rightShoulderZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
@@ -158,7 +158,7 @@ const STEAL_ATTEMPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
   // 左腕：バランス
-  leftShoulderX: {[STEAL_T0]: 30, [STEAL_T1]: 40, [STEAL_T2]: 50, [STEAL_T3]: 45, [STEAL_T4]: 30},
+  leftShoulderX: {[STEAL_T0]: -30, [STEAL_T1]: -40, [STEAL_T2]: -50, [STEAL_T3]: -45, [STEAL_T4]: -30},
   leftShoulderY: {[STEAL_T0]: 0, [STEAL_T1]: 15, [STEAL_T2]: 20, [STEAL_T3]: 15, [STEAL_T4]: 0},
   leftShoulderZ: {[STEAL_T0]: 0, [STEAL_T1]: 0, [STEAL_T2]: 0, [STEAL_T3]: 0, [STEAL_T4]: 0},
 
@@ -243,7 +243,7 @@ const PASS_INTERCEPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   headZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
 
   // 両腕：広げて構える
-  rightShoulderX: {[INTERCEPT_T0]: 45, [INTERCEPT_T1]: 70, [INTERCEPT_T2]: 75, [INTERCEPT_T3]: 75, [INTERCEPT_T4]: 45},
+  rightShoulderX: {[INTERCEPT_T0]: -45, [INTERCEPT_T1]: -70, [INTERCEPT_T2]: -75, [INTERCEPT_T3]: -75, [INTERCEPT_T4]: -45},
   rightShoulderY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: -40, [INTERCEPT_T2]: -50, [INTERCEPT_T3]: -50, [INTERCEPT_T4]: 0},
   rightShoulderZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: -30, [INTERCEPT_T2]: -35, [INTERCEPT_T3]: -35, [INTERCEPT_T4]: 0},
 
@@ -251,7 +251,7 @@ const PASS_INTERCEPT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightElbowY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
   rightElbowZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 0, [INTERCEPT_T2]: 0, [INTERCEPT_T3]: 0, [INTERCEPT_T4]: 0},
 
-  leftShoulderX: {[INTERCEPT_T0]: 45, [INTERCEPT_T1]: 70, [INTERCEPT_T2]: 75, [INTERCEPT_T3]: 75, [INTERCEPT_T4]: 45},
+  leftShoulderX: {[INTERCEPT_T0]: -45, [INTERCEPT_T1]: -70, [INTERCEPT_T2]: -75, [INTERCEPT_T3]: -75, [INTERCEPT_T4]: -45},
   leftShoulderY: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 40, [INTERCEPT_T2]: 50, [INTERCEPT_T3]: 50, [INTERCEPT_T4]: 0},
   leftShoulderZ: {[INTERCEPT_T0]: 0, [INTERCEPT_T1]: 30, [INTERCEPT_T2]: 35, [INTERCEPT_T3]: 35, [INTERCEPT_T4]: 0},
 

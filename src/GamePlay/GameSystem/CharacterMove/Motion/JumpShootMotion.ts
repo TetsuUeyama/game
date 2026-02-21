@@ -50,7 +50,7 @@ const JUMP_SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> 
   headZ: {[JS_LAYUP_T0]: 0, [JS_LAYUP_T1]: 0, [JS_LAYUP_T2]: 0, [JS_LAYUP_T3]: 0},
 
   // 右腕: 片手で高く伸ばしてリリース
-  rightShoulderX: {[JS_LAYUP_T0]: 150, [JS_LAYUP_T1]: 175, [JS_LAYUP_T2]: 160, [JS_LAYUP_T3]: 45},
+  rightShoulderX: {[JS_LAYUP_T0]: -150, [JS_LAYUP_T1]: -175, [JS_LAYUP_T2]: -160, [JS_LAYUP_T3]: -45},
   rightShoulderY: {[JS_LAYUP_T0]: 0, [JS_LAYUP_T1]: 0, [JS_LAYUP_T2]: 0, [JS_LAYUP_T3]: 0},
   rightShoulderZ: {[JS_LAYUP_T0]: 0, [JS_LAYUP_T1]: 0, [JS_LAYUP_T2]: 0, [JS_LAYUP_T3]: 0},
 
@@ -59,7 +59,7 @@ const JUMP_SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> 
   rightElbowZ: {[JS_LAYUP_T0]: 0, [JS_LAYUP_T1]: 0, [JS_LAYUP_T2]: 0, [JS_LAYUP_T3]: 0},
 
   // 左腕: 補助→下ろす
-  leftShoulderX: {[JS_LAYUP_T0]: 100, [JS_LAYUP_T1]: 110, [JS_LAYUP_T2]: 60, [JS_LAYUP_T3]: 30},
+  leftShoulderX: {[JS_LAYUP_T0]: -100, [JS_LAYUP_T1]: -110, [JS_LAYUP_T2]: -60, [JS_LAYUP_T3]: -30},
   leftShoulderY: {[JS_LAYUP_T0]: 15, [JS_LAYUP_T1]: 20, [JS_LAYUP_T2]: 10, [JS_LAYUP_T3]: 0},
   leftShoulderZ: {[JS_LAYUP_T0]: 0, [JS_LAYUP_T1]: 0, [JS_LAYUP_T2]: 0, [JS_LAYUP_T3]: 0},
 
@@ -159,7 +159,7 @@ const JUMP_SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> =
   headZ: {[JS_DUNK_T0]: 0, [JS_DUNK_T1]: 0, [JS_DUNK_T2]: 0, [JS_DUNK_T3]: 0},
 
   // 右腕: 振り上げ→力強く叩きつけ
-  rightShoulderX: {[JS_DUNK_T0]: 180, [JS_DUNK_T1]: 175, [JS_DUNK_T2]: 70, [JS_DUNK_T3]: 45},
+  rightShoulderX: {[JS_DUNK_T0]: -180, [JS_DUNK_T1]: -175, [JS_DUNK_T2]: -70, [JS_DUNK_T3]: -45},
   rightShoulderY: {[JS_DUNK_T0]: 0, [JS_DUNK_T1]: 0, [JS_DUNK_T2]: 0, [JS_DUNK_T3]: 0},
   rightShoulderZ: {[JS_DUNK_T0]: -15, [JS_DUNK_T1]: -10, [JS_DUNK_T2]: 10, [JS_DUNK_T3]: 0},
 
@@ -168,7 +168,7 @@ const JUMP_SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> =
   rightElbowZ: {[JS_DUNK_T0]: 0, [JS_DUNK_T1]: 0, [JS_DUNK_T2]: 0, [JS_DUNK_T3]: 0},
 
   // 左腕: 補助→叩きつけ
-  leftShoulderX: {[JS_DUNK_T0]: 170, [JS_DUNK_T1]: 165, [JS_DUNK_T2]: 60, [JS_DUNK_T3]: 45},
+  leftShoulderX: {[JS_DUNK_T0]: -170, [JS_DUNK_T1]: -165, [JS_DUNK_T2]: -60, [JS_DUNK_T3]: -45},
   leftShoulderY: {[JS_DUNK_T0]: 0, [JS_DUNK_T1]: 0, [JS_DUNK_T2]: 0, [JS_DUNK_T3]: 0},
   leftShoulderZ: {[JS_DUNK_T0]: 15, [JS_DUNK_T1]: 10, [JS_DUNK_T2]: -10, [JS_DUNK_T3]: 0},
 
@@ -270,7 +270,7 @@ const JUMP_SHOOT_MID_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   headZ: {[JS_MID_T0]: 0, [JS_MID_T1]: 0, [JS_MID_T2]: 0, [JS_MID_T3]: 0},
 
   // 右腕: シュートフォーム→リリース→フォロースルー
-  rightShoulderX: {[JS_MID_T0]: 140, [JS_MID_T1]: 165, [JS_MID_T2]: 170, [JS_MID_T3]: 30},
+  rightShoulderX: {[JS_MID_T0]: -140, [JS_MID_T1]: -165, [JS_MID_T2]: -170, [JS_MID_T3]: -30},
   rightShoulderY: {[JS_MID_T0]: 0, [JS_MID_T1]: 0, [JS_MID_T2]: 0, [JS_MID_T3]: 0},
   rightShoulderZ: {[JS_MID_T0]: 0, [JS_MID_T1]: 0, [JS_MID_T2]: 0, [JS_MID_T3]: 0},
 
@@ -279,7 +279,7 @@ const JUMP_SHOOT_MID_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightElbowZ: {[JS_MID_T0]: 0, [JS_MID_T1]: 0, [JS_MID_T2]: 0, [JS_MID_T3]: 0},
 
   // 左腕: ガイドハンド
-  leftShoulderX: {[JS_MID_T0]: 100, [JS_MID_T1]: 115, [JS_MID_T2]: 50, [JS_MID_T3]: 30},
+  leftShoulderX: {[JS_MID_T0]: -100, [JS_MID_T1]: -115, [JS_MID_T2]: -50, [JS_MID_T3]: -30},
   leftShoulderY: {[JS_MID_T0]: 20, [JS_MID_T1]: 25, [JS_MID_T2]: 10, [JS_MID_T3]: 0},
   leftShoulderZ: {[JS_MID_T0]: 0, [JS_MID_T1]: 0, [JS_MID_T2]: 0, [JS_MID_T3]: 0},
 

@@ -37,7 +37,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
   headZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
   // 腕：ドリブルの動き
-  rightShoulderX: {[DRIBBLE_T0]: 30, [DRIBBLE_T1]: 45, [DRIBBLE_T2]: 60, [DRIBBLE_T3]: 50, [DRIBBLE_T4]: 30},
+  rightShoulderX: {[DRIBBLE_T0]: -30, [DRIBBLE_T1]: -45, [DRIBBLE_T2]: -60, [DRIBBLE_T3]: -50, [DRIBBLE_T4]: -30},
   rightShoulderY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: -20, [DRIBBLE_T2]: -30, [DRIBBLE_T3]: -25, [DRIBBLE_T4]: 0},
   rightShoulderZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
@@ -46,7 +46,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
   rightElbowZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
   // 左腕：バランス
-  leftShoulderX: {[DRIBBLE_T0]: 30, [DRIBBLE_T1]: 50, [DRIBBLE_T2]: 70, [DRIBBLE_T3]: 55, [DRIBBLE_T4]: 30},
+  leftShoulderX: {[DRIBBLE_T0]: -30, [DRIBBLE_T1]: -50, [DRIBBLE_T2]: -70, [DRIBBLE_T3]: -55, [DRIBBLE_T4]: -30},
   leftShoulderY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 20, [DRIBBLE_T2]: 30, [DRIBBLE_T3]: 25, [DRIBBLE_T4]: 0},
   leftShoulderZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
@@ -129,7 +129,7 @@ const DRIBBLE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   headZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 
   // 右腕：ドリブルする腕（上下動）
-  rightShoulderX: {[STANCE_T0]: 30, [STANCE_T1]: 50, [STANCE_T2]: 30, [STANCE_T3]: 50},
+  rightShoulderX: {[STANCE_T0]: -30, [STANCE_T1]: -50, [STANCE_T2]: -30, [STANCE_T3]: -50},
   rightShoulderY: {[STANCE_T0]: -30, [STANCE_T1]: -30, [STANCE_T2]: -30, [STANCE_T3]: -30},
   rightShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 
@@ -138,7 +138,7 @@ const DRIBBLE_STANCE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightElbowZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 
   // 左腕：ガード（ディフェンダーをブロック）
-  leftShoulderX: {[STANCE_T0]: 40, [STANCE_T1]: 40, [STANCE_T2]: 40, [STANCE_T3]: 40},
+  leftShoulderX: {[STANCE_T0]: -40, [STANCE_T1]: -40, [STANCE_T2]: -40, [STANCE_T3]: -40},
   leftShoulderY: {[STANCE_T0]: 40, [STANCE_T1]: 40, [STANCE_T2]: 40, [STANCE_T3]: 40},
   leftShoulderZ: {[STANCE_T0]: 0, [STANCE_T1]: 0, [STANCE_T2]: 0, [STANCE_T3]: 0},
 

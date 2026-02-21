@@ -63,11 +63,11 @@ const WF_ADDITIONS: Record<string, number[]> = {
   headZ: [0, 0, 0, 0, 0],
 
   // 腕振り（脚と逆位相）
-  leftShoulderX: [0, 25, 0, -25, 0],
+  leftShoulderX: [0, -25, 0, 25, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [0, -25, 0, 25, 0],
+  rightShoulderX: [0, 25, 0, -25, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
@@ -167,11 +167,11 @@ const WB_ADDITIONS: Record<string, number[]> = {
   headY: [0, 5, 0, -5, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: [0, -18, 0, 18, 0],
+  leftShoulderX: [0, 18, 0, -18, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [0, 18, 0, -18, 0],
+  rightShoulderX: [0, -18, 0, 18, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 

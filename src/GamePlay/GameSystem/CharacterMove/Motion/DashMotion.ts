@@ -33,11 +33,11 @@ const DF_ADDITIONS = {
   headY: [0, 0, 0, 0, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: [0, -45, 0, 45, 0],
+  leftShoulderX: [0, 45, 0, -45, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [22.5, 45, 0, -45, 0],
+  rightShoulderX: [-22.5, -45, 0, 45, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
@@ -231,11 +231,11 @@ const DL_ADDITIONS = {
   headY: [0, 0, 0, 0, 0],
   headZ: [7, 10, 2, 10, 2],
 
-  leftShoulderX: [20, 10, 0, 10, 0],
+  leftShoulderX: [-20, -10, 0, -10, 0],
   leftShoulderY: [-20, -20, -10, -20, -10],
   leftShoulderZ: [-19, -9, -9, -9, -9],
 
-  rightShoulderX: [10, 20, 0, 20, 0],
+  rightShoulderX: [-10, -20, 0, -20, 0],
   rightShoulderY: [20, 20, 10, 20, 10],
   rightShoulderZ: [9, 9, 4, 9, 4],
 
