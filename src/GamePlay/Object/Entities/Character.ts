@@ -189,9 +189,14 @@ export class Character {
   // IKSystem
   private ikSystem: IKSystem | null = null;
 
-  constructor(scene: Scene, position: Vector3, config?: CharacterConfig) {
+  constructor(scene: Scene, position: Vector3, config?: CharacterConfig, team?: 'ally' | 'enemy') {
     this.scene = scene;
     this.position = position.clone();
+
+    // チームを先に設定（GLB モデル選択に必要）
+    if (team) {
+      this.team = team;
+    }
 
     // 設定を初期化（指定がなければデフォルト）
     this.config = config || DEFAULT_CHARACTER_CONFIG;
@@ -205,7 +210,7 @@ export class Character {
 
     // 身体モデルを構築（GLB ロード済みなら GLB、それ以外は ProceduralHumanoid）
     if (GLBModelLoader.getInstance().isReady()) {
-      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position);
+      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position, this.team);
     } else {
       this.characterModel = new MatchCharacterModel(scene, this.config, this.state, this.position);
     }
@@ -522,12 +527,14 @@ export class Character {
 
   /**
    * 向きを即時設定（ラジアン）
-   * 初期化・失敗時の復元など、即座に反映が必要な場合に使用
+   * 初期化・失敗時の復元など、即座に反映が必要な場合に使用。
+   * GLB rootMesh にも即座に反映する（syncTransform）。
    */
   public setRotationImmediate(angle: number): void {
     this.rotation = angle;
     this.targetRotation = angle;
     this.mesh.rotation.y = angle;
+    this.characterModel.syncTransform();
   }
 
   /**

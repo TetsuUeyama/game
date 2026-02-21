@@ -539,6 +539,7 @@ export class CheckModeManager {
 
     // キャラクターをフィールド中央に作成
     const character = this.createCheckModeCharacter('ally', { x: 0, z: 0 }, pd, 'PG');
+
     this.context.addAllyCharacter(character);
     this.context.updateCollisionHandler([character]);
 

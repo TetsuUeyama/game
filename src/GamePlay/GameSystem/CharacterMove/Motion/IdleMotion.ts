@@ -1,11 +1,14 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { expandBasePose } from "@/GamePlay/GameSystem/CharacterMove/Motion/BaseMotion";
 
 /**
  * アイドル（直立）モーション
  *
+ * BaseMotion（静的な基本姿勢）に呼吸デルタを加算して生成。
+ *
  * キーフレーム構成：
- * - T0: 直立姿勢
+ * - T0: 直立姿勢（= BASE_POSE）
  * - T1: わずかな呼吸の動き
  * - T2: 直立姿勢（元に戻る）
  * - T3: わずかな呼吸の動き（逆方向）
@@ -19,55 +22,24 @@ export const T2 = 1.0;  // 第2キーフレーム
 export const T3 = 1.5;  // 第3キーフレーム
 export const T4 = 2.0;  // 終了
 
-// 各部位の軸ごとの時系列データ（時間: 角度）
-export const IDLE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  // 上半身
-  upperBodyX: {[T0]: 0, [T1]: 2, [T2]: 0, [T3]: 0, [T4]: 0},
-  upperBodyY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  upperBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
+const IDLE_TIMES = [T0, T1, T2, T3, T4];
 
-  lowerBodyX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  lowerBodyY: {[T0]: 0, [T1]: 5, [T2]: 0, [T3]: -5, [T4]: 0},
-  lowerBodyZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-
-  headX: {[T0]: 0, [T1]: -1, [T2]: 0, [T3]: 0, [T4]: 0},
-  headY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  headZ: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-
-  // 腕
-  leftShoulderX: {[T0]: 0, [T1]: 5, [T2]: 0, [T3]: -5, [T4]: 0},
-  leftShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  leftShoulderZ: {[T0]: -6, [T1]: -6, [T2]: -6, [T3]: -6, [T4]: -6},
-
-  rightShoulderX: {[T0]: 0, [T1]: -5, [T2]: 0, [T3]: 5, [T4]: 0},
-  rightShoulderY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  rightShoulderZ: {[T0]: 6, [T1]: 6, [T2]: 6, [T3]: 6, [T4]: 6},
-
-  leftElbowX: {[T0]: -10, [T1]: -10, [T2]: -10, [T3]: -10, [T4]: -10},
-  leftElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  leftElbowZ: {[T0]: 6, [T1]: 6, [T2]: 6, [T3]: 6, [T4]: 6},
-
-  rightElbowX: {[T0]: -10, [T1]: -10, [T2]: -10, [T3]: -10, [T4]: -10},
-  rightElbowY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  rightElbowZ: {[T0]: -6, [T1]: -6, [T2]: -6, [T3]: -6, [T4]: -6},
-
-  // 脚
-  leftHipX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  leftHipY: {[T0]: -15, [T1]: -15, [T2]: -15, [T3]: -15, [T4]: -15},
-  leftHipZ: {[T0]: -8, [T1]: -8, [T2]: -8, [T3]: -8, [T4]: -8},
-
-  rightHipX: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  rightHipY: {[T0]: 15, [T1]: 15, [T2]: 15, [T3]: 15, [T4]: 15},
-  rightHipZ: {[T0]: 8, [T1]: 8, [T2]: 8, [T3]: 8, [T4]: 8},
-
-  leftKneeX: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
-  leftKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  leftKneeZ: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
-
-  rightKneeX: {[T0]: 5, [T1]: 5, [T2]: 5, [T3]: 5, [T4]: 5},
-  rightKneeY: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},
-  rightKneeZ: {[T0]: -5, [T1]: -5, [T2]: -5, [T3]: -5, [T4]: -5},
+// 呼吸による差分のみ定義（BASE_POSE からの変位）
+const IDLE_ADDITIONS: Record<string, number[]> = {
+  upperBodyX: [0, 2, 0, 0, 0],
+  lowerBodyY: [0, 5, 0, -5, 0],
+  headX: [0, -1, 0, 0, 0],
+  leftShoulderX: [0, 5, 0, -5, 0],
+  rightShoulderX: [0, -5, 0, 5, 0],
 };
+
+// BASE_POSE を全タイムポイントに展開し、呼吸デルタを加算
+export const IDLE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = createDerivedMotion(
+  expandBasePose(IDLE_TIMES),
+  IDLE_TIMES,
+  IDLE_TIMES,
+  IDLE_ADDITIONS
+);
 
 const POSITION_ANIMATIONS: Record<string, Record<number, number>> = {
   y: {[T0]: 0, [T1]: 0, [T2]: 0, [T3]: 0, [T4]: 0},

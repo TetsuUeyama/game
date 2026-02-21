@@ -41,8 +41,10 @@ export class MatchCharacterModel {
 
   // ── GLB モード用 ──
   private _glbClone: GLBCloneData | null = null;
-  /** GLB rootMesh の初期 rotationQuaternion（GLB ローダーが設定する回転、通常 RotY(π)） */
-  private _glbInitialRotation: Quaternion | null = null;
+  /** GLB __root__ の初期回転（GLTF ハンドネス変換: RotY(180°)） */
+  private _glbBaseRotation: Quaternion = Quaternion.Identity();
+  /** GLB __root__ の初期スケール（GLTF ハンドネス変換: (1,1,-1)） */
+  private _glbBaseScale: Vector3 = new Vector3(1, 1, 1);
 
   // ── 共通 ──
   private _adapter: SkeletonAdapter;
@@ -63,7 +65,6 @@ export class MatchCharacterModel {
     position: Vector3,
   ) {
     this._renderMode = 'procedural';
-    this._glbInitialRotation = null;
 
     // ProceduralHumanoid を生成
     this.humanoid = createProceduralHumanoid(scene);
@@ -127,17 +128,22 @@ export class MatchCharacterModel {
     config: { physical: { height: number }; vision: { visionAngle: number; visionRange: number } },
     state: CharacterState,
     position: Vector3,
+    team: 'ally' | 'enemy' = 'ally',
   ): MatchCharacterModel {
     const loader = GLBModelLoader.getInstance();
-    const clone = loader.createClone(scene);
+    const clone = loader.createClone(scene, team);
 
     const model = Object.create(MatchCharacterModel.prototype) as MatchCharacterModel;
     model._renderMode = 'glb';
     model.humanoid = null;
     model._glbClone = clone;
 
-    // GLB rootMesh の初期回転を保存（通常 RotY(π)、ローダーが設定）
-    model._glbInitialRotation = clone.rootMesh.rotationQuaternion?.clone() ?? null;
+    // GLB __root__ の初期 transform をキャプチャ（GLTF ハンドネス変換を保持するため）
+    // Babylon.js GLTF ローダーは __root__ に RotY(180°) + Scale(1,1,-1) を設定し、
+    // 右手系→左手系変換を行う。合成効果は X 軸ミラー（左右反転）。
+    // syncRootMeshTransform でこれを維持しないと左右が反転する。
+    model._glbBaseRotation = clone.rootMesh.rotationQuaternion?.clone() ?? Quaternion.Identity();
+    model._glbBaseScale = clone.rootMesh.scaling.clone();
 
     // SkeletonAdapter を GLB skeleton から生成
     model._adapter = new SkeletonAdapter(clone.skeleton, clone.rootMesh);
@@ -152,14 +158,21 @@ export class MatchCharacterModel {
     // Procedural モードでは prepare() を無効化するが、GLB モードでは残す。
     // prepare() はボーン回転を上書きしない（読み取って GPU 行列を計算するだけ）。
 
-    // GLB ボーンの TransformNode に rotationQuaternion を初期化
-    // （MotionPlayer / MotionController が property setter で書き込むために必要）
+    // GLB ボーンの TransformNode を rest pose で初期化。
+    // 目的:
+    //   1. rotationQuaternion を確保（MotionPlayer/MotionController が property setter で書き込むため）
+    //   2. 全ボーンを FK パイプラインと同じ Q_rest 状態にする。
+    //      ゲームモーションには足ボーン等のキーフレームがないため、FK が書き込まない
+    //      ボーンは初期値がそのまま残る。GLB クローンの初期値と Q_rest の微妙な差異が
+    //      IK 経由で足の向きに影響するのを防ぐ。
     for (const bone of model._adapter.skeleton.bones) {
       const node = bone.getTransformNode();
-      if (node && !node.rotationQuaternion) {
-        node.rotationQuaternion = Quaternion.Identity();
-      }
+      if (!node) continue;
+      const restQ = model._adapter.getRestQuaternion(bone);
+      node.rotationQuaternion = restQ ? restQ.clone() : Quaternion.Identity();
     }
+    // bone 内部の _localRotation も初期化（IK の bone API が正確に動作するため）
+    model._adapter.initializeAllBones();
 
     // ヒップボーンのレストポーズ位置をキャッシュ
     const hipBone = model._adapter.findBone("hips");
@@ -517,17 +530,20 @@ export class MatchCharacterModel {
     r.position.x = w.position.x;
     r.position.y = w.position.y - this._heightOffset * w.scaling.y;
     r.position.z = w.position.z;
-    r.scaling.copyFrom(w.scaling);
 
-    if (this._renderMode === 'glb' && this._glbInitialRotation) {
-      // GLB: キャラクターの向き × GLB 初期回転（通常 RotY(π)）
-      const yawQ = Quaternion.FromEulerAngles(0, w.rotation.y, 0);
-      r.rotationQuaternion = yawQ.multiply(this._glbInitialRotation);
-    } else if (this._renderMode === 'glb') {
-      // GLB で初期回転なし（フォールバック）
-      r.rotationQuaternion = Quaternion.FromEulerAngles(0, w.rotation.y, 0);
+    if (this._renderMode === 'glb') {
+      // GLB: キャラクターの Y 回転と GLTF ハンドネス変換を合成。
+      // _glbBaseRotation = RotY(180°)、_glbBaseScale = (1,1,-1) が典型値。
+      // 合成効果は X 軸ミラー（右手系→左手系変換）。
+      // これを消すと左右が反転するため、必ず保持する。
+      const charQ = Quaternion.RotationAxis(Vector3.Up(), w.rotation.y);
+      r.rotationQuaternion = charQ.multiply(this._glbBaseRotation);
+      r.scaling.x = w.scaling.x * this._glbBaseScale.x;
+      r.scaling.y = w.scaling.y * this._glbBaseScale.y;
+      r.scaling.z = w.scaling.z * this._glbBaseScale.z;
     } else {
       // Procedural: rotation.y を直接設定
+      r.scaling.copyFrom(w.scaling);
       r.rotation.y = w.rotation.y;
     }
 

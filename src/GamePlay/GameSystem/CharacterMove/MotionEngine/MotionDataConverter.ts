@@ -33,6 +33,7 @@ const ALL_JOINT_NAMES: (keyof KeyframeJoints)[] = [
   "upperBody", "lowerBody", "head",
   "leftShoulder", "rightShoulder", "leftElbow", "rightElbow",
   "leftHip", "rightHip", "leftKnee", "rightKnee",
+  "leftFoot", "rightFoot",
 ];
 
 /**

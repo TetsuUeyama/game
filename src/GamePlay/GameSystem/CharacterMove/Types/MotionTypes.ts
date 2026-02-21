@@ -40,6 +40,8 @@ export interface KeyframeJoints {
   rightHip?: JointRotation;
   leftKnee?: JointRotation;
   rightKnee?: JointRotation;
+  leftFoot?: JointRotation;
+  rightFoot?: JointRotation;
 }
 
 /**

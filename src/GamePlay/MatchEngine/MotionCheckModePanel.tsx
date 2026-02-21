@@ -4,8 +4,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
-import { ACTION_MOTIONS, ActionType } from '@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig';
 import { Character } from '@/GamePlay/Object/Entities/Character';
+import { MotionCheckPanel } from '@/GamePlay/GameSystem/CharacterModel/UI/MotionCheckPanel';
+import { GAME_MOTIONS } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/GameMotionCatalog';
+import { MotionDefinition } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionDefinitionTypes';
+import { MotionPlayer, SingleMotionPoseData } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionPlayer';
+import { createSingleMotionPoseData } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory';
+import { loadGLBAnimation } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/GLBAnimationLoader';
+import { GameMotionEntry } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/GameMotionCatalog';
 
 interface MotionCheckModePanelProps {
   gameScene: GameScene | null;
@@ -14,32 +20,22 @@ interface MotionCheckModePanelProps {
 
 type Phase = 'setup' | 'playing';
 
-const ACTION_KEYS = Object.keys(ACTION_MOTIONS) as ActionType[];
-
-const ACTION_LABELS: Record<string, string> = {
-  shoot_3pt: '3Pシュート',
-  shoot_midrange: 'ミドルシュート',
-  shoot_layup: 'レイアップ',
-  shoot_dunk: 'ダンク',
-  pass_chest: 'チェストパス',
-  pass_bounce: 'バウンドパス',
-  pass_overhead: 'オーバーヘッドパス',
-  shoot_feint: 'シュートフェイント',
-  block_shot: 'ブロック',
-  steal_attempt: 'スティール',
-  pass_intercept: 'パスインターセプト',
-  defense_stance: 'ディフェンススタンス',
-  dribble_breakthrough: 'ドリブル突破',
-  jump_ball: 'ジャンプボール',
-  rebound_jump: 'リバウンドジャンプ',
-  loose_ball_scramble: 'ルーズボールスクランブル',
-  loose_ball_pickup: 'ルーズボールピックアップ',
-  ball_catch: 'ボールキャッチ',
-};
+/**
+ * GAME_MOTIONS のエントリ名（"game:idle"）と
+ * motionDataToDefinition が返す MotionDefinition.name（"idle"）が異なる場合があるため、
+ * MotionCheckPanel の select value が一致するようエントリ名で統一する。
+ */
+const BASE_MOTIONS: GameMotionEntry[] = GAME_MOTIONS.map(entry => ({
+  name: entry.name,
+  motion: entry.motion.name === entry.name
+    ? entry.motion
+    : { ...entry.motion, name: entry.name },
+}));
 
 /**
  * モーションチェックモードパネル
- * アクションごとのモーションを選択し、タイムライン操作で時間経過を確認する
+ * MotionCheckPanel（テストシーン用）を試合環境で再利用し、
+ * 37+モーション・12関節リスト・キーフレーム編集・コードエクスポートを提供する。
  */
 export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePanelProps) {
   const [phase, setPhase] = useState<Phase>('setup');
@@ -49,17 +45,17 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
   const [players, setPlayers] = useState<Record<string, PlayerData>>({});
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
 
-  // アクション選択
-  const [selectedAction, setSelectedAction] = useState<ActionType>(ACTION_KEYS[0]);
-
-  // プレビュー状態
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  // MotionCheckPanel 用 state
+  const [availableMotions, setAvailableMotions] = useState<GameMotionEntry[]>(BASE_MOTIONS);
+  const [currentMotion, setCurrentMotion] = useState<MotionDefinition>(
+    BASE_MOTIONS[0].motion
+  );
+  const [motionPlaying, setMotionPlaying] = useState(false);
+  const [glbLoading, setGlbLoading] = useState(false);
 
   // refs
   const characterRef = useRef<Character | null>(null);
+  const motionPlayerRef = useRef<MotionPlayer | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
 
@@ -90,140 +86,206 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
     }
   }, []);
 
-  // モーションを適用して一時停止
-  const applyMotion = useCallback((actionKey: ActionType) => {
+  /** MotionDefinition → SingleMotionPoseData を生成 */
+  const buildPoseData = useCallback((motion: MotionDefinition): SingleMotionPoseData | null => {
     const character = characterRef.current;
-    if (!character) return;
+    if (!character) return null;
+    const adapter = character.getSkeletonAdapter();
+    return createSingleMotionPoseData(adapter.skeleton, motion, adapter.getRestPoseCache(), adapter.isXMirrored);
+  }, []);
 
-    const motionData = ACTION_MOTIONS[actionKey];
-    if (!motionData) return;
+  /** MotionPlayer を作成 or ホットスワップ */
+  const applyMotionToPlayer = useCallback((motion: MotionDefinition) => {
+    const poseData = buildPoseData(motion);
+    if (!poseData) return;
 
-    stopAnimLoop();
-    setIsPlaying(false);
-
-    // モーションを再生（ブレンドなし）
-    character.getMotionController().play(motionData, 1.0, 0);
-    // 即座に一時停止
-    character.getMotionController().pause();
-    // 時間を0にセット
-    character.getMotionController().setCurrentTime(0);
-
-    setCurrentTime(0);
-    setDuration(motionData.duration);
-  }, [stopAnimLoop]);
+    if (motionPlayerRef.current) {
+      motionPlayerRef.current.setData(poseData);
+      motionPlayerRef.current.reset();
+    } else {
+      motionPlayerRef.current = new MotionPlayer(poseData);
+      motionPlayerRef.current.setLoop(true);
+    }
+    // 最初のフレームを描画
+    motionPlayerRef.current.seekTo(0);
+  }, [buildPoseData]);
 
   // 開始ボタン
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     if (!gameScene || !selectedPlayerId) return;
 
     const character = gameScene.setupMotionCheckMode(selectedPlayerId, players);
     if (!character) return;
 
+    // GameScene を一時停止して Character.update() がボーンを上書きしないようにする
+    gameScene.pause();
+
     characterRef.current = character;
+
+    // デフォルトのモーション（カタログ先頭）をセット
+    const initialMotion = availableMotions[0].motion;
+    setCurrentMotion(initialMotion);
+
+    // MotionPlayer を作成し、即座に再生開始
+    const adapter = character.getSkeletonAdapter();
+    const poseData = createSingleMotionPoseData(adapter.skeleton, initialMotion, adapter.getRestPoseCache(), adapter.isXMirrored);
+    if (poseData) {
+      motionPlayerRef.current = new MotionPlayer(poseData);
+      motionPlayerRef.current.setLoop(true);
+    }
+
+    lastTimeRef.current = performance.now();
+    setMotionPlaying(true);
     setPhase('playing');
 
-    // モーションを適用
-    const motionData = ACTION_MOTIONS[selectedAction];
-    if (motionData) {
-      character.getMotionController().play(motionData, 1.0, 0);
-      character.getMotionController().pause();
-      character.getMotionController().setCurrentTime(0);
-      setCurrentTime(0);
-      setDuration(motionData.duration);
+    // public/dribble.glb を自動読み込み＆即再生
+    try {
+      const glbMotion = await loadGLBAnimation('/dribble.glb', gameScene.getScene(), 'glb:dribble');
+      if (glbMotion) {
+        const entry: GameMotionEntry = { name: 'glb:dribble', motion: glbMotion };
+        setAvailableMotions(prev => {
+          if (prev.some(m => m.name === 'glb:dribble')) return prev;
+          return [...prev, entry];
+        });
+        // 読み込み完了後、即座に選択＆再生
+        stopAnimLoop();
+        setCurrentMotion(glbMotion);
+        applyMotionToPlayer(glbMotion);
+        lastTimeRef.current = performance.now();
+        setMotionPlaying(true);
+      }
+    } catch {
+      // dribble.glb が存在しない場合は無視
     }
-  }, [gameScene, selectedPlayerId, players, selectedAction]);
+  }, [gameScene, selectedPlayerId, players, stopAnimLoop, applyMotionToPlayer]);
 
-  // 再生/一時停止
-  const handlePlayPause = useCallback(() => {
-    const character = characterRef.current;
-    if (!character) return;
+  // モーション選択（MotionCheckPanel からのコールバック）
+  const handleMotionSelect = useCallback((name: string) => {
+    const entry = availableMotions.find(m => m.name === name);
+    if (!entry) return;
 
-    if (isPlaying) {
+    stopAnimLoop();
+
+    setCurrentMotion(entry.motion);
+    applyMotionToPlayer(entry.motion);
+
+    // 選択後すぐに再生開始
+    lastTimeRef.current = performance.now();
+    setMotionPlaying(true);
+  }, [availableMotions, stopAnimLoop, applyMotionToPlayer]);
+
+  // モーション変更（キーフレーム編集）— MotionCheckPanel からのコールバック
+  // MotionCheckPanel は name を保持したまま joints を変更するのでそのまま使える
+  const handleMotionChange = useCallback((edited: MotionDefinition) => {
+    setCurrentMotion(edited);
+
+    // MotionPlayer にホットスワップ（再生位置を維持）
+    const poseData = buildPoseData(edited);
+    if (poseData && motionPlayerRef.current) {
+      const prevTime = motionPlayerRef.current.currentTime;
+      motionPlayerRef.current.setData(poseData);
+      motionPlayerRef.current.seekTo(prevTime);
+    }
+  }, [buildPoseData]);
+
+  // 再生/一時停止トグル
+  const handlePlayToggle = useCallback(() => {
+    if (motionPlaying) {
       // 一時停止
-      character.getMotionController().pause();
       stopAnimLoop();
-      setIsPlaying(false);
+      setMotionPlaying(false);
     } else {
       // 再生開始
-      character.getMotionController().resume();
       lastTimeRef.current = performance.now();
-      setIsPlaying(true);
+      setMotionPlaying(true);
     }
-  }, [isPlaying, stopAnimLoop]);
+  }, [motionPlaying, stopAnimLoop]);
 
-  // 再生中の更新ループ
+  // 再生中の RAF ループ
   useEffect(() => {
-    if (!isPlaying || !characterRef.current) return;
-
-    const character = characterRef.current;
+    if (!motionPlaying || !motionPlayerRef.current) return;
 
     const updateLoop = (now: number) => {
-      const dt = (now - lastTimeRef.current) / 1000 * playbackSpeed;
+      const dt = (now - lastTimeRef.current) / 1000;
       lastTimeRef.current = now;
 
-      character.update(dt);
-
-      const state = character.getMotionController().getState();
-      setCurrentTime(state.currentTime);
-
-      // モーション終了チェック
-      if (state.currentTime >= duration) {
-        character.getMotionController().pause();
-        setIsPlaying(false);
-        setCurrentTime(duration);
-        return;
-      }
-
+      motionPlayerRef.current?.update(dt);
       animFrameRef.current = requestAnimationFrame(updateLoop);
     };
 
+    lastTimeRef.current = performance.now();
     animFrameRef.current = requestAnimationFrame(updateLoop);
 
     return () => {
       stopAnimLoop();
     };
-  }, [isPlaying, playbackSpeed, duration, stopAnimLoop]);
+  }, [motionPlaying, stopAnimLoop]);
 
-  // タイムラインシーク
-  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    const character = characterRef.current;
-    if (!character) return;
-
-    character.getMotionController().setCurrentTime(time);
-    setCurrentTime(time);
+  // 現在の再生時刻を返す（MotionCheckPanel の getPlaybackTime）
+  const getPlaybackTime = useCallback(() => {
+    return motionPlayerRef.current?.currentTime ?? 0;
   }, []);
 
-  // アクション切り替え
-  const handleActionChange = useCallback((actionKey: ActionType) => {
-    setSelectedAction(actionKey);
-    if (phase === 'playing') {
-      applyMotion(actionKey);
+  // GLB ファイルからアニメーションを読み込み、モーションリストに追加
+  const handleLoadGLB = useCallback(async (file: File) => {
+    if (!gameScene) return;
+
+    setGlbLoading(true);
+    try {
+      const url = URL.createObjectURL(file);
+      const motionName = `glb:${file.name.replace(/\.glb$/i, '')}`;
+      const motion = await loadGLBAnimation(url, gameScene.getScene(), motionName);
+      URL.revokeObjectURL(url);
+
+      if (!motion) return;
+
+      const entry: GameMotionEntry = { name: motionName, motion };
+      setAvailableMotions(prev => {
+        // 同名エントリがあれば上書き
+        const filtered = prev.filter(m => m.name !== motionName);
+        return [...filtered, entry];
+      });
+
+      // 読み込んだモーションを即座に選択＆再生
+      stopAnimLoop();
+      setCurrentMotion(motion);
+      applyMotionToPlayer(motion);
+      lastTimeRef.current = performance.now();
+      setMotionPlaying(true);
+    } finally {
+      setGlbLoading(false);
     }
-  }, [phase, applyMotion]);
+  }, [gameScene, stopAnimLoop, applyMotionToPlayer]);
 
   // 設定に戻る
   const handleBackToSetup = useCallback(() => {
     stopAnimLoop();
-    setIsPlaying(false);
+    setMotionPlaying(false);
+    motionPlayerRef.current?.dispose();
+    motionPlayerRef.current = null;
     characterRef.current = null;
+    gameScene?.resume();
     setPhase('setup');
-    setCurrentTime(0);
-    setDuration(0);
-  }, [stopAnimLoop]);
+  }, [stopAnimLoop, gameScene]);
 
   // 閉じる
   const handleClose = useCallback(() => {
     stopAnimLoop();
+    motionPlayerRef.current?.dispose();
+    motionPlayerRef.current = null;
+    gameScene?.resume();
     onClose();
-  }, [stopAnimLoop, onClose]);
+  }, [stopAnimLoop, onClose, gameScene]);
 
   // クリーンアップ
   useEffect(() => {
     return () => {
       stopAnimLoop();
+      motionPlayerRef.current?.dispose();
+      motionPlayerRef.current = null;
+      gameScene?.resume();
     };
-  }, [stopAnimLoop]);
+  }, [stopAnimLoop, gameScene]);
 
   if (loading) {
     return (
@@ -286,24 +348,6 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
               </select>
             </div>
 
-            {/* アクション選択 */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                アクション
-              </label>
-              <select
-                value={selectedAction}
-                onChange={(e) => setSelectedAction(e.target.value as ActionType)}
-                className="w-full px-4 py-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-teal-500 focus:outline-none"
-              >
-                {ACTION_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {ACTION_LABELS[key] || key}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* 開始ボタン */}
             <button
               onClick={handleStart}
@@ -320,96 +364,60 @@ export function MotionCheckModePanel({ gameScene, onClose }: MotionCheckModePane
         </div>
       )}
 
-      {/* プレビュー画面 */}
+      {/* プレビュー画面: 右サイドパネル */}
       {phase === 'playing' && (
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-auto">
-          <div className="bg-gray-800/95 backdrop-blur-sm border-t border-gray-700 p-4">
-            {/* ヘッダー行 */}
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold text-white">
-                {ACTION_LABELS[selectedAction] || selectedAction}
-              </h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleBackToSetup}
-                  className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm font-semibold"
-                >
-                  設定に戻る
-                </button>
-                <button
-                  onClick={handleClose}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold"
-                >
-                  閉じる
-                </button>
-              </div>
-            </div>
-
-            {/* タイムライン */}
-            <div className="mb-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400 font-mono w-16 text-right">
-                  {currentTime.toFixed(2)}s
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={duration}
-                  step={0.01}
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                />
-                <span className="text-sm text-gray-400 font-mono w-16">
-                  {duration.toFixed(2)}s
-                </span>
-              </div>
-            </div>
-
-            {/* コントロール行 */}
-            <div className="flex items-center gap-3">
-              {/* 再生/一時停止 */}
-              <button
-                onClick={handlePlayPause}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                  isPlaying
-                    ? 'bg-yellow-500 hover:bg-yellow-600 text-black'
-                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+        <div className="absolute top-0 right-0 bottom-0 w-80 flex flex-col pointer-events-auto"
+             style={{ background: '#1e1e1e' }}>
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
+            <h3 className="text-sm font-bold text-white">Motion Check</h3>
+            <div className="flex gap-1">
+              <label
+                className={`px-2 py-1 rounded text-xs font-semibold cursor-pointer ${
+                  glbLoading
+                    ? 'bg-gray-700 text-gray-400'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
-                {isPlaying ? '一時停止' : '再生'}
-              </button>
-
-              {/* 速度変更 */}
-              <div className="flex gap-1">
-                {[0.25, 0.5, 1.0].map((speed) => (
-                  <button
-                    key={speed}
-                    onClick={() => setPlaybackSpeed(speed)}
-                    className={`px-2 py-1.5 rounded text-xs font-semibold transition-colors ${
-                      playbackSpeed === speed
-                        ? 'bg-teal-500 text-white'
-                        : 'bg-gray-600 hover:bg-gray-500 text-gray-300'
-                    }`}
-                  >
-                    {speed}x
-                  </button>
-                ))}
-              </div>
-
-              {/* アクション切り替え */}
-              <select
-                value={selectedAction}
-                onChange={(e) => handleActionChange(e.target.value as ActionType)}
-                className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-teal-500 focus:outline-none text-sm"
+                {glbLoading ? '...' : 'GLB'}
+                <input
+                  type="file"
+                  accept=".glb"
+                  className="hidden"
+                  disabled={glbLoading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleLoadGLB(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <button
+                onClick={handleBackToSetup}
+                className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs font-semibold"
               >
-                {ACTION_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {ACTION_LABELS[key] || key}
-                  </option>
-                ))}
-              </select>
+                戻る
+              </button>
+              <button
+                onClick={handleClose}
+                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold"
+              >
+                閉じる
+              </button>
             </div>
+          </div>
+
+          {/* MotionCheckPanel */}
+          <div className="flex-1 overflow-hidden p-1">
+            <MotionCheckPanel
+              motionData={currentMotion}
+              onMotionChange={handleMotionChange}
+              playing={motionPlaying}
+              onPlayToggle={handlePlayToggle}
+              availableMotions={availableMotions}
+              onMotionSelect={handleMotionSelect}
+              getPlaybackTime={getPlaybackTime}
+            />
           </div>
         </div>
       )}

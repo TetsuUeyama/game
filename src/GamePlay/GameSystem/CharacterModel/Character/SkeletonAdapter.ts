@@ -65,10 +65,21 @@ export class SkeletonAdapter {
   /** FK対象ボーン（AnimationFactory 互換） */
   private _foundBones: FoundBones | null;
 
+  /**
+   * X軸ミラー検出フラグ。
+   * GLTF ローダーは __root__ に RotY(180°) + Scale(1,1,-1) を設定する。
+   * 合成効果は X 軸ミラーで、Y/Z 回転方向が反転する。
+   * FK オフセットの Y/Z を反転して補正する。
+   */
+  private _mirrorYZ: boolean;
+
   constructor(skeleton: Skeleton, mesh: Mesh) {
     this.skeleton = skeleton;
     this.mesh = mesh;
     this.rigType = detectRigType(skeleton);
+
+    // X-mirror detection: GLTF loader sets Scale(1,1,-1) on rootMesh
+    this._mirrorYZ = mesh.scaling.z < 0;
 
     // 全ボーンのレスト回転をキャプチャ（bone.getRestPose() は不変）
     for (const bone of skeleton.bones) {
@@ -134,13 +145,24 @@ export class SkeletonAdapter {
   /**
    * ジョイント名でFK回転を適用。
    * ゲームモードの MotionController から呼ばれる。
+   *
+   * X軸ミラー下では Y/Z 回転方向が反転するが、
+   * 右側ボーンはローカル軸が左の鏡像のため反転不要。
    */
   applyFKRotationByJoint(jointName: string, offsetEulerRad: Vector3): void {
     const logicalName = JOINT_TO_LOGICAL[jointName];
     if (!logicalName) return;
     const bone = this.findBone(logicalName);
     if (!bone) return;
-    this.applyFKRotation(bone, offsetEulerRad);
+
+    if (this._mirrorYZ && !jointName.startsWith("right")) {
+      const corrected = new Vector3(
+        offsetEulerRad.x, -offsetEulerRad.y, -offsetEulerRad.z,
+      );
+      this.applyFKRotation(bone, corrected);
+    } else {
+      this.applyFKRotation(bone, offsetEulerRad);
+    }
   }
 
   /** ボーンのレスト回転を取得（FK対象はBIND_POSE_CORRECTIONS反映済み） */
@@ -156,6 +178,11 @@ export class SkeletonAdapter {
     const logicalName = JOINT_TO_LOGICAL[jointName];
     if (!logicalName) return null;
     return this.findBone(logicalName);
+  }
+
+  /** X軸ミラーが有効かどうか（GLTF ハンドネス変換による Y/Z 回転反転） */
+  get isXMirrored(): boolean {
+    return this._mirrorYZ;
   }
 
   /** FK レスト回転キャッシュ（createSingleMotionPoseData 互換） */

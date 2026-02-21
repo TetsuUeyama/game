@@ -223,7 +223,9 @@ export function motionToCode(motion: MotionDefinition): string {
 
 /** JOINT_TO_BONE のジョイント名一覧（UIで使用） */
 export const JOINT_NAMES = [
+  // Viewer 形式 (hips/spine) と Game 形式 (lowerBody/upperBody/head) の両方を含む
   "hips", "spine",
+  "upperBody", "lowerBody", "head",
   "leftShoulder", "rightShoulder",
   "leftElbow", "rightElbow",
   "leftHip", "rightHip",
