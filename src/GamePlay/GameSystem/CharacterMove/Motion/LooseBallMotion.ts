@@ -38,7 +38,7 @@ const LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS: Record<string, Record<number, number
   headZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
   // 両腕：前方低位に伸ばす（ボールを掴みに行く）
-  rightShoulderX: {[LB_T0]: -45, [LB_T1]: -80, [LB_T2]: -100, [LB_T3]: -90, [LB_T4]: -45},
+  rightShoulderX: {[LB_T0]: 45, [LB_T1]: 80, [LB_T2]: 100, [LB_T3]: 90, [LB_T4]: 45},
   rightShoulderY: {[LB_T0]: 0, [LB_T1]: -10, [LB_T2]: -15, [LB_T3]: -10, [LB_T4]: 0},
   rightShoulderZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
@@ -46,7 +46,7 @@ const LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS: Record<string, Record<number, number
   rightElbowY: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
   rightElbowZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
-  leftShoulderX: {[LB_T0]: -45, [LB_T1]: -80, [LB_T2]: -100, [LB_T3]: -90, [LB_T4]: -45},
+  leftShoulderX: {[LB_T0]: 45, [LB_T1]: 80, [LB_T2]: 100, [LB_T3]: 90, [LB_T4]: 45},
   leftShoulderY: {[LB_T0]: 0, [LB_T1]: 10, [LB_T2]: 15, [LB_T3]: 10, [LB_T4]: 0},
   leftShoulderZ: {[LB_T0]: 0, [LB_T1]: 0, [LB_T2]: 0, [LB_T3]: 0, [LB_T4]: 0},
 
@@ -102,7 +102,7 @@ const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>>
   headZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
   // 両腕：前方下方に伸ばす（ボールを拾う動作）
-  rightShoulderX: {[PU_T0]: -45, [PU_T1]: -60, [PU_T2]: -75, [PU_T3]: -60, [PU_T4]: -45},
+  rightShoulderX: {[PU_T0]: 45, [PU_T1]: 60, [PU_T2]: 75, [PU_T3]: 60, [PU_T4]: 45},
   rightShoulderY: {[PU_T0]: 0, [PU_T1]: -5, [PU_T2]: -10, [PU_T3]: -5, [PU_T4]: 0},
   rightShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
@@ -110,7 +110,7 @@ const LOOSE_BALL_PICKUP_JOINT_ANIMATIONS: Record<string, Record<number, number>>
   rightElbowY: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
   rightElbowZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 
-  leftShoulderX: {[PU_T0]: -45, [PU_T1]: -60, [PU_T2]: -75, [PU_T3]: -60, [PU_T4]: -45},
+  leftShoulderX: {[PU_T0]: 45, [PU_T1]: 60, [PU_T2]: 75, [PU_T3]: 60, [PU_T4]: 45},
   leftShoulderY: {[PU_T0]: 0, [PU_T1]: 5, [PU_T2]: 10, [PU_T3]: 5, [PU_T4]: 0},
   leftShoulderZ: {[PU_T0]: 0, [PU_T1]: 0, [PU_T2]: 0, [PU_T3]: 0, [PU_T4]: 0},
 

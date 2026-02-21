@@ -10,13 +10,14 @@ import { BoardPlayerPosition } from '@/GamePlay/MatchEngine/PositionBoard/Positi
 import { ShootCheckModePanel } from './ShootCheckModePanel';
 import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
+import { MotionCheckModePanel } from './MotionCheckModePanel';
 
 import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
 
-type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check';
+type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'motion_check';
 
 /**
  * Character Move 1対1ゲームコンポーネント
@@ -555,6 +556,14 @@ export default function CharacterMove1on1Game() {
       {/* パスチェックモードパネル */}
       {currentMode === 'pass_check' && (
         <PassCheckModePanel
+          gameScene={gameSceneRef.current}
+          onClose={handleCloseCheckMode}
+        />
+      )}
+
+      {/* モーションチェックモードパネル */}
+      {currentMode === 'motion_check' && (
+        <MotionCheckModePanel
           gameScene={gameSceneRef.current}
           onClose={handleCloseCheckMode}
         />

@@ -17,8 +17,8 @@ export const BASE_POSE: Record<string, number> = {
   headX: 0, headY: 0, headZ: 0,
 
   // 腕
-  leftShoulderX: 75, leftShoulderY: -75, leftShoulderZ: 75,
-  rightShoulderX: 75, rightShoulderY: -75, rightShoulderZ: 75,
+  leftShoulderX: -75, leftShoulderY: -75, leftShoulderZ: 75,
+  rightShoulderX: -75, rightShoulderY: -75, rightShoulderZ: 75,
   leftElbowX: -10, leftElbowY: 0, leftElbowZ: 0,
   rightElbowX: -10, rightElbowY: 0, rightElbowZ: 0,
 
