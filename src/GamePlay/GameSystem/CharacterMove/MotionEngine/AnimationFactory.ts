@@ -685,10 +685,13 @@ function motionToEulerKeys(
     const stdY = standing?.y ?? 0;
     const stdZ = standing?.z ?? 0;
 
-    // X-mirror 補正: Y は左/センターのみ反転、Z は右のみ反転
+    // X-mirror 補正:
+    //   Y: 左/センター反転、右そのまま（左右ボーンの Y 軸がミラー）
+    //   Z: 腕ジョイントは左右とも反転（Z 軸が非ミラー）、それ以外は Y と同じ
     const isRight = jointName.startsWith("right");
     const yS = (mirrorYZ && !isRight) ? -1 : 1;
-    const zS = (mirrorYZ && isRight) ? -1 : 1;
+    const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
+    const zS = isArm ? 1 : yS;
 
     // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
@@ -720,10 +723,10 @@ function motionToEulerKeys(
       const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
       const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
-      // Rigify 専用セクション: rigifyAdjustments のみ適用（STANDING_POSE_OFFSETS は不要）
       const isRight = jointName.startsWith("right");
       const yS = (mirrorYZ && !isRight) ? -1 : 1;
-      const zS = (mirrorYZ && isRight) ? -1 : 1;
+      const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
+      const zS = isArm ? 1 : yS;
       const value = new Vector3(
         adjX * DEG_TO_RAD,
         adjY * DEG_TO_RAD * yS,
@@ -747,7 +750,8 @@ function motionToEulerKeys(
     const standing = isRigify ? undefined : BONE_STANDING_OFFSETS[key as keyof FoundBones];
     const isRight = key.startsWith("r");
     const yS = (mirrorYZ && !isRight) ? -1 : 1;
-    const zS = (mirrorYZ && isRight) ? -1 : 1;
+    const isArm = key.includes("Arm");
+    const zS = isArm ? 1 : yS;
     const offset = standing
       ? new Vector3(standing.x * DEG_TO_RAD, standing.y * DEG_TO_RAD * yS, standing.z * DEG_TO_RAD * zS)
       : Vector3.Zero();

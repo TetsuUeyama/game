@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import type { VisualSettings } from '@/GamePlay/GameSystem/StatusCheckSystem';
 
-type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'motion_check';
+type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check';
 type CameraModeType = 'on_ball' | 'manual';
 
 interface HamburgerMenuProps {
@@ -123,7 +123,6 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
       case 'shoot_check': return 'シュートチェック';
       case 'dribble_check': return 'ドリブルチェック';
       case 'pass_check': return 'パスチェック';
-      case 'motion_check': return 'モーションチェック';
     }
   };
 
@@ -133,7 +132,6 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
       case 'shoot_check': return 'bg-purple-600 hover:bg-purple-700';
       case 'dribble_check': return 'bg-orange-600 hover:bg-orange-700';
       case 'pass_check': return 'bg-green-600 hover:bg-green-700';
-      case 'motion_check': return 'bg-teal-600 hover:bg-teal-700';
     }
   };
 
@@ -161,7 +159,7 @@ export function HamburgerMenu({ gameScene, currentMode, onModeChange, isPosition
           <div className="p-4 border-b border-gray-700">
             <h3 className="text-sm font-bold text-gray-400 mb-3">モード選択</h3>
             <div className="space-y-2">
-              {(['game', 'shoot_check', 'dribble_check', 'pass_check', 'motion_check'] as GameModeType[]).map((mode) => (
+              {(['game', 'shoot_check', 'dribble_check', 'pass_check'] as GameModeType[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => handleModeSelect(mode)}

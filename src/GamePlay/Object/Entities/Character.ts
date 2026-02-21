@@ -9,6 +9,7 @@ import {
   LinesMesh,
   Bone,
   TransformNode,
+  Space,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
@@ -50,7 +51,7 @@ import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfi
 import { MatchCharacterModel } from "@/GamePlay/GameSystem/CharacterModel/Character/MatchCharacterModel";
 import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
 import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
-import { IKSystem } from "@/GamePlay/GameSystem/CharacterModel/Character/IKSystem";
+import { IKSystem } from "@/GamePlay/GameSystem/CharacterMove/Controllers/IKSystem";
 import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 
 // ポジション → 背番号マッピング
@@ -68,6 +69,10 @@ export class Character {
 
   // 身体モデル
   private characterModel: MatchCharacterModel;
+  /** 骨格アダプター（骨格データの唯一の所有者） */
+  private _adapter!: SkeletonAdapter;
+  /** ヒップボーンのレストポーズ位置（IKリセット用） */
+  private _hipRestPos!: Vector3;
   public visionAngle: number; // 視野角（度）
   public visionRange: number; // 視野範囲（m）
 
@@ -210,11 +215,15 @@ export class Character {
 
     // 身体モデルを構築（GLB ロード済みなら GLB、それ以外は ProceduralHumanoid）
     if (GLBModelLoader.getInstance().isReady()) {
-      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position, this.team);
+      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position);
     } else {
       this.characterModel = new MatchCharacterModel(scene, this.config, this.state, this.position);
     }
     this.mesh = this.characterModel.getRootMesh();
+
+    // 骨格データを Character に直接保持（骨格の唯一の所有者）
+    this._adapter = this.characterModel.getAdapter();
+    this._hipRestPos = this.characterModel.getHipRestPos().clone();
 
     // 方向サークルを初期化（均一円形、状況に応じてCircleSizeControllerが比率を変更）
     this.directionCircle = new DirectionCircle(
@@ -297,7 +306,7 @@ export class Character {
    * 関節名に対応するスケルトンボーンを取得
    */
   public getBoneForJoint(jointName: string): Bone | null {
-    return this.characterModel.getBoneForJoint(jointName);
+    return this._adapter.findBoneByJointName(jointName);
   }
 
   /**
@@ -305,14 +314,14 @@ export class Character {
    * レスト回転と合成してボーンに設定する。
    */
   public setBoneAnimationRotation(jointName: string, animEuler: Vector3): void {
-    this.characterModel.setBoneAnimationRotation(jointName, animEuler);
+    this._adapter.applyFKRotationByJoint(jointName, animEuler);
   }
 
   /**
    * SkeletonAdapter を取得する（MotionController 統合用）。
    */
   public getSkeletonAdapter(): SkeletonAdapter {
-    return this.characterModel.getAdapter();
+    return this._adapter;
   }
 
   /**
@@ -323,7 +332,12 @@ export class Character {
   public initializeIK(): void {
     if (this.ikSystem) return;
     this.ikSystem = new IKSystem(this.scene, DEFAULT_MOTION_CONFIG);
-    this.ikSystem.initialize(this.characterModel.getSkeleton(), this.characterModel.getSkeletonMesh());
+    this.ikSystem.initialize(
+      this._adapter.skeleton,
+      this.characterModel.getSkeletonMesh(),
+      this._hipRestPos,
+      this._adapter,
+    );
   }
 
   /**
@@ -460,16 +474,45 @@ export class Character {
     this.mesh.position.y = this.position.y + this.motionOffsetY;
   }
 
+  /** ヒップ位置をレストポーズにリセットする（IK が前フレームで変更した分を戻す） */
+  private _resetHipPosition(): void {
+    const hipBone = this._adapter.findBone("hips");
+    if (!hipBone) return;
+    const node = hipBone.getTransformNode();
+    if (node) {
+      node.position.copyFrom(this._hipRestPos);
+    } else {
+      hipBone.setPosition(this._hipRestPos, Space.LOCAL);
+    }
+  }
+
+  /** ヒップボーンのワールドY座標を取得する */
+  private _getHipWorldY(): number {
+    this._adapter.forceWorldMatrixUpdate();
+    const hipBone = this._adapter.findBone("hips");
+    return hipBone ? this._adapter.getBoneWorldPosition(hipBone).y : 0;
+  }
+
+  /** 足ボーンのワールドY座標を取得する */
+  private _getFootBoneYPositions(): { leftY: number; rightY: number } {
+    this._adapter.forceWorldMatrixUpdate();
+    const lFoot = this._adapter.findBone("leftFoot");
+    const rFoot = this._adapter.findBone("rightFoot");
+    const leftY = lFoot ? this._adapter.getBoneWorldPosition(lFoot).y : 0;
+    const rightY = rFoot ? this._adapter.getBoneWorldPosition(rFoot).y : 0;
+    return { leftY, rightY };
+  }
+
   /**
    * レスト姿勢（関節回転0）での足のY座標をキャプチャする。
    * コンストラクタおよびスケール変更時（setHeight）から呼ばれる。
    */
   private captureFootRestY(): void {
     // rootMesh を最新の wrapperMesh トランスフォームに同期してからキャプチャ
-    this.characterModel.prepareFrame();
+    this._resetHipPosition();
     this.characterModel.syncTransform();
     const meshY = this.mesh.getAbsolutePosition().y;
-    const { leftY, rightY } = this.characterModel.getFootBonePositions();
+    const { leftY, rightY } = this._getFootBoneYPositions();
     this.footRestRelativeY = Math.min(leftY - meshY, rightY - meshY);
     this._prevAutoGround = 0;
   }
@@ -485,12 +528,12 @@ export class Character {
     // FK は回転のみ設定するため、IK のヒップ位置変更が次フレームの足位置計算に残り、
     // autoGround → wrapperMesh.y → rootMesh.y の発散（腕ズレ）を引き起こす。
     // リセット後は IK が再度正しいヒップオフセットを計算するため問題ない。
-    this.characterModel.prepareFrame();
+    this._resetHipPosition();
     // wrapperMesh → rootMesh 同期 + ボーン位置を更新（足位置の正確な計算のため）
     this.characterModel.syncTransform();
     this.characterModel.updateVisuals();
     const meshY = this.mesh.getAbsolutePosition().y;
-    const { leftY, rightY } = this.characterModel.getFootBonePositions();
+    const { leftY, rightY } = this._getFootBoneYPositions();
     const lowestFootRelY = Math.min(leftY - meshY, rightY - meshY);
     const raw = this.footRestRelativeY - lowestFootRelY;
 
@@ -917,7 +960,9 @@ export class Character {
    * 右手のひらの先端位置を取得（ワールド座標）
    */
   public getRightHandPosition(): Vector3 {
-    const handWorldPosition = this.characterModel.getHandBonePosition('right');
+    this._adapter.forceWorldMatrixUpdate();
+    const bone = this._adapter.findBone("rightHand");
+    const handWorldPosition = bone ? this._adapter.getBoneWorldPosition(bone) : Vector3.Zero();
     const handRadius = 0.07;
     return handWorldPosition.add(new Vector3(0, -handRadius, 0));
   }
@@ -926,7 +971,9 @@ export class Character {
    * 左手のひらの先端位置を取得（ワールド座標）
    */
   public getLeftHandPosition(): Vector3 {
-    const handWorldPosition = this.characterModel.getHandBonePosition('left');
+    this._adapter.forceWorldMatrixUpdate();
+    const bone = this._adapter.findBone("leftHand");
+    const handWorldPosition = bone ? this._adapter.getBoneWorldPosition(bone) : Vector3.Zero();
     const handRadius = 0.07;
     return handWorldPosition.add(new Vector3(0, -handRadius, 0));
   }
@@ -1233,7 +1280,7 @@ export class Character {
 
     // 長さが0の場合は中心位置を返す
     if (vectorLength < 0.001) {
-      const ballY = this.characterModel.getWaistBonePosition().y;
+      const ballY = this._getHipWorldY();
       return new Vector3(this.position.x, ballY, this.position.z);
     }
 
@@ -1247,7 +1294,7 @@ export class Character {
     const ballZ = faceCenter.z + unitZ * insetDistance;
 
     // ボールは腰関節の高さに配置（上半身と下半身の境界）
-    const ballY = this.characterModel.getWaistBonePosition().y;
+    const ballY = this._getHipWorldY();
 
     return new Vector3(ballX, ballY, ballZ);
   }

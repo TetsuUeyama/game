@@ -1,7 +1,6 @@
 import {
   Scene,
   Skeleton,
-  Bone,
   Vector3,
   Quaternion,
   Mesh,
@@ -9,13 +8,12 @@ import {
   StandardMaterial,
   PBRMaterial,
   Color3,
-  Space,
   DynamicTexture,
 } from "@babylonjs/core";
 import { createProceduralHumanoid, ProceduralHumanoidResult } from "@/GamePlay/GameSystem/CharacterModel/Character/ProceduralHumanoid";
 import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
-import { GLBModelLoader, GLBCloneData } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
+import { GLBModelLoader, GLBCloneData, HAIR_SCALE_RATIO } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
 
 type RenderMode = 'procedural' | 'glb';
 
@@ -128,10 +126,9 @@ export class MatchCharacterModel {
     config: { physical: { height: number }; vision: { visionAngle: number; visionRange: number } },
     state: CharacterState,
     position: Vector3,
-    team: 'ally' | 'enemy' = 'ally',
   ): MatchCharacterModel {
     const loader = GLBModelLoader.getInstance();
-    const clone = loader.createClone(scene, team);
+    const clone = loader.createClone(scene);
 
     const model = Object.create(MatchCharacterModel.prototype) as MatchCharacterModel;
     model._renderMode = 'glb';
@@ -230,31 +227,9 @@ export class MatchCharacterModel {
     return this._adapter;
   }
 
-  // ─── FK 書き込み ─────────────────────────────────────────
-
-  setBoneAnimationRotation(jointName: string, animEuler: Vector3): void {
-    this._adapter.applyFKRotationByJoint(jointName, animEuler);
-  }
-
-  // ─── フレーム準備 ─────────────────────────────────────
-
-  /**
-   * 毎フレーム開始時に呼ぶ。IK が前フレームで変更したヒップ位置をリセットする。
-   * GLB: TransformNode.position 経由でリセット（Bone API は TransformNode に効かない）
-   * Procedural: Bone API 経由でリセット
-   */
-  prepareFrame(): void {
-    const hipBone = this._adapter.findBone("hips");
-    if (!hipBone) return;
-
-    if (this._renderMode === 'glb') {
-      const node = hipBone.getTransformNode();
-      if (node) {
-        node.position.copyFrom(this._hipRestPos);
-      }
-    } else {
-      hipBone.setPosition(this._hipRestPos, Space.LOCAL);
-    }
+  /** ヒップボーンのレストポーズ位置を返す（IKSystem 共有用） */
+  getHipRestPos(): Vector3 {
+    return this._hipRestPos;
   }
 
   // ─── ビジュアル更新 ─────────────────────────────────────
@@ -272,80 +247,6 @@ export class MatchCharacterModel {
       this.humanoid.updateVisuals();
     }
     // GLB: SkinnedMesh が自動変形 → no-op
-  }
-
-  // ─── ボーン位置クエリ ────────────────────────────────────
-
-  private _getSkeletonRootMesh(): Mesh {
-    if (this._renderMode === 'glb' && this._glbClone) {
-      return this._glbClone.rootMesh;
-    }
-    return this.humanoid!.rootMesh;
-  }
-
-  /**
-   * GLB: 全ボーンの TransformNode ワールド行列を強制再計算する。
-   * FK は TransformNode.rotationQuaternion に書き込むが、bone._localMatrix は
-   * skeleton.prepare()（レンダーループ内）まで更新されない。
-   * ボーン位置クエリ前にこのメソッドを呼び、TransformNode 経由で正確な位置を取得する。
-   */
-  private _forceGLBWorldMatrixUpdate(): void {
-    this._glbClone!.rootMesh.computeWorldMatrix(true);
-    for (const bone of this._adapter.skeleton.bones) {
-      const node = bone.getTransformNode();
-      if (node) node.computeWorldMatrix(true);
-    }
-  }
-
-  /**
-   * ボーンのワールド座標を取得する。
-   * GLB: TransformNode のワールド座標を直接読む（FK 書き込みが即時反映される）。
-   * Procedural: bone API (computeAbsoluteMatrices + getAbsolutePosition) を使用。
-   */
-  private _getBoneWorldPosition(bone: Bone): Vector3 {
-    if (this._renderMode === 'glb') {
-      const node = bone.getTransformNode();
-      if (node) return node.absolutePosition.clone();
-      return Vector3.Zero();
-    }
-    return bone.getAbsolutePosition(this._getSkeletonRootMesh());
-  }
-
-  getFootBonePositions(): { leftY: number; rightY: number } {
-    if (this._renderMode === 'glb') {
-      this._forceGLBWorldMatrixUpdate();
-    } else {
-      this._adapter.skeleton.computeAbsoluteMatrices(true);
-    }
-    const lFoot = this._adapter.findBone("leftFoot");
-    const rFoot = this._adapter.findBone("rightFoot");
-    const leftY = lFoot ? this._getBoneWorldPosition(lFoot).y : 0;
-    const rightY = rFoot ? this._getBoneWorldPosition(rFoot).y : 0;
-    return { leftY, rightY };
-  }
-
-  getHandBonePosition(side: 'left' | 'right'): Vector3 {
-    const bone = this._adapter.findBone(side === 'left' ? "leftHand" : "rightHand");
-    if (!bone) return Vector3.Zero();
-    if (this._renderMode === 'glb') {
-      this._forceGLBWorldMatrixUpdate();
-      return this._getBoneWorldPosition(bone);
-    }
-    return bone.getAbsolutePosition(this._getSkeletonRootMesh());
-  }
-
-  getWaistBonePosition(): Vector3 {
-    const bone = this._adapter.findBone("hips");
-    if (!bone) return Vector3.Zero();
-    if (this._renderMode === 'glb') {
-      this._forceGLBWorldMatrixUpdate();
-      return this._getBoneWorldPosition(bone);
-    }
-    return bone.getAbsolutePosition(this._getSkeletonRootMesh());
-  }
-
-  getBoneForJoint(jointName: string): Bone | null {
-    return this._adapter.findBoneByJointName(jointName);
   }
 
   // ─── ビジュアル操作 ─────────────────────────────────────
@@ -500,18 +401,10 @@ export class MatchCharacterModel {
 
   /** 頭ボーンのローカルY高さを計算 */
   private computeHeadLocalY(): number {
-    if (this._renderMode === 'glb') {
-      this._forceGLBWorldMatrixUpdate();
-      const headBone = this._adapter.findBone("head");
-      const headWorldY = headBone
-        ? this._getBoneWorldPosition(headBone).y
-        : 1.56;
-      return headWorldY - this._wrapperMesh.position.y;
-    }
-    this._adapter.skeleton.computeAbsoluteMatrices(true);
+    this._adapter.forceWorldMatrixUpdate();
     const headBone = this._adapter.findBone("head");
     const headWorldY = headBone
-      ? headBone.getAbsolutePosition(this._getSkeletonRootMesh()).y
+      ? this._adapter.getBoneWorldPosition(headBone).y
       : 1.56;
     return headWorldY - this._wrapperMesh.position.y;
   }
@@ -526,7 +419,7 @@ export class MatchCharacterModel {
    */
   private syncRootMeshTransform(): void {
     const w = this._wrapperMesh;
-    const r = this._getSkeletonRootMesh();
+    const r = this.getSkeletonMesh();
     r.position.x = w.position.x;
     r.position.y = w.position.y - this._heightOffset * w.scaling.y;
     r.position.z = w.position.z;
@@ -560,7 +453,6 @@ export class MatchCharacterModel {
       }
 
       h.scaling.copyFrom(r.scaling);
-      const HAIR_SCALE_RATIO = 96.37 / 209.15;
       h.scaling.scaleInPlace(HAIR_SCALE_RATIO);
       h.computeWorldMatrix(true);
     }
