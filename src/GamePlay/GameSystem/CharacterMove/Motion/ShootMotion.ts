@@ -50,7 +50,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
   // 右腕（シュートハンド）：ボールを持ち上げてリリース
-  rightShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -120, [SHOOT_3PT_T2]: -160, [SHOOT_3PT_T3]: -170, [SHOOT_3PT_T4]: -30},
+  rightShoulderX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 120, [SHOOT_3PT_T2]: 160, [SHOOT_3PT_T3]: 170, [SHOOT_3PT_T4]: 30},
   rightShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
@@ -59,7 +59,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
   // 左腕（ガイドハンド）：補助
-  leftShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -120, [SHOOT_3PT_T3]: -60, [SHOOT_3PT_T4]: -30},
+  leftShoulderX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 120, [SHOOT_3PT_T3]: 60, [SHOOT_3PT_T4]: 30},
   leftShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 20, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 15, [SHOOT_3PT_T4]: 0},
   leftShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
@@ -145,7 +145,7 @@ const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   headY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   headZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
-  rightShoulderX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -100, [SHOOT_MID_T2]: -150, [SHOOT_MID_T3]: -160, [SHOOT_MID_T4]: -30},
+  rightShoulderX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 100, [SHOOT_MID_T2]: 150, [SHOOT_MID_T3]: 160, [SHOOT_MID_T4]: 30},
   rightShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   rightShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
@@ -153,7 +153,7 @@ const SHOOT_MIDRANGE_JOINT_ANIMATIONS: Record<string, Record<number, number>> = 
   rightElbowY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
   rightElbowZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
-  leftShoulderX: {[SHOOT_MID_T0]: -30, [SHOOT_MID_T1]: -80, [SHOOT_MID_T2]: -110, [SHOOT_MID_T3]: -50, [SHOOT_MID_T4]: -30},
+  leftShoulderX: {[SHOOT_MID_T0]: 30, [SHOOT_MID_T1]: 80, [SHOOT_MID_T2]: 110, [SHOOT_MID_T3]: 50, [SHOOT_MID_T4]: 30},
   leftShoulderY: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 15, [SHOOT_MID_T2]: 25, [SHOOT_MID_T3]: 10, [SHOOT_MID_T4]: 0},
   leftShoulderZ: {[SHOOT_MID_T0]: 0, [SHOOT_MID_T1]: 0, [SHOOT_MID_T2]: 0, [SHOOT_MID_T3]: 0, [SHOOT_MID_T4]: 0},
 
@@ -239,7 +239,7 @@ const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
   // 右腕：ボールを持ち上げて上方へリリース
-  rightShoulderX: {[SHOOT_LAYUP_T0]: -45, [SHOOT_LAYUP_T1]: -130, [SHOOT_LAYUP_T2]: -170, [SHOOT_LAYUP_T3]: -150, [SHOOT_LAYUP_T4]: -45},
+  rightShoulderX: {[SHOOT_LAYUP_T0]: 45, [SHOOT_LAYUP_T1]: 130, [SHOOT_LAYUP_T2]: 170, [SHOOT_LAYUP_T3]: 150, [SHOOT_LAYUP_T4]: 45},
   rightShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
   rightShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
@@ -247,7 +247,7 @@ const SHOOT_LAYUP_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
   rightElbowZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
-  leftShoulderX: {[SHOOT_LAYUP_T0]: -30, [SHOOT_LAYUP_T1]: -90, [SHOOT_LAYUP_T2]: -100, [SHOOT_LAYUP_T3]: -60, [SHOOT_LAYUP_T4]: -30},
+  leftShoulderX: {[SHOOT_LAYUP_T0]: 30, [SHOOT_LAYUP_T1]: 90, [SHOOT_LAYUP_T2]: 100, [SHOOT_LAYUP_T3]: 60, [SHOOT_LAYUP_T4]: 30},
   leftShoulderY: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 10, [SHOOT_LAYUP_T2]: 20, [SHOOT_LAYUP_T3]: 10, [SHOOT_LAYUP_T4]: 0},
   leftShoulderZ: {[SHOOT_LAYUP_T0]: 0, [SHOOT_LAYUP_T1]: 0, [SHOOT_LAYUP_T2]: 0, [SHOOT_LAYUP_T3]: 0, [SHOOT_LAYUP_T4]: 0},
 
@@ -350,7 +350,7 @@ const SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
 
   // 右腕：構え→大きく振り上げ→力強く叩きつけ
-  rightShoulderX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -70, [SHOOT_DUNK_T2]: -180, [SHOOT_DUNK_T3]: -70, [SHOOT_DUNK_T4]: -50, [SHOOT_DUNK_T5]: -45},
+  rightShoulderX: {[SHOOT_DUNK_T0]: 50, [SHOOT_DUNK_T1]: 70, [SHOOT_DUNK_T2]: 180, [SHOOT_DUNK_T3]: 70, [SHOOT_DUNK_T4]: 50, [SHOOT_DUNK_T5]: 45},
   rightShoulderY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
   rightShoulderZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: -15, [SHOOT_DUNK_T3]: 10, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
 
@@ -359,7 +359,7 @@ const SHOOT_DUNK_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
 
   // 左腕：補助→叩きつけ後は下ろす
-  leftShoulderX: {[SHOOT_DUNK_T0]: -50, [SHOOT_DUNK_T1]: -65, [SHOOT_DUNK_T2]: -170, [SHOOT_DUNK_T3]: -60, [SHOOT_DUNK_T4]: -50, [SHOOT_DUNK_T5]: -45},
+  leftShoulderX: {[SHOOT_DUNK_T0]: 50, [SHOOT_DUNK_T1]: 65, [SHOOT_DUNK_T2]: 170, [SHOOT_DUNK_T3]: 60, [SHOOT_DUNK_T4]: 50, [SHOOT_DUNK_T5]: 45},
   leftShoulderY: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 0, [SHOOT_DUNK_T3]: 0, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
   leftShoulderZ: {[SHOOT_DUNK_T0]: 0, [SHOOT_DUNK_T1]: 0, [SHOOT_DUNK_T2]: 15, [SHOOT_DUNK_T3]: -10, [SHOOT_DUNK_T4]: 0, [SHOOT_DUNK_T5]: 0},
 
@@ -459,7 +459,7 @@ const SHOOT_FEINT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
 
   // 右腕（シュートハンド）：ボールを持ち上げかけて止める
-  rightShoulderX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -80, [SHOOT_FEINT_T2]: -60, [SHOOT_FEINT_T3]: -30},
+  rightShoulderX: {[SHOOT_FEINT_T0]: 30, [SHOOT_FEINT_T1]: 80, [SHOOT_FEINT_T2]: 60, [SHOOT_FEINT_T3]: 30},
   rightShoulderY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
   rightShoulderZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
 
@@ -468,7 +468,7 @@ const SHOOT_FEINT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   rightElbowZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
 
   // 左腕（ガイドハンド）：補助
-  leftShoulderX: {[SHOOT_FEINT_T0]: -30, [SHOOT_FEINT_T1]: -60, [SHOOT_FEINT_T2]: -45, [SHOOT_FEINT_T3]: -30},
+  leftShoulderX: {[SHOOT_FEINT_T0]: 30, [SHOOT_FEINT_T1]: 60, [SHOOT_FEINT_T2]: 45, [SHOOT_FEINT_T3]: 30},
   leftShoulderY: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 10, [SHOOT_FEINT_T2]: 5, [SHOOT_FEINT_T3]: 0},
   leftShoulderZ: {[SHOOT_FEINT_T0]: 0, [SHOOT_FEINT_T1]: 0, [SHOOT_FEINT_T2]: 0, [SHOOT_FEINT_T3]: 0},
 

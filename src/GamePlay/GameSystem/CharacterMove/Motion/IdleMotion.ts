@@ -29,8 +29,8 @@ const IDLE_ADDITIONS: Record<string, number[]> = {
   upperBodyX: [0, 2, 0, 0, 0],
   lowerBodyY: [0, 5, 0, -5, 0],
   headX: [0, -1, 0, 0, 0],
-  leftShoulderX: [0, 5, 0, -5, 0],
-  rightShoulderX: [0, -5, 0, 5, 0],
+  leftShoulderX: [0, -5, 0, 5, 0],
+  rightShoulderX: [0, 5, 0, -5, 0],
 };
 
 // BASE_POSE を全タイムポイントに展開し、呼吸デルタを加算

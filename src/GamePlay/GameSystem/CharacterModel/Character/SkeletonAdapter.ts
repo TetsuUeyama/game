@@ -146,6 +146,9 @@ export class SkeletonAdapter {
    * ジョイント名でFK回転を適用。
    * ゲームモードの MotionController から呼ばれる。
    *
+   * 肩ジョイントの X 符号規約: 正 = 腕を上げる、負 = 腕を下げる。
+   * ボーンのローカル軸では逆方向のため、肩の X を反転してから適用する。
+   *
    * X軸ミラー下では Y/Z 回転方向が反転するが、
    * 右側ボーンはローカル軸が左の鏡像のため反転不要。
    */
@@ -155,19 +158,23 @@ export class SkeletonAdapter {
     const bone = this.findBone(logicalName);
     if (!bone) return;
 
+    // 肩の X 符号反転（正=上、負=下 の規約に統一）
+    const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
+    const xVal = isShoulder ? -offsetEulerRad.x : offsetEulerRad.x;
+
     if (this._mirrorYZ) {
       const isRight = jointName.startsWith("right");
       const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
       const ySign = isRight ? 1 : -1;
       const zSign = isArm ? 1 : ySign;
       const corrected = new Vector3(
-        offsetEulerRad.x,
+        xVal,
         offsetEulerRad.y * ySign,
         offsetEulerRad.z * zSign,
       );
       this.applyFKRotation(bone, corrected);
     } else {
-      this.applyFKRotation(bone, offsetEulerRad);
+      this.applyFKRotation(bone, new Vector3(xVal, offsetEulerRad.y, offsetEulerRad.z));
     }
   }
 
