@@ -1,6 +1,6 @@
 
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 import {
   WF_JOINT_ANIMATIONS, WF_T0, WF_T1, WF_T2, WF_T3, WF_T4,
   WB_JOINT_ANIMATIONS, WB_T0, WB_T1, WB_T2, WB_T3, WB_T4,

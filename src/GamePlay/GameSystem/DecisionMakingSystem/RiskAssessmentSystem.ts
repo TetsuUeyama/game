@@ -2,7 +2,7 @@ import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
-import { DefenderStateUtils } from "@/GamePlay/GameSystem/CharacterMove/Utils/DefenderStateUtils";
+import { DefenderStateUtils } from "@/GamePlay/GameSystem/DecisionMakingSystem/DefenderStateUtils";
 import { RISK_ASSESSMENT_CONFIG } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentConfig";
 import {
   PassTrajectoryCalculator,
@@ -16,7 +16,7 @@ import {
   PassType,
   PASS_TYPE_CONFIGS,
 } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
-import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
+import { getTeammates } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 
 /**

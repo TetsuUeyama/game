@@ -15,13 +15,15 @@ import { Skeleton, Bone, Mesh, Quaternion, Space, Vector3 } from "@babylonjs/cor
 import {
   captureRestPoses,
   RestPoseCache,
+  computeCorrections,
+} from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import {
   findSkeletonBone,
   detectRigType,
   findAllBones,
-  computeCorrections,
   RigType,
   FoundBones,
-} from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+} from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/SkeletonUtils";
 import { LogicalBoneName } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 import { clampJointDegrees } from "@/GamePlay/GameSystem/CharacterMove/Config/JointLimitsConfig";
 
@@ -159,20 +161,20 @@ export class SkeletonAdapter {
     const bone = this.findBone(logicalName);
     if (!bone) return;
 
-    // ジョイント角度リミット: ラジアン→度数変換 → クランプ → 度数→ラジアン変換
-    const RAD_TO_DEG = 180 / Math.PI;
-    const DEG_TO_RAD = Math.PI / 180;
-    const clampedX = clampJointDegrees(jointName, "X", offsetEulerRad.x * RAD_TO_DEG) * DEG_TO_RAD;
-    const clampedY = clampJointDegrees(jointName, "Y", offsetEulerRad.y * RAD_TO_DEG) * DEG_TO_RAD;
-    const clampedZ = clampJointDegrees(jointName, "Z", offsetEulerRad.z * RAD_TO_DEG) * DEG_TO_RAD;
-
     // 関節軸方向の補正（ボーンローカル軸と規約の不一致を吸収）
     const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
     const isHip = jointName === "leftHip" || jointName === "rightHip";
     const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
-    const xVal = isShoulder ? -clampedX : clampedX;
-    const yVal = isFoot ? -clampedY : clampedY;
-    const zVal = (isHip || isFoot) ? -clampedZ : clampedZ;
+    const xRaw = isShoulder ? -offsetEulerRad.x : offsetEulerRad.x;
+    const yRaw = isFoot ? -offsetEulerRad.y : offsetEulerRad.y;
+    const zRaw = (isHip || isFoot) ? -offsetEulerRad.z : offsetEulerRad.z;
+
+    // ジョイント角度リミット: 軸補正後の最終値にクランプ適用（リミット = 最終ボーン角度の制限）
+    const RAD_TO_DEG = 180 / Math.PI;
+    const DEG_TO_RAD = Math.PI / 180;
+    const xVal = clampJointDegrees(jointName, "X", xRaw * RAD_TO_DEG) * DEG_TO_RAD;
+    const yVal = clampJointDegrees(jointName, "Y", yRaw * RAD_TO_DEG) * DEG_TO_RAD;
+    const zVal = clampJointDegrees(jointName, "Z", zRaw * RAD_TO_DEG) * DEG_TO_RAD;
 
     if (this._mirrorYZ) {
       const isRight = jointName.startsWith("right");

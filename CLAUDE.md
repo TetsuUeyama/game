@@ -14,6 +14,12 @@ src/character-move/UTILS_SYSTEM_REFACTORING.md
 - 将来計画（IK+アニメーションブレンディング）
 - 変更履歴
 
+## 編集禁止ファイル
+
+以下のファイルは **絶対に編集してはいけない**。人体構造の知識に基づいて手動で調整された設定値であり、AI が勝手に変更すると不正な動作になる。
+
+- `src/GamePlay/GameSystem/CharacterMove/Config/JointLimitsConfig.ts` — ジョイント角度リミット設定（min/max 値）
+
 ## コード作成・修正時のルール
 
 1. **作業前**: 作業手順書を確認し、該当タスクのチェックボックスを確認

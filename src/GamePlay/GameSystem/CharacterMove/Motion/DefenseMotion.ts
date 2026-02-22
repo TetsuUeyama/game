@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ディフェンスモーション
@@ -99,13 +99,6 @@ export const BLOCK_SHOT_MOTION: MotionData = {
     landingTime: 0.9,
     peakHeight: 1.0,
   },
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "head", priority: 8 },
-  ],
 };
 
 export const BLOCK_SHOT_MOTION_CONFIG: MotionConfig = {
@@ -195,11 +188,6 @@ export const STEAL_ATTEMPT_MOTION: MotionData = {
   duration: STEAL_T4,
   loop: false,
   keyframes: buildKeyframes(STEAL_ATTEMPT_JOINT_ANIMATIONS, STEAL_ATTEMPT_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const STEAL_ATTEMPT_MOTION_CONFIG: MotionConfig = {
@@ -288,12 +276,6 @@ export const PASS_INTERCEPT_MOTION: MotionData = {
   duration: INTERCEPT_T4,
   loop: false,
   keyframes: buildKeyframes(PASS_INTERCEPT_JOINT_ANIMATIONS, PASS_INTERCEPT_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-  ],
 };
 
 export const PASS_INTERCEPT_MOTION_CONFIG: MotionConfig = {
@@ -383,15 +365,6 @@ export const DEFENSE_STANCE_MOTION: MotionData = {
   duration: STANCE_T3,
   loop: true,  // ループモーション
   keyframes: buildKeyframes(DEFENSE_STANCE_JOINT_ANIMATIONS, DEFENSE_STANCE_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "leftShoulder", priority: 8 },
-    { jointName: "upperBody", priority: 7 },
-  ],
 };
 
 export const DEFENSE_STANCE_MOTION_CONFIG: MotionConfig = {

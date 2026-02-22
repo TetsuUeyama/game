@@ -10,7 +10,7 @@ import {
   DefenderPlacement,
 } from '@/GamePlay/MatchEngine/CheckControllers/PassCheckController';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
 import { PassType } from '@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 

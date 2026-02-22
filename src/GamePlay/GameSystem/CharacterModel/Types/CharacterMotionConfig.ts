@@ -20,7 +20,7 @@ export const DEFAULT_MOTION_CONFIG: CharacterMotionConfig = {
   turnSpeed: 2.5,
   blendSharpness: 5.0,
   ikWeight: 1.0,
-  stepHeight: 0.5,
+  stepHeight: 0.1,
 };
 
 /**

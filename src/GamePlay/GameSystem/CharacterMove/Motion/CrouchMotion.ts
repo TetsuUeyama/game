@@ -1,5 +1,5 @@
 import {MotionData, MotionConfig} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import {buildKeyframes} from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import {buildKeyframes} from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * しゃがみ込みモーション

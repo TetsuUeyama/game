@@ -13,7 +13,7 @@ import {DRIBBLE_STANCE_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/
 import {DASH_FORWARD_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import {RiskAssessmentSystem} from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { normalizeAngle, getDistance2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
-import { getTeammates, getOpponents } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
+import { getTeammates, getOpponents } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 import { isInPaintArea } from "@/GamePlay/GameSystem/DecisionMakingSystem/TacticalZoneConfig";
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { PassController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/PassController";

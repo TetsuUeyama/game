@@ -1,7 +1,7 @@
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
-import { FaceAvatarRenderer } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarRenderer";
+import { FaceAvatarRenderer } from "@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarRenderer";
 
 export interface FaceAvatarData {
   characterId: string;

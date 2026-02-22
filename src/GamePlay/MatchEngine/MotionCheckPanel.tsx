@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MotionDefinition, JointKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionDefinitionTypes";
-import { JOINT_NAMES, AXES, motionToCode } from "@/GamePlay/GameSystem/CharacterMove/UI/CheckModeTypes";
-import { CodeExportDialog } from "@/GamePlay/GameSystem/CharacterMove/UI/CodeExportDialog";
+import { JOINT_NAMES, AXES, motionToCode } from "@/GamePlay/MatchEngine/CheckModeTypes";
+import { CodeExportDialog } from "@/GamePlay/MatchEngine/CodeExportDialog";
 
 interface MotionCheckPanelProps {
   motionData: MotionDefinition;

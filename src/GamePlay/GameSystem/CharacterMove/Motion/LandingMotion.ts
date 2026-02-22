@@ -1,5 +1,5 @@
 import {MotionData, MotionConfig} from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import {buildKeyframes} from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import {buildKeyframes} from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ダッシュ速度に応じて着地モーションを延長する

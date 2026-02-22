@@ -7,7 +7,7 @@
  */
 
 import { MotionData } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /** 各関節の静的な基本角度（IdleMotion T0 から抽出） */
 export const BASE_POSE: Record<string, number> = {
@@ -18,7 +18,7 @@ export const BASE_POSE: Record<string, number> = {
 
   // 腕
   leftShoulderX: -75, leftShoulderY: 0, leftShoulderZ: 0,
-  rightShoulderX: 75, rightShoulderY: 0, rightShoulderZ: 0,
+  rightShoulderX: -75, rightShoulderY: 0, rightShoulderZ: 0,
   leftElbowX: -10, leftElbowY: 0, leftElbowZ: 0,
   rightElbowX: -10, rightElbowY: 0, rightElbowZ: 0,
 

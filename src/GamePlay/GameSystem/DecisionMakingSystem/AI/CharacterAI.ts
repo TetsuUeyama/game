@@ -21,7 +21,7 @@ import {
   OffBallOffenseAI,
   OffBallDefenseAI,
 } from "@/GamePlay/GameSystem/DecisionMakingSystem/AI";
-import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
+import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/Visualization/PassTrajectoryVisualizer";
 import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/LooseBallDecisionSystem";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { ACTION_DEFINITIONS } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";

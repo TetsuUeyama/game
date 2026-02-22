@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ボールキャッチモーション
@@ -82,13 +82,6 @@ export const BALL_CATCH_MOTION: MotionData = {
   duration: BALL_CATCH_T3,
   loop: false,
   keyframes: buildKeyframes(BALL_CATCH_JOINT_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const BALL_CATCH_MOTION_CONFIG: MotionConfig = {

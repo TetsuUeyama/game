@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 import { DominantHand } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 
 /**
@@ -142,12 +142,6 @@ function createRightHandedMotion(faceIndex: number): MotionData {
     duration: T1,
     loop: false,
     keyframes: buildKeyframes(jointAnimations),
-    priorities: [
-      { jointName: "rightShoulder", priority: 6 },
-      { jointName: "rightElbow", priority: 6 },
-      { jointName: "leftShoulder", priority: 6 },
-      { jointName: "leftElbow", priority: 6 },
-    ],
   };
 }
 
@@ -195,12 +189,6 @@ function createLeftHandedMotion(faceIndex: number): MotionData {
     duration: T1,
     loop: false,
     keyframes: buildKeyframes(jointAnimations),
-    priorities: [
-      { jointName: "rightShoulder", priority: 6 },
-      { jointName: "rightElbow", priority: 6 },
-      { jointName: "leftShoulder", priority: 6 },
-      { jointName: "leftElbow", priority: 6 },
-    ],
   };
 }
 

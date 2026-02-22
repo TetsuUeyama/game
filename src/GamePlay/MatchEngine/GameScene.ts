@@ -11,7 +11,7 @@ import {
 import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
 import "@babylonjs/loaders/glTF";
 import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
-import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture";
+import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarCapture";
 import {
   InputController,
   CollisionHandler,
@@ -35,14 +35,14 @@ import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem
 import { BallReachSystem } from "@/GamePlay/GameSystem/BallReachSystem/BallReachSystem";
 import type { VisualSettings } from "@/GamePlay/GameSystem/StatusCheckSystem";
 import { GameTeamConfig } from "@/GamePlay/Management/Services/TeamConfigLoader";
-import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
+import { PlayerData } from "@/GamePlay/Management/Types/PlayerData";
 import { PhysicsManager } from "@/GamePlay/Object/Physics/PhysicsManager";
 import { LIGHT_CONFIG } from "@/GamePlay/Object/Entities/Light";
 import {
   PassTrajectoryVisualizer,
   ShootTrajectoryVisualizer,
   DribblePathVisualizer,
-} from "@/GamePlay/GameSystem/CharacterMove/Visualization";
+} from "@/GamePlay/GameSystem/Visualization";
 import { PassCheckController, DefenderPlacement } from "@/GamePlay/MatchEngine/CheckControllers/PassCheckController";
 import {
   JumpBallInfo,
@@ -191,12 +191,16 @@ export class GameScene {
   private allyTeamName: string = 'ATM';
   private enemyTeamName: string = 'BTM';
 
+  // 初期化完了コールバック（GLBモデル・物理エンジン・キャラクター再作成が全て完了した時に呼ばれる）
+  private onReady?: () => void;
+
   constructor(canvas: HTMLCanvasElement, options?: {
     showAdditionalCharacters?: boolean;
     teamConfig?: GameTeamConfig;
     playerData?: Record<string, PlayerData>;
     allyTeamName?: string;
     enemyTeamName?: string;
+    onReady?: () => void;
   }) {
     const showAdditionalCharacters = options?.showAdditionalCharacters ?? true;
     const teamConfig = options?.teamConfig;
@@ -204,6 +208,7 @@ export class GameScene {
 
     if (options?.allyTeamName) this.allyTeamName = options.allyTeamName;
     if (options?.enemyTeamName) this.enemyTeamName = options.enemyTeamName;
+    this.onReady = options?.onReady;
 
     // WebGLサポートチェック（テスト用キャンバスを使用して、実際のキャンバスのコンテキストを消費しない）
     const testCanvas = document.createElement("canvas");
@@ -678,6 +683,7 @@ export class GameScene {
 
       // 初期化完了フラグを設定
       this.isInitialized = true;
+      this.onReady?.();
     } catch (error) {
       console.error("[GameScene] Havok physics initialization failed:", error);
       throw new Error("Havok physics engine is required but failed to initialize");

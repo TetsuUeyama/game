@@ -1,7 +1,26 @@
 import { Scalar, Quaternion, Bone, Space } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { MotionData, MotionState, MotionConfig, Keyframe, PositionOffset, JumpPhysics } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
+import { MotionData, MotionConfig, Keyframe, KeyframeJoints, PositionOffset, JumpPhysics } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
 import { MOTION_BLEND_CONFIG, MOTION_SPEED_CONFIG, MOTION_POSITION_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
+
+/** モーション再生状態（MotionController 専用） */
+interface MotionState {
+  isPlaying: boolean; // 再生中か
+  currentTime: number; // 現在の再生時間
+  currentMotion: MotionData | null; // 現在のモーション
+  speed: number; // 再生速度（1.0が標準）
+  // ブレンディング情報
+  isBlending: boolean; // ブレンド中か
+  blendTime: number; // ブレンド経過時間
+  blendDuration: number; // ブレンド時間（秒）
+  previousJoints: KeyframeJoints | null; // 前のモーションの関節状態
+  previousPosition: PositionOffset | null; // 前のモーションの位置
+  nextMotion: MotionData | null; // 次のモーション（ブレンド先）
+  // 位置オフセット追跡
+  lastAppliedPosition: PositionOffset | null; // 最後に適用した位置オフセット
+  basePosition: PositionOffset | null; // モーション開始時の基準位置
+  positionScale: number; // 位置オフセットのスケール（1.0が標準）
+}
 import { MotionPlayer } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionPlayer";
 import { createSingleMotionPoseData } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
 import { motionDataToDefinition } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionDataConverter";

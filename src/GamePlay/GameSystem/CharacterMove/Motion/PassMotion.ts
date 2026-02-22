@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * パスモーション
@@ -87,13 +87,6 @@ export const PASS_CHEST_MOTION: MotionData = {
   duration: PASS_CHEST_T4,
   loop: false,
   keyframes: buildKeyframes(PASS_CHEST_JOINT_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const PASS_CHEST_MOTION_CONFIG: MotionConfig = {
@@ -182,13 +175,6 @@ export const PASS_BOUNCE_MOTION: MotionData = {
   duration: PASS_BOUNCE_T4,
   loop: false,
   keyframes: buildKeyframes(PASS_BOUNCE_JOINT_ANIMATIONS, PASS_BOUNCE_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const PASS_BOUNCE_MOTION_CONFIG: MotionConfig = {
@@ -271,14 +257,6 @@ export const PASS_OVERHEAD_MOTION: MotionData = {
   duration: PASS_OVERHEAD_T4,
   loop: false,
   keyframes: buildKeyframes(PASS_OVERHEAD_JOINT_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const PASS_OVERHEAD_MOTION_CONFIG: MotionConfig = {

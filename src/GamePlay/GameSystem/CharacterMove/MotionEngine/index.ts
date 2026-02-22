@@ -1,18 +1,17 @@
-export { PoseBlender } from "./PoseBlender";
-export type { PoseBoneData } from "./PoseBlender";
-export { BlendController } from "./BlendController";
 export {
   captureRestPoses,
-  findBoneForJoint,
-  createPoseData,
   createSingleMotionPoseData,
   createAnimationsForSkeleton,
-  findSkeletonBone,
-  getJointCorrection,
+  computeCorrections,
+  STANDING_POSE_OFFSETS,
 } from "./AnimationFactory";
 export type { RestPoseCache } from "./AnimationFactory";
+export {
+  detectRigType,
+  findSkeletonBone,
+  findAllBones,
+} from "./SkeletonUtils";
+export type { FoundBones, RigType } from "./SkeletonUtils";
 export { MotionPlayer } from "./MotionPlayer";
 export type { SingleMotionPoseData } from "./MotionPlayer";
 export type { MotionDefinition, MotionJointData, JointKeyframes } from "./MotionDefinitionTypes";
-export { IDLE_MOTION } from "./ViewerIdleMotion";
-export { WALK_MOTION } from "./ViewerWalkMotion";

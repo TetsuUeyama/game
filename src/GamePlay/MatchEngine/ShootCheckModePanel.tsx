@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import { ShootCheckController, ShootCheckProgress, CellShootResult, ShootCheckConfig, ShotTypeFilter, DefenderConfig } from '@/GamePlay/MatchEngine/CheckControllers/ShootCheckController';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
 import { ShootCheckHeatmap } from './ShootCheckHeatmap';
 import { ShootCheckResultsTable } from './ShootCheckResultsTable';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';

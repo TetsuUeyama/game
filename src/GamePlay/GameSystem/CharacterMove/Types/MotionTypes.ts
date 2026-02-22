@@ -54,14 +54,6 @@ export interface Keyframe {
 }
 
 /**
- * 部位の優先度設定
- */
-export interface JointPriority {
-  jointName: keyof KeyframeJoints;
-  priority: number; // 値が大きいほど優先度が高い
-}
-
-/**
  * ジャンプ物理Y軌道設定
  *
  * 線形補間の代わりに放物線（2区間パラボラ）でY位置を計算する。
@@ -86,7 +78,6 @@ export interface MotionData {
   duration: number; // 全体の再生時間（秒）
   loop: boolean; // ループ再生するか
   keyframes: Keyframe[]; // キーフレームの配列
-  priorities?: JointPriority[]; // 部位の優先度（オプション）
   jumpPhysics?: JumpPhysics; // ジャンプ物理Y軌道（設定時はY補間を放物線に置換）
 }
 
@@ -99,25 +90,4 @@ export interface MotionConfig {
   blendDuration?: number; // ブレンド時間（秒、デフォルト: 0.3）
   priority?: number; // 優先度（値が大きいほど優先、デフォルト: 0）
   interruptible?: boolean; // 他のモーションで中断可能か（デフォルト: true）
-}
-
-/**
- * モーション再生状態
- */
-export interface MotionState {
-  isPlaying: boolean; // 再生中か
-  currentTime: number; // 現在の再生時間
-  currentMotion: MotionData | null; // 現在のモーション
-  speed: number; // 再生速度（1.0が標準）
-  // ブレンディング情報
-  isBlending: boolean; // ブレンド中か
-  blendTime: number; // ブレンド経過時間
-  blendDuration: number; // ブレンド時間（秒）
-  previousJoints: KeyframeJoints | null; // 前のモーションの関節状態
-  previousPosition: PositionOffset | null; // 前のモーションの位置
-  nextMotion: MotionData | null; // 次のモーション（ブレンド先）
-  // 位置オフセット追跡
-  lastAppliedPosition: PositionOffset | null; // 最後に適用した位置オフセット
-  basePosition: PositionOffset | null; // モーション開始時の基準位置
-  positionScale: number; // 位置オフセットのスケール（1.0が標準）
 }

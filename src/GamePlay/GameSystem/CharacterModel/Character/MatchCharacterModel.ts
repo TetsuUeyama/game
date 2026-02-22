@@ -489,8 +489,10 @@ export class MatchCharacterModel {
           }
           if (mesh.material instanceof StandardMaterial) {
             mesh.material.diffuseColor = color;
+            mesh.material.diffuseTexture = null;
           } else if (mesh.material instanceof PBRMaterial) {
             mesh.material.albedoColor = color;
+            mesh.material.albedoTexture = null;
           }
         }
       }

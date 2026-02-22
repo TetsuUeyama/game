@@ -6,7 +6,7 @@ import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 import type { MatchConfig } from '@/GamePlay/Management/League/Types';
-import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
+import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from '@/GamePlay/MatchEngine/PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
@@ -86,10 +86,13 @@ export function LeagueMatchGame() {
           playerData,
           allyTeamName: homeTeam.abbr,
           enemyTeamName: awayTeam.abbr,
+          onReady: () => {
+            if (mounted) {
+              setError(null);
+              setLoading(false);
+            }
+          },
         });
-
-        setError(null);
-        setLoading(false);
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : '初期化に失敗しました');

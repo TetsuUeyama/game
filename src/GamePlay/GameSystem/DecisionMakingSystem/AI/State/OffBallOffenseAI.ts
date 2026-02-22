@@ -12,7 +12,7 @@ import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerState
 import { PassTrajectoryCalculator, Vec3 } from "@/GamePlay/Object/Physics/Trajectory/PassTrajectoryCalculator";
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { PassType, PASS_TYPE_CONFIGS } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
-import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
+import { getTeammates } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { SAFE_BOUNDARY_CONFIG } from "@/GamePlay/Object/Entities/Field";
 import {

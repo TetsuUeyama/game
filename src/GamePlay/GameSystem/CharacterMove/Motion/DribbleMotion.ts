@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ドリブル突破モーション
@@ -83,13 +83,6 @@ export const DRIBBLE_BREAKTHROUGH_MOTION: MotionData = {
   duration: DRIBBLE_T4,
   loop: false,
   keyframes: buildKeyframes(DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS, DRIBBLE_BREAKTHROUGH_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "upperBody", priority: 10 },
-    { jointName: "leftHip", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "leftKnee", priority: 8 },
-    { jointName: "rightKnee", priority: 8 },
-  ],
 };
 
 export const DRIBBLE_BREAKTHROUGH_MOTION_CONFIG: MotionConfig = {
@@ -175,17 +168,6 @@ export const DRIBBLE_STANCE_MOTION: MotionData = {
   duration: STANCE_T3,
   loop: true,
   keyframes: buildKeyframes(DRIBBLE_STANCE_JOINT_ANIMATIONS, DRIBBLE_STANCE_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "upperBody", priority: 10 },
-    { jointName: "leftHip", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "leftKnee", priority: 8 },
-    { jointName: "rightKnee", priority: 8 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "rightElbow", priority: 8 },
-    { jointName: "leftShoulder", priority: 7 },
-    { jointName: "leftElbow", priority: 7 },
-  ],
 };
 
 export const DRIBBLE_STANCE_MOTION_CONFIG: MotionConfig = {
