@@ -48,51 +48,53 @@ const WF_TIMES = [WF_T0, WF_T1, WF_T2, WF_T3, WF_T4];
 
 // アイドル姿勢からの追加値（自然な歩行サイクル）
 // T1: 左足前・右腕前  T3: 右足前・左腕前
+// hipX: 負=屈曲(太もも前)、正=伸展(太もも後)
 const WF_ADDITIONS: Record<string, number[]> = {
-  // 上半身：前傾＋骨盤と逆回転
-  upperBodyX: [-3, -5, -3, -5, -3],
-  upperBodyY: [0, 8, 0, -8, 0],
-  upperBodyZ: [0, -2, 0, 2, 0],
+  // 上半身：わずかな前傾（太ももが主動力）
+  upperBodyX: [2, 3, 2, 3, 2],
+  upperBodyY: [0, -8, 0, 8, 0],
+  upperBodyZ: [0, 2, 0, -2, 0],
 
   lowerBodyX: [0, 0, 0, 0, 0],
-  lowerBodyY: [0, -5, 0, 5, 0],
+  lowerBodyY: [0, 5, 0, -5, 0],
   lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: [2, 3, 2, 3, 2],
-  headY: [0, -6, 0, 6, 0],
+  headX: [-1, -2, -1, -2, -1],
+  headY: [0, 6, 0, -6, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  // 腕振り（脚と逆位相）
-  leftShoulderX: [0, -25, 0, 25, 0],
+  // 腕振り（対側: 左足前→右腕前）
+  leftShoulderX: [0, 25, 0, -25, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [0, 25, 0, -25, 0],
+  rightShoulderX: [0, -25, 0, 25, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [0, -15, 0, 5, 0],
+  leftElbowX: [0, 5, 0, -15, 0],
   leftElbowY: [0, 0, 0, 0, 0],
   leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [0, 5, 0, -15, 0],
+  rightElbowX: [0, -15, 0, 5, 0],
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  // 脚（歩行の主要ドライバー）
-  leftHipX: [0, 25, 0, -18, 0],
+  // 脚（太ももで前進を駆動: 負=前、正=後）
+  leftHipX: [0, -25, 0, 18, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [0, -18, 0, 25, 0],
+  rightHipX: [0, 18, 0, -25, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [0, 0, 0, -25, 0],
+  // 膝：スイングフェーズで曲げる（正=屈曲）
+  leftKneeX: [0, 5, 0, 25, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, -25, 0, 0, 0],
+  rightKneeX: [0, 25, 0, 5, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 
@@ -141,48 +143,52 @@ export const WB_T4 = 1.0;
 const WB_TIMES = [WB_T0, WB_T1, WB_T2, WB_T3, WB_T4];
 
 // T1: 左足後退  T3: 右足後退
+// hipX: 正=伸展(太もも後=後退ステップ)、負=屈曲(太もも前=復帰)
 const WB_ADDITIONS: Record<string, number[]> = {
-  upperBodyX: [3, 4, 3, 4, 3],
-  upperBodyY: [0, -6, 0, 6, 0],
-  upperBodyZ: [0, 2, 0, -2, 0],
+  upperBodyX: [-2, -3, -2, -3, -2],
+  upperBodyY: [0, 6, 0, -6, 0],
+  upperBodyZ: [0, -2, 0, 2, 0],
 
   lowerBodyX: [0, 0, 0, 0, 0],
-  lowerBodyY: [0, 4, 0, -4, 0],
+  lowerBodyY: [0, -4, 0, 4, 0],
   lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: [-2, -3, -2, -3, -2],
-  headY: [0, 5, 0, -5, 0],
+  headX: [1, 2, 1, 2, 1],
+  headY: [0, -5, 0, 5, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: [0, 18, 0, -18, 0],
+  // 腕振り（対側: 左足後退→左腕前）
+  leftShoulderX: [0, -18, 0, 18, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [0, -18, 0, 18, 0],
+  rightShoulderX: [0, 18, 0, -18, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [0, 5, 0, -12, 0],
+  leftElbowX: [0, -12, 0, 5, 0],
   leftElbowY: [0, 0, 0, 0, 0],
   leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [0, -12, 0, 5, 0],
+  rightElbowX: [0, 5, 0, -12, 0],
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [0, -18, 0, 15, 0],
+  // 脚（太ももで後退: 正=後、負=前）
+  leftHipX: [0, 18, 0, -15, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [0, 15, 0, -18, 0],
+  rightHipX: [0, -15, 0, 18, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [0, -25, 0, 0, 0],
+  // 膝：スイングフェーズで曲げる（正=屈曲）
+  leftKneeX: [0, 25, 0, 5, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, 0, 0, -25, 0],
+  rightKneeX: [0, 5, 0, 25, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 
@@ -260,19 +266,20 @@ const WL_ADDITIONS: Record<string, number[]> = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, -5, 0, -5, 0],
 
-  leftHipX: [0, 10, 0, -5, 0],
+  leftHipX: [0, -10, 0, 5, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, -10, 0, 5, 0],
 
-  rightHipX: [0, -5, 0, 10, 0],
+  rightHipX: [0, 5, 0, -10, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, -5, 0, -10, 0],
 
-  leftKneeX: [0, -15, 0, -5, 0],
+  // 膝：横移動のスイングフェーズで曲げる（正=屈曲）
+  leftKneeX: [0, 15, 0, 5, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, -5, 0, -15, 0],
+  rightKneeX: [0, 5, 0, 15, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 
@@ -349,19 +356,20 @@ const WR_ADDITIONS: Record<string, number[]> = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 5, 0, 5, 0],
 
-  leftHipX: [0, -5, 0, 10, 0],
+  leftHipX: [0, 5, 0, -10, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 5, 0, 10, 0],
 
-  rightHipX: [0, 10, 0, -5, 0],
+  rightHipX: [0, -10, 0, 5, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 10, 0, -5, 0],
 
-  leftKneeX: [0, -5, 0, -15, 0],
+  // 膝：横移動のスイングフェーズで曲げる（正=屈曲）
+  leftKneeX: [0, 5, 0, 15, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, -15, 0, -5, 0],
+  rightKneeX: [0, 15, 0, 5, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 

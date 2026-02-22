@@ -20,40 +20,41 @@ const DF_T3 = 0.6;
 const DF_T4 = 0.8;
 
 // 歩行モーションに加算する値（配列のインデックスは T0, T1, T2, T3, T4 に対応）
+// Walk修正後の新ベースに合わせて再計算。upperBodyX大幅削減、hipXで太もも駆動を強化
 const DF_ADDITIONS = {
-  upperBodyX: [27.5, 30, 10, 30, 10],
+  upperBodyX: [8, 9, 3, 9, 3],
   upperBodyY: [0, 0, 0, 0, 0],
   upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: [-10, -15, -5, -15, -5],
+  lowerBodyX: [-5, -7, -3, -7, -3],
   lowerBodyY: [0, 0, 0, 0, 0],
   lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: [-11.5, -12, 0, -12, 0],
+  headX: [-4, -5, -1, -5, -1],
   headY: [0, 0, 0, 0, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: [0, 45, 0, -45, 0],
+  leftShoulderX: [0, 10, 0, -10, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [-22.5, -45, 0, 45, 0],
+  rightShoulderX: [0, -10, 0, 10, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [0, 0, 0, 0, 0],
+  leftElbowX: [0, -15, 0, 5, 0],
   leftElbowY: [0, 0, 0, 0, 0],
   leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [0, 0, 0, 0, 0],
+  rightElbowX: [0, 5, 0, -15, 0],
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [-27.5, -45, 0, 35, 0],
+  leftHipX: [-20, -20, -5, 10, -20],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [0, 35, 0, -45, 0],
+  rightHipX: [-20, 10, -5, -20, -20],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
@@ -119,48 +120,52 @@ const DB_T2 = 0.4;
 const DB_T3 = 0.6;
 const DB_T4 = 0.8;
 
+// Walk修正後の新ベースに合わせて再計算。upperBodyX削減、太もも駆動
 const DB_ADDITIONS = {
-  upperBodyX: [5, 10, 0, 10, 0],
+  upperBodyX: [-3, -4, -1, -4, -1],
   upperBodyY: [0, 0, 0, 0, 0],
   upperBodyZ: [0, 0, 0, 0, 0],
 
-  lowerBodyX: [-5, -10, 0, -10, 0],
+  lowerBodyX: [-3, -5, -2, -5, -2],
   lowerBodyY: [0, 0, 0, 0, 0],
   lowerBodyZ: [0, 0, 0, 0, 0],
 
-  headX: [2, 7, -3, 7, -3],
+  headX: [1, 1, 0, 1, 0],
   headY: [0, 0, 0, 0, 0],
   headZ: [0, 0, 0, 0, 0],
 
-  leftShoulderX: [0, 0, 0, 0, 0],
+  // 腕振り増幅（後退走りの力強い腕振り）
+  leftShoulderX: [0, -7, 0, 7, 0],
   leftShoulderY: [0, 0, 0, 0, 0],
   leftShoulderZ: [0, 0, 0, 0, 0],
 
-  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderX: [0, 7, 0, -7, 0],
   rightShoulderY: [0, 0, 0, 0, 0],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [0, 0, 0, 0, 0],
+  leftElbowX: [0, -3, 0, 2, 0],
   leftElbowY: [0, 0, 0, 0, 0],
   leftElbowZ: [0, 0, 0, 0, 0],
 
-  rightElbowX: [0, 0, 0, 0, 0],
+  rightElbowX: [0, 2, 0, -3, 0],
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [0, 0, 0, 0, 0],
+  // 脚の動き増幅（速い後退ステップ: 太もも駆動）
+  leftHipX: [0, 12, 0, -5, 0],
   leftHipY: [0, 0, 0, 0, 0],
   leftHipZ: [0, 0, 0, 0, 0],
 
-  rightHipX: [0, 0, 0, 0, 0],
+  rightHipX: [0, -5, 0, 12, 0],
   rightHipY: [0, 0, 0, 0, 0],
   rightHipZ: [0, 0, 0, 0, 0],
 
-  leftKneeX: [0, 0, 0, 0, 0],
+  // 膝の曲げ増幅（素早いバックペダル）
+  leftKneeX: [10, 12, 10, 12, 10],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, 0, 0, 0, 0],
+  rightKneeX: [10, 12, 10, 12, 10],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 };
@@ -247,11 +252,11 @@ const DL_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [-40, -10, -10, -10, -10],
+  leftHipX: [-40, 10, -10, -20, -10],
   leftHipY: [0, 15, 0, 15, 0],
   leftHipZ: [17, 7, 17, 7, 17],
 
-  rightHipX: [-10, -40, -5, -40, -5],
+  rightHipX: [-10, -50, -5, -20, -5],
   rightHipY: [0, -10, 0, -10, 0],
   rightHipZ: [-13, 0, -13, 0, -13],
 
@@ -317,6 +322,7 @@ const DR_T2 = 0.4;
 const DR_T3 = 0.6;
 const DR_T4 = 0.8;
 
+// 左ダッシュのミラー（左右反転: left↔right入替、Y/Z符号反転）
 const DR_ADDITIONS = {
   upperBodyX: [5, 5, 0, 5, 0],
   upperBodyY: [0, 0, 0, 0, 0],
@@ -330,13 +336,15 @@ const DR_ADDITIONS = {
   headY: [0, 0, 0, 0, 0],
   headZ: [-7, -10, -2, -10, -2],
 
-  leftShoulderX: [0, 0, 0, 0, 0],
-  leftShoulderY: [0, 0, 0, 0, 0],
-  leftShoulderZ: [0, 0, 0, 0, 0],
+  // 左腕 = 左ダッシュの右腕ミラー
+  leftShoulderX: [-10, -20, 0, -20, 0],
+  leftShoulderY: [-20, -20, -10, -20, -10],
+  leftShoulderZ: [-9, -9, -4, -9, -4],
 
-  rightShoulderX: [0, 0, 0, 0, 0],
-  rightShoulderY: [0, 0, 0, 0, 0],
-  rightShoulderZ: [0, 0, 0, 0, 0],
+  // 右腕 = 左ダッシュの左腕ミラー
+  rightShoulderX: [-20, -10, 0, -10, 0],
+  rightShoulderY: [20, 20, 10, 20, 10],
+  rightShoulderZ: [19, 9, 9, 9, 9],
 
   leftElbowX: [0, 0, 0, 0, 0],
   leftElbowY: [0, 0, 0, 0, 0],
@@ -346,19 +354,23 @@ const DR_ADDITIONS = {
   rightElbowY: [0, 0, 0, 0, 0],
   rightElbowZ: [0, 0, 0, 0, 0],
 
-  leftHipX: [0, 0, 0, 0, 0],
-  leftHipY: [0, 0, 0, 0, 0],
-  leftHipZ: [0, 0, 0, 0, 0],
+  // 左脚 = 左ダッシュの右脚ミラー
+  leftHipX: [-10, -50, -5, -20, -5],
+  leftHipY: [0, 10, 0, 10, 0],
+  leftHipZ: [13, 0, 13, 0, 13],
 
-  rightHipX: [0, 0, 0, 0, 0],
-  rightHipY: [0, 0, 0, 0, 0],
-  rightHipZ: [0, 0, 0, 0, 0],
+  // 右脚 = 左ダッシュの左脚ミラー
+  rightHipX: [-40, 10, -10, -20, -10],
+  rightHipY: [0, -15, 0, -15, 0],
+  rightHipZ: [-17, -7, -17, -7, -17],
 
-  leftKneeX: [0, 0, 0, 0, 0],
+  // 左膝 = 左ダッシュの右膝ミラー
+  leftKneeX: [20, 50, 10, 50, 10],
   leftKneeY: [0, 0, 0, 0, 0],
-  leftKneeZ: [0, 0, 0, 0, 0],
+  leftKneeZ: [-8, -8, -8, -8, -8],
 
-  rightKneeX: [0, 0, 0, 0, 0],
+  // 右膝 = 左ダッシュの左膝ミラー
+  rightKneeX: [50, 15, 20, 15, 20],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [8, 8, 8, 8, 8],
 };

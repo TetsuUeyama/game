@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
 import { fetchAllMasterData } from '@/GamePlay/Management/Services/MasterDataService';
-import { DocumentData } from 'firebase/firestore';
 
 type Rank = 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 
@@ -276,7 +275,7 @@ export default function TeamsPage() {
         ]);
 
         const playerDataList: PlayerData[] = Object.values(playersMap).map(
-          (d: DocumentData) => d as PlayerData
+          (d) => d as unknown as PlayerData
         );
 
         const generated = generateTeams(

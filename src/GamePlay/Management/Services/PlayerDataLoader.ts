@@ -1,7 +1,6 @@
 import { PlayerData, PlayerDataJSON, FaceConfigJSON } from "@/GamePlay/Management/Types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { fetchAllPlayers } from "@/GamePlay/Management/Services/PlayerService";
-import { DocumentData } from "firebase/firestore";
 
 /**
  * 選手データローダー
@@ -139,12 +138,12 @@ export class PlayerDataLoader {
     // Firestoreから読み込み開始
     this.loadPromise = (async () => {
       try {
-        const firestoreData: Record<string, DocumentData> = await fetchAllPlayers();
+        const firestoreData: Record<string, Record<string, unknown>> = await fetchAllPlayers();
 
         // FirestoreデータをPlayerData形式に変換
         const players: Record<string, PlayerData> = {};
         for (const [id, data] of Object.entries(firestoreData)) {
-          players[id] = this.convertToPlayerData(data as PlayerDataJSON);
+          players[id] = this.convertToPlayerData(data as unknown as PlayerDataJSON);
         }
 
         // キャッシュに保存

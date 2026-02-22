@@ -13,7 +13,6 @@ import { fetchAllPlayers } from '@/GamePlay/Management/Services/PlayerService';
 import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
 import { useLeaguePlayers } from '@/GamePlay/Management/Hooks/UseLeaguePlayers';
-import { DocumentData } from 'firebase/firestore';
 
 type PageState = 'loading' | 'start' | 'register' | 'initializing' | 'menu';
 
@@ -55,7 +54,7 @@ export default function Home() {
 
   // 選手詳細モーダル
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayerInfo | null>(null);
-  const [masterPlayerCache, setMasterPlayerCache] = useState<Record<string, DocumentData>>({});
+  const [masterPlayerCache, setMasterPlayerCache] = useState<Record<string, Record<string, unknown>>>({});
 
   // リーグデータ読み込み
   const loadLeagueData = useCallback(async (userId: string) => {
@@ -81,7 +80,7 @@ export default function Home() {
     if (!raw) return;
 
     const playerData = PlayerDataLoader.convertToPlayerData(
-      raw as Parameters<typeof PlayerDataLoader.convertToPlayerData>[0]
+      raw as unknown as Parameters<typeof PlayerDataLoader.convertToPlayerData>[0]
     );
 
     setSelectedPlayer({

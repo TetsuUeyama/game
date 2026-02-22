@@ -476,16 +476,18 @@ export class MatchCharacterModel {
     }
   }
 
-  /** GLB 胴体部分のカラー変更（Ch42_Body メッシュ） */
+  /** GLB シャツ部分のカラー変更（Ch42_Shirt メッシュ） */
   private _setGLBBodyColor(r: number, g: number, b: number): void {
     if (!this._glbClone) return;
     const color = new Color3(r, g, b);
     for (const mesh of this._glbClone.allMeshes) {
       const baseName = mesh.name.replace(/_clone_.*$/, "");
-      if (baseName === "Ch42_Body" || baseName === "Ch42_body") {
+      if (baseName === "Ch42_Shirt") {
         if (mesh.material) {
-          if (!mesh.material.name.includes("_cloned")) {
-            mesh.material = mesh.material.clone(mesh.material.name + "_cloned")!;
+          // 他メッシュ(Body1, Shorts等)と同じマテリアルを共有しているため、
+          // シャツ専用にクローンして独立させる
+          if (!mesh.material.name.includes("_shirt_cloned")) {
+            mesh.material = mesh.material.clone(mesh.material.name + "_shirt_cloned")!;
           }
           if (mesh.material instanceof StandardMaterial) {
             mesh.material.diffuseColor = color;

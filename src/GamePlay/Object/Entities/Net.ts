@@ -295,9 +295,9 @@ export class Net {
           this.scene
         );
 
-        const linearDamping = isMidRingNode ? 0.8 : 0.3;
+        const linearDamping = isMidRingNode ? 0.95 : 0.85;
         node.physics.body.setLinearDamping(linearDamping);
-        node.physics.body.setAngularDamping(0.3);
+        node.physics.body.setAngularDamping(0.8);
 
         // 初期状態は全ノード ANIMATED（静止）
         node.physics.body.setMotionType(PhysicsMotionType.ANIMATED);
@@ -432,18 +432,18 @@ export class Net {
       [
         {
           axis: PhysicsConstraintAxis.LINEAR_X,
-          minLimit: -distance * 0.6,
-          maxLimit: distance * 0.6,
+          minLimit: -distance * 0.07,
+          maxLimit: distance * 0.07,
         },
         {
           axis: PhysicsConstraintAxis.LINEAR_Y,
-          minLimit: -distance * 0.6,
-          maxLimit: distance * 0.6,
+          minLimit: -distance * 0.07,
+          maxLimit: distance * 0.07,
         },
         {
           axis: PhysicsConstraintAxis.LINEAR_Z,
-          minLimit: -distance * 0.6,
-          maxLimit: distance * 0.6,
+          minLimit: -distance * 0.07,
+          maxLimit: distance * 0.07,
         },
       ],
       this.scene
@@ -520,6 +520,7 @@ export class Net {
       const cx = this.rimCenter.x;
       const cz = this.rimCenter.z;
       const RADIAL_SPRING = 0.0001; // 半径方向のバネ強度
+      const VERTICAL_SPRING = 0.0003; // 垂直方向のバネ強度（静止位置へ復帰）
 
       for (const node of this.nodes) {
         if (node.isFixed || !node.physics) continue;
@@ -531,6 +532,15 @@ export class Net {
           if (vel.y > 0) {
             node.physics.body.setLinearVelocity(new Vector3(vel.x, 0, vel.z));
           }
+        }
+
+        // 垂直スプリング: 静止位置より下なら上向きに引き戻す
+        const yDeficit = node.restPosition.y - node.mesh.position.y;
+        if (yDeficit > 0) {
+          node.physics.body.applyImpulse(
+            new Vector3(0, yDeficit * VERTICAL_SPRING, 0),
+            node.mesh.position,
+          );
         }
 
         // 半径方向スプリング: 静止半径より内側なら外向きに押し戻す
@@ -601,7 +611,7 @@ export class Net {
       if (distance < radius) {
         const attenuation = 1 - distance / radius;
         node.physics.body.applyImpulse(
-          force.scale(attenuation * 0.01),
+          force.scale(attenuation * 0.003),
           node.mesh.position
         );
       }

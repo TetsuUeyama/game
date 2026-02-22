@@ -23,10 +23,10 @@ export const BASE_POSE: Record<string, number> = {
   rightElbowX: -10, rightElbowY: 0, rightElbowZ: 0,
 
   // 脚
-  leftHipX: 0, leftHipY: -15, leftHipZ: -8,
-  rightHipX: 0, rightHipY: 15, rightHipZ: 8,
+  leftHipX: 0, leftHipY: 0, leftHipZ: 0,
+  rightHipX: 0, rightHipY: 0, rightHipZ: 0,
   leftKneeX: 5, leftKneeY: 0, leftKneeZ: 5,
-  rightKneeX: 5, rightKneeY: 0, rightKneeZ: -5,
+  rightKneeX: 5, rightKneeY: 0, rightKneeZ: 5,
   leftFootX: 0, leftFootY: 0, leftFootZ: 0,
   rightFootX: 0, rightFootY: 0, rightFootZ: 0,
 };

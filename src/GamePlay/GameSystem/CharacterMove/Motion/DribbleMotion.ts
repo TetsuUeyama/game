@@ -23,8 +23,8 @@ const DRIBBLE_T3 = 0.6;    // activeTime終了
 const DRIBBLE_T4 = 0.8;    // recoveryTime終了
 
 const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
-  // 上半身：前傾して勢いをつける
-  upperBodyX: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 25, [DRIBBLE_T2]: 35, [DRIBBLE_T3]: 30, [DRIBBLE_T4]: 0},
+  // 上半身：軽い前傾（太ももが主動力）
+  upperBodyX: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 10, [DRIBBLE_T2]: 15, [DRIBBLE_T3]: 12, [DRIBBLE_T4]: 0},
   upperBodyY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   upperBodyZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
@@ -32,7 +32,7 @@ const DRIBBLE_BREAKTHROUGH_JOINT_ANIMATIONS: Record<string, Record<number, numbe
   lowerBodyY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   lowerBodyZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
-  headX: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 10, [DRIBBLE_T2]: 15, [DRIBBLE_T3]: 10, [DRIBBLE_T4]: 0},
+  headX: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 3, [DRIBBLE_T2]: 5, [DRIBBLE_T3]: 3, [DRIBBLE_T4]: 0},
   headY: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
   headZ: {[DRIBBLE_T0]: 0, [DRIBBLE_T1]: 0, [DRIBBLE_T2]: 0, [DRIBBLE_T3]: 0, [DRIBBLE_T4]: 0},
 
