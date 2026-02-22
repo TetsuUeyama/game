@@ -1,4 +1,4 @@
-import { LeagueMatchGame } from '@/GamePlay/Management/League/LeagueMatchGame';
+import { LeagueMatchGame } from '@/SimulationPlay/Management/League/LeagueMatchGame';
 
 export default function LeagueMatchPage() {
   return <LeagueMatchGame />;

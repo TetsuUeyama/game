@@ -8,7 +8,7 @@ import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { Field } from "@/GamePlay/Object/Entities/Field";
 import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
-import { PlayerData } from "@/GamePlay/Management/Types/PlayerData";
+import { PlayerData } from "@/GamePlay/Data/Types/PlayerData";
 import { DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { DribblePathVisualizer } from "@/GamePlay/GameSystem/Visualization/DribblePathVisualizer";
 import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/Visualization/ShootTrajectoryVisualizer";

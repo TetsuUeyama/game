@@ -1,6 +1,6 @@
 'use client';
 
-import { PlayerStats } from '@/GamePlay/Management/Types/PlayerData';
+import { PlayerStats } from '@/GamePlay/Data/Types/PlayerData';
 
 export interface SelectedPlayerInfo {
   playerName: string;

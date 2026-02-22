@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-import { PASS_COOLDOWN } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassConfig";
+import { PASS_COOLDOWN } from "@/SimulationPlay/TargetTrackingAccuracySystem/PassConfig";
 
 // ── パスレーン分析ユーティリティ ──────────────────────────
 

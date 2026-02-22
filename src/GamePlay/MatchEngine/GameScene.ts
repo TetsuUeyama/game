@@ -34,8 +34,8 @@ import { LooseBallDecisionSystem } from "@/GamePlay/GameSystem/LooseBallSystem/L
 import { RiskAssessmentSystem } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
 import { BallReachSystem } from "@/GamePlay/GameSystem/BallReachSystem/BallReachSystem";
 import type { VisualSettings } from "@/GamePlay/GameSystem/StatusCheckSystem";
-import { GameTeamConfig } from "@/GamePlay/Management/Services/TeamConfigLoader";
-import { PlayerData } from "@/GamePlay/Management/Types/PlayerData";
+import { GameTeamConfig } from "@/GamePlay/Data/TeamConfigLoader";
+import { PlayerData } from "@/GamePlay/Data/Types/PlayerData";
 import { PhysicsManager } from "@/GamePlay/Object/Physics/PhysicsManager";
 import { LIGHT_CONFIG } from "@/GamePlay/Object/Entities/Light";
 import {

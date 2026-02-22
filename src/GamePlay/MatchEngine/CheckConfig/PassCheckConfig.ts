@@ -3,7 +3,7 @@
  * PassCheckController用の定数と型定義を提供
  */
 
-import { PassType } from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
+import { PassType } from "@/SimulationPlay/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 
 /**
  * パスチェックのタイミング設定

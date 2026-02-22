@@ -9,9 +9,9 @@ import {
   PassCheckConfig,
   DefenderPlacement,
 } from '@/GamePlay/MatchEngine/CheckControllers/PassCheckController';
-import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
-import { PassType } from '@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig';
+import { PlayerDataLoader } from '@/GamePlay/Data/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/Data/Types/PlayerData';
+import { PassType } from '@/SimulationPlay/TargetTrackingAccuracySystem/PassTrajectoryConfig';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 
 interface PassCheckModePanelProps {

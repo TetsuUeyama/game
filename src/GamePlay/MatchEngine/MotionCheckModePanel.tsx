@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
-import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
+import { PlayerDataLoader } from '@/GamePlay/Data/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/Data/Types/PlayerData';
 import { Character } from '@/GamePlay/Object/Entities/Character';
 import { MotionCheckPanel } from '@/GamePlay/MatchEngine/MotionCheckPanel';
 import { GAME_MOTIONS } from '@/GamePlay/GameSystem/CharacterMove/MotionEngine/GameMotionCatalog';

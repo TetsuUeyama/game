@@ -8,8 +8,8 @@ import {
   DribbleCheckResult,
   DribbleCheckConfig,
 } from '@/GamePlay/MatchEngine/CheckControllers/DribbleCheckController';
-import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
+import { PlayerDataLoader } from '@/GamePlay/Data/PlayerDataLoader';
+import { PlayerData } from '@/GamePlay/Data/Types/PlayerData';
 import { FieldGridUtils } from '@/GamePlay/GameSystem/FieldSystem/FieldGridConfig';
 import { FeintController } from '@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController';
 
