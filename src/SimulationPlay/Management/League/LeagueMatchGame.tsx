@@ -1,40 +1,36 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { GameScene } from '@/GamePlay/MatchEngine/GameScene';
-import { TeamConfigLoader } from '@/GamePlay/Data/TeamConfigLoader';
 import { PlayerDataLoader } from '@/GamePlay/Data/PlayerDataLoader';
-import { HamburgerMenu } from './HamburgerMenu';
-import { PositionBoardPanel } from './PositionBoard/PositionBoardPanel';
-import { BoardPlayerPosition } from '@/GamePlay/MatchEngine/PositionBoard/PositionBoard';
-import { ShootCheckModePanel } from './ShootCheckModePanel';
-import { DribbleCheckModePanel } from './DribbleCheckModePanel';
-import { PassCheckModePanel } from './PassCheckModePanel';
-import { MotionCheckModePanel } from './MotionCheckModePanel';
-
+import { LeagueManager } from '@/SimulationPlay/Management/League/LeagueManager';
+import type { MatchConfig } from '@/SimulationPlay/Management/League/Types';
 import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
-import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
-import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
-
-type GameModeType = 'game' | 'shoot_check' | 'dribble_check' | 'pass_check' | 'motion_check';
+import { PlayerFaceAvatar, PlayerGameStatsView } from '@/GamePlay/MatchEngine/PlayerFaceAvatar';
+import { PlayerDetailPanel, SelectedPlayerInfo } from '@/GamePlay/MatchEngine/PlayerDetailPanel';
 
 /**
- * Character Move 1対1ゲームコンポーネント
+ * リーグ試合用ゲームコンポーネント
+ * localStorageからマッチ設定を読み込み、試合を実行する
  */
-export default function CharacterMove1on1Game() {
+export function LeagueMatchGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameSceneRef = useRef<GameScene | null>(null);
+  const matchConfigRef = useRef<MatchConfig | null>(null);
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [score, setScore] = useState<{ ally: number; enemy: number }>({ ally: 0, enemy: 0 });
   const [winner, setWinner] = useState<'ally' | 'enemy' | null>(null);
-  const [winningScore, setWinningScore] = useState<number>(5);
-  const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: 'ATM', enemy: 'BTM' });
+  const [playerNames, setPlayerNames] = useState<{ ally: string; enemy: string }>({ ally: '', enemy: '' });
   const [shotClock, setShotClock] = useState<number>(24.0);
   const [shotClockOffenseTeam, setShotClockOffenseTeam] = useState<'ally' | 'enemy' | null>(null);
-  const [isPositionBoardVisible, setIsPositionBoardVisible] = useState<boolean>(false);
-  const [currentMode, setCurrentMode] = useState<GameModeType>('game');
+  const [resultSaved, setResultSaved] = useState(false);
+
+  // 顔アバター関連
   const [faceAvatars, setFaceAvatars] = useState<FaceAvatarData[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<SelectedPlayerInfo | null>(null);
   const [playerStateColors, setPlayerStateColors] = useState<Record<string, string>>({});
@@ -47,25 +43,49 @@ export default function CharacterMove1on1Game() {
 
     let mounted = true;
 
-    const initializeGame = async () => {
+    const init = async () => {
       try {
         setLoading(true);
-        console.log('[CharacterMove1on1Game] ゲーム初期化開始...');
 
-        // 5対5用のチーム設定を読み込む
-        const teamConfig = await TeamConfigLoader.loadTeamConfig('teamConfig5on5');
+        // マッチ設定を読み込む
+        const config = LeagueManager.loadMatchConfig();
+        if (!config) {
+          setError('試合設定が見つかりません。リーグページに戻ってください。');
+          setLoading(false);
+          return;
+        }
+        matchConfigRef.current = config;
+
+        const leagueState = LeagueManager.loadLeagueState();
+        if (!leagueState) {
+          setError('リーグ状態が見つかりません。');
+          setLoading(false);
+          return;
+        }
+
+        const homeTeam = LeagueManager.getTeam(config.homeTeamId);
+        const awayTeam = LeagueManager.getTeam(config.awayTeamId);
+        if (!homeTeam || !awayTeam) {
+          setError('チーム情報が見つかりません。');
+          setLoading(false);
+          return;
+        }
+
+        // チーム設定を生成
+        const teamConfig = LeagueManager.buildTeamConfig(homeTeam, awayTeam);
 
         // 選手データを読み込む
         const playerData = await PlayerDataLoader.loadPlayerData();
 
         if (!mounted || !canvasRef.current) return;
 
-        console.log('[CharacterMove1on1Game] GameScene初期化中...');
-        // ゲームシーンの初期化
+        // ゲームシーンを初期化
         gameSceneRef.current = new GameScene(canvasRef.current, {
           showAdditionalCharacters: true,
           teamConfig,
           playerData,
+          allyTeamName: homeTeam.abbr,
+          enemyTeamName: awayTeam.abbr,
           onReady: () => {
             if (mounted) {
               setError(null);
@@ -73,19 +93,16 @@ export default function CharacterMove1on1Game() {
             }
           },
         });
-        console.log('[CharacterMove1on1Game] ゲーム初期化完了');
       } catch (err) {
-        console.error('[CharacterMove1on1Game] Initialization failed:', err);
         if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize 3D game');
+          setError(err instanceof Error ? err.message : '初期化に失敗しました');
           setLoading(false);
         }
       }
     };
 
-    initializeGame();
+    init();
 
-    // クリーンアップ
     return () => {
       mounted = false;
       if (gameSceneRef.current) {
@@ -95,73 +112,24 @@ export default function CharacterMove1on1Game() {
     };
   }, []);
 
-  // キーボードショートカット（カメラ切り替え）
-  useEffect(() => {
-    let vertexNumbersVisible = false;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!gameSceneRef.current) return;
-
-      switch (e.key.toLowerCase()) {
-        case 'z':
-          // 前のキャラクター（手動モードに切り替え）
-          gameSceneRef.current.setCameraMode('manual');
-          gameSceneRef.current.switchToPreviousCharacter();
-          break;
-        case 'c':
-          // 次のキャラクター（手動モードに切り替え）
-          gameSceneRef.current.setCameraMode('manual');
-          gameSceneRef.current.switchToNextCharacter();
-          break;
-        case 'tab':
-          // チーム切り替え（手動モードに切り替え）
-          e.preventDefault();
-          gameSceneRef.current.setCameraMode('manual');
-          gameSceneRef.current.switchTeam();
-          break;
-        case 'v':
-          // 頂点番号の表示/非表示を切り替え
-          vertexNumbersVisible = !vertexNumbersVisible;
-          if (vertexNumbersVisible) {
-            gameSceneRef.current.showOctagonVertexNumbers();
-            console.log('[CharacterMove1on1Game] 頂点番号を表示');
-          } else {
-            gameSceneRef.current.hideOctagonVertexNumbers();
-            console.log('[CharacterMove1on1Game] 頂点番号を非表示');
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // スコアと勝者を定期的にチェック
+  // スコア・勝者・ステートカラー・ゲームスタッツを定期チェック
   useEffect(() => {
     if (!gameSceneRef.current || loading) return;
 
-    // 勝利に必要な得点と選手名を取得
-    setWinningScore(gameSceneRef.current.getWinningScore());
     setPlayerNames(gameSceneRef.current.getPlayerNames());
 
-    const checkInterval = setInterval(() => {
-      if (gameSceneRef.current) {
-        const currentScore = gameSceneRef.current.getScore();
-        const currentWinner = gameSceneRef.current.getWinner();
-        const currentShotClock = gameSceneRef.current.getShotClockRemainingTime();
-        const currentOffenseTeam = gameSceneRef.current.getShotClockOffenseTeam();
-        setScore(currentScore);
-        setWinner(currentWinner);
-        setShotClock(currentShotClock);
-        setShotClockOffenseTeam(currentOffenseTeam);
-        setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
-        setPlayerGameStats(gameSceneRef.current.getPlayerGameStats());
-        setGameElapsed(gameSceneRef.current.getGameElapsedSeconds());
-      }
-    }, 100); // 100msごとにチェック
+    const interval = setInterval(() => {
+      if (!gameSceneRef.current) return;
+      setScore(gameSceneRef.current.getScore());
+      setWinner(gameSceneRef.current.getWinner());
+      setShotClock(gameSceneRef.current.getShotClockRemainingTime());
+      setShotClockOffenseTeam(gameSceneRef.current.getShotClockOffenseTeam());
+      setPlayerStateColors(gameSceneRef.current.getPlayerStateColors());
+      setPlayerGameStats(gameSceneRef.current.getPlayerGameStats());
+      setGameElapsed(gameSceneRef.current.getGameElapsedSeconds());
+    }, 100);
 
-    return () => clearInterval(checkInterval);
+    return () => clearInterval(interval);
   }, [loading]);
 
   // フェイスアバターキャプチャ
@@ -179,14 +147,14 @@ export default function CharacterMove1on1Game() {
           lastCharacterVersionRef.current = gameSceneRef.current.getCharacterVersion();
         }
       } catch {
-        // キャプチャ失敗は無視（ゲーム進行に影響しない）
+        // キャプチャ失敗は無視
       }
     };
 
     // 1秒後に初回キャプチャ
     const initTimer = setTimeout(captureAvatars, 1000);
 
-    // characterVersionの変更を監視（既存のポーリングに便乗）
+    // characterVersionの変更を監視
     const versionCheck = setInterval(() => {
       if (!gameSceneRef.current) return;
       const currentVersion = gameSceneRef.current.getCharacterVersion();
@@ -224,7 +192,7 @@ export default function CharacterMove1on1Game() {
     });
   }, []);
 
-  // ロール変更ハンドラー（シュート優先度の自動リオーダー対応）
+  // ロール変更ハンドラー
   const handleRoleChange = useCallback((
     characterId: string,
     team: 'ally' | 'enemy',
@@ -245,23 +213,19 @@ export default function CharacterMove1on1Game() {
       const oldPriority = character.shotPriority;
 
       if (newPriority !== null && newPriority !== oldPriority) {
-        // 他の同チーム選手の優先度をシフト
         for (const c of characters) {
           if (c === character || c.shotPriority == null) continue;
           if (oldPriority != null) {
-            // 例: 4→1 の場合、1〜3 を +1 にシフト
             if (newPriority < oldPriority) {
               if (c.shotPriority >= newPriority && c.shotPriority < oldPriority) {
                 c.shotPriority++;
               }
             } else {
-              // 例: 1→4 の場合、2〜4 を -1 にシフト
               if (c.shotPriority > oldPriority && c.shotPriority <= newPriority) {
                 c.shotPriority--;
               }
             }
           } else {
-            // 未設定→新規設定: 新優先度以上の既存選手を +1 にシフト
             if (c.shotPriority >= newPriority) {
               c.shotPriority++;
             }
@@ -275,7 +239,6 @@ export default function CharacterMove1on1Game() {
       character.defenseRole = (value || null) as DefenseRole | null;
     }
 
-    // faceAvatars state を全チームメンバー分同期
     setFaceAvatars(prev => prev.map(a => {
       if (a.team !== team) return a;
       const c = characters.find(ch => ch.playerData?.basic.ID === a.characterId);
@@ -287,63 +250,6 @@ export default function CharacterMove1on1Game() {
         defenseRole: c.defenseRole,
       };
     }));
-  }, []);
-
-  // ゲームをリセット
-  const handleResetGame = () => {
-    if (gameSceneRef.current) {
-      gameSceneRef.current.resetGame();
-      setScore({ ally: 0, enemy: 0 });
-      setWinner(null);
-    }
-  };
-
-  // ポジション配置を適用
-  const handleApplyPositions = useCallback((
-    allyPositions: BoardPlayerPosition[],
-    enemyPositions: BoardPlayerPosition[]
-  ) => {
-    if (!gameSceneRef.current) return;
-
-    const allyPosArray = allyPositions.map(p => ({
-      playerId: p.playerId,
-      worldX: p.worldX,
-      worldZ: p.worldZ,
-    }));
-
-    const enemyPosArray = enemyPositions.map(p => ({
-      playerId: p.playerId,
-      worldX: p.worldX,
-      worldZ: p.worldZ,
-    }));
-
-    gameSceneRef.current.applyTeamPositions(allyPosArray, enemyPosArray);
-  }, []);
-
-  // モード変更ハンドラー
-  const handleModeChange = useCallback((mode: GameModeType) => {
-    if (!gameSceneRef.current) return;
-
-    // 現在のチェックモードを終了
-    if (currentMode !== 'game') {
-      gameSceneRef.current.exitCheckMode();
-      gameSceneRef.current.resume();
-    }
-
-    // 新しいモードを設定
-    if (mode !== 'game') {
-      gameSceneRef.current.pause();
-    }
-    setCurrentMode(mode);
-  }, [currentMode]);
-
-  // チェックモードを閉じる
-  const handleCloseCheckMode = useCallback(() => {
-    if (gameSceneRef.current) {
-      gameSceneRef.current.exitCheckMode();
-      gameSceneRef.current.resume();
-    }
-    setCurrentMode('game');
   }, []);
 
   // 経過時間を "MM:SS" に変換
@@ -360,29 +266,38 @@ export default function CharacterMove1on1Game() {
     return { points: raw.points, assists: raw.assists, playingTime: formatTime(gameElapsed) };
   };
 
-  // エラー表示
+  // リーグページに戻る（結果保存 → 遷移）
+  const handleBackToLeague = useCallback(() => {
+    const config = matchConfigRef.current;
+    if (!config) return;
+
+    // プレイヤーの試合結果を保存
+    if (winner && !resultSaved) {
+      const winnerSide: 'home' | 'away' = winner === 'ally' ? 'home' : 'away';
+      LeagueManager.saveMatchResult({
+        matchId: config.matchId,
+        homeScore: score.ally,
+        awayScore: score.enemy,
+        winner: winnerSide,
+      });
+      LeagueManager.clearMatchConfig();
+      setResultSaved(true);
+    }
+
+    // リーグページへ遷移
+    router.push('/league');
+  }, [winner, score, resultSaved, router]);
+
   if (error) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gray-900">
-        <div className="max-w-md p-6 bg-red-900/20 border border-red-500 rounded-lg">
-          <h2 className="text-xl font-bold text-red-400 mb-4">
-            3D Game Initialization Error
-          </h2>
-          <p className="text-white mb-4">{error}</p>
-          <div className="text-sm text-gray-300">
-            <p className="mb-2">Possible solutions:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Use a modern browser (Chrome, Firefox, Edge, Safari)</li>
-              <li>Enable hardware acceleration in browser settings</li>
-              <li>Update your graphics drivers</li>
-              <li>Check if WebGL is enabled in your browser</li>
-            </ul>
-          </div>
+        <div className="text-center">
+          <p className="text-red-400 text-lg mb-4">{error}</p>
           <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+            onClick={() => router.push('/league')}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg"
           >
-            Retry
+            リーグに戻る
           </button>
         </div>
       </div>
@@ -479,40 +394,19 @@ export default function CharacterMove1on1Game() {
           </div>
           {/* 先取表示 */}
           <p className="text-center text-xs text-yellow-400 font-bold mt-1 drop-shadow-lg">
-            {winningScore}点先取
+            5点先取
           </p>
         </div>
       )}
 
-      {/* ローディング画面 */}
+      {/* ローディング */}
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-700 z-50">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
-            <p className="text-white text-xl font-bold">ゲームデータを読み込み中...</p>
-            <p className="text-white/70 text-sm mt-2">1対1の設定を準備しています...</p>
+            <p className="text-white text-xl font-bold">試合準備中...</p>
           </div>
         </div>
-      )}
-
-      {/* ハンバーガーメニュー */}
-      {!loading && (
-        <HamburgerMenu
-          gameScene={gameSceneRef.current}
-          currentMode={currentMode}
-          onModeChange={handleModeChange}
-          isPositionBoardVisible={isPositionBoardVisible}
-          onTogglePositionBoard={() => setIsPositionBoardVisible(!isPositionBoardVisible)}
-        />
-      )}
-
-      {/* ポジション配置ボードパネル */}
-      {!loading && (
-        <PositionBoardPanel
-          isVisible={isPositionBoardVisible}
-          onClose={() => setIsPositionBoardVisible(false)}
-          onApplyPositions={handleApplyPositions}
-        />
       )}
 
       {/* 勝利オーバーレイ */}
@@ -528,48 +422,16 @@ export default function CharacterMove1on1Game() {
               WIN!
             </div>
             <div className="text-2xl text-white mb-8">
-              {score.enemy} - {score.ally}
+              {score.ally} - {score.enemy}
             </div>
             <button
-              onClick={handleResetGame}
+              onClick={handleBackToLeague}
               className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-xl font-bold rounded-xl shadow-lg transition-all"
             >
-              もう一度プレイ
+              リーグに戻る
             </button>
           </div>
         </div>
-      )}
-
-      {/* シュートチェックモードパネル */}
-      {currentMode === 'shoot_check' && (
-        <ShootCheckModePanel
-          gameScene={gameSceneRef.current}
-          onClose={handleCloseCheckMode}
-        />
-      )}
-
-      {/* ドリブルチェックモードパネル */}
-      {currentMode === 'dribble_check' && (
-        <DribbleCheckModePanel
-          gameScene={gameSceneRef.current}
-          onClose={handleCloseCheckMode}
-        />
-      )}
-
-      {/* パスチェックモードパネル */}
-      {currentMode === 'pass_check' && (
-        <PassCheckModePanel
-          gameScene={gameSceneRef.current}
-          onClose={handleCloseCheckMode}
-        />
-      )}
-
-      {/* モーションチェックモードパネル */}
-      {currentMode === 'motion_check' && (
-        <MotionCheckModePanel
-          gameScene={gameSceneRef.current}
-          onClose={handleCloseCheckMode}
-        />
       )}
 
       {/* 選手詳細パネル */}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { db } from "@/GamePlay/Management/Lib/Firebase";
+import { db } from "@/SimulationPlay/Management/Lib/Firebase";
 import { collection, addDoc, getDocs } from "firebase/firestore";
 
 export default function FirebaseTestPage() {

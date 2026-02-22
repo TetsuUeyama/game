@@ -15,7 +15,7 @@ import {
   getInterceptionRiskLevel,
   PassType,
   PASS_TYPE_CONFIGS,
-} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
+} from "@/SimulationPlay/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 import { getTeammates } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 import { getDistance2DSimple } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 

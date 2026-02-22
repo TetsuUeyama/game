@@ -33,7 +33,7 @@ import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controller
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
-import { PlayerData } from "@/GamePlay/Management/Types/PlayerData";
+import { PlayerData } from "@/GamePlay/Data/Types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
@@ -41,8 +41,8 @@ import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCir
 import { DRIBBLE_BREAKTHROUGH_CONFIG, DribbleBreakthroughUtils } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/DribbleBreakthroughConfig";
 import { DashSpeedUtils } from "@/GamePlay/GameSystem/CharacterMove/Config/DashSpeedConfig";
 import { getDashDirectionMultiplier, getWalkDirectionMultiplier } from "@/GamePlay/GameSystem/CharacterMove/Config/MotionConfig";
-import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
-import { MOVEMENT_BALANCE } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceConfig";
+import { BalanceController } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceController";
+import { MOVEMENT_BALANCE } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
 import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/OneOnOneBattleConfig";

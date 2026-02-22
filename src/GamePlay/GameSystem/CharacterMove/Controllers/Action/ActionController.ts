@@ -10,7 +10,7 @@ import {
   ACTION_MOTIONS,
 } from "@/GamePlay/GameSystem/CharacterMove/Config/ActionConfig";
 import { Character } from "@/GamePlay/Object/Entities/Character";
-import { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
+import { BalanceController } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceController";
 import { CROUCH_MOTION } from "@/GamePlay/GameSystem/CharacterMove/Motion/CrouchMotion";
 
 /**

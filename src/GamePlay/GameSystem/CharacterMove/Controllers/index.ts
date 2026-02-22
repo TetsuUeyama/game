@@ -1,6 +1,6 @@
 // System Controllers
-export { BalanceController } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
-export type { BalanceSphereState, CollisionResult } from "@/GamePlay/GameSystem/MarbleSimulation/Balance/BalanceController";
+export { BalanceController } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceController";
+export type { BalanceSphereState, CollisionResult } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceController";
 export { CircleSizeController } from "@/GamePlay/GameSystem/CircleSystem/CircleSizeController";
 export { CollisionHandler } from "@/GamePlay/GameSystem/CircleSystem/CollisionHandler";
 export { ContestController } from "@/GamePlay/GameSystem/CircleSystem/ContestController";

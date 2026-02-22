@@ -9,7 +9,7 @@ import {
   PassTypeConfig,
   PASS_TYPE_CONFIGS,
   INTERCEPTION_CONFIG,
-} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassTrajectoryConfig";
+} from "@/SimulationPlay/TargetTrackingAccuracySystem/PassTrajectoryConfig";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 
 import type { Vec3 } from './TrajectoryTypes';

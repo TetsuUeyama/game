@@ -8,7 +8,7 @@ import {ShootingController} from "@/GamePlay/GameSystem/ShootingSystem/ShootingC
 import {FeintController} from "@/GamePlay/GameSystem/CharacterMove/Controllers/Action/FeintController";
 import {ShotClockController} from "@/GamePlay/MatchEngine/Game/ShotClockController";
 import {ShootingUtils, SHOOT_RANGE} from "@/GamePlay/GameSystem/ShootingSystem/ShootingConfig";
-import {PassUtils} from "@/GamePlay/GameSystem/TargetTrackingAccuracySystem/PassConfig";
+import {PassUtils} from "@/SimulationPlay/TargetTrackingAccuracySystem/PassConfig";
 import {DRIBBLE_STANCE_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DribbleMotion";
 import {DASH_FORWARD_MOTION} from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import {RiskAssessmentSystem} from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
