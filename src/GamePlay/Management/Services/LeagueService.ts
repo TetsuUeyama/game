@@ -1,6 +1,3 @@
-import { db } from '@/GamePlay/Management/Lib/Firebase';
-import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
-
 // ===== 型定義 =====
 
 /** players サブコレクションに保存する選手データ */
@@ -23,6 +20,11 @@ export interface LeagueTeam {
   isMyTeam: boolean;
   playerIds: string[];    // players サブコレクションのID参照
 }
+
+// ===== インメモリストア =====
+
+const leagueTeamsStore = new Map<string, LeagueTeam[]>();
+const leaguePlayersStore = new Map<string, Record<string, LeaguePlayer>>();
 
 // ===== ユーティリティ =====
 
@@ -62,7 +64,6 @@ function buildNamePool(
 /**
  * チーム1つ分の選手を生成（仮ロジック: ランダム選出）
  * 各学年3〜5人、計12〜20人
- * ※ 登録ロジックは後日差し替え予定
  */
 function createTeamPlayers(
   teamId: string,
@@ -93,9 +94,7 @@ function createTeamPlayers(
 }
 
 /**
- * リーグを生成し Firestore に保存
- * - teams → users/{userId}/league/{teamId}
- * - players → users/{userId}/players/{playerId}
+ * リーグを生成しメモリに保存
  */
 export async function generateLeague(
   userId: string,
@@ -109,7 +108,6 @@ export async function generateLeague(
 ): Promise<void> {
   const TEAM_COUNT = 120;
   const MAX_PLAYERS = TEAM_COUNT * 20;
-  const BATCH_LIMIT = 500;
 
   const myUniIndex = universities.indexOf(myUniversity);
   const myTeamIndex = teamNames.indexOf(myTeamName);
@@ -129,13 +127,13 @@ export async function generateLeague(
 
   // チーム & 選手データを構築
   const allTeams: LeagueTeam[] = [];
-  const allPlayers: LeaguePlayer[] = [];
+  const allPlayers: Record<string, LeaguePlayer> = {};
 
   // 自チーム
   {
     const teamId = 'team_0';
     const players = createTeamPlayers(teamId, playerPool, namePool, playerCounter);
-    allPlayers.push(...players);
+    for (const p of players) allPlayers[p.id] = p;
     allTeams.push({
       id: teamId,
       universityIndex: myUniIndex,
@@ -153,7 +151,7 @@ export async function generateLeague(
     const uniIdx = otherUniIndices[i];
     const teamIdx = shuffledTeamIndices[i % shuffledTeamIndices.length];
     const players = createTeamPlayers(teamId, playerPool, namePool, playerCounter);
-    allPlayers.push(...players);
+    for (const p of players) allPlayers[p.id] = p;
     allTeams.push({
       id: teamId,
       universityIndex: uniIdx,
@@ -165,30 +163,9 @@ export async function generateLeague(
     });
   }
 
-  // Firestore にバッチ書き込み（500件ずつ）
-  const allWrites: { ref: ReturnType<typeof doc>; data: Record<string, unknown> }[] = [];
-
-  for (const team of allTeams) {
-    allWrites.push({
-      ref: doc(db, 'users', userId, 'league', team.id),
-      data: JSON.parse(JSON.stringify(team)),
-    });
-  }
-  for (const player of allPlayers) {
-    allWrites.push({
-      ref: doc(db, 'users', userId, 'players', player.id),
-      data: JSON.parse(JSON.stringify(player)),
-    });
-  }
-
-  for (let i = 0; i < allWrites.length; i += BATCH_LIMIT) {
-    const batch = writeBatch(db);
-    const chunk = allWrites.slice(i, i + BATCH_LIMIT);
-    for (const w of chunk) {
-      batch.set(w.ref, w.data);
-    }
-    await batch.commit();
-  }
+  // メモリに保存
+  leagueTeamsStore.set(userId, allTeams);
+  leaguePlayersStore.set(userId, allPlayers);
 }
 
 // ===== データ取得 =====
@@ -199,17 +176,12 @@ export async function generateLeague(
 export async function fetchLeagueTeams(
   userId: string
 ): Promise<LeagueTeam[]> {
-  const snapshot = await getDocs(collection(db, 'users', userId, 'league'));
-  const teams: LeagueTeam[] = [];
-  snapshot.forEach((docSnap) => {
-    teams.push(docSnap.data() as LeagueTeam);
-  });
-  teams.sort((a, b) => {
+  const teams = leagueTeamsStore.get(userId) ?? [];
+  return [...teams].sort((a, b) => {
     if (a.isMyTeam) return -1;
     if (b.isMyTeam) return 1;
     return a.universityName.localeCompare(b.universityName, 'ja');
   });
-  return teams;
 }
 
 /**
@@ -218,11 +190,5 @@ export async function fetchLeagueTeams(
 export async function fetchLeaguePlayers(
   userId: string
 ): Promise<Record<string, LeaguePlayer>> {
-  const snapshot = await getDocs(collection(db, 'users', userId, 'players'));
-  const players: Record<string, LeaguePlayer> = {};
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data() as LeaguePlayer;
-    players[docSnap.id] = data;
-  });
-  return players;
+  return leaguePlayersStore.get(userId) ?? {};
 }

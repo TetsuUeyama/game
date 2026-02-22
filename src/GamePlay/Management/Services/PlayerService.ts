@@ -1,64 +1,43 @@
-import { db } from '@/GamePlay/Management/Lib/Firebase';
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  writeBatch,
-  DocumentData,
-} from 'firebase/firestore';
-
-const COLLECTION = 'masterData/players/items';
-const BATCH_LIMIT = 500; // Firestore batch write limit
+/** キャッシュ: 一度取得したらメモリに保持 */
+let cachedPlayers: Record<string, Record<string, unknown>> | null = null;
 
 /**
- * 選手データをFirestoreにアップロード（バッチ書き込み）
- * @param players PlayerDataJSON[] 形式の選手データ配列
- * @returns アップロードした件数
+ * 選手データをアップロード（no-op: ローカルデータのため不要）
  */
 export async function uploadPlayers(
-  players: DocumentData[]
+  _players: Record<string, unknown>[]
 ): Promise<number> {
-  let uploaded = 0;
-
-  for (let i = 0; i < players.length; i += BATCH_LIMIT) {
-    const batch = writeBatch(db);
-    const chunk = players.slice(i, i + BATCH_LIMIT);
-
-    for (const player of chunk) {
-      const ref = doc(db, COLLECTION, String(player.ID));
-      batch.set(ref, player);
-    }
-
-    await batch.commit();
-    uploaded += chunk.length;
-  }
-
-  return uploaded;
+  return _players.length;
 }
 
 /**
- * Firestoreから全選手データを取得
- * @returns ID -> PlayerDataJSON のマップ
+ * 全選手データを取得（/data/playerData.json から）
+ * @returns ID -> PlayerData のマップ
  */
-export async function fetchAllPlayers(): Promise<Record<string, DocumentData>> {
-  const snapshot = await getDocs(collection(db, COLLECTION));
-  const players: Record<string, DocumentData> = {};
+export async function fetchAllPlayers(): Promise<Record<string, Record<string, unknown>>> {
+  if (cachedPlayers) return cachedPlayers;
 
-  snapshot.forEach((docSnap) => {
-    players[docSnap.id] = docSnap.data();
-  });
+  const res = await fetch('/data/playerData.json');
+  if (!res.ok) throw new Error(`Failed to fetch playerData.json: ${res.status}`);
+  const arr: Record<string, unknown>[] = await res.json();
 
+  const players: Record<string, Record<string, unknown>> = {};
+  for (const item of arr) {
+    const id = String(item.ID);
+    players[id] = item;
+  }
+
+  cachedPlayers = players;
   return players;
 }
 
 /**
- * Firestoreから特定の選手データを取得
+ * 特定の選手データを取得
  * @param playerId 選手ID
  */
 export async function fetchPlayer(
   playerId: string
-): Promise<DocumentData | undefined> {
-  const docSnap = await getDoc(doc(db, COLLECTION, playerId));
-  return docSnap.exists() ? docSnap.data() : undefined;
+): Promise<Record<string, unknown> | undefined> {
+  const all = await fetchAllPlayers();
+  return all[playerId];
 }

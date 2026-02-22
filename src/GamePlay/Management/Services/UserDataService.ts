@@ -1,10 +1,11 @@
-import { db } from '@/GamePlay/Management/Lib/Firebase';
-import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { GameTeamConfig } from '@/GamePlay/Management/Services/TeamConfigLoader';
 
-const USERS_COLLECTION = 'users';
-
 type ConfigKey = 'teamConfig1on1' | 'teamConfig5on5';
+
+// ===== インメモリストア =====
+
+const userProfiles = new Map<string, UserProfile>();
+const userConfigs = new Map<string, GameTeamConfig>(); // key: `${userId}/${configKey}`
 
 // ===== ユーザープロフィール =====
 
@@ -15,14 +16,15 @@ export interface UserProfile {
 }
 
 /**
- * 新規ユーザープロフィールを作成
+ * 新規ユーザープロフィールを作成（メモリに保存）
  * @returns 生成されたユーザーID
  */
 export async function createUserProfile(
   profile: UserProfile
 ): Promise<string> {
-  const docRef = await addDoc(collection(db, USERS_COLLECTION), profile);
-  return docRef.id;
+  const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  userProfiles.set(id, { ...profile });
+  return id;
 }
 
 /**
@@ -31,79 +33,54 @@ export async function createUserProfile(
 export async function getUserProfile(
   userId: string
 ): Promise<UserProfile | null> {
-  const docSnap = await getDoc(doc(db, USERS_COLLECTION, userId));
-  if (!docSnap.exists()) return null;
-  return docSnap.data() as UserProfile;
+  return userProfiles.get(userId) ?? null;
 }
 
 /**
  * ユーザーが存在するか確認
  */
 export async function checkUserExists(userId: string): Promise<boolean> {
-  const docSnap = await getDoc(doc(db, USERS_COLLECTION, userId));
-  return docSnap.exists();
-}
-
-/** GameTeamConfig をFirestore互換のプレーンオブジェクトに変換 */
-function toPlainObject(config: GameTeamConfig): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(config));
+  return userProfiles.has(userId);
 }
 
 /**
- * ユーザーのチーム構成をFirestoreに保存
- * @param userId ユーザーID
- * @param configKey 設定キー（1on1 or 5on5）
- * @param config チーム構成データ
+ * ユーザーのチーム構成をメモリに保存
  */
 export async function saveUserTeamConfig(
   userId: string,
   configKey: ConfigKey,
   config: GameTeamConfig
 ): Promise<void> {
-  await setDoc(
-    doc(db, USERS_COLLECTION, userId, 'configs', configKey),
-    toPlainObject(config)
-  );
+  userConfigs.set(`${userId}/${configKey}`, JSON.parse(JSON.stringify(config)));
 }
 
 /**
- * ユーザーのチーム構成をFirestoreから取得
- * @param userId ユーザーID
- * @param configKey 設定キー
- * @returns チーム構成（存在しない場合はnull）
+ * ユーザーのチーム構成をメモリから取得
  */
 export async function loadUserTeamConfig(
   userId: string,
   configKey: ConfigKey
 ): Promise<GameTeamConfig | null> {
-  const docSnap = await getDoc(
-    doc(db, USERS_COLLECTION, userId, 'configs', configKey)
-  );
-  if (!docSnap.exists()) return null;
-  return docSnap.data() as GameTeamConfig;
+  return userConfigs.get(`${userId}/${configKey}`) ?? null;
 }
 
 /**
- * デフォルトのチーム構成をFirestoreにアップロード（管理用）
- * masterData/teamConfig1on1, masterData/teamConfig5on5 として保存
+ * デフォルトのチーム構成をアップロード（no-op）
  */
 export async function uploadDefaultTeamConfig(
-  configKey: ConfigKey,
-  config: GameTeamConfig
+  _configKey: ConfigKey,
+  _config: GameTeamConfig
 ): Promise<void> {
-  await setDoc(
-    doc(db, 'masterData', configKey),
-    toPlainObject(config)
-  );
+  // no-op
 }
 
 /**
- * デフォルトのチーム構成をFirestoreから取得
+ * デフォルトのチーム構成を取得（JSONファイルから）
  */
 export async function fetchDefaultTeamConfig(
   configKey: ConfigKey
 ): Promise<GameTeamConfig | null> {
-  const docSnap = await getDoc(doc(db, 'masterData', configKey));
-  if (!docSnap.exists()) return null;
-  return docSnap.data() as GameTeamConfig;
+  const res = await fetch(`/data/${configKey}.json`);
+  if (!res.ok) return null;
+  return (await res.json()) as GameTeamConfig;
 }

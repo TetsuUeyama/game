@@ -1,28 +1,22 @@
 import { useState, useCallback } from 'react';
-import { db } from '@/GamePlay/Management/Lib/Firebase';
-import { doc, writeBatch } from 'firebase/firestore';
 import { fetchLeaguePlayers, LeaguePlayer } from '@/GamePlay/Management/Services/LeagueService';
-
-const BATCH_LIMIT = 500;
 
 /**
  * リーグ選手データのローカル状態管理フック
  *
  * - ローカル state で選手データを保持し、UI はここから取得
  * - updatePlayer で即時にローカル更新（dirty 追跡）
- * - saveChanges で変更分のみ Firestore に書き込み
+ * - saveChanges で dirty をクリア（メモリ上で既に更新済みのため永続化不要）
  */
 export function useLeaguePlayers() {
   const [players, setPlayers] = useState<Record<string, LeaguePlayer>>({});
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
-  const [userId, setUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  /** Firestore から全選手を読み込み（初回 or リロード時） */
+  /** メモリから全選手を読み込み（初回 or リロード時） */
   const loadPlayers = useCallback(async (uid: string) => {
     const data = await fetchLeaguePlayers(uid);
     setPlayers(data);
-    setUserId(uid);
     setDirtyIds(new Set());
   }, []);
 
@@ -61,28 +55,16 @@ export function useLeaguePlayers() {
     []
   );
 
-  /** 変更分のみ Firestore にバッチ書き込み */
+  /** dirty をクリア（メモリ上で既に更新済みのため永続化不要） */
   const saveChanges = useCallback(async () => {
-    if (!userId || dirtyIds.size === 0) return;
+    if (dirtyIds.size === 0) return;
     setSaving(true);
     try {
-      const ids = Array.from(dirtyIds);
-
-      for (let i = 0; i < ids.length; i += BATCH_LIMIT) {
-        const batch = writeBatch(db);
-        const chunk = ids.slice(i, i + BATCH_LIMIT);
-        for (const id of chunk) {
-          const ref = doc(db, 'users', userId, 'players', id);
-          batch.set(ref, JSON.parse(JSON.stringify(players[id])));
-        }
-        await batch.commit();
-      }
-
       setDirtyIds(new Set());
     } finally {
       setSaving(false);
     }
-  }, [userId, dirtyIds, players]);
+  }, [dirtyIds]);
 
   return {
     players,
