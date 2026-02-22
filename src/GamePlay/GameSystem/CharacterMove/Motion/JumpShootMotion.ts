@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ジャンプシュートモーション
@@ -103,16 +103,6 @@ export const JUMP_SHOOT_LAYUP_MOTION: MotionData = {
     peakHeight: 1.0,
     hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
   },
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const JUMP_SHOOT_LAYUP_MOTION_CONFIG: MotionConfig = {
@@ -212,18 +202,6 @@ export const JUMP_SHOOT_DUNK_MOTION: MotionData = {
     peakHeight: 1.5,
     hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
   },
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "leftElbow", priority: 10 },
-    { jointName: "leftHip", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const JUMP_SHOOT_DUNK_MOTION_CONFIG: MotionConfig = {
@@ -323,14 +301,6 @@ export const JUMP_SHOOT_MID_MOTION: MotionData = {
     peakHeight: 0.8,
     hangTime: 0.12,      // startup中は頂点に滞空 → ボールリリースは頂点で
   },
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const JUMP_SHOOT_MID_MOTION_CONFIG: MotionConfig = {

@@ -4,7 +4,7 @@
  */
 
 import { PlayerDataLoader } from '@/GamePlay/Management/Services/PlayerDataLoader';
-import type { PlayerData } from '@/GamePlay/GameSystem/CharacterMove/Types/PlayerData';
+import type { PlayerData } from '@/GamePlay/Management/Types/PlayerData';
 import { LeagueManager } from '@/GamePlay/Management/League/LeagueManager';
 import type { LeagueTeam, MatchResultPayload, LeagueMatch } from '@/GamePlay/Management/League/Types';
 

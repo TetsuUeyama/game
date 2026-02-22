@@ -43,8 +43,8 @@ export const BONE_OFFSETS: Record<string, BoneOffset> = {
   leftHand:       { x:  0,      y: -0.20,  z: 0 },
 
   // Right arm (Spine2 → RightShoulder → RightArm → RightForeArm → RightHand)
-  rightShoulder:  { x:  0.10,   y:  0.06,  z: 0 },
-  rightArm:       { x:  0.04,   y: -0.12,  z: 0 },
+  rightShoulder:  { x:  -0.10,   y:  0.06,  z: 0 },
+  rightArm:       { x:  -0.04,   y: -0.12,  z: 0 },
   rightForeArm:   { x:  0,      y: -0.26,  z: 0 },
   rightHand:      { x:  0,      y: -0.20,  z: 0 },
 
@@ -55,7 +55,7 @@ export const BONE_OFFSETS: Record<string, BoneOffset> = {
   leftToeBase:    { x:  0,      y: -0.09,  z: 0.12 },
 
   // Right leg (Hips → RightUpLeg → RightLeg → RightFoot → RightToeBase)
-  rightUpLeg:     { x:  0.12,   y: -0.04,  z: 0 },
+  rightUpLeg:     { x:  -0.12,   y: -0.04,  z: 0 },
   rightLeg:       { x:  0,      y: -0.42,  z: 0 },
   rightFoot:      { x:  0,      y: -0.42,  z: 0 },
   rightToeBase:   { x:  0,      y: -0.09,  z: 0.12 },

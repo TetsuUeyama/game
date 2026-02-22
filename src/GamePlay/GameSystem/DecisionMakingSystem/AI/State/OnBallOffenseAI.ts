@@ -7,7 +7,7 @@ import { OnBallOffenseAISub } from "@/GamePlay/GameSystem/DecisionMakingSystem/A
 import { getShootAggressiveness, get1on1ActionProbabilities } from "@/GamePlay/GameSystem/DecisionMakingSystem/PositionBehaviorConfig";
 import { CourtZone, ShotClockPhase, detectCourtZone, getShotClockPhase } from "@/GamePlay/GameSystem/DecisionMakingSystem/CourtZoneConfig";
 import { OffenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
-import { getOpponents } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
+import { getOpponents } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 
 /**
  * オンボールオフェンス時のAI

@@ -12,7 +12,7 @@ import { DribbleCheckModePanel } from './DribbleCheckModePanel';
 import { PassCheckModePanel } from './PassCheckModePanel';
 import { MotionCheckModePanel } from './MotionCheckModePanel';
 
-import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterMove/Utils/FaceAvatarCapture';
+import { FaceAvatarData } from '@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarCapture';
 import { OffenseRole, DefenseRole } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
 import { PlayerFaceAvatar, PlayerGameStatsView } from './PlayerFaceAvatar';
 import { PlayerDetailPanel, SelectedPlayerInfo } from './PlayerDetailPanel';
@@ -66,10 +66,13 @@ export default function CharacterMove1on1Game() {
           showAdditionalCharacters: true,
           teamConfig,
           playerData,
+          onReady: () => {
+            if (mounted) {
+              setError(null);
+              setLoading(false);
+            }
+          },
         });
-
-        setError(null);
-        setLoading(false);
         console.log('[CharacterMove1on1Game] ゲーム初期化完了');
       } catch (err) {
         console.error('[CharacterMove1on1Game] Initialization failed:', err);

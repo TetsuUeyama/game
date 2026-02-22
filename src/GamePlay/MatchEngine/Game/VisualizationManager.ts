@@ -3,9 +3,9 @@
  * パス軌道、シュート軌道、ドリブル導線の可視化を管理
  */
 
-import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/PassTrajectoryVisualizer";
-import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/ShootingSystem/ShootTrajectoryVisualizer";
-import { DribblePathVisualizer } from "@/GamePlay/GameSystem/CharacterMove/Visualization/DribblePathVisualizer";
+import { PassTrajectoryVisualizer } from "@/GamePlay/GameSystem/Visualization/PassTrajectoryVisualizer";
+import { ShootTrajectoryVisualizer } from "@/GamePlay/GameSystem/Visualization/ShootTrajectoryVisualizer";
+import { DribblePathVisualizer } from "@/GamePlay/GameSystem/Visualization/DribblePathVisualizer";
 
 /**
  * 可視化マネージャー用コンテキスト

@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * シュートモーション
@@ -96,14 +96,6 @@ export const SHOOT_3PT_MOTION: MotionData = {
   duration: SHOOT_3PT_T4,
   loop: false,
   keyframes: buildKeyframes(SHOOT_3PT_JOINT_ANIMATIONS, SHOOT_3PT_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const SHOOT_3PT_MOTION_CONFIG: MotionConfig = {
@@ -189,14 +181,6 @@ export const SHOOT_MIDRANGE_MOTION: MotionData = {
   duration: SHOOT_MID_T4,
   loop: false,
   keyframes: buildKeyframes(SHOOT_MIDRANGE_JOINT_ANIMATIONS, SHOOT_MIDRANGE_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const SHOOT_MIDRANGE_MOTION_CONFIG: MotionConfig = {
@@ -284,16 +268,6 @@ export const SHOOT_LAYUP_MOTION: MotionData = {
   duration: SHOOT_LAYUP_T4,
   loop: false,
   keyframes: buildKeyframes(SHOOT_LAYUP_JOINT_ANIMATIONS, SHOOT_LAYUP_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const SHOOT_LAYUP_MOTION_CONFIG: MotionConfig = {
@@ -402,18 +376,6 @@ export const SHOOT_DUNK_MOTION: MotionData = {
   duration: SHOOT_DUNK_T5,
   loop: false,
   keyframes: buildKeyframes(SHOOT_DUNK_JOINT_ANIMATIONS, SHOOT_DUNK_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "leftElbow", priority: 10 },
-    { jointName: "leftHip", priority: 9 },
-    { jointName: "rightHip", priority: 9 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const SHOOT_DUNK_MOTION_CONFIG: MotionConfig = {
@@ -506,14 +468,6 @@ export const SHOOT_FEINT_MOTION: MotionData = {
   duration: SHOOT_FEINT_T3,
   loop: false,
   keyframes: buildKeyframes(SHOOT_FEINT_JOINT_ANIMATIONS, SHOOT_FEINT_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-    { jointName: "head", priority: 7 },
-  ],
 };
 
 export const SHOOT_FEINT_MOTION_CONFIG: MotionConfig = {

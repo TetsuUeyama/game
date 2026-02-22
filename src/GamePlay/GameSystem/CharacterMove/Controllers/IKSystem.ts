@@ -13,7 +13,7 @@ import {
   MeshBuilder,
 } from "@babylonjs/core";
 import { CharacterMotionConfig } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
-import { findSkeletonBone } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/AnimationFactory";
+import { findSkeletonBone } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/SkeletonUtils";
 import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
 
 // ── 頭部ルックアット設定 ──

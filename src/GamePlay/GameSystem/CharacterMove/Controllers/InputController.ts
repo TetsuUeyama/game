@@ -27,9 +27,9 @@ import {
   DASH_RIGHT_MOTION_CONFIG,
 } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashMotion";
 import { createDashStopMotion, DASH_STOP_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Motion/DashStopMotion";
-import { JumpChargeGauge } from "@/GamePlay/GameSystem/CharacterMove/UI/JumpChargeGauge";
-import { DashGauge } from "@/GamePlay/GameSystem/CharacterMove/UI/DashGauge";
-import { CooldownGauge } from "@/GamePlay/GameSystem/CharacterMove/UI/CooldownGauge";
+import { JumpChargeGauge } from "@/GamePlay/GameSystem/Visualization/Gauges/JumpChargeGauge";
+import { DashGauge } from "@/GamePlay/GameSystem/Visualization/Gauges/DashGauge";
+import { CooldownGauge } from "@/GamePlay/GameSystem/Visualization/Gauges/CooldownGauge";
 import {
   WALK_SPEED_MULTIPLIERS,
   DASH_SPEED_MULTIPLIERS,

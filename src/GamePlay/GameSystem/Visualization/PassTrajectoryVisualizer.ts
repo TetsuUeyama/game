@@ -29,7 +29,7 @@ import {
   RiskAssessmentSystem,
   TrajectoryRiskAnalysisResult,
 } from "@/GamePlay/GameSystem/DecisionMakingSystem/RiskAssessmentSystem";
-import { getTeammates } from "@/GamePlay/GameSystem/CharacterMove/Utils/TeamUtils";
+import { getTeammates } from "@/GamePlay/GameSystem/Utils/TeamUtils";
 
 /**
  * 可視化されたパスオプション

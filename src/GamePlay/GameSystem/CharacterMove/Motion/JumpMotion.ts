@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ジャンプモーション
@@ -81,19 +81,6 @@ export const JUMP_MOTION: MotionData = {
     landingTime: 0.6,
     peakHeight: 1.5,
   },
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 10 },
-    { jointName: "rightKnee", priority: 10 },
-    { jointName: "leftShoulder", priority: 9 },
-    { jointName: "rightShoulder", priority: 9 },
-    { jointName: "leftElbow", priority: 8 },
-    { jointName: "rightElbow", priority: 8 },
-    { jointName: "upperBody", priority: 7 },
-    { jointName: "lowerBody", priority: 6 },
-    { jointName: "head", priority: 5 },
-  ],
 };
 
 export const JUMP_MOTION_CONFIG: MotionConfig = {
@@ -208,13 +195,6 @@ export const JUMP_BALL_MOTION: MotionData = {
     landingTime: 0.9,
     peakHeight: 1.0,
   },
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "head", priority: 8 },
-  ],
 };
 
 /**

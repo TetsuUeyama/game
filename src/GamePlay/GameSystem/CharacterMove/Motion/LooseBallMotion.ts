@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 
 /**
  * ルーズボール確保モーション
@@ -147,13 +147,6 @@ export const LOOSE_BALL_PICKUP_MOTION: MotionData = {
   duration: PU_T4,
   loop: false,
   keyframes: buildKeyframes(LOOSE_BALL_PICKUP_JOINT_ANIMATIONS, LOOSE_BALL_PICKUP_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const LOOSE_BALL_PICKUP_MOTION_CONFIG: MotionConfig = {
@@ -169,13 +162,6 @@ export const LOOSE_BALL_SCRAMBLE_MOTION: MotionData = {
   duration: LB_T4,
   loop: false,
   keyframes: buildKeyframes(LOOSE_BALL_SCRAMBLE_JOINT_ANIMATIONS, LOOSE_BALL_SCRAMBLE_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "rightShoulder", priority: 10 },
-    { jointName: "leftShoulder", priority: 10 },
-    { jointName: "rightElbow", priority: 9 },
-    { jointName: "leftElbow", priority: 9 },
-    { jointName: "upperBody", priority: 8 },
-  ],
 };
 
 export const LOOSE_BALL_SCRAMBLE_MOTION_CONFIG: MotionConfig = {

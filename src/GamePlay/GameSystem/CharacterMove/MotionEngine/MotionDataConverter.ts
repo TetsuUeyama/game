@@ -1,5 +1,5 @@
 /**
- * MotionData ↔ MotionDefinition 変換ユーティリティ
+ * MotionData → MotionDefinition 変換ユーティリティ
  *
  * MotionData（ゲームモード）:
  *   keyframes: [{ time, joints: { leftShoulder: {x,y,z}, ... }, position? }]
@@ -87,89 +87,3 @@ export function motionDataToDefinition(data: MotionData): MotionDefinition {
   };
 }
 
-/**
- * MotionDefinition → MotionData に変換する。
- *
- * テストシーンのモーション定義をゲームモードで使用する場合の変換。
- * MotionDefinition の全キーフレーム時刻を統合し、各時刻で全軸を補間する。
- *
- * MotionDefinition の角度は直立姿勢基準（0° = 直立）。
- * MotionData の角度はレスト姿勢基準（直立オフセット込み）。
- * → 変換時に STANDING_POSE_OFFSETS を加算する。
- *
- * 注: position データは生成されない（MotionDefinition に含まれないため）。
- */
-export function motionDefinitionToData(
-  def: MotionDefinition,
-  loop: boolean = true,
-): MotionData {
-  const timesSet = new Set<number>();
-  for (const keyframes of Object.values(def.joints)) {
-    for (const t of Object.keys(keyframes)) {
-      timesSet.add(parseFloat(t));
-    }
-  }
-  const times = Array.from(timesSet).sort((a, b) => a - b);
-
-  // ジョイント名をグループ化
-  const jointAxes = new Map<string, Map<string, JointKeyframes>>();
-  for (const [key, keyframes] of Object.entries(def.joints)) {
-    const axis = key.slice(-1); // "X", "Y", "Z"
-    const jointName = key.slice(0, -1);
-    if (!jointAxes.has(jointName)) jointAxes.set(jointName, new Map());
-    jointAxes.get(jointName)!.set(axis, keyframes);
-  }
-
-  const keyframes = times.map((time) => {
-    const joints: KeyframeJoints = {};
-
-    for (const [jointName, axes] of jointAxes) {
-      if (!ALL_JOINT_NAMES.includes(jointName as keyof KeyframeJoints)) continue;
-
-      const standing = STANDING_POSE_OFFSETS[jointName];
-      const rotation: JointRotation = {
-        x: interpolateAtTime(axes.get("X"), time) + (standing?.x ?? 0),
-        y: interpolateAtTime(axes.get("Y"), time) + (standing?.y ?? 0),
-        z: interpolateAtTime(axes.get("Z"), time) + (standing?.z ?? 0),
-      };
-      joints[jointName as keyof KeyframeJoints] = rotation;
-    }
-
-    return { time, joints };
-  });
-
-  return {
-    name: def.name,
-    duration: def.duration,
-    loop,
-    keyframes,
-  };
-}
-
-/** 指定時刻での値を線形補間で取得する */
-function interpolateAtTime(
-  keyframes: JointKeyframes | undefined,
-  time: number,
-): number {
-  if (!keyframes) return 0;
-
-  const entries = Object.entries(keyframes)
-    .map(([t, v]) => ({ t: parseFloat(t), v }))
-    .sort((a, b) => a.t - b.t);
-
-  if (entries.length === 0) return 0;
-  if (entries.length === 1) return entries[0].v;
-
-  if (time <= entries[0].t) return entries[0].v;
-  if (time >= entries[entries.length - 1].t) return entries[entries.length - 1].v;
-
-  for (let i = 0; i < entries.length - 1; i++) {
-    if (entries[i].t <= time && time <= entries[i + 1].t) {
-      const span = entries[i + 1].t - entries[i].t;
-      const ratio = span > 0 ? (time - entries[i].t) / span : 0;
-      return entries[i].v + (entries[i + 1].v - entries[i].v) * ratio;
-    }
-  }
-
-  return entries[entries.length - 1].v;
-}

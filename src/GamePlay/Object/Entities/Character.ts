@@ -33,7 +33,7 @@ import { ActionController } from "@/GamePlay/GameSystem/CharacterMove/Controller
 import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
-import { PlayerData } from "@/GamePlay/GameSystem/CharacterMove/Types/PlayerData";
+import { PlayerData } from "@/GamePlay/Management/Types/PlayerData";
 import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";

@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 import { expandBasePose } from "@/GamePlay/GameSystem/CharacterMove/Motion/BaseMotion";
 
 /**
@@ -50,12 +50,6 @@ export const IDLE_MOTION: MotionData = {
   duration: T4, // 1サイクル: T4秒
   loop: true,
   keyframes: buildKeyframes(IDLE_JOINT_ANIMATIONS, POSITION_ANIMATIONS),
-  // 優先度設定（全体的に低め）
-  priorities: [
-    {jointName: "upperBody", priority: 5},
-    {jointName: "head", priority: 4},
-    {jointName: "lowerBody", priority: 3},
-  ],
 };
 
 /**

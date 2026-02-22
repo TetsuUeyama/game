@@ -1,5 +1,5 @@
 import { MotionData, MotionConfig } from "@/GamePlay/GameSystem/CharacterMove/Types/MotionTypes";
-import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/Utils/MotionUtils";
+import { buildKeyframes, createDerivedMotion } from "@/GamePlay/GameSystem/CharacterMove/MotionEngine/MotionUtils";
 import { IDLE_JOINT_ANIMATIONS, T0 as IDLE_T0, T1 as IDLE_T1, T2 as IDLE_T2, T3 as IDLE_T3, T4 as IDLE_T4 } from "@/GamePlay/GameSystem/CharacterMove/Motion/IdleMotion";
 
 /**
@@ -119,19 +119,6 @@ export const WALK_FORWARD_MOTION: MotionData = {
   duration: WF_T4,
   loop: true,
   keyframes: buildKeyframes(WF_JOINT_ANIMATIONS, WF_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "leftShoulder", priority: 8 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "leftElbow", priority: 7 },
-    { jointName: "rightElbow", priority: 7 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "lowerBody", priority: 5 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_FORWARD_MOTION_CONFIG: MotionConfig = {
@@ -222,16 +209,6 @@ export const WALK_BACKWARD_MOTION: MotionData = {
   duration: WB_T4,
   loop: true,
   keyframes: buildKeyframes(WB_JOINT_ANIMATIONS, WB_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "leftShoulder", priority: 8 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_BACKWARD_MOTION_CONFIG: MotionConfig = {
@@ -321,14 +298,6 @@ export const WALK_LEFT_MOTION: MotionData = {
   duration: WL_T4,
   loop: true,
   keyframes: buildKeyframes(WL_JOINT_ANIMATIONS, WL_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_LEFT_MOTION_CONFIG: MotionConfig = {
@@ -418,14 +387,6 @@ export const WALK_RIGHT_MOTION: MotionData = {
   duration: WR_T4,
   loop: true,
   keyframes: buildKeyframes(WR_JOINT_ANIMATIONS, WR_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_RIGHT_MOTION_CONFIG: MotionConfig = {
@@ -468,16 +429,6 @@ export const WALK_FORWARD_LEFT_MOTION: MotionData = {
   duration: WFL_T4,
   loop: true,
   keyframes: buildKeyframes(WFL_JOINT_ANIMATIONS, WFL_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "leftShoulder", priority: 8 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_FORWARD_LEFT_MOTION_CONFIG: MotionConfig = {
@@ -514,16 +465,6 @@ export const WALK_FORWARD_RIGHT_MOTION: MotionData = {
   duration: WFR_T4,
   loop: true,
   keyframes: buildKeyframes(WFR_JOINT_ANIMATIONS, WFR_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "leftShoulder", priority: 8 },
-    { jointName: "rightShoulder", priority: 8 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_FORWARD_RIGHT_MOTION_CONFIG: MotionConfig = {
@@ -560,14 +501,6 @@ export const WALK_BACKWARD_LEFT_MOTION: MotionData = {
   duration: WBL_T4,
   loop: true,
   keyframes: buildKeyframes(WBL_JOINT_ANIMATIONS, WBL_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_BACKWARD_LEFT_MOTION_CONFIG: MotionConfig = {
@@ -604,14 +537,6 @@ export const WALK_BACKWARD_RIGHT_MOTION: MotionData = {
   duration: WBR_T4,
   loop: true,
   keyframes: buildKeyframes(WBR_JOINT_ANIMATIONS, WBR_POSITION_ANIMATIONS),
-  priorities: [
-    { jointName: "leftHip", priority: 10 },
-    { jointName: "rightHip", priority: 10 },
-    { jointName: "leftKnee", priority: 9 },
-    { jointName: "rightKnee", priority: 9 },
-    { jointName: "upperBody", priority: 6 },
-    { jointName: "head", priority: 4 },
-  ],
 };
 
 export const WALK_BACKWARD_RIGHT_MOTION_CONFIG: MotionConfig = {

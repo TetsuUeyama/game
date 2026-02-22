@@ -15,63 +15,33 @@
  *      Q_rest × eq(offset) でクォータニオン合成。
  *      旧実装の eq(rest_euler + offset_euler) は数学的に不正確だったため廃止。
  *
- *   4. PoseBlender              ← bone.rotationQuaternion に書き込み
- *      idle/walk を速度比でブレンドして毎フレーム適用。
+ *   4. MotionPlayer             ← bone.rotationQuaternion に書き込み
+ *      Quaternion Slerp で毎フレーム補間適用。
  *
  * 重要な注意点:
  *   - バインドポーズは getRestPose() から取得（不変）
  *   - getLocalMatrix() は使用禁止（アニメーション状態で変わる）
- *   - IKSystem は PoseBlender の後に実行（FK を上書きするため）
+ *   - IKSystem は MotionPlayer の後に実行（FK を上書きするため）
  */
 import {
   Skeleton,
   Bone,
   Vector3,
   Quaternion,
-  Space,
   Scene,
   Animation,
   AnimationGroup,
-  TransformNode,
 } from "@babylonjs/core";
-import {
-  MIXAMO_BONE_NAMES,
-  RIGIFY_BONE_NAMES,
-  LogicalBoneName,
-} from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
-import { PoseData, PoseBoneData } from "./PoseBlender";
 import { SingleMotionPoseData } from "./MotionPlayer";
+import { FoundBones, detectRigType, findAllBones } from "./SkeletonUtils";
 import { MotionDefinition } from "./MotionDefinitionTypes";
 import { IDLE_MOTION } from "./ViewerIdleMotion";
 import { WALK_MOTION } from "./ViewerWalkMotion";
 import { clampJointDegrees } from "@/GamePlay/GameSystem/CharacterMove/Config/JointLimitsConfig";
 
-/** ボーン検索結果（hips/spine は Rigify では null になる場合がある） */
-export interface FoundBones {
-  hips: Bone | null;
-  spine: Bone | null;
-  spine2: Bone | null;
-  head: Bone | null;
-  lUpLeg: Bone | null;
-  rUpLeg: Bone | null;
-  lLeg: Bone | null;
-  rLeg: Bone | null;
-  lFoot: Bone | null;
-  rFoot: Bone | null;
-  lArm: Bone | null;
-  rArm: Bone | null;
-  lForeArm: Bone | null;
-  rForeArm: Bone | null;
-}
-
-/** リグの種類 */
-export type RigType = "mixamo" | "rigify" | "unknown";
-
-export function detectRigType(skeleton: Skeleton): RigType {
-  if (skeleton.bones.some((b) => b.name.includes("mixamorig:"))) return "mixamo";
-  if (skeleton.bones.some((b) => b.name.startsWith("DEF-"))) return "rigify";
-  return "unknown";
-}
+// Re-export skeleton utilities for backward compatibility
+export { detectRigType, findAllBones, findSkeletonBone } from "./SkeletonUtils";
+export type { FoundBones, RigType } from "./SkeletonUtils";
 
 /** モーション関節名 → FoundBones キー */
 const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
@@ -90,24 +60,6 @@ const JOINT_TO_BONE: Record<string, keyof FoundBones> = {
   rightKnee: "rLeg",
   leftFoot: "lFoot",
   rightFoot: "rFoot",
-};
-
-/** FoundBones キー → LogicalBoneName（ボーン検索用） */
-const FOUND_TO_LOGICAL: Record<keyof FoundBones, LogicalBoneName> = {
-  hips: "hips",
-  spine: "spine",
-  spine2: "spine2",
-  head: "head",
-  lUpLeg: "leftUpLeg",
-  rUpLeg: "rightUpLeg",
-  lLeg: "leftLeg",
-  rLeg: "rightLeg",
-  lFoot: "leftFoot",
-  rFoot: "rightFoot",
-  lArm: "leftArm",
-  rArm: "rightArm",
-  lForeArm: "leftForeArm",
-  rForeArm: "rightForeArm",
 };
 
 const DEG_TO_RAD = Math.PI / 180;
@@ -215,94 +167,6 @@ export function captureRestPoses(skeleton: Skeleton): RestPoseCache | null {
 }
 
 /**
- * モーション関節名（"leftShoulder" 等）からスケルトンのボーンを取得する。
- * UI でジョイントハイライト表示に使用。
- *
- * findSkeletonBone は Rigify で DEF- プレフィックス以外のボーン（hips="torso",
- * spine="ORG-spine.003"）を返さないため、フォールバックで直接検索する。
- */
-export function findBoneForJoint(
-  skeleton: Skeleton,
-  jointName: string,
-): Bone | null {
-  const foundKey = JOINT_TO_BONE[jointName];
-  if (!foundKey) return null;
-  const logicalName = FOUND_TO_LOGICAL[foundKey];
-  if (!logicalName) return null;
-
-  // 通常検索（Mixamo / unknown）
-  const bone = findSkeletonBone(skeleton, logicalName);
-  if (bone) return bone;
-
-  // フォールバック: Rigify の非 DEF ボーン（torso, ORG-spine 等）を直接検索
-  const rigifyName = RIGIFY_BONE_NAMES[logicalName];
-  if (rigifyName) {
-    return skeleton.bones.find((b) =>
-      b.name === rigifyName ||
-      b.name.startsWith(rigifyName + "_")
-    ) ?? null;
-  }
-
-  return null;
-}
-
-/**
- * スケルトンに対して Idle / Walk のポーズデータを生成する。
- *
- * AnimationGroup ではなく、PoseBlender 用の Quaternion キーフレームデータを返す。
- * PoseBlender が毎フレーム直接ボーンの rotationQuaternion を設定する。
- *
- * 変換パイプライン:
- *   MotionDefinition (度数)
- *     → motionToEulerKeys(): 純粋なオフセット Euler (rad)
- *       → eulerKeysToQuatKeys(): Q_rest × eq(offset) → 最終 Quaternion
- *         → PoseBlender: bone.rotationQuaternion に書き込み
- */
-export function createPoseData(
-  skeleton: Skeleton,
-  restPoses?: RestPoseCache,
-): PoseData | null {
-  const rigType = detectRigType(skeleton);
-  const bones = findAllBones(skeleton, rigType);
-  if (!bones) return null;
-
-  const isRigify = rigType === "rigify";
-
-  // 左右対称補正: 右ボーンのレスト姿勢が左のミラーと一致しない場合の補正
-  const corrections = computeCorrections(bones, restPoses);
-
-  // Step 1: MotionDefinition → 純粋なオフセット Euler キーフレーム
-  //         レスト姿勢は含まない（後段で Quaternion 合成する）
-  const idleEntries = motionToEulerKeys(IDLE_MOTION, bones, isRigify);
-  const walkEntries = motionToEulerKeys(WALK_MOTION, bones, isRigify);
-
-  const boneMap = new Map<Bone, PoseBoneData>();
-
-  // Step 2: オフセット Euler → 最終 Quaternion
-  //         idle は絶対モード: Q_rest × eq(offset)
-  for (const { bone, keys } of idleEntries) {
-    if (!boneMap.has(bone)) {
-      boneMap.set(bone, { bone, idleKeys: [], walkKeys: [] });
-    }
-    boneMap.get(bone)!.idleKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, false);
-  }
-
-  //         walk は isDelta=true なので: eq(offset) のみ（PoseBlender が idle に加算）
-  for (const { bone, keys } of walkEntries) {
-    if (!boneMap.has(bone)) {
-      boneMap.set(bone, { bone, idleKeys: [], walkKeys: [] });
-    }
-    boneMap.get(bone)!.walkKeys = eulerKeysToQuatKeys(keys, bone, corrections, restPoses, WALK_MOTION.isDelta ?? false);
-  }
-
-  return {
-    bones: Array.from(boneMap.values()),
-    idleFrameCount: Math.round(IDLE_MOTION.duration * FPS),
-    walkFrameCount: Math.round(WALK_MOTION.duration * FPS),
-  };
-}
-
-/**
  * プロシージャルスケルトン用: AnimationGroup ベースの Idle/Walk アニメーションを生成。
  * rotationQuaternion プロパティをターゲットにし、Q_rest × eq(offset) でクォータニオン合成。
  * GLBモデルと同一の変換パイプラインを使用。
@@ -358,98 +222,6 @@ export function createAnimationsForSkeleton(
   }
 
   return { idle: idleGroup, walk: walkGroup };
-}
-
-// ─── Bone Finder ───────────────────────────────────────────
-
-/**
- * Rigify の非 DEF ボーンをフォールバック検索する。
- * findSkeletonBone は DEF- プレフィックスのないボーンを拒否するため、
- * spine2 (tweak_spine.004) や head などの非 DEF ボーンはこの関数で検索する。
- */
-function findRigifyBone(skeleton: Skeleton, logicalName: LogicalBoneName): Bone | null {
-  const rigifyName = RIGIFY_BONE_NAMES[logicalName];
-  if (!rigifyName) return null;
-  return skeleton.bones.find((b) =>
-    b.name === rigifyName ||
-    (b.name.startsWith(rigifyName + "_") &&
-      !b.name.startsWith(rigifyName + "."))
-  ) ?? null;
-}
-
-/**
- * 全ボーンを検索して FoundBones を返す。
- * 有効なボーンが1つもなければ null。
- */
-export function findAllBones(skeleton: Skeleton, rigType: RigType): FoundBones | null {
-  const hips =
-    rigType === "rigify" ? null : findSkeletonBone(skeleton, "hips", rigType);
-  const spine =
-    rigType === "rigify" ? null : findSkeletonBone(skeleton, "spine", rigType);
-
-  if (rigType !== "rigify" && !hips) return null;
-
-  const bones: FoundBones = {
-    hips,
-    spine,
-    spine2: findSkeletonBone(skeleton, "spine2", rigType)
-      ?? (rigType === "rigify" ? findRigifyBone(skeleton, "spine2") : null),
-    head: findSkeletonBone(skeleton, "head", rigType)
-      ?? (rigType === "rigify" ? findRigifyBone(skeleton, "head") : null),
-    lUpLeg: findSkeletonBone(skeleton, "leftUpLeg", rigType),
-    rUpLeg: findSkeletonBone(skeleton, "rightUpLeg", rigType),
-    lLeg: findSkeletonBone(skeleton, "leftLeg", rigType),
-    rLeg: findSkeletonBone(skeleton, "rightLeg", rigType),
-    lFoot: findSkeletonBone(skeleton, "leftFoot", rigType),
-    rFoot: findSkeletonBone(skeleton, "rightFoot", rigType),
-    lArm: findSkeletonBone(skeleton, "leftArm", rigType),
-    rArm: findSkeletonBone(skeleton, "rightArm", rigType),
-    lForeArm: findSkeletonBone(skeleton, "leftForeArm", rigType),
-    rForeArm: findSkeletonBone(skeleton, "rightForeArm", rigType),
-  };
-
-  if (!Object.values(bones).some((b) => b !== null)) return null;
-
-  return bones;
-}
-
-/**
- * スケルトンからボーンを論理名で検索する。
- * AnimationFactory / IKSystem 共用。
- */
-export function findSkeletonBone(
-  skeleton: Skeleton,
-  logicalName: LogicalBoneName,
-  rigType?: RigType
-): Bone | null {
-  const mixamoName = MIXAMO_BONE_NAMES[logicalName];
-  const rigifyPattern = RIGIFY_BONE_NAMES[logicalName];
-  const rig = rigType ?? detectRigType(skeleton);
-
-  if (rig === "rigify") {
-    if (!rigifyPattern || !rigifyPattern.startsWith("DEF-")) return null;
-    return (
-      skeleton.bones.find(
-        (b) =>
-          b.name === rigifyPattern ||
-          (b.name.startsWith(rigifyPattern + "_") &&
-            !b.name.startsWith(rigifyPattern + "."))
-      ) ?? null
-    );
-  }
-
-  const exact = skeleton.bones.find((b) => b.name === mixamoName);
-  if (exact) return exact;
-
-  const genericName = mixamoName.replace("mixamorig:", "");
-  const generic = skeleton.bones.find((b) => b.name === genericName);
-  if (generic) return generic;
-
-  const lower = genericName.toLowerCase();
-  const fuzzy = skeleton.bones.find((b) =>
-    b.name.toLowerCase().includes(lower)
-  );
-  return fuzzy ?? null;
 }
 
 // ─── Rest Pose ────────────────────────────────────────────
@@ -596,29 +368,6 @@ function eulerKeysToQuatKeys(
   }));
 }
 
-/**
- * 指定ジョイントの補正クォータニオンを取得する。
- * インジケータ矢印の軸補正に使用。補正不要なら null。
- */
-export function getJointCorrection(
-  skeleton: Skeleton,
-  jointName: string,
-  restPoses?: RestPoseCache,
-): Quaternion | null {
-  const rigType = detectRigType(skeleton);
-  const bones = findAllBones(skeleton, rigType);
-  if (!bones) return null;
-
-  const boneKey = JOINT_TO_BONE[jointName];
-  if (!boneKey) return null;
-
-  const bone = bones[boneKey];
-  if (!bone) return null;
-
-  const corrections = computeCorrections(bones, restPoses);
-  return corrections.get(bone) ?? null;
-}
-
 // ─── Motion → Offset Euler Keys 変換 ──────────────────────
 //
 // パイプラインの第1段: MotionDefinition の度数データ → 純粋なオフセット Euler (rad)
@@ -702,18 +451,19 @@ function motionToEulerKeys(
     const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
     const zS = isArm ? 1 : yS;
 
-    // 純粋なオフセットのみ出力（度→ラジアン変換 + 直立オフセット + Rigify調整を加算）
+    // 純粋なオフセットのみ出力（直立オフセット + Rigify調整 + 軸符号補正 → クランプ → ラジアン変換）
+    // クランプは軸符号補正後の最終度数値に適用（リミット値 = 最終ボーン角度の制限）
     // レスト姿勢(Q_rest)は含めない。eulerKeysToQuatKeys で Q_rest × eq(offset) として合成する。
     const keys = times.map((time) => {
-      const rawX = clampJointDegrees(jointName, "X", axes.get("X")?.[time] ?? 0);
-      const rawY = clampJointDegrees(jointName, "Y", axes.get("Y")?.[time] ?? 0);
-      const rawZ = clampJointDegrees(jointName, "Z", axes.get("Z")?.[time] ?? 0);
+      const combinedX = ((axes.get("X")?.[time] ?? 0) + stdX + adjX) * xS;
+      const combinedY = ((axes.get("Y")?.[time] ?? 0) + stdY + adjY) * yS * yFootS;
+      const combinedZ = ((axes.get("Z")?.[time] ?? 0) + stdZ + adjZ) * zS * zJointS;
       return {
         frame: Math.round(time * FPS),
         value: new Vector3(
-          (rawX + stdX + adjX) * DEG_TO_RAD * xS,
-          (rawY + stdY + adjY) * DEG_TO_RAD * yS * yFootS,
-          (rawZ + stdZ + adjZ) * DEG_TO_RAD * zS * zJointS,
+          clampJointDegrees(jointName, "X", combinedX) * DEG_TO_RAD,
+          clampJointDegrees(jointName, "Y", combinedY) * DEG_TO_RAD,
+          clampJointDegrees(jointName, "Z", combinedZ) * DEG_TO_RAD,
         ),
       };
     });
@@ -733,9 +483,9 @@ function motionToEulerKeys(
       if (!bone || processedBones.has(bone)) continue;
 
       processedBones.add(bone);
-      const adjX = clampJointDegrees(jointName, "X", motion.rigifyAdjustments[jointName + "X"] ?? 0);
-      const adjY = clampJointDegrees(jointName, "Y", motion.rigifyAdjustments[jointName + "Y"] ?? 0);
-      const adjZ = clampJointDegrees(jointName, "Z", motion.rigifyAdjustments[jointName + "Z"] ?? 0);
+      const adjX = motion.rigifyAdjustments[jointName + "X"] ?? 0;
+      const adjY = motion.rigifyAdjustments[jointName + "Y"] ?? 0;
+      const adjZ = motion.rigifyAdjustments[jointName + "Z"] ?? 0;
 
       const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
       const isHip = jointName === "leftHip" || jointName === "rightHip";
@@ -748,9 +498,9 @@ function motionToEulerKeys(
       const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");
       const zS = isArm ? 1 : yS;
       const value = new Vector3(
-        adjX * DEG_TO_RAD * xS,
-        adjY * DEG_TO_RAD * yS * yFootS,
-        adjZ * DEG_TO_RAD * zS * zJointS,
+        clampJointDegrees(jointName, "X", adjX * xS) * DEG_TO_RAD,
+        clampJointDegrees(jointName, "Y", adjY * yS * yFootS) * DEG_TO_RAD,
+        clampJointDegrees(jointName, "Z", adjZ * zS * zJointS) * DEG_TO_RAD,
       );
       results.push({
         bone,
@@ -785,196 +535,6 @@ function motionToEulerKeys(
   }
 
   return results;
-}
-
-// ─── Aligned Rest Cache ─────────────────────────────────────
-
-/**
- * GLBモデルのレスト回転を簡易モデルにマッピングした補正済みRestPoseCacheを構築する。
- *
- * 問題: GLBモデルと簡易モデルはレスト回転(Q_rest)が異なるため、
- *       同じMotionDefinitionを適用しても異なるモーションになる。
- *
- * 解決:
- *   GLBモデルの階層: rootMesh(__root__) → [Armature等] → HipsNode → SpineNode → ...
- *   簡易モデルの階層: rootMesh → Hips → Spine → ...
- *
- *   GLBには Armature TransformNode（通常 RotX(90°)、Blender Z-up → GLTF Y-up 変換）が
- *   rootMesh とボーンの間に存在するが、簡易モデルにはない。
- *
- *   Hips（ルートボーン）: Armature回転を Q_rest に焼き込む
- *     corrected = ArmatureChainQ × Q_rest_glb(Hips)
- *     典型例: RotX(90°) × RotX(-90°) = Identity
- *
- *   他のボーン: GLB Q_rest をそのまま使用
- *     親チェーンが Hips 以下で一致するため、補正不要
- *
- * @returns correctedCache: 簡易モデル用の補正済みRestPoseCache
- * @returns rootRotation: 簡易モデルのrootMeshに設定すべき回転（GLB rootMeshと同じ）
- */
-export function buildAlignedRestCache(
-  glbSkeleton: Skeleton,
-  glbRestCache: RestPoseCache,
-  glbRootMesh: TransformNode,
-  procRestCache: RestPoseCache,
-): { correctedCache: RestPoseCache; rootRotation: Quaternion } {
-  // 1. GLBボーン名 → Q_rest マップ
-  const glbByName = new Map<string, Quaternion>();
-  for (const [bone, quat] of glbRestCache) {
-    glbByName.set(bone.name, quat);
-  }
-
-  // 2. GLB Hips → rootMesh 間のチェーン回転（Armature回転）を計算
-  //    HipsNode の親から rootMesh まで遡り、各ノードのローカル回転を累積
-  const glbHipsBone = findSkeletonBone(glbSkeleton, "hips");
-  let chainQ = Quaternion.Identity();
-  if (glbHipsBone) {
-    const hipsNode = glbHipsBone.getTransformNode();
-    if (hipsNode) {
-      let current: TransformNode | null =
-        hipsNode.parent instanceof TransformNode ? hipsNode.parent : null;
-      while (current && current !== glbRootMesh) {
-        const nodeQ = current.rotationQuaternion
-          ? current.rotationQuaternion.clone()
-          : Quaternion.RotationYawPitchRoll(current.rotation.y, current.rotation.x, current.rotation.z);
-        chainQ = nodeQ.multiply(chainQ);
-        current = current.parent instanceof TransformNode ? current.parent : null;
-      }
-    }
-  }
-
-  // 3. rootRotation: GLB rootMesh の回転をそのまま使用
-  const rootRotation = glbRootMesh.rotationQuaternion
-    ? glbRootMesh.rotationQuaternion.clone()
-    : Quaternion.RotationYawPitchRoll(
-        glbRootMesh.rotation.y,
-        glbRootMesh.rotation.x,
-        glbRootMesh.rotation.z,
-      );
-
-  // 4. 簡易モデルの RestPoseCache を GLB の値で上書き
-  //    Hips: chainQ × Q_rest_glb（Armature回転を焼き込み）
-  //    他ボーン: Q_rest_glb そのまま（親チェーンが一致するため補正不要）
-  const correctedCache: RestPoseCache = new Map();
-  const hipsName = glbHipsBone?.name ?? "";
-  for (const [procBone, origQuat] of procRestCache) {
-    const glbQuat = glbByName.get(procBone.name);
-    if (glbQuat) {
-      if (procBone.name === hipsName) {
-        correctedCache.set(procBone, chainQ.multiply(glbQuat));
-      } else {
-        correctedCache.set(procBone, glbQuat.clone());
-      }
-    } else {
-      correctedCache.set(procBone, origQuat);
-    }
-  }
-
-  return { correctedCache, rootRotation };
-}
-
-// ─── Runtime Pose Sync ──────────────────────────────────────
-//
-// GLBモデルのボーン回転を簡易モデルに毎フレーム直接コピーする。
-// buildAlignedRestCache のキャッシュベースのアプローチと異なり、
-// PoseBlender/MotionPlayer が書き込んだ最終回転を読み取ってコピーするため、
-// Q_rest パイプラインの問題を完全に回避する。
-//
-// GLB: rootMesh → Armature(RotX(90°)) → HipsNode → SpineNode → ...
-// Proc: rootMesh → Root → Hips → Spine → ...
-//
-// Hips: procQ = ArmatureChainQ × glbQ（Armature回転を焼き込み）
-// 他ボーン: procQ = glbQ（親チェーンが Hips 以下で一致）
-
-/** ランタイムポーズ同期の初期化データ */
-export interface PoseSyncState {
-  /** GLBボーン名 → GLB TransformNode 参照 */
-  glbNodeMap: Map<string, TransformNode>;
-  /** GLBボーン名 → proc Bone 参照 */
-  procBoneMap: Map<string, Bone>;
-  /** Hips ボーン名 */
-  hipsName: string;
-  /** Armature チェーン回転（Hips 補正用） */
-  chainQ: Quaternion;
-}
-
-/**
- * ランタイムポーズ同期を初期化する。
- * GLBモデルのFK対象ボーンと簡易モデルのボーンを名前でマッピング。
- *
- * 腕ボーンの位置ズレは ProceduralHumanoid の updateVisuals() で
- * 視覚反転（肩位置基準のミラー）により解決する。
- */
-export function initPoseSync(
-  glbSkeleton: Skeleton,
-  glbRootMesh: TransformNode,
-  procSkeleton: Skeleton,
-): PoseSyncState {
-  // GLB ボーン → TransformNode マップ
-  const glbNodeMap = new Map<string, TransformNode>();
-  for (const bone of glbSkeleton.bones) {
-    const node = bone.getTransformNode();
-    if (node) {
-      glbNodeMap.set(bone.name, node);
-    }
-  }
-
-  // proc ボーン名 → Bone マップ
-  const procBoneMap = new Map<string, Bone>();
-  for (const bone of procSkeleton.bones) {
-    procBoneMap.set(bone.name, bone);
-  }
-
-  // Armature チェーン回転
-  const glbHipsBone = findSkeletonBone(glbSkeleton, "hips");
-  let chainQ = Quaternion.Identity();
-  const hipsName = glbHipsBone?.name ?? "";
-  if (glbHipsBone) {
-    const hipsNode = glbHipsBone.getTransformNode();
-    if (hipsNode) {
-      let current: TransformNode | null =
-        hipsNode.parent instanceof TransformNode ? hipsNode.parent : null;
-      while (current && current !== glbRootMesh) {
-        const nodeQ = current.rotationQuaternion
-          ? current.rotationQuaternion.clone()
-          : Quaternion.RotationYawPitchRoll(current.rotation.y, current.rotation.x, current.rotation.z);
-        chainQ = nodeQ.multiply(chainQ);
-        current = current.parent instanceof TransformNode ? current.parent : null;
-      }
-    }
-  }
-
-  return { glbNodeMap, procBoneMap, hipsName, chainQ };
-}
-
-/**
- * GLBモデルの現在のボーン回転を簡易モデルにコピーする。
- * 毎フレーム、PoseBlender/MotionPlayer の更新後に呼び出す。
- *
- * - Hips: Armature チェーン回転で補正（chainQ × glbQ）
- * - 他ボーン: そのままコピー（glbQ）
- *
- * 腕ボーンの位置ズレは ProceduralHumanoid の updateVisuals() で
- * 視覚反転（肩位置基準のミラー）により解決する。
- */
-export function syncPoseFromGLB(state: PoseSyncState): void {
-  const { glbNodeMap, procBoneMap, hipsName, chainQ } = state;
-
-  for (const [boneName, glbNode] of glbNodeMap) {
-    const procBone = procBoneMap.get(boneName);
-    if (!procBone) continue;
-
-    const glbQ = glbNode.rotationQuaternion;
-    if (!glbQ) continue;
-
-    if (boneName === hipsName) {
-      // Hips: Armature 回転を焼き込み
-      procBone.setRotationQuaternion(chainQ.multiply(glbQ), Space.LOCAL);
-    } else {
-      // 他ボーン: そのままコピー
-      procBone.setRotationQuaternion(glbQ.clone(), Space.LOCAL);
-    }
-  }
 }
 
 // ─── Single Motion Pose Data ────────────────────────────────
