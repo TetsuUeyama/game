@@ -226,6 +226,39 @@ export class SkeletonAdapter {
   }
 
   /**
+   * ボーンチェーン方向（親→本ボーン）に沿って distance だけ延長した位置を返す。
+   * 手首ボーンに使えば、前腕→手首方向を延長してパーム中心を得られる。
+   * 呼び出し前に forceWorldMatrixUpdate() を実行済みであること。
+   */
+  getBoneChainExtendedPosition(bone: Bone, distance: number): Vector3 {
+    const bonePos = this.getBoneWorldPosition(bone);
+    const parent = bone.getParent() as Bone | null;
+    if (!parent) return bonePos;
+
+    const parentPos = this.getBoneWorldPosition(parent);
+    const dir = bonePos.subtract(parentPos);
+    const len = dir.length();
+    if (len < 1e-6) return bonePos;
+
+    dir.scaleInPlace(distance / len);
+    return bonePos.add(dir);
+  }
+
+  /**
+   * ボーンのローカル軸をワールド方向ベクトルに変換して返す。
+   * 例: localAxis=(0,0,-1) を渡すと、ボーンのローカル -Z 軸のワールド方向を返す。
+   * 呼び出し前に forceWorldMatrixUpdate() を実行済みであること。
+   */
+  getBoneLocalAxisInWorld(bone: Bone, localAxis: Vector3): Vector3 {
+    const node = bone.getTransformNode();
+    if (node) {
+      return Vector3.TransformNormal(localAxis, node.getWorldMatrix()).normalize();
+    }
+    const combined = bone.getAbsoluteTransform().multiply(this.mesh.getWorldMatrix());
+    return Vector3.TransformNormal(localAxis, combined).normalize();
+  }
+
+  /**
    * ボーンワールド座標クエリ前に呼ぶ。
    * GLB: rootMesh + 全 TransformNode のワールド行列を再計算。
    * Procedural: skeleton の絶対行列を再計算。
