@@ -442,9 +442,10 @@ function motionToEulerKeys(
     const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
     const isHip = jointName === "leftHip" || jointName === "rightHip";
     const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
+    const isRightElbow = jointName === "rightElbow";
     const xS = isShoulder ? -1 : 1;
     const yFootS = isFoot ? -1 : 1;
-    const zJointS = (isHip || isFoot) ? -1 : 1;
+    const zJointS = (isHip || isFoot || isRightElbow) ? -1 : 1;
 
     const isRight = jointName.startsWith("right");
     const yS = (mirrorYZ && !isRight) ? -1 : 1;
@@ -490,9 +491,10 @@ function motionToEulerKeys(
       const isShoulder = jointName === "leftShoulder" || jointName === "rightShoulder";
       const isHip = jointName === "leftHip" || jointName === "rightHip";
       const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
+      const isRightElbow = jointName === "rightElbow";
       const xS = isShoulder ? -1 : 1;
       const yFootS = isFoot ? -1 : 1;
-      const zJointS = (isHip || isFoot) ? -1 : 1;
+      const zJointS = (isHip || isFoot || isRightElbow) ? -1 : 1;
       const isRight = jointName.startsWith("right");
       const yS = (mirrorYZ && !isRight) ? -1 : 1;
       const isArm = jointName.endsWith("Shoulder") || jointName.endsWith("Elbow");

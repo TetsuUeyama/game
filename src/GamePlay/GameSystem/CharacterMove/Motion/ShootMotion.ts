@@ -50,37 +50,37 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   headZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
   // 右腕（シュートハンド）：ボールを持ち上げてリリース
-  rightShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -120, [SHOOT_3PT_T2]: -160, [SHOOT_3PT_T3]: -170, [SHOOT_3PT_T4]: -30},
-  rightShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
-  rightShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  rightShoulderX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 30, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 30, [SHOOT_3PT_T4]: 30},
+  rightShoulderY: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 30, [SHOOT_3PT_T2]: 41, [SHOOT_3PT_T3]: 30, [SHOOT_3PT_T4]: 30},
+  rightShoulderZ: {[SHOOT_3PT_T0]: -60, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: -60, [SHOOT_3PT_T3]: -60, [SHOOT_3PT_T4]: 0},
 
   rightElbowX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -110, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
   rightElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
   // 左腕（ガイドハンド）：補助
-  leftShoulderX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -120, [SHOOT_3PT_T3]: -60, [SHOOT_3PT_T4]: -30},
-  leftShoulderY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 20, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 15, [SHOOT_3PT_T4]: 0},
-  leftShoulderZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
+  leftShoulderX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 30, [SHOOT_3PT_T2]: 35, [SHOOT_3PT_T3]: 30, [SHOOT_3PT_T4]: 30},
+  leftShoulderY: {[SHOOT_3PT_T0]: 25, [SHOOT_3PT_T1]: 35, [SHOOT_3PT_T2]: 32.5, [SHOOT_3PT_T3]: 35, [SHOOT_3PT_T4]: 30},
+  leftShoulderZ: {[SHOOT_3PT_T0]: 90, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 90, [SHOOT_3PT_T3]: 90, [SHOOT_3PT_T4]: 90},
 
   leftElbowX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: -80, [SHOOT_3PT_T3]: -40, [SHOOT_3PT_T4]: -30},
   leftElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   leftElbowZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
   // 脚：ジャンプ
-  leftHipX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
+  leftHipX: {[SHOOT_3PT_T0]: 20, [SHOOT_3PT_T1]: 4, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 10, [SHOOT_3PT_T4]: 20},
   leftHipY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   leftHipZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
-  rightHipX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
+  rightHipX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 20, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 10, [SHOOT_3PT_T4]: 30},
   rightHipY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightHipZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
-  leftKneeX: {[SHOOT_3PT_T0]: 50, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 10, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 50},
+  leftKneeX: {[SHOOT_3PT_T0]: -25, [SHOOT_3PT_T1]: -30, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: -25},
   leftKneeY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   leftKneeZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 
-  rightKneeX: {[SHOOT_3PT_T0]: 50, [SHOOT_3PT_T1]: 90, [SHOOT_3PT_T2]: 10, [SHOOT_3PT_T3]: 40, [SHOOT_3PT_T4]: 50},
+  rightKneeX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -30, [SHOOT_3PT_T2]: -5, [SHOOT_3PT_T3]: -30, [SHOOT_3PT_T4]: -30},
   rightKneeY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
   rightKneeZ: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
 };

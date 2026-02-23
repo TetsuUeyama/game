@@ -2,15 +2,41 @@ import { GameTeamConfig } from '@/GamePlay/Data/TeamConfigLoader';
 
 type ConfigKey = 'teamConfig1on1' | 'teamConfig5on5';
 
+// ===== ロスター & トレーニング型定義 =====
+
+export type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
+
+export interface RosterStarter {
+  leaguePlayerId: string;
+  position: Position;
+}
+
+export interface RosterConfig {
+  starters: RosterStarter[];  // 5人
+  bench: string[];            // leaguePlayerId × 5人
+}
+
+export type TrainingProgramId =
+  | 'shooting' | 'three_point' | 'dribbling' | 'passing'
+  | 'defense' | 'physical' | 'speed' | 'team_tactics'
+  | 'free_throw' | 'mental';
+
+export interface TrainingConfig {
+  selectedPrograms: TrainingProgramId[];  // 最大3つ
+}
+
 // ===== インメモリストア =====
 
 const userProfiles = new Map<string, UserProfile>();
 const userConfigs = new Map<string, GameTeamConfig>(); // key: `${userId}/${configKey}`
+const rosterConfigs = new Map<string, RosterConfig>();
+const trainingConfigs = new Map<string, TrainingConfig>();
 
 // ===== ユーザープロフィール =====
 
 export interface UserProfile {
-  name: string;
+  lastName: string;
+  firstName: string;
   university: string;
   teamName: string;
 }
@@ -83,4 +109,34 @@ export async function fetchDefaultTeamConfig(
   const res = await fetch(`/data/${configKey}.json`);
   if (!res.ok) return null;
   return (await res.json()) as GameTeamConfig;
+}
+
+// ===== ロスター構成 =====
+
+export async function saveRosterConfig(
+  userId: string,
+  config: RosterConfig
+): Promise<void> {
+  rosterConfigs.set(userId, JSON.parse(JSON.stringify(config)));
+}
+
+export async function loadRosterConfig(
+  userId: string
+): Promise<RosterConfig | null> {
+  return rosterConfigs.get(userId) ?? null;
+}
+
+// ===== トレーニング構成 =====
+
+export async function saveTrainingConfig(
+  userId: string,
+  config: TrainingConfig
+): Promise<void> {
+  trainingConfigs.set(userId, JSON.parse(JSON.stringify(config)));
+}
+
+export async function loadTrainingConfig(
+  userId: string
+): Promise<TrainingConfig | null> {
+  return trainingConfigs.get(userId) ?? null;
 }
