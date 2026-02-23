@@ -73,3 +73,54 @@ export interface ScanResult {
   timer: number;
   focusDist: number;
 }
+
+// =========================================================================
+// BallFireAction types
+// =========================================================================
+
+/** 発射評価に必要な状態スナップショット */
+export interface BallFireContext {
+  launcher: SimMover;
+  targets: SimMover[];
+  obstacles: SimMover[];
+  obIntSpeeds: number[];
+}
+
+/** プレファイア評価の結果 */
+export interface PreFireEvalResult {
+  selectedTargetIdx: number;
+  preFire: SimPreFireInfo | null;
+}
+
+/** 発射ソリューション */
+export interface FireSolution {
+  targetIdx: number;
+  interceptX: number;
+  interceptZ: number;
+  flightTime: number;
+  targetVelocity: { vx: number; vz: number };
+  obInFOVs: boolean[];
+}
+
+/** 障害物のリアクション */
+export interface ObstacleReaction {
+  obstacleIdx: number;
+  reacting: boolean;
+  vx: number;
+  vz: number;
+}
+
+/** 発射試行の結果 */
+export interface FireAttemptResult {
+  fired: boolean;
+  solution: FireSolution | null;
+  newCooldown: number;
+}
+
+/** ボール結果判定 */
+export type BallResultType = 'block' | 'hit' | 'miss' | 'none';
+
+export interface BallResultDetection {
+  result: BallResultType;
+  cooldownTime: number;
+}

@@ -10,6 +10,13 @@ export {
   type ScreenerState,
   type DunkerState,
   type ScanResult,
+  type BallFireContext,
+  type PreFireEvalResult,
+  type FireSolution,
+  type ObstacleReaction,
+  type FireAttemptResult,
+  type BallResultType,
+  type BallResultDetection,
 } from "./Types/TrackingSimTypes";
 
 export {
@@ -65,3 +72,10 @@ export {
   moveDunker,
   moveSpacer,
 } from "./Movement/RoleMovement";
+
+export {
+  evaluatePreFire,
+  attemptFire,
+  computeObstacleReactions,
+  detectBallResult,
+} from "./Action/PassAction";

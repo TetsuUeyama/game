@@ -11,12 +11,6 @@ import {
 
 import {
   ENTITY_HEIGHT,
-  SIM_FIELD_X_HALF,
-  SIM_FIELD_Z_HALF,
-  SIM_MARGIN,
-  HIT_RADIUS,
-  BLOCK_RADIUS,
-  BALL_TIMEOUT,
   LAUNCHER_RADIUS,
   TARGET_RADIUS,
   OBSTACLE_RADIUS,
@@ -35,7 +29,6 @@ import {
   OB_D_INTERCEPT_SPEED,
   OB_E_IDLE_SPEED,
   OB_E_INTERCEPT_SPEED,
-  BALL_SPEED,
   OB_A_HOVER_RADIUS,
   OB_B_HOVER_RADIUS,
   OB_C_HOVER_RADIUS,
@@ -59,6 +52,7 @@ import type {
   SlasherState,
   ScreenerState,
   DunkerState,
+  BallFireContext,
 } from "./Types/TrackingSimTypes";
 
 import {
@@ -69,19 +63,17 @@ import {
   moveWithFacing,
   restoreRandom,
   dist2d,
-  randFire,
   separateEntities,
 } from "./Movement/MovementCore";
 
-import {
-  isTrajectoryInFOV,
-  canReachTrajectory,
-  isPhysicallyClose,
-  canTargetReach,
-} from "./Decision/TrajectoryAnalysis";
-
-import { canObIntercept, solveLaunch } from "./Decision/LaunchSolver";
 import { updateScan } from "./Decision/ScanSystem";
+
+import {
+  evaluatePreFire,
+  attemptFire,
+  computeObstacleReactions,
+  detectBallResult,
+} from "./Action/PassAction";
 
 import {
   moveLauncherSmart,
@@ -97,8 +89,6 @@ import { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */
 const BALL_LAUNCH_Y = ENTITY_HEIGHT * 0.7;
-/** Max Y for collision detection (entity top + tolerance) */
-const BALL_COLLISION_Y_MAX = ENTITY_HEIGHT + 0.5;
 
 export class TrackingSimulation3D {
   private scene: Scene;
@@ -403,147 +393,51 @@ export class TrackingSimulation3D {
       ]);
 
       // === Pre-fire evaluation ===
-      let bestIdx = 0;
-      let bestScore = -Infinity;
-      let bestPF: SimPreFireInfo | null = null;
-
-      for (let ti = 0; ti < targets.length; ti++) {
-        const tgt = targets[ti];
-        const estDist = dist2d(launcher.x, launcher.z, tgt.x, tgt.z);
-        const estFT = Math.max(0.3, estDist / BALL_SPEED);
-        const estIPx = tgt.x + tgt.vx * estFT;
-        const estIPz = tgt.z + tgt.vz * estFT;
-
-        const obReaches = allObs.map((_, oi) => obIntSpeeds[oi] * estFT);
-        const targetReach = TARGET_INTERCEPT_SPEED * estFT;
-        const tgtCanReach = canTargetReach(tgt, estIPx, estIPz, targetReach);
-
-        const obInFOVs = allObs.map(ob => isTrajectoryInFOV(ob, launcher.x, launcher.z, estIPx, estIPz));
-        const obBlocks = allObs.map((ob, oi) =>
-          (obInFOVs[oi] && canReachTrajectory(ob, launcher.x, launcher.z, estIPx, estIPz, obReaches[oi]))
-          || isPhysicallyClose(ob, launcher.x, launcher.z, estIPx, estIPz));
-
-        const blocked = obBlocks.some(b => b) || !tgtCanReach;
-        const blockerCount = obBlocks.filter(b => b).length;
-        const rolePriority: Record<string, number> = {
-          DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SPACER: 1.0, SCREENER: 0.5,
-        };
-        const roleBonus = rolePriority[ROLE_ASSIGNMENTS.targets[ti].role] ?? 0;
-        const score = -blockerCount * 10 + (tgtCanReach ? 5 : 0) - estDist * 0.01 + roleBonus;
-
-        const pf: SimPreFireInfo = {
-          targetIdx: ti, estFlightTime: estFT, estIPx, estIPz,
-          obReaches, obInFOVs, obBlocks,
-          targetReach, targetCanReach: tgtCanReach, blocked,
-        };
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestIdx = ti;
-          bestPF = pf;
-        }
-      }
-
-      this.selectedTargetIdx = bestIdx;
-      this.preFire = bestPF;
+      const ctx: BallFireContext = { launcher, targets, obstacles: allObs, obIntSpeeds };
+      const evalResult = evaluatePreFire(ctx, ROLE_ASSIGNMENTS);
+      this.selectedTargetIdx = evalResult.selectedTargetIdx;
+      this.preFire = evalResult.preFire;
 
       // === Fire cooldown ===
       this.cooldown -= dt;
       if (this.cooldown <= 0) {
-        let fired = false;
-        const order = targets.map((_, i) => i).sort((a, b) => {
-          if (a === bestIdx) return -1;
-          if (b === bestIdx) return 1;
-          return 0;
-        });
+        const fireResult = attemptFire(ctx, this.selectedTargetIdx, SOLVER_CFG_3D);
+        if (fireResult.fired && fireResult.solution) {
+          const sol = fireResult.solution;
+          const success = this.fireBallArc(launcher.x, launcher.z, sol.interceptX, sol.interceptZ);
+          if (success) {
+            this.interceptPt = { x: sol.interceptX, z: sol.interceptZ };
+            this.selectedTargetIdx = sol.targetIdx;
+            this.preFire = null;
 
-        for (const ti of order) {
-          const tgt = targets[ti];
-          const sol = solveLaunch(
-            launcher.x, launcher.z,
-            tgt.x, tgt.z, tgt.vx, tgt.vz,
-            BALL_SPEED, SOLVER_CFG_3D,
-          );
+            // Selected target: move toward intercept point
+            const tgt = targets[sol.targetIdx];
+            tgt.vx = sol.targetVelocity.vx;
+            tgt.vz = sol.targetVelocity.vz;
 
-          const fieldXMin = -SIM_FIELD_X_HALF + SIM_MARGIN;
-          const fieldXMax = SIM_FIELD_X_HALF - SIM_MARGIN;
-          const fieldZMin = -SIM_FIELD_Z_HALF + SIM_MARGIN;
-          const fieldZMax = SIM_FIELD_Z_HALF - SIM_MARGIN;
-          const ipInField = sol?.valid
-            && sol.interceptPos.x >= fieldXMin && sol.interceptPos.x <= fieldXMax
-            && sol.interceptPos.z >= fieldZMin && sol.interceptPos.z <= fieldZMax;
-
-          if (!sol?.valid || !ipInField) continue;
-
-          const bvx = sol.launchVelocity.x;
-          const bvz = sol.launchVelocity.z;
-          const ft = sol.flightTime;
-          const ipx = sol.interceptPos.x;
-          const ipz = sol.interceptPos.z;
-
-          const tReach = TARGET_INTERCEPT_SPEED * ft;
-          const tCanReach = canTargetReach(tgt, ipx, ipz, tReach);
-
-          const obFOVs = allObs.map(ob => isTrajectoryInFOV(ob, launcher.x, launcher.z, ipx, ipz));
-          let anyBlock = false;
-          for (let oi = 0; oi < allObs.length; oi++) {
-            const canBlock = (obFOVs[oi] && canObIntercept(allObs[oi], launcher.x, launcher.z, bvx, bvz, obIntSpeeds[oi], ft))
-              || isPhysicallyClose(allObs[oi], launcher.x, launcher.z, ipx, ipz);
-            if (canBlock) { anyBlock = true; break; }
-          }
-
-          if (anyBlock || !tCanReach) continue;
-
-          // Fire ball with arc trajectory!
-          const success = this.fireBallArc(launcher.x, launcher.z, ipx, ipz);
-          if (!success) continue;
-
-          this.interceptPt = { x: ipx, z: ipz };
-          this.selectedTargetIdx = ti;
-          this.preFire = null;
-
-          // Selected target: move toward intercept point
-          const tdx = ipx - tgt.x;
-          const tdz = ipz - tgt.z;
-          const tdist = Math.sqrt(tdx * tdx + tdz * tdz);
-          if (tdist < 5 * 0.015) {
-            tgt.vx = 0; tgt.vz = 0;
-          } else {
-            tgt.vx = (tdx / tdist) * TARGET_INTERCEPT_SPEED;
-            tgt.vz = (tdz / tdist) * TARGET_INTERCEPT_SPEED;
-          }
-
-          // Reacting obstacles: use actual ball velocity for intercept calculation
-          const reactingObs = [false, false, false, false, false];
-          const bPos = this.ball.getPosition();
-          const bVel = this.ball.getVelocity();
-          for (let oi = 0; oi < allObs.length; oi++) {
-            if (oi === 1) continue; // obB is not reactive
-            if (!obFOVs[oi]) continue;
-            reactingObs[oi] = true;
-            const obSol = solveLaunch(
-              allObs[oi].x, allObs[oi].z,
-              bPos.x, bPos.z, bVel.x, bVel.z,
-              obIntSpeeds[oi], SOLVER_CFG_3D,
+            // Reacting obstacles
+            const bPos = this.ball.getPosition();
+            const bVel = this.ball.getVelocity();
+            const reactions = computeObstacleReactions(
+              allObs, obIntSpeeds, sol.obInFOVs,
+              bPos.x, bPos.z, bVel.x, bVel.z, SOLVER_CFG_3D,
             );
-            if (obSol?.valid) {
-              allObs[oi].vx = obSol.launchVelocity.x;
-              allObs[oi].vz = obSol.launchVelocity.z;
-            } else {
-              const dx = bPos.x - allObs[oi].x;
-              const dz = bPos.z - allObs[oi].z;
-              const dd = Math.sqrt(dx * dx + dz * dz) || 1;
-              allObs[oi].vx = (dx / dd) * obIntSpeeds[oi];
-              allObs[oi].vz = (dz / dd) * obIntSpeeds[oi];
+            const reactingObs = [false, false, false, false, false];
+            for (const r of reactions) {
+              reactingObs[r.obstacleIdx] = r.reacting;
+              if (r.reacting) {
+                allObs[r.obstacleIdx].vx = r.vx;
+                allObs[r.obstacleIdx].vz = r.vz;
+              }
             }
+            this.obReacting = reactingObs;
+            this.cooldown = fireResult.newCooldown;
+          } else {
+            this.cooldown = fireResult.newCooldown;
           }
-          this.obReacting = reactingObs;
-          this.cooldown = randFire();
-          fired = true;
-          break;
+        } else {
+          this.cooldown = fireResult.newCooldown;
         }
-
-        if (!fired) this.cooldown = 0.3;
       }
     } else {
       // === Ball in flight ===
@@ -645,39 +539,16 @@ export class TrackingSimulation3D {
         ...obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
       ]);
 
-      // Block collision (XZ distance + Y range check)
-      for (const ob of allObs) {
-        if (dist2d(ballPos.x, ballPos.z, ob.x, ob.z) < BLOCK_RADIUS && ballPos.y < BALL_COLLISION_Y_MAX) {
-          this.deactivateBall();
-          this.score.block++;
-          this.resetAfterResult(1.0);
-          break;
-        }
-      }
-
-      // Hit detection
-      if (this.ballActive) {
-        for (let ti = 0; ti < targets.length; ti++) {
-          if (dist2d(ballPos.x, ballPos.z, targets[ti].x, targets[ti].z) < HIT_RADIUS && ballPos.y < BALL_COLLISION_Y_MAX) {
-            this.deactivateBall();
-            this.score.hit++;
-            this.resetAfterResult(1.5);
-            break;
-          }
-        }
-      }
-
-      // Miss: ball landed (physics detected ground), out of bounds, or timeout
-      if (this.ballActive) {
-        const ballLanded = !this.ball.isInFlight();
-        const margin = SIM_MARGIN * 2;
-        const out = ballPos.x < -SIM_FIELD_X_HALF - margin || ballPos.x > SIM_FIELD_X_HALF + margin
-          || ballPos.z < -SIM_FIELD_Z_HALF - margin || ballPos.z > SIM_FIELD_Z_HALF + margin;
-        if (ballLanded || out || this.ballAge > BALL_TIMEOUT) {
-          this.deactivateBall();
-          this.score.miss++;
-          this.resetAfterResult(1.0);
-        }
+      // === Ball result detection (block → hit → miss) ===
+      const detection = detectBallResult(
+        ballPos.x, ballPos.y, ballPos.z,
+        this.ball.isInFlight(), this.ballAge,
+        targets, allObs,
+      );
+      if (detection.result !== 'none') {
+        this.deactivateBall();
+        this.score[detection.result]++;
+        this.resetAfterResult(detection.cooldownTime);
       }
     }
 
