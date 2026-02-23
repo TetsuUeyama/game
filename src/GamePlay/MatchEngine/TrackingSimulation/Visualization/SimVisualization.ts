@@ -6,6 +6,7 @@ import {
   Vector3,
   Mesh,
   LinesMesh,
+  TransformNode,
 } from "@babylonjs/core";
 
 import {
@@ -17,7 +18,7 @@ import {
   FOV_WINDOW_LEN,
 } from "../Config/FieldConfig";
 import { TARGET_COLORS_3D } from "../Config/EntityConfig";
-import type { SimMover, SimPreFireInfo, SimScanMemory } from "../Types/TrackingSimTypes";
+import type { SimMover, SimPreFireInfo, SimScanMemory, ActionState } from "../Types/TrackingSimTypes";
 import { dirSpeedMult } from "../Movement/MovementCore";
 import { isTrajectoryInFOV, fovHalfAtDist } from "../Decision/TrajectoryAnalysis";
 
@@ -31,6 +32,19 @@ export interface SimVisState {
   ballActive: boolean;
   interceptPt: { x: number; z: number } | null;
   ballTrailPositions: Vector3[];
+  actionStates: ActionState[];
+}
+
+// --- Action gauge constants ---
+const GAUGE_W = 0.5;
+const GAUGE_H = 0.04;
+const GAUGE_Y_OFFSET = 0.15;
+
+interface ActionGaugeMeshes {
+  root: TransformNode;
+  bg: Mesh;
+  phases: [Mesh, Mesh, Mesh];
+  phaseMats: [StandardMaterial, StandardMaterial, StandardMaterial];
 }
 
 export class SimVisualization {
@@ -46,6 +60,7 @@ export class SimVisualization {
   trajectoryLine: LinesMesh | null = null;
   ballTrailLine: LinesMesh | null = null;
   interceptMarkerLine: LinesMesh | null = null;
+  private gauges: ActionGaugeMeshes[] = [];
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -95,6 +110,9 @@ export class SimVisualization {
       line.color = new Color3(0.6, 0.4, 0.8);
       this.fovLines.push(line);
     }
+
+    // Action gauges (1 launcher + 5 targets + 5 obstacles = 11)
+    this.createActionGauges(11);
   }
 
   disposeMeshes(): void {
@@ -121,6 +139,7 @@ export class SimVisualization {
       this.interceptMarkerLine.dispose();
       this.interceptMarkerLine = null;
     }
+    this.disposeActionGauges();
   }
 
   syncAll(state: SimVisState): void {
@@ -129,6 +148,7 @@ export class SimVisualization {
     this.syncTrajectoryVisualization(state);
     this.syncBallTrailVisualization(state);
     this.syncInterceptMarker(state);
+    this.syncActionGauges(state);
   }
 
   private createLine(name: string, points: Vector3[], r: number, g: number, b: number, alpha = 1.0): LinesMesh {
@@ -323,6 +343,143 @@ export class SimVisualization {
         ],
         1.0, 0.4, 0.4, 0.8,
       );
+    }
+  }
+
+  // =========================================================================
+  // Action gauge visualization
+  // =========================================================================
+
+  private createActionGauges(count: number): void {
+    const phaseColors = [
+      new Color3(1.0, 0.85, 0.0),   // startup: yellow
+      new Color3(0.0, 0.8, 1.0),    // active: cyan
+      new Color3(1.0, 0.25, 0.25),  // recovery: red
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const root = new TransformNode(`gaugeRoot_${i}`, this.scene);
+      root.billboardMode = TransformNode.BILLBOARDMODE_ALL;
+      root.setEnabled(false);
+
+      // Background
+      const bgMat = new StandardMaterial(`gaugeBgMat_${i}`, this.scene);
+      bgMat.diffuseColor = new Color3(0.12, 0.12, 0.12);
+      bgMat.specularColor = Color3.Black();
+      bgMat.alpha = 0.7;
+      const bg = MeshBuilder.CreatePlane(`gaugeBg_${i}`, { width: GAUGE_W, height: GAUGE_H }, this.scene);
+      bg.material = bgMat;
+      bg.parent = root;
+      bg.position.z = 0.001; // slightly behind fill planes
+      bg.isPickable = false;
+
+      // Phase fill planes
+      const phases: Mesh[] = [];
+      const phaseMats: StandardMaterial[] = [];
+      for (let p = 0; p < 3; p++) {
+        const mat = new StandardMaterial(`gaugePhMat_${i}_${p}`, this.scene);
+        mat.diffuseColor = phaseColors[p];
+        mat.specularColor = Color3.Black();
+        mat.emissiveColor = phaseColors[p].scale(0.3);
+        mat.alpha = 1.0;
+
+        const plane = MeshBuilder.CreatePlane(`gaugePh_${i}_${p}`, {
+          width: 1, height: GAUGE_H * 0.85,
+        }, this.scene);
+        plane.material = mat;
+        plane.parent = root;
+        plane.isPickable = false;
+
+        phases.push(plane);
+        phaseMats.push(mat);
+      }
+
+      this.gauges.push({
+        root,
+        bg,
+        phases: phases as [Mesh, Mesh, Mesh],
+        phaseMats: phaseMats as [StandardMaterial, StandardMaterial, StandardMaterial],
+      });
+    }
+  }
+
+  private disposeActionGauges(): void {
+    for (const g of this.gauges) {
+      g.phases.forEach(p => { p.material?.dispose(); p.dispose(); });
+      g.bg.material?.dispose();
+      g.bg.dispose();
+      g.root.dispose();
+    }
+    this.gauges = [];
+  }
+
+  private syncActionGauges(state: SimVisState): void {
+    const entities: { x: number; z: number }[] = [
+      state.launcher,
+      ...state.targets,
+      ...state.obstacles,
+    ];
+
+    for (let i = 0; i < this.gauges.length && i < state.actionStates.length; i++) {
+      const g = this.gauges[i];
+      const as = state.actionStates[i];
+      const ent = entities[i];
+
+      if (as.phase === 'idle' || !as.timing) {
+        g.root.setEnabled(false);
+        continue;
+      }
+
+      g.root.setEnabled(true);
+      g.root.position.set(ent.x, ENTITY_HEIGHT + GAUGE_Y_OFFSET, ent.z);
+
+      const t = as.timing;
+      const total = t.startup + t.active + t.recovery;
+      if (total <= 0) { g.root.setEnabled(false); continue; }
+
+      const phaseWidths = [
+        GAUGE_W * (t.startup / total),
+        GAUGE_W * (t.active / total),
+        GAUGE_W * (t.recovery / total),
+      ];
+      const phaseDurations = [t.startup, t.active, t.recovery];
+      const phaseIdx = as.phase === 'startup' ? 0 : as.phase === 'active' ? 1 : 2;
+
+      let xOffset = -GAUGE_W / 2;
+
+      for (let p = 0; p < 3; p++) {
+        const pw = phaseWidths[p];
+        const dur = phaseDurations[p];
+
+        if (pw < 0.001 || dur <= 0) {
+          g.phases[p].setEnabled(false);
+          xOffset += pw;
+          continue;
+        }
+
+        g.phases[p].setEnabled(true);
+
+        let fillRatio: number;
+        if (p < phaseIdx) {
+          // Past phase: fully filled
+          fillRatio = 1.0;
+          g.phaseMats[p].alpha = 0.6;
+        } else if (p === phaseIdx) {
+          // Current phase: partial fill
+          fillRatio = Math.min(as.elapsed / dur, 1.0);
+          g.phaseMats[p].alpha = 1.0;
+        } else {
+          // Future phase: dim outline
+          fillRatio = 1.0;
+          g.phaseMats[p].alpha = 0.15;
+        }
+
+        const fillW = pw * fillRatio;
+        g.phases[p].scaling.x = Math.max(fillW, 0.002);
+        g.phases[p].position.x = xOffset + fillW / 2;
+
+        xOffset += pw;
+      }
     }
   }
 }

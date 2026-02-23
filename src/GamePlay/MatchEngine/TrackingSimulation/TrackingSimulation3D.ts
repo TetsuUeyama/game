@@ -53,6 +53,9 @@ import type {
   ScreenerState,
   DunkerState,
   BallFireContext,
+  ActionState,
+  ActionTiming,
+  FireSolution,
 } from "./Types/TrackingSimTypes";
 
 import {
@@ -73,6 +76,13 @@ import {
   attemptFire,
   computeObstacleReactions,
   detectBallResult,
+  createIdleAction,
+  startAction,
+  tickActionState,
+  forceRecovery,
+  PASS_TIMING,
+  OBSTACLE_REACT_TIMING,
+  TARGET_RECEIVE_TIMING,
 } from "./Action/PassAction";
 
 import {
@@ -89,6 +99,12 @@ import { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */
 const BALL_LAUNCH_Y = ENTITY_HEIGHT * 0.7;
+
+/** Obstacle intercept speeds (shared between update and executePendingFire) */
+const OB_INT_SPEEDS = [
+  OB_A_INTERCEPT_SPEED, OB_B_CHASE_SPEED, OB_C_INTERCEPT_SPEED,
+  OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED,
+];
 
 export class TrackingSimulation3D {
   private scene: Scene;
@@ -113,6 +129,11 @@ export class TrackingSimulation3D {
   private interceptPt: { x: number; z: number } | null = null;
 
   private obReacting = [false, false, false, false, false];
+
+  // Action state: [launcher, t0, t1, t2, t3, t4, ob0, ob1, ob2, ob3, ob4]
+  private actionStates: ActionState[] = [];
+  private pendingFire: FireSolution | null = null;
+  private pendingCooldown = 0;
 
   // Scan state
   private obScanAtLauncher = [true, true, false, false, true];
@@ -201,8 +222,7 @@ export class TrackingSimulation3D {
     return success;
   }
 
-  private resetAfterResult(cooldownTime: number): void {
-    this.cooldown = cooldownTime;
+  private resetAfterResult(): void {
     this.interceptPt = null;
     this.obReacting = [false, false, false, false, false];
     for (let ti = 0; ti < this.targets.length; ti++) this.targetDests[ti] = null;
@@ -217,6 +237,52 @@ export class TrackingSimulation3D {
     this.slasherState = { dest: null, reevalTimer: 0, vcutPhase: this.slasherState.vcutPhase, vcutActive: false };
     this.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
     this.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
+  }
+
+  /** startup完了後にボールを実際に発射 */
+  private executePendingFire(): void {
+    if (!this.pendingFire) return;
+    const sol = this.pendingFire;
+    this.pendingFire = null;
+
+    const success = this.fireBallArc(this.launcher.x, this.launcher.z, sol.interceptX, sol.interceptZ);
+    if (!success) {
+      // 発射失敗 → アイドルに戻す
+      this.actionStates[0] = createIdleAction();
+      this.cooldown = 0.3;
+      return;
+    }
+
+    this.interceptPt = { x: sol.interceptX, z: sol.interceptZ };
+    this.selectedTargetIdx = sol.targetIdx;
+    this.preFire = null;
+
+    // ターゲット速度設定
+    const tgt = this.targets[sol.targetIdx];
+    tgt.vx = sol.targetVelocity.vx;
+    tgt.vz = sol.targetVelocity.vz;
+
+    // ターゲットアクション: active（受け取り体勢）
+    this.actionStates[1 + sol.targetIdx] = startAction(TARGET_RECEIVE_TIMING);
+
+    // 障害物リアクション
+    const bPos = this.ball.getPosition();
+    const bVel = this.ball.getVelocity();
+    const reactions = computeObstacleReactions(
+      this.obstacles, OB_INT_SPEEDS, sol.obInFOVs,
+      bPos.x, bPos.z, bVel.x, bVel.z, SOLVER_CFG_3D,
+    );
+    const reactingObs = [false, false, false, false, false];
+    for (const r of reactions) {
+      reactingObs[r.obstacleIdx] = r.reacting;
+      if (r.reacting) {
+        this.obstacles[r.obstacleIdx].vx = r.vx;
+        this.obstacles[r.obstacleIdx].vz = r.vz;
+        // 障害物アクション: active（インターセプト）
+        this.actionStates[6 + r.obstacleIdx] = startAction(OBSTACLE_REACT_TIMING);
+      }
+    }
+    this.obReacting = reactingObs;
   }
 
   // =========================================================================
@@ -241,6 +307,9 @@ export class TrackingSimulation3D {
     this.preFire = null;
     this.interceptPt = null;
     this.obReacting = [false, false, false, false, false];
+    this.actionStates = Array.from({ length: 11 }, () => createIdleAction());
+    this.pendingFire = null;
+    this.pendingCooldown = 0;
     this.obScanAtLauncher = [true, true, false, false, true];
     this.obScanTimers = [2.0, 1.5, 1.0, 1.8, 1.2];
     this.obFocusDists = [4.5, 2.25, 3.0, 3.75, 3.0];
@@ -302,6 +371,7 @@ export class TrackingSimulation3D {
         ballActive: this.ballActive,
         interceptPt: this.interceptPt,
         ballTrailPositions: this.ballTrailPositions,
+        actionStates: this.actionStates,
       });
     } catch (e) {
       console.error('[TrackingSimulation3D] visualization error:', e);
@@ -315,10 +385,21 @@ export class TrackingSimulation3D {
   private update(dt: number): void {
     const { launcher, targets, obstacles } = this;
     const allObs = obstacles;
-    const obIntSpeeds = [
-      OB_A_INTERCEPT_SPEED, OB_B_CHASE_SPEED, OB_C_INTERCEPT_SPEED,
-      OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED,
-    ];
+
+    // === Tick action states ===
+    const prevLauncherPhase = this.actionStates[0].phase;
+    for (let i = 0; i < this.actionStates.length; i++) {
+      this.actionStates[i] = tickActionState(this.actionStates[i], dt);
+    }
+
+    // Launcher startup → active: fire ball
+    if (prevLauncherPhase === 'startup' && this.actionStates[0].phase === 'active') {
+      this.executePendingFire();
+    }
+    // Launcher recovery → idle: set new cooldown
+    if (prevLauncherPhase === 'recovery' && this.actionStates[0].phase === 'idle') {
+      this.cooldown = this.pendingCooldown;
+    }
 
     // Launcher: role-based smart movement (PG / MAIN_HANDLER)
     moveLauncherSmart(launcher, this.launcherState, targets, allObs, dt);
@@ -393,50 +474,30 @@ export class TrackingSimulation3D {
       ]);
 
       // === Pre-fire evaluation ===
-      const ctx: BallFireContext = { launcher, targets, obstacles: allObs, obIntSpeeds };
+      const ctx: BallFireContext = { launcher, targets, obstacles: allObs, obIntSpeeds: OB_INT_SPEEDS };
       const evalResult = evaluatePreFire(ctx, ROLE_ASSIGNMENTS);
       this.selectedTargetIdx = evalResult.selectedTargetIdx;
       this.preFire = evalResult.preFire;
 
-      // === Fire cooldown ===
-      this.cooldown -= dt;
-      if (this.cooldown <= 0) {
-        const fireResult = attemptFire(ctx, this.selectedTargetIdx, SOLVER_CFG_3D);
-        if (fireResult.fired && fireResult.solution) {
-          const sol = fireResult.solution;
-          const success = this.fireBallArc(launcher.x, launcher.z, sol.interceptX, sol.interceptZ);
-          if (success) {
-            this.interceptPt = { x: sol.interceptX, z: sol.interceptZ };
-            this.selectedTargetIdx = sol.targetIdx;
-            this.preFire = null;
-
-            // Selected target: move toward intercept point
-            const tgt = targets[sol.targetIdx];
-            tgt.vx = sol.targetVelocity.vx;
-            tgt.vz = sol.targetVelocity.vz;
-
-            // Reacting obstacles
-            const bPos = this.ball.getPosition();
-            const bVel = this.ball.getVelocity();
-            const reactions = computeObstacleReactions(
-              allObs, obIntSpeeds, sol.obInFOVs,
-              bPos.x, bPos.z, bVel.x, bVel.z, SOLVER_CFG_3D,
-            );
-            const reactingObs = [false, false, false, false, false];
-            for (const r of reactions) {
-              reactingObs[r.obstacleIdx] = r.reacting;
-              if (r.reacting) {
-                allObs[r.obstacleIdx].vx = r.vx;
-                allObs[r.obstacleIdx].vz = r.vz;
-              }
-            }
-            this.obReacting = reactingObs;
-            this.cooldown = fireResult.newCooldown;
+      // === Fire cooldown (only when launcher is idle) ===
+      if (this.actionStates[0].phase === 'idle') {
+        this.cooldown -= dt;
+        if (this.cooldown <= 0) {
+          const fireResult = attemptFire(ctx, this.selectedTargetIdx, SOLVER_CFG_3D);
+          if (fireResult.fired && fireResult.solution) {
+            const sol = fireResult.solution;
+            this.pendingFire = sol;
+            this.pendingCooldown = fireResult.newCooldown;
+            // Start pass action (startup → active → recovery)
+            const timing: ActionTiming = {
+              startup: PASS_TIMING.startup,
+              active: sol.flightTime,
+              recovery: PASS_TIMING.recovery,
+            };
+            this.actionStates[0] = startAction(timing);
           } else {
             this.cooldown = fireResult.newCooldown;
           }
-        } else {
-          this.cooldown = fireResult.newCooldown;
         }
       }
     } else {
@@ -548,7 +609,14 @@ export class TrackingSimulation3D {
       if (detection.result !== 'none') {
         this.deactivateBall();
         this.score[detection.result]++;
-        this.resetAfterResult(detection.cooldownTime);
+        // Force all active entities to recovery
+        this.pendingCooldown = detection.cooldownTime;
+        for (let i = 0; i < this.actionStates.length; i++) {
+          if (this.actionStates[i].phase !== 'idle') {
+            this.actionStates[i] = forceRecovery(this.actionStates[i]);
+          }
+        }
+        this.resetAfterResult();
       }
     }
 

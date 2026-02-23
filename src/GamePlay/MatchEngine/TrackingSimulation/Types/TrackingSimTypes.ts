@@ -75,7 +75,36 @@ export interface ScanResult {
 }
 
 // =========================================================================
-// BallFireAction types
+// Action common types
+// =========================================================================
+
+/** アクションのフェーズ */
+export type ActionPhase = 'idle' | 'startup' | 'active' | 'recovery';
+
+/**
+ * アクションのタイミング定義（秒）
+ * startup → active → recovery の順に遷移する
+ */
+export interface ActionTiming {
+  /** 実行し発生するまでの時間（予備動作） */
+  startup: number;
+  /** アクションの実行時間 */
+  active: number;
+  /** 実行後、次の行動に移行できるまでの時間（硬直） */
+  recovery: number;
+}
+
+/** アクションの実行時ランタイム状態 */
+export interface ActionState {
+  phase: ActionPhase;
+  /** 現在フェーズの経過時間 */
+  elapsed: number;
+  /** アクションのタイミング定義（idleの時はnull） */
+  timing: ActionTiming | null;
+}
+
+// =========================================================================
+// PassAction types
 // =========================================================================
 
 /** 発射評価に必要な状態スナップショット */
