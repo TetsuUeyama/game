@@ -37,6 +37,7 @@ const zRaw = (isHip || isFoot || isRightElbow) ? -offsetEulerRad.z : offsetEuler
 | ジョイント | X | Y | Z |
 |---|---|---|---|
 | leftShoulder / rightShoulder | 反転 (`xS = -1`) | - | - |
+| rightShoulder | 反転 (`xS = -1`) | - | 反転 (`zJointS = -1`) |
 | leftHip / rightHip | - | - | 反転 (`zJointS = -1`) |
 | leftFoot / rightFoot | - | 反転 (`yFootS = -1`) | 反転 (`zJointS = -1`) |
 | rightElbow | - | - | 反転 (`zJointS = -1`) |

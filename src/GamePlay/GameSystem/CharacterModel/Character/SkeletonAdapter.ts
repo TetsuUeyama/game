@@ -166,9 +166,10 @@ export class SkeletonAdapter {
     const isHip = jointName === "leftHip" || jointName === "rightHip";
     const isFoot = jointName === "leftFoot" || jointName === "rightFoot";
     const isRightElbow = jointName === "rightElbow";
+    const isRightShoulder = jointName === "rightShoulder";
     const xRaw = isShoulder ? -offsetEulerRad.x : offsetEulerRad.x;
     const yRaw = isFoot ? -offsetEulerRad.y : offsetEulerRad.y;
-    const zRaw = (isHip || isFoot || isRightElbow) ? -offsetEulerRad.z : offsetEulerRad.z;
+    const zRaw = (isHip || isFoot || isRightElbow || isRightShoulder) ? -offsetEulerRad.z : offsetEulerRad.z;
 
     // ジョイント角度リミット: 軸補正後の最終値にクランプ適用（リミット = 最終ボーン角度の制限）
     const RAD_TO_DEG = 180 / Math.PI;
