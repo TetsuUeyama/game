@@ -9,8 +9,9 @@ import {
   Color4,
 } from "@babylonjs/core";
 import { Camera, Character, Field, Ball } from "@/GamePlay/Object/Entities";
-import "@babylonjs/loaders/glTF";
-import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
+// GLBモデルに戻す場合は以下2行のコメントを外す:
+// import "@babylonjs/loaders/glTF";
+// import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
 import { FaceAvatarCapture, FaceAvatarData } from "@/GamePlay/GameSystem/CharacterModel/FaceAvatar/FaceAvatarCapture";
 import {
   InputController,
@@ -641,14 +642,13 @@ export class GameScene {
    */
   private async initializePhysicsAsync(): Promise<void> {
     try {
-      // 物理エンジン初期化とGLBモデルロードを並列実行
-      const glbLoader = GLBModelLoader.getInstance();
-      const [_physicsResult] = await Promise.all([
-        PhysicsManager.getInstance().initialize(this.scene),
-        glbLoader.loadAsync(this.scene).catch((err) => {
-          console.warn("[GameScene] GLBモデルの読み込みに失敗。ProceduralHumanoidで続行:", err);
-        }),
-      ]);
+      // 物理エンジン初期化（GLBモデルロードはスキップ — ProceduralHumanoidを使用）
+      // GLBモデルに戻す場合は以下のコメントを外す:
+      // const glbLoader = GLBModelLoader.getInstance();
+      // await glbLoader.loadAsync(this.scene).catch((err) => {
+      //   console.warn("[GameScene] GLBモデルの読み込みに失敗。ProceduralHumanoidで続行:", err);
+      // });
+      await PhysicsManager.getInstance().initialize(this.scene);
 
       // 地面に静的物理ボディを追加（ボールが床を通り抜けないように）
       if (this.field) {
@@ -660,20 +660,17 @@ export class GameScene {
         this.ball.reinitializePhysics();
       }
 
-      // GLBロード成功時: キャラクターをGLBモデルで再作成
-      if (glbLoader.isReady() && this.savedTeamConfig && this.savedPlayerData) {
-        this.recreateCharactersWithGLB();
-      }
+      // GLBロードスキップ時はProceduralHumanoidのまま（再作成不要）
+      // GLBモデルに戻す場合は以下のコメントを外す:
+      // const glbLoader = GLBModelLoader.getInstance();
+      // if (glbLoader.isReady() && this.savedTeamConfig && this.savedPlayerData) {
+      //   this._recreateCharactersWithGLB();
+      // }
 
       // 全キャラクターの物理ボディを初期化（ボールとの衝突用）
       const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
       for (const character of allCharacters) {
         character.initializePhysics();
-        character.initializeIK();
-        // 頭部ルックアット: ボールを視線追従ターゲットに設定
-        if (this.ball) {
-          character.setLookAtTarget(this.ball.mesh);
-        }
       }
 
       // 物理エンジン初期化後、ゲームモードの場合はジャンプボールを開始
@@ -690,56 +687,41 @@ export class GameScene {
     }
   }
 
-  /**
-   * GLBモデルロード後にキャラクターを再作成する。
-   * 既にProceduralHumanoidで作成されたキャラクターをGLBモデルベースに置き換える。
-   */
-  private recreateCharactersWithGLB(): void {
-    if (!this.savedTeamConfig || !this.savedPlayerData) return;
-
-    // 既存キャラクターを破棄
-    for (const character of this.allyCharacters) {
-      character.dispose();
-    }
-    for (const character of this.enemyCharacters) {
-      character.dispose();
-    }
-    this.allyCharacters = [];
-    this.enemyCharacters = [];
-    this.characterAIs = [];
-    this.aiCharacterIndices.clear();
-
-    // GLBモデルでチームを再作成
-    this.createTeams(this.savedTeamConfig, this.savedPlayerData);
-
-    // 衝突判定コントローラーを再初期化
-    const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
-    if (this.collisionHandler) {
-      this.collisionHandler.dispose();
-    }
-    this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
-
-    // リスク判定システムを再初期化
-    this.riskAssessmentSystem = new RiskAssessmentSystem(this.ball, this.field, allCharacters);
-
-    // AIコントローラーを再初期化
-    for (const character of allCharacters) {
-      if (this.aiCharacterIndices.has(character)) {
-        const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager!);
-        if (this.looseBallDecisionSystem) ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
-        if (this.riskAssessmentSystem) ai.setRiskAssessmentSystem(this.riskAssessmentSystem);
-        if (this.shootingController) ai.setShootingController(this.shootingController);
-        if (this.feintController) ai.setFeintController(this.feintController);
-        if (this.shotClockController) ai.setShotClockController(this.shotClockController);
-        if (this.passController) ai.setPassController(this.passController);
-        if (this.dribbleController) ai.setDribbleController(this.dribbleController);
-        if (this.defenseActionController) ai.setDefenseActionController(this.defenseActionController);
-        if (this.looseBallController) ai.setLooseBallController(this.looseBallController);
-        if (this.passTrajectoryVisualizer) ai.setPassTrajectoryVisualizer(this.passTrajectoryVisualizer);
-        this.characterAIs.push(ai);
-      }
-    }
-  }
+  // GLBモデルに戻す場合は以下のメソッドのコメントを外す:
+  // /**
+  //  * GLBモデルロード後にキャラクターを再作成する。
+  //  * 既にProceduralHumanoidで作成されたキャラクターをGLBモデルベースに置き換える。
+  //  */
+  // private recreateCharactersWithGLB(): void {
+  //   if (!this.savedTeamConfig || !this.savedPlayerData) return;
+  //   for (const character of this.allyCharacters) { character.dispose(); }
+  //   for (const character of this.enemyCharacters) { character.dispose(); }
+  //   this.allyCharacters = [];
+  //   this.enemyCharacters = [];
+  //   this.characterAIs = [];
+  //   this.aiCharacterIndices.clear();
+  //   this.createTeams(this.savedTeamConfig, this.savedPlayerData);
+  //   const allCharacters = [...this.allyCharacters, ...this.enemyCharacters];
+  //   if (this.collisionHandler) { this.collisionHandler.dispose(); }
+  //   this.collisionHandler = new CollisionHandler(this.ball, allCharacters);
+  //   this.riskAssessmentSystem = new RiskAssessmentSystem(this.ball, this.field, allCharacters);
+  //   for (const character of allCharacters) {
+  //     if (this.aiCharacterIndices.has(character)) {
+  //       const ai = new CharacterAI(character, this.ball, allCharacters, this.field, this.playerStateManager!);
+  //       if (this.looseBallDecisionSystem) ai.setLooseBallDecisionSystem(this.looseBallDecisionSystem);
+  //       if (this.riskAssessmentSystem) ai.setRiskAssessmentSystem(this.riskAssessmentSystem);
+  //       if (this.shootingController) ai.setShootingController(this.shootingController);
+  //       if (this.feintController) ai.setFeintController(this.feintController);
+  //       if (this.shotClockController) ai.setShotClockController(this.shotClockController);
+  //       if (this.passController) ai.setPassController(this.passController);
+  //       if (this.dribbleController) ai.setDribbleController(this.dribbleController);
+  //       if (this.defenseActionController) ai.setDefenseActionController(this.defenseActionController);
+  //       if (this.looseBallController) ai.setLooseBallController(this.looseBallController);
+  //       if (this.passTrajectoryVisualizer) ai.setPassTrajectoryVisualizer(this.passTrajectoryVisualizer);
+  //       this.characterAIs.push(ai);
+  //     }
+  //   }
+  // }
 
 
   /**
@@ -915,6 +897,9 @@ export class GameScene {
       for (const character of allCharacters) {
         character.update(deltaTime);
       }
+      // character.update() の後にワールドスペース腕回転を適用
+      this._jumpBallManager?.postUpdate();
+      this.ball.applyPreCatchArmOverlay();
       this.ball.update(deltaTime);
       this.field.update(deltaTime);
       // ジャンプボール中の衝突判定
@@ -942,6 +927,9 @@ export class GameScene {
       for (const character of allCharacters) {
         character.update(deltaTime);
       }
+
+      // character.update() の後にプレキャッチ腕回転を適用
+      this.ball.applyPreCatchArmOverlay();
 
       // 競り合いコントローラーの更新（キャラクター同士の押し合い）
       if (this.contestController) {

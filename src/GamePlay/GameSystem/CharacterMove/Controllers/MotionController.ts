@@ -43,6 +43,9 @@ export class MotionController {
   private character: Character;
   private state: MotionState;
 
+  // disabled モード（Box化時に全メソッドをno-op化）
+  private _disabled: boolean = false;
+
   // モーション管理用
   private motions: Map<string, MotionConfig> = new Map();
   private defaultMotionName: string | null = null;
@@ -79,6 +82,16 @@ export class MotionController {
   // モーション登録・管理機能
   // ========================================
 
+  /** disabled モードを設定（Box化時に使用） */
+  public setDisabled(disabled: boolean): void {
+    this._disabled = disabled;
+  }
+
+  /** disabled モードかどうかを取得 */
+  public isDisabled(): boolean {
+    return this._disabled;
+  }
+
   /**
    * モーションを登録
    */
@@ -107,6 +120,7 @@ export class MotionController {
    * @param force 強制的に再生するか（現在のモーションが中断不可でも上書き）
    */
   public playByName(motionName: string, force: boolean = false): boolean {
+    if (this._disabled) return false;
     const config = this.motions.get(motionName);
     if (!config) {
       console.warn(`[MotionController] モーション "${motionName}" が見つかりません`);
@@ -143,6 +157,7 @@ export class MotionController {
    * デフォルトモーションに戻る
    */
   public playDefault(): boolean {
+    if (this._disabled) return false;
     if (!this.defaultMotionName) {
       console.warn("[MotionController] デフォルトモーションが設定されていません");
       return false;
@@ -157,6 +172,7 @@ export class MotionController {
    * @param positionScale 位置オフセットのスケール（1.0が標準）
    */
   public playByNameWithPositionScale(motionName: string, positionScale: number): boolean {
+    if (this._disabled) return false;
     const config = this.motions.get(motionName);
     if (!config) {
       console.warn(`[MotionController] モーション "${motionName}" が見つかりません`);
@@ -237,6 +253,7 @@ export class MotionController {
    * loop: falseのモーションが終了したら自動的にデフォルトモーションに戻る
    */
   public updateMotionManager(): void {
+    if (this._disabled) return;
     // アクション実行中はデフォルトモーションへの復帰をスキップ
     const actionController = this.character.getActionController();
     if (actionController && actionController.getCurrentAction() !== null) {
@@ -262,6 +279,7 @@ export class MotionController {
    * 既にモーションが再生中の場合は、ブレンドして遷移する
    */
   public play(motion: MotionData, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
+    if (this._disabled) return;
     if (this.state.isPlaying && this.state.currentMotion) {
       // ブレンド開始: 現在のボーン Quaternion をスナップショット
       this._prevBoneQuats = this._cloneBoneQuats(this._lastBoneQuats);
@@ -294,6 +312,7 @@ export class MotionController {
    * ジャンプの高さを変えるなど、位置オフセットをスケールする場合に使用
    */
   public playWithScale(motion: MotionData, positionScale: number, speed: number = MOTION_SPEED_CONFIG.DEFAULT_SPEED, blendDuration: number = MOTION_BLEND_CONFIG.DEFAULT_BLEND_DURATION): void {
+    if (this._disabled) return;
     if (this.state.isPlaying && this.state.currentMotion) {
       // ブレンド開始: 現在のボーン Quaternion をスナップショット
       this._prevBoneQuats = this._cloneBoneQuats(this._lastBoneQuats);
@@ -325,6 +344,7 @@ export class MotionController {
    * モーションを停止
    */
   public stop(): void {
+    if (this._disabled) return;
     this.state.isPlaying = false;
     this.state.currentTime = 0;
   }
@@ -333,6 +353,7 @@ export class MotionController {
    * モーションを一時停止
    */
   public pause(): void {
+    if (this._disabled) return;
     this.state.isPlaying = false;
   }
 
@@ -340,6 +361,7 @@ export class MotionController {
    * モーションを再開
    */
   public resume(): void {
+    if (this._disabled) return;
     this.state.isPlaying = true;
   }
 
@@ -349,6 +371,7 @@ export class MotionController {
    * @param time 設定する時間（秒）
    */
   public setCurrentTime(time: number): void {
+    if (this._disabled) return;
     if (!this.state.currentMotion) {
       return;
     }
@@ -367,6 +390,7 @@ export class MotionController {
    * 更新処理（毎フレーム呼び出す）
    */
   public update(deltaTime: number): void {
+    if (this._disabled) return;
     if (!this.state.isPlaying) {
       return;
     }
@@ -432,7 +456,11 @@ export class MotionController {
   /** SkeletonAdapter を遅延取得 */
   private _getAdapter(): SkeletonAdapter {
     if (!this._adapter) {
-      this._adapter = this.character.getSkeletonAdapter();
+      const adapter = this.character.getSkeletonAdapter();
+      if (!adapter) {
+        throw new Error("[MotionController] SkeletonAdapter is null (Box mode). MotionController should be disabled.");
+      }
+      this._adapter = adapter;
     }
     return this._adapter;
   }
@@ -722,6 +750,7 @@ export class MotionController {
    * 再生中かどうかを取得
    */
   public isPlaying(): boolean {
+    if (this._disabled) return false;
     return this.state.isPlaying;
   }
 
@@ -730,6 +759,7 @@ export class MotionController {
    * ブレンド中の場合は、ブレンド先のモーション名を返す
    */
   public getCurrentMotionName(): string | null {
+    if (this._disabled) return null;
     if (this.state.isBlending && this.state.nextMotion) {
       return this.state.nextMotion.name;
     }

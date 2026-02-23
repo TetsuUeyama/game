@@ -7,23 +7,13 @@ import {
   Mesh,
   AbstractMesh,
   LinesMesh,
-  Bone,
-  TransformNode,
-  Space,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/CharacterPhysicsManager";
 import { CharacterBlockJumpController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CharacterBlockJumpController";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
-
-/** 手首→手のひら中心の距離（前腕→手首方向を延長、約7cm） */
-const PALM_CHAIN_DISTANCE = 0.07;
-
-/** 手のひら法線方向（ボーンローカル空間: 手の甲→手のひら方向） */
-const PALM_NORMAL_LOCAL = new Vector3(0, 0, 1);
-
-/** ボール半径（バスケットボール規格） */
-const BALL_RADIUS = 0.12;
+import type { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
+import type { IKSystem } from "@/GamePlay/GameSystem/CharacterMove/Controllers/IKSystem";
 
 // キャラクター設定
 export const CHARACTER_CONFIG = {
@@ -43,7 +33,7 @@ import { CharacterState, CHARACTER_STATE_COLORS } from "@/GamePlay/GameSystem/St
 import { CHARACTER_COLLISION_CONFIG } from "@/GamePlay/Object/Physics/Collision/CollisionConfig";
 import { CharacterConfig, DEFAULT_CHARACTER_CONFIG } from "@/GamePlay/GameSystem/CharacterMove/Types/CharacterStats";
 import { PlayerData } from "@/GamePlay/Data/Types/PlayerData";
-import { FaceConfig, DEFAULT_FACE_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
+import { FaceConfig } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
 import { OffenseRole, DefenseRole } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
 import { BallAction, FACE_ACTIONS } from "@/GamePlay/GameSystem/BallHandlingSystem/BallAction";
 import { DirectionCircle } from "@/GamePlay/GameSystem/CircleSystem/DirectionCircle";
@@ -53,15 +43,9 @@ import { getDashDirectionMultiplier, getWalkDirectionMultiplier } from "@/GamePl
 import { BalanceController } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceController";
 import { MOVEMENT_BALANCE } from "@/SimulationPlay/MarbleSimulation/Balance/BalanceConfig";
 import { DominantHand, HoldingHand, BallHoldingUtils, BALL_HOLDING_CONFIG } from "@/GamePlay/GameSystem/BallHandlingSystem/BallHoldingConfig";
-import { getBallHoldingMotion } from "@/GamePlay/GameSystem/CharacterMove/Motion/BallHoldingMotion";
 import { AdvantageStatus, AdvantageUtils, ADVANTAGE_CONFIG } from "@/GamePlay/GameSystem/OneOnOneBattleSystem/OneOnOneBattleConfig";
 import { normalizeAngle, isInFieldOfView2D } from "@/GamePlay/Object/Physics/Spatial/SpatialUtils";
 import { FieldGridUtils } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
-import { MatchCharacterModel } from "@/GamePlay/GameSystem/CharacterModel/Character/MatchCharacterModel";
-import { GLBModelLoader } from "@/GamePlay/GameSystem/CharacterModel/Character/GLBModelLoader";
-import { SkeletonAdapter } from "@/GamePlay/GameSystem/CharacterModel/Character/SkeletonAdapter";
-import { IKSystem } from "@/GamePlay/GameSystem/CharacterMove/Controllers/IKSystem";
-import { DEFAULT_MOTION_CONFIG } from "@/GamePlay/GameSystem/CharacterModel/Types/CharacterMotionConfig";
 
 // ポジション → 背番号マッピング
 const POSITION_NUMBER_MAP: Record<string, number> = {
@@ -73,15 +57,13 @@ const POSITION_NUMBER_MAP: Record<string, number> = {
  */
 export class Character {
   public scene: Scene;
-  public mesh: Mesh; // ルートメッシュ（親メッシュ）
-  public model: AbstractMesh | null = null; // 読み込んだ3Dモデル
+  public mesh: Mesh; // ルートメッシュ（Boxメッシュ）
 
-  // 身体モデル
-  private characterModel: MatchCharacterModel;
-  /** 骨格アダプター（骨格データの唯一の所有者） */
-  private _adapter!: SkeletonAdapter;
-  /** ヒップボーンのレストポーズ位置（IKリセット用） */
-  private _hipRestPos!: Vector3;
+  // Boxモデル用メッシュ
+  private _stateIndicatorMesh!: Mesh;
+  private _visionConeMesh!: Mesh;
+  private _bodyMaterial!: StandardMaterial;
+
   public visionAngle: number; // 視野角（度）
   public visionRange: number; // 視野範囲（m）
 
@@ -91,11 +73,7 @@ export class Character {
   public velocity: Vector3 = Vector3.Zero(); // 速度ベクトル
 
   private groundY: number; // 地面のY座標
-  private motionOffsetY: number = 0; // モーションによるY軸オフセット
-  /** 自動接地: レスト姿勢（関節回転0）での足のY座標（mesh基準の相対値） */
-  private footRestRelativeY: number | null = null;
-  /** 自動接地: 前フレームの結果（デルタクランプ用） */
-  private _prevAutoGround: number = 0;
+  private motionOffsetY: number = 0; // モーションによるY軸オフセット（互換性のため残す）
   private upperBodyYawOffset: number = 0; // 上半身のYaw回転オフセット（パス時に使用）
 
   // 衝突判定（footCircleRadiusで統一）
@@ -193,20 +171,12 @@ export class Character {
   private balanceSphereMesh: Mesh | null = null;
   private balanceSphereVisible: boolean = false;
 
-  // パーム位置の可視化
-  private palmSphereRight: Mesh | null = null;
-  private palmSphereLeft: Mesh | null = null;
-  private palmSphereVisible: boolean = false;
-
   // 半透明モード
   private isBodyTransparent: boolean = false;
   private originalMaterialAlphas: Map<Mesh, number> = new Map();
 
   // Havok物理ボディマネージャー
   private physicsManager: CharacterPhysicsManager;
-
-  // IKSystem
-  private ikSystem: IKSystem | null = null;
 
   constructor(scene: Scene, position: Vector3, config?: CharacterConfig, team?: 'ally' | 'enemy') {
     this.scene = scene;
@@ -227,17 +197,44 @@ export class Character {
     this.visionAngle = this.config.vision.visionAngle;
     this.visionRange = this.config.vision.visionRange;
 
-    // 身体モデルを構築（GLB ロード済みなら GLB、それ以外は ProceduralHumanoid）
-    if (GLBModelLoader.getInstance().isReady()) {
-      this.characterModel = MatchCharacterModel.createFromGLB(scene, this.config, this.state, this.position);
-    } else {
-      this.characterModel = new MatchCharacterModel(scene, this.config, this.state, this.position);
-    }
-    this.mesh = this.characterModel.getRootMesh();
+    // === Boxモデル生成 ===
+    const height = this.config.physical.height;
+    this.mesh = MeshBuilder.CreateBox("character_box", {
+      width: 0.4, height: height, depth: 0.3
+    }, scene);
+    this.mesh.position = this.position.clone();
 
-    // 骨格データを Character に直接保持（骨格の唯一の所有者）
-    this._adapter = this.characterModel.getAdapter();
-    this._hipRestPos = this.characterModel.getHipRestPos().clone();
+    // マテリアル設定
+    this._bodyMaterial = new StandardMaterial("character_mat", scene);
+    this._bodyMaterial.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    this.mesh.material = this._bodyMaterial;
+
+    // 状態インジケーター（頭上の球）
+    this._stateIndicatorMesh = MeshBuilder.CreateSphere("indicator", { diameter: 0.15 }, scene);
+    this._stateIndicatorMesh.parent = this.mesh;
+    this._stateIndicatorMesh.position = new Vector3(0, height * 0.55, 0);
+    const indicatorMat = new StandardMaterial("indicator_mat", scene);
+    indicatorMat.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    this._stateIndicatorMesh.material = indicatorMat;
+
+    // 視野コーン
+    this._visionConeMesh = MeshBuilder.CreateCylinder("vision", {
+      diameterTop: 0,
+      diameterBottom: this.visionRange * 2 * Math.tan((this.visionAngle / 2) * Math.PI / 180),
+      height: this.visionRange,
+      tessellation: 16,
+    }, scene);
+    this._visionConeMesh.parent = this.mesh;
+    this._visionConeMesh.rotation.x = Math.PI / 2;
+    this._visionConeMesh.position = new Vector3(0, height * 0.3, this.visionRange / 2);
+    const visionMat = new StandardMaterial("vision_mat", scene);
+    visionMat.diffuseColor = new Color3(0.5, 0.5, 0.5);
+    visionMat.alpha = 0.15;
+    this._visionConeMesh.material = visionMat;
+    this._visionConeMesh.isVisible = false;
+
+    // デフォルトで状態インジケーターを非表示
+    this._stateIndicatorMesh.isVisible = this._stateIndicatorsEnabled;
 
     // 方向サークルを初期化（均一円形、状況に応じてCircleSizeControllerが比率を変更）
     this.directionCircle = new DirectionCircle(
@@ -253,15 +250,11 @@ export class Character {
     // 足元の円の色分けセグメントを作成
     this.directionCircle.createFootCircleFaceSegments();
 
-    // デフォルトで状態インジケーターを非表示（メニューで有効化可能）
-    this.characterModel.getStateIndicator().isVisible = this._stateIndicatorsEnabled;
     this.directionCircle.setFootCircleVisible(this._stateIndicatorsEnabled);
 
-    // モーションコントローラーを初期化
+    // モーションコントローラーを初期化（disabled モード）
     this.motionController = new MotionController(this);
-
-    // 自動接地: レスト姿勢での足の基準Y座標をキャプチャ
-    this.captureFootRestY();
+    this.motionController.setDisabled(true);
 
     // アクションコントローラーを初期化
     this.actionController = new ActionController(this);
@@ -281,39 +274,18 @@ export class Character {
 
     // ブロックジャンプコントローラーを初期化
     this.blockJumpController = new CharacterBlockJumpController();
-
-    // パーム位置球を常時表示
-    this.setPalmSphereVisible(true);
-  }
-
-  /**
-   * 3Dモデルを設定
-   * @param model ロードした3Dモデル
-   */
-  public setModel(model: AbstractMesh): void {
-    // 既存の身体パーツを非表示に
-    this.characterModel.hideAllParts();
-
-    // モデルをルートメッシュの子として追加
-    this.model = model;
-    this.model.parent = this.mesh;
-
-    // モデルの位置をルートメッシュの中心に配置
-    // （3Dモデルの原点がキャラクターの足元にある場合は調整が必要）
-    this.model.position = new Vector3(0, -CHARACTER_CONFIG.height / 2, 0);
   }
 
   /**
    * 下半身ボックスメッシュを取得（オフセット調整用）
    */
   public getLowerBodyMesh(): Mesh | null {
-    return this.characterModel.getHipsMesh();
+    return null;
   }
 
   /**
    * 関節メッシュを取得
-   * @deprecated MatchCharacterModel ではメッシュ階層がないため null を返す。
-   * setBoneAnimationRotation() を使用してください。
+   * @deprecated Box化により常にnull
    */
   public getJoint(_jointName: string): Mesh | null {
     return null;
@@ -321,80 +293,76 @@ export class Character {
 
   /**
    * 関節名に対応するスケルトンボーンを取得
+   * Box化によりnull
    */
-  public getBoneForJoint(jointName: string): Bone | null {
-    return this._adapter.findBoneByJointName(jointName);
+  public getBoneForJoint(_jointName: string): null {
+    return null;
   }
 
   /**
-   * FK回転（アニメーション回転）をボーンに書き込む。
-   * レスト回転と合成してボーンに設定する。
+   * FK回転をボーンに書き込む — Box化によりno-op
    */
-  public setBoneAnimationRotation(jointName: string, animEuler: Vector3): void {
-    this._adapter.applyFKRotationByJoint(jointName, animEuler);
+  public setBoneAnimationRotation(_jointName: string, _animEuler: Vector3): void {
+    // no-op: Box化
   }
 
   /**
-   * SkeletonAdapter を取得する（MotionController 統合用）。
+   * SkeletonAdapter を取得する — Box化により null を返す
    */
-  public getSkeletonAdapter(): SkeletonAdapter {
-    return this._adapter;
+  public getSkeletonAdapter(): SkeletonAdapter | null {
+    return null;
   }
 
   /**
-   * Skeleton Bridge + IKSystem を初期化する。
-   * Mesh階層と並行してSkeletonを生成し、BoneIKControllerベースのIKを有効化する。
-   * 初回呼び出し時のみ生成される（2回目以降は何もしない）。
+   * IKSystem を初期化する — Box化によりno-op
    */
   public initializeIK(): void {
-    if (this.ikSystem) return;
-    this.ikSystem = new IKSystem(this.scene, DEFAULT_MOTION_CONFIG);
-    this.ikSystem.initialize(
-      this._adapter.skeleton,
-      this.characterModel.getSkeletonMesh(),
-      this._hipRestPos,
-      this._adapter,
-    );
+    // no-op: Box化
   }
 
   /**
-   * IKSystem を取得する（initializeIK() 未呼び出しの場合は null）。
-   * 外部から腕IKターゲットを設定する場合などに使用。
+   * IKSystem を取得する — Box化により null
    */
   public getIKSystem(): IKSystem | null {
-    return this.ikSystem;
+    return null;
   }
 
   /**
-   * 頭部ルックアットのターゲットを設定する。
-   * @param target シーン内のTransformNode（ボール等）。null で解除。
+   * 頭部ルックアットのターゲットを設定する — Box化によりno-op
    */
-  public setLookAtTarget(target: TransformNode | null): void {
-    if (this.ikSystem) {
-      this.ikSystem.setLookAtTarget(target);
-    }
+  public setLookAtTarget(_target: AbstractMesh | null): void {
+    // no-op: Box化
+  }
+
+  /** キャッチ体幹調整を設定 — Box化によりno-op */
+  public setCatchBodyOverlay(_overlay: { spinePitch: number; spineRoll: number }): void {
+    // no-op: Box化
+  }
+
+  /** キャッチ体幹調整をクリア — Box化によりno-op */
+  public clearCatchBodyOverlay(): void {
+    // no-op: Box化
   }
 
   /**
-   * 顔のメッシュ（頭・目・口）を取得（キャプチャ用）
-   * stateIndicator, visionCone は除外
+   * 顔のメッシュを取得 — Box化により空配列
    */
   public getFaceMeshes(): Mesh[] {
-    return this.characterModel.getFaceMeshes();
+    return [];
   }
 
   /**
    * 頭上の状態インジケーターメッシュを取得
    */
   public getStateIndicator(): Mesh {
-    return this.characterModel.getStateIndicator();
+    return this._stateIndicatorMesh;
   }
 
   /**
    * 視野コーンメッシュを取得
    */
   public getVisionCone(): Mesh {
-    return this.characterModel.getVisionCone();
+    return this._visionConeMesh;
   }
 
   /**
@@ -491,80 +459,11 @@ export class Character {
     this.mesh.position.y = this.position.y + this.motionOffsetY;
   }
 
-  /** ヒップ位置をレストポーズにリセットする（IK が前フレームで変更した分を戻す） */
-  private _resetHipPosition(): void {
-    const hipBone = this._adapter.findBone("hips");
-    if (!hipBone) return;
-    const node = hipBone.getTransformNode();
-    if (node) {
-      node.position.copyFrom(this._hipRestPos);
-    } else {
-      hipBone.setPosition(this._hipRestPos, Space.LOCAL);
-    }
-  }
-
-  /** ヒップボーンのワールドY座標を取得する */
-  private _getHipWorldY(): number {
-    this._adapter.forceWorldMatrixUpdate();
-    const hipBone = this._adapter.findBone("hips");
-    return hipBone ? this._adapter.getBoneWorldPosition(hipBone).y : 0;
-  }
-
-  /** 足ボーンのワールドY座標を取得する */
-  private _getFootBoneYPositions(): { leftY: number; rightY: number } {
-    this._adapter.forceWorldMatrixUpdate();
-    const lFoot = this._adapter.findBone("leftFoot");
-    const rFoot = this._adapter.findBone("rightFoot");
-    const leftY = lFoot ? this._adapter.getBoneWorldPosition(lFoot).y : 0;
-    const rightY = rFoot ? this._adapter.getBoneWorldPosition(rFoot).y : 0;
-    return { leftY, rightY };
-  }
-
   /**
-   * レスト姿勢（関節回転0）での足のY座標をキャプチャする。
-   * コンストラクタおよびスケール変更時（setHeight）から呼ばれる。
-   */
-  private captureFootRestY(): void {
-    // rootMesh を最新の wrapperMesh トランスフォームに同期してからキャプチャ
-    this._resetHipPosition();
-    this.characterModel.syncTransform();
-    const meshY = this.mesh.getAbsolutePosition().y;
-    const { leftY, rightY } = this._getFootBoneYPositions();
-    this.footRestRelativeY = Math.min(leftY - meshY, rightY - meshY);
-    this._prevAutoGround = 0;
-  }
-
-  /**
-   * 現在の関節回転から、足を地面に着けるために必要なY補正値を計算する。
-   * 関節回転適用後、motionOffsetY設定前に呼ぶこと。
-   * @returns 自動接地オフセット（通常は0以下の値）
+   * 自動接地オフセット — Box化により常に0
    */
   public getAutoGroundOffset(): number {
-    if (this.footRestRelativeY === null) return 0;
-    // IK が前フレームで設定したヒップオフセットをリセットしてから足位置を計算する。
-    // FK は回転のみ設定するため、IK のヒップ位置変更が次フレームの足位置計算に残り、
-    // autoGround → wrapperMesh.y → rootMesh.y の発散（腕ズレ）を引き起こす。
-    // リセット後は IK が再度正しいヒップオフセットを計算するため問題ない。
-    this._resetHipPosition();
-    // wrapperMesh → rootMesh 同期 + ボーン位置を更新（足位置の正確な計算のため）
-    this.characterModel.syncTransform();
-    this.characterModel.updateVisuals();
-    const meshY = this.mesh.getAbsolutePosition().y;
-    const { leftY, rightY } = this._getFootBoneYPositions();
-    const lowestFootRelY = Math.min(leftY - meshY, rightY - meshY);
-    const raw = this.footRestRelativeY - lowestFootRelY;
-
-    // フレーム間デルタクランプ: 1フレームあたりの変化量を制限して
-    // 初期化時やIK干渉による足位置異常値が連鎖崩壊を引き起こすのを防止する。
-    // 0.02/frame = 60fps で最大 1.2/s（歩行サイクルの足位置変化 ≈ 0.003/frame に十分）。
-    const MAX_DELTA = 0.02;
-    const result = Math.max(
-      this._prevAutoGround - MAX_DELTA,
-      Math.min(this._prevAutoGround + MAX_DELTA, raw),
-    );
-    this._prevAutoGround = result;
-
-    return result;
+    return 0;
   }
 
   /** 上半身のYaw回転オフセットを設定（ラジアン） */
@@ -594,7 +493,6 @@ export class Character {
     this.rotation = angle;
     this.targetRotation = angle;
     this.mesh.rotation.y = angle;
-    this.characterModel.syncTransform();
   }
 
   /**
@@ -784,23 +682,8 @@ export class Character {
    * @param _deltaTime フレーム時間（秒）
    */
   public update(deltaTime: number): void {
-    // FK→ボーン
-    this.motionController.update(deltaTime);
-
     // アクション状態
     this.actionController.update(deltaTime);
-
-    // rootMesh トランスフォームを IK 実行前に同期（最新位置で IK 計算するため）
-    this.characterModel.syncTransform();
-
-    // BoneIKController（ボーン上でIK解決: 足IK + 腕IK + 頭部ルックアット）
-    if (this.ikSystem) {
-      const airborne = this.motionOffsetY > 0.01;
-      this.ikSystem.update(airborne);
-    }
-
-    // ボーン位置からビジュアルメッシュを更新
-    this.characterModel.updateVisuals();
 
     // 重心コントローラーを更新
     this.balanceController.update(deltaTime);
@@ -813,18 +696,13 @@ export class Character {
       this.updateBalanceSpherePosition();
     }
 
-    // パーム球の位置を更新（表示中のみ）
-    if (this.palmSphereVisible) {
-      this.updatePalmSpherePositions();
-    }
-
     // ブロックジャンプの横移動を更新
     this.updateBlockJump(deltaTime);
 
     // 方向サークルを更新
     this.directionCircle.update();
 
-    // Havok物理ボディの位置を更新（手のアニメーションに追従）
+    // Havok物理ボディの位置を更新
     this.updatePhysicsBodyPositions();
   }
 
@@ -906,27 +784,21 @@ export class Character {
    * @param b 青 (0.0 - 1.0)
    */
   public setColor(r: number, g: number, b: number): void {
-    this.characterModel.setColor(r, g, b);
+    this._bodyMaterial.diffuseColor = new Color3(r, g, b);
   }
 
   /**
-   * 胴体の色を変更（肩を含む）
-   * @param r 赤 (0.0 - 1.0)
-   * @param g 緑 (0.0 - 1.0)
-   * @param b 青 (0.0 - 1.0)
+   * 胴体の色を変更
    */
   public setBodyColor(r: number, g: number, b: number): void {
-    this.characterModel.setBodyColor(r, g, b);
+    this._bodyMaterial.diffuseColor = new Color3(r, g, b);
   }
 
   /**
-   * 背番号を胴体の背面に表示
-   * upperBody の -Z 面（背中側）に平面メッシュを貼り付ける
-   * @param teamColor チームカラー（背景色として使用）
+   * 背番号を適用 — Box化により色のみ設定
    */
-  public applyJerseyNumber(teamColor: Color3): void {
-    if (this.jerseyNumber == null) return;
-    this.characterModel.applyJerseyNumber(this.jerseyNumber, teamColor);
+  public applyJerseyNumber(_teamColor: Color3): void {
+    // Box化: テクスチャ適用はスキップ
   }
 
   /**
@@ -936,11 +808,8 @@ export class Character {
   public setVisible(visible: boolean): void {
     this.isVisible = visible;
 
-    // ルートメッシュを含む全パーツの表示を切り替え
+    // ルートメッシュ（Box）の表示を切り替え
     this.mesh.setEnabled(visible);
-
-    // ビジュアルメッシュは wrapper の子ではないため、明示的に制御
-    this.characterModel.setVisible(visible);
 
     // 足元の円（オクタゴン）
     if (this.footCircle) {
@@ -956,14 +825,6 @@ export class Character {
     // 重心球
     if (this.balanceSphereMesh) {
       this.balanceSphereMesh.setEnabled(visible);
-    }
-
-    // パーム球
-    if (this.palmSphereRight) {
-      this.palmSphereRight.setEnabled(visible);
-    }
-    if (this.palmSphereLeft) {
-      this.palmSphereLeft.setEnabled(visible);
     }
   }
 
@@ -987,27 +848,29 @@ export class Character {
   }
 
   /**
-   * 右手のひらの先端位置を取得（ワールド座標）
+   * 右手の位置を取得（ワールド座標）
+   * Box化: キャラクター位置+回転からの固定オフセットで計算
    */
   public getRightHandPosition(): Vector3 {
-    this._adapter.forceWorldMatrixUpdate();
-    const bone = this._adapter.findBone("rightHand");
-    if (!bone) return Vector3.Zero();
-    const palmCenter = this._adapter.getBoneChainExtendedPosition(bone, PALM_CHAIN_DISTANCE);
-    const palmNormal = this._adapter.getBoneLocalAxisInWorld(bone, PALM_NORMAL_LOCAL);
-    return palmCenter.add(palmNormal.scale(BALL_RADIUS));
+    const pos = this.getPosition();
+    const rot = this.rotation;
+    // 右側0.3m、前方0.15m、腰の高さ
+    const offsetX = Math.cos(rot) * 0.3 + Math.sin(rot) * 0.15;
+    const offsetZ = -Math.sin(rot) * 0.3 + Math.cos(rot) * 0.15;
+    return new Vector3(pos.x + offsetX, pos.y, pos.z + offsetZ);
   }
 
   /**
-   * 左手のひらの先端位置を取得（ワールド座標）
+   * 左手の位置を取得（ワールド座標）
+   * Box化: キャラクター位置+回転からの固定オフセットで計算
    */
   public getLeftHandPosition(): Vector3 {
-    this._adapter.forceWorldMatrixUpdate();
-    const bone = this._adapter.findBone("leftHand");
-    if (!bone) return Vector3.Zero();
-    const palmCenter = this._adapter.getBoneChainExtendedPosition(bone, PALM_CHAIN_DISTANCE);
-    const palmNormal = this._adapter.getBoneLocalAxisInWorld(bone, PALM_NORMAL_LOCAL);
-    return palmCenter.add(palmNormal.scale(BALL_RADIUS));
+    const pos = this.getPosition();
+    const rot = this.rotation;
+    // 左側-0.3m、前方0.15m、腰の高さ
+    const offsetX = -Math.cos(rot) * 0.3 + Math.sin(rot) * 0.15;
+    const offsetZ = Math.sin(rot) * 0.3 + Math.cos(rot) * 0.15;
+    return new Vector3(pos.x + offsetX, pos.y, pos.z + offsetZ);
   }
 
   /**
@@ -1061,16 +924,14 @@ export class Character {
     const color = CHARACTER_STATE_COLORS[state];
 
     // 状態インジケーターの色を更新
-    const indicator = this.characterModel.getStateIndicator();
-    if (indicator.material && indicator.material instanceof StandardMaterial) {
-      indicator.material.diffuseColor = new Color3(color.r, color.g, color.b);
-      indicator.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
+    if (this._stateIndicatorMesh.material && this._stateIndicatorMesh.material instanceof StandardMaterial) {
+      this._stateIndicatorMesh.material.diffuseColor = new Color3(color.r, color.g, color.b);
+      this._stateIndicatorMesh.material.emissiveColor = new Color3(color.r * 0.3, color.g * 0.3, color.b * 0.3);
     }
 
     // 視野コーンの色も更新
-    const visionCone = this.characterModel.getVisionCone();
-    if (visionCone.material && visionCone.material instanceof StandardMaterial) {
-      visionCone.material.diffuseColor = new Color3(color.r, color.g, color.b);
+    if (this._visionConeMesh.material && this._visionConeMesh.material instanceof StandardMaterial) {
+      this._visionConeMesh.material.diffuseColor = new Color3(color.r, color.g, color.b);
     }
 
     // 足元の円の色を更新
@@ -1241,7 +1102,7 @@ export class Character {
 
   /**
    * ボール保持モーションを更新
-   * 現在の保持方向に応じた腕のモーションを再生
+   * Box化: 持ち替え判定のみ、モーション再生はスキップ
    */
   private updateBallHoldingMotion(): void {
     const faceIndex = this.ballHoldingFaces[this.currentBallHoldingIndex];
@@ -1249,19 +1110,11 @@ export class Character {
 
     // 持ち替えが必要な場合のチェック
     if (newHoldingHand !== this.currentHoldingHand) {
-      // 持ち替えは正面（方向0）でのみ可能
-      if (!BallHoldingUtils.canSwitchHand(faceIndex)) {
-        console.warn(`[Character] 方向${faceIndex}では持ち替えができません（正面でのみ可能）`);
-        // 持ち替えなしで、現在の手でできる方向に制限される
-        // ただし、モーションは再生する（手は変わらない）
-      } else {
+      if (BallHoldingUtils.canSwitchHand(faceIndex)) {
         this.currentHoldingHand = newHoldingHand;
       }
     }
-
-    // ボール保持モーションを再生
-    const motion = getBallHoldingMotion(this.dominantHand, faceIndex);
-    this.motionController.play(motion, 1.0, BALL_HOLDING_CONFIG.ARM_BLEND_DURATION);
+    // Box化: モーション再生はスキップ
   }
 
   /**
@@ -1312,8 +1165,7 @@ export class Character {
 
     // 長さが0の場合は中心位置を返す
     if (vectorLength < 0.001) {
-      const ballY = this._getHipWorldY();
-      return new Vector3(this.position.x, ballY, this.position.z);
+      return new Vector3(this.position.x, this.position.y, this.position.z);
     }
 
     // 単位ベクトル化
@@ -1325,8 +1177,8 @@ export class Character {
     const ballX = faceCenter.x + unitX * insetDistance;
     const ballZ = faceCenter.z + unitZ * insetDistance;
 
-    // ボールは腰関節の高さに配置（上半身と下半身の境界）
-    const ballY = this._getHipWorldY();
+    // ボールは腰の高さに配置
+    const ballY = this.position.y;
 
     return new Vector3(ballX, ballY, ballZ);
   }
@@ -1487,11 +1339,6 @@ export class Character {
       // キャラクターの位置を更新（新しいgroundYに合わせる）
       // 現在のXZ座標を保持し、Y座標だけを新しいgroundYに更新
       this.setPosition(new Vector3(this.position.x, this.groundY, this.position.z));
-
-      // スケール変更後に自動接地のベースラインを再キャプチャ
-      // （captureFootRestY はコンストラクタでデフォルトスケールで取得済みだが、
-      //   setHeight でスケールが変わるため再取得が必要）
-      this.captureFootRestY();
     }
 
     // 重心コントローラーを更新（身長変更に伴い重心位置を再計算）
@@ -1516,7 +1363,7 @@ export class Character {
    */
   public setStateIndicatorsEnabled(enabled: boolean): void {
     this._stateIndicatorsEnabled = enabled;
-    this.characterModel.getStateIndicator().isVisible = enabled;
+    this._stateIndicatorMesh.isVisible = enabled;
     this.directionCircle.setFootCircleVisible(enabled);
   }
 
@@ -1535,7 +1382,7 @@ export class Character {
    * 視野コーンの表示/非表示を切り替え
    */
   public setVisionVisible(visible: boolean): void {
-    this.characterModel.getVisionCone().isVisible = visible;
+    this._visionConeMesh.isVisible = visible;
   }
 
   /**
@@ -1601,9 +1448,10 @@ export class Character {
     // 背番号を設定（テクスチャ適用はチームカラー設定後に行う）
     this.jerseyNumber = POSITION_NUMBER_MAP[position] ?? null;
 
-    // 顔設定を適用
-    const fc = playerData.faceConfig ?? DEFAULT_FACE_CONFIG;
-    this.applyFaceConfig(fc);
+    // 顔設定を適用（Box化: no-op）
+    if (playerData.faceConfig) {
+      this.applyFaceConfig(playerData.faceConfig);
+    }
   }
 
   /**
@@ -2042,74 +1890,10 @@ export class Character {
   }
 
   /**
-   * パーム位置球の表示/非表示を設定
+   * パーム位置球の表示/非表示を設定 — Box化によりno-op
    */
-  public setPalmSphereVisible(visible: boolean): void {
-    this.palmSphereVisible = visible;
-
-    if (visible) {
-      if (!this.palmSphereRight) {
-        this.createPalmSphereMeshes();
-      }
-      this.palmSphereRight!.isVisible = true;
-      this.palmSphereLeft!.isVisible = true;
-    } else {
-      if (this.palmSphereRight) {
-        this.palmSphereRight.isVisible = false;
-      }
-      if (this.palmSphereLeft) {
-        this.palmSphereLeft.isVisible = false;
-      }
-    }
-  }
-
-  /**
-   * パーム位置球メッシュを作成（左右）
-   */
-  private createPalmSphereMeshes(): void {
-    if (this.palmSphereRight) return;
-
-    const diameter = 0.06;
-    const segments = 12;
-
-    // 右手パーム球
-    this.palmSphereRight = MeshBuilder.CreateSphere(
-      `${this.team}_palm_R`,
-      { diameter, segments },
-      this.scene
-    );
-    const matR = new StandardMaterial(`${this.team}_palm_mat_R`, this.scene);
-    matR.diffuseColor = new Color3(1.0, 0.8, 0.0);   // 黄色
-    matR.emissiveColor = new Color3(0.6, 0.5, 0.0);
-    matR.alpha = 0.8;
-    this.palmSphereRight.material = matR;
-
-    // 左手パーム球
-    this.palmSphereLeft = MeshBuilder.CreateSphere(
-      `${this.team}_palm_L`,
-      { diameter, segments },
-      this.scene
-    );
-    const matL = new StandardMaterial(`${this.team}_palm_mat_L`, this.scene);
-    matL.diffuseColor = new Color3(0.0, 1.0, 0.6);    // 緑
-    matL.emissiveColor = new Color3(0.0, 0.5, 0.3);
-    matL.alpha = 0.8;
-    this.palmSphereLeft.material = matL;
-
-    this.updatePalmSpherePositions();
-  }
-
-  /**
-   * パーム位置球の位置を毎フレーム更新
-   */
-  private updatePalmSpherePositions(): void {
-    if (!this.palmSphereRight || !this.palmSphereLeft) return;
-
-    const rightPos = this.getRightHandPosition();
-    const leftPos = this.getLeftHandPosition();
-
-    this.palmSphereRight.position.copyFrom(rightPos);
-    this.palmSphereLeft.position.copyFrom(leftPos);
+  public setPalmSphereVisible(_visible: boolean): void {
+    // no-op: Box化でパーム球は廃止
   }
 
   /**
@@ -2158,7 +1942,7 @@ export class Character {
    * すべての身体メッシュを取得
    */
   private getAllBodyMeshes(): Mesh[] {
-    return this.characterModel.getAllVisualMeshes();
+    return [this.mesh];
   }
 
   // ==========================================================================
@@ -2212,17 +1996,8 @@ export class Character {
    * 破棄
    */
   public dispose(): void {
-    // IKSystem を破棄
-    if (this.ikSystem) {
-      this.ikSystem.dispose();
-      this.ikSystem = null;
-    }
-
     // 物理ボディを破棄
     this.physicsManager.dispose();
-
-    // キャラクターモデルを破棄
-    this.characterModel.dispose();
 
     // 方向サークルを破棄
     this.directionCircle.dispose();
@@ -2231,16 +2006,6 @@ export class Character {
     if (this.balanceSphereMesh) {
       this.balanceSphereMesh.dispose();
       this.balanceSphereMesh = null;
-    }
-
-    // パーム球を破棄
-    if (this.palmSphereRight) {
-      this.palmSphereRight.dispose();
-      this.palmSphereRight = null;
-    }
-    if (this.palmSphereLeft) {
-      this.palmSphereLeft.dispose();
-      this.palmSphereLeft = null;
     }
 
     // 名前ラベルを破棄
@@ -2253,12 +2018,15 @@ export class Character {
       this.nameLabelTexture = null;
     }
 
-    // 3Dモデルを破棄
-    if (this.model) {
-      this.model.dispose();
+    // 状態インジケーター・視野コーンを破棄
+    if (this._stateIndicatorMesh) {
+      this._stateIndicatorMesh.dispose();
+    }
+    if (this._visionConeMesh) {
+      this._visionConeMesh.dispose();
     }
 
-    // ルートメッシュを破棄
+    // ルートメッシュ（Box）を破棄
     if (this.mesh) {
       this.mesh.dispose();
     }

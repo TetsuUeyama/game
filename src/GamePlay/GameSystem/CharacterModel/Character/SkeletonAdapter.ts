@@ -282,4 +282,40 @@ export class SkeletonAdapter {
   getFoundBones(): FoundBones | null {
     return this._foundBones;
   }
+
+  /**
+   * ボーンの現在回転に追加オイラー回転を適用する（FK後の上書き用）。
+   * applyFKRotation と同じ correction 処理を使用:
+   *   補正なし: (restQ × deltaQ × restQ⁻¹) × currentQ
+   *   補正あり: (restQ × corrQ × deltaQ × corrQ⁻¹ × restQ⁻¹) × currentQ
+   */
+  applyAdditiveFKRotation(bone: Bone, deltaEulerRad: Vector3): void {
+    const restQ = this._fkRestCache.get(bone) ?? this._allRestQuats.get(bone);
+    if (!restQ) return;
+
+    const node = bone.getTransformNode();
+    const currentQ = node?.rotationQuaternion ?? bone.getRotationQuaternion(Space.LOCAL);
+    if (!currentQ) return;
+
+    const deltaQ = Quaternion.FromEulerAngles(
+      deltaEulerRad.x, deltaEulerRad.y, deltaEulerRad.z,
+    );
+
+    const corrQ = this._corrections.get(bone);
+    let conjugated: Quaternion;
+    if (corrQ) {
+      // restQ × corrQ × deltaQ × corrQ⁻¹ × restQ⁻¹
+      const base = restQ.multiply(corrQ);
+      const baseInv = Quaternion.Inverse(base);
+      conjugated = base.multiply(deltaQ).multiply(baseInv);
+    } else {
+      // restQ × deltaQ × restQ⁻¹
+      const restInv = Quaternion.Inverse(restQ);
+      conjugated = restQ.multiply(deltaQ).multiply(restInv);
+    }
+
+    const result = conjugated.multiply(currentQ);
+    if (node) { node.rotationQuaternion = result; }
+    else { bone.setRotationQuaternion(result, Space.LOCAL); }
+  }
 }

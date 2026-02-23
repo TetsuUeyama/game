@@ -240,6 +240,25 @@ export class IKSystem {
   }
 
   /**
+   * 腕IKのブレンド重みを設定（0=FK, 1=IK完全追従）
+   * @param side "left" | "right"
+   * @param amount ブレンド重み（0〜1）
+   */
+  setArmSlerpAmount(side: "left" | "right", amount: number): void {
+    const ik = side === "left" ? this._leftArmIK : this._rightArmIK;
+    if (ik) ik.slerpAmount = amount;
+  }
+
+  /**
+   * 腕IKのブレンド重みをデフォルト（config.ikWeight）に復帰
+   * @param side "left" | "right"
+   */
+  resetArmSlerpAmount(side: "left" | "right"): void {
+    const ik = side === "left" ? this._leftArmIK : this._rightArmIK;
+    if (ik) ik.slerpAmount = this._config.ikWeight;
+  }
+
+  /**
    * 頭部ルックアットのターゲットを設定する。
    * @param target シーン内のTransformNode（ボール等）。null で解除 → FK姿勢にスムーズ復帰。
    */
