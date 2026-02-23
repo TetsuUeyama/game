@@ -1,26 +1,28 @@
 /**
- * TrackingSimulation3D - 3D Babylon.js version of the 2D tracking simulation
- * Uses Ball.ts entity with DeterministicTrajectory for projectile physics
+ * TrackingSimulation3D - Orchestrator for 3D tracking simulation
+ * Delegates visualization to SimVisualization, AI to specialized modules
  */
 
 import {
   Scene,
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
   Vector3,
-  Mesh,
-  LinesMesh,
   Observer,
 } from "@babylonjs/core";
 
 import {
   ENTITY_HEIGHT,
-  LAUNCHER_SIZE,
-  TARGET_SIZE,
-  OBSTACLE_SIZE,
+  SIM_FIELD_X_HALF,
+  SIM_FIELD_Z_HALF,
+  SIM_MARGIN,
   HIT_RADIUS,
   BLOCK_RADIUS,
+  BALL_TIMEOUT,
+  LAUNCHER_RADIUS,
+  TARGET_RADIUS,
+  OBSTACLE_RADIUS,
+} from "./Config/FieldConfig";
+
+import {
   LAUNCHER_SPEED,
   TARGET_RANDOM_SPEED,
   TARGET_INTERCEPT_SPEED,
@@ -39,48 +41,58 @@ import {
   OB_C_HOVER_RADIUS,
   OB_D_HOVER_RADIUS,
   OB_E_HOVER_RADIUS,
-  BALL_TIMEOUT,
-  SIM_FIELD_X_HALF,
-  SIM_FIELD_Z_HALF,
-  SIM_MARGIN,
-  TARGET_COLORS_3D,
   SOLVER_CFG_3D,
   INIT_LAUNCHER,
   INIT_TARGETS,
   INIT_OBSTACLES,
-  T4_X1, T4_Z1, T4_X2, T4_Z2,
-  T5_X1, T5_Z1, T5_X2, T5_Z2,
-  FOV_FULL_LEN,
-  FOV_WINDOW_LEN,
-} from "./TrackingSimConstants";
+} from "./Config/EntityConfig";
+
+import { ROLE_ASSIGNMENTS } from "./Config/RoleConfig";
+
+import type {
+  SimMover,
+  SimBall,
+  SimScanMemory,
+  SimPreFireInfo,
+  TrackingSimScore,
+  LauncherState,
+  SlasherState,
+  ScreenerState,
+  DunkerState,
+} from "./Types/TrackingSimTypes";
 
 import {
-  type SimMover,
-  type SimBall,
-  type SimScanMemory,
-  type SimPreFireInfo,
-  type TrackingSimScore,
   makeMover,
   makeScanMemory,
-  stepMover,
   setChaserVelocity,
   moveKeepFacing,
   moveWithFacing,
   restoreRandom,
   dist2d,
+  randFire,
+  separateEntities,
+} from "./Movement/MovementCore";
+
+import {
   isTrajectoryInFOV,
   canReachTrajectory,
   isPhysicallyClose,
   canTargetReach,
-  canObIntercept,
-  moveTargetToOpenSpace,
-  randFire,
-  updateScan,
-  solveLaunch,
-  fovHalfAtDist,
-  dirSpeedMult,
-} from "./TrackingSimAI";
+} from "./Decision/TrajectoryAnalysis";
 
+import { canObIntercept, solveLaunch } from "./Decision/LaunchSolver";
+import { updateScan } from "./Decision/ScanSystem";
+
+import {
+  moveLauncherSmart,
+  moveSecondHandler,
+  moveSlasher,
+  moveScreener,
+  moveDunker,
+  moveSpacer,
+} from "./Movement/RoleMovement";
+
+import { SimVisualization } from "./Visualization/SimVisualization";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */
@@ -92,19 +104,8 @@ export class TrackingSimulation3D {
   private scene: Scene;
   private ball: Ball;
   private observer: Observer<Scene> | null = null;
+  private vis: SimVisualization;
 
-  // Meshes (Ball manages its own mesh via Havok physics)
-  private launcherMesh!: Mesh;
-  private targetMeshes: Mesh[] = [];
-  private obstacleMeshes: Mesh[] = [];
-  private fovLines: LinesMesh[] = [];
-  private trajectoryLine: LinesMesh | null = null;
-
-  // Additional visualization meshes
-  private fovWindowLines: LinesMesh[] = [];
-  private reachLines: LinesMesh[] = [];
-  private ballTrailLine: LinesMesh | null = null;
-  private interceptMarkerLine: LinesMesh | null = null;
   private ballTrailPositions: Vector3[] = [];
   private static readonly BALL_TRAIL_MAX = 40;
 
@@ -133,17 +134,24 @@ export class TrackingSimulation3D {
   private targetDests: ({ x: number; z: number } | null)[] = [null, null, null, null, null];
   private targetReevalTimers = [0.5, 0.7, 0.9, 1.1, 0.6];
 
+  // Role-based state
+  private launcherState!: LauncherState;
+  private slasherState!: SlasherState;
+  private screenerState!: ScreenerState;
+  private dunkerState!: DunkerState;
+
   private prevTime = 0;
 
   constructor(scene: Scene, ball: Ball) {
     this.scene = scene;
     this.ball = ball;
     this.ball.mesh.setEnabled(false);
+    this.vis = new SimVisualization(scene);
   }
 
   public start(): void {
     this.initState();
-    this.createMeshes();
+    this.vis.createMeshes();
     this.prevTime = performance.now();
     this.observer = this.scene.onBeforeRenderObservable.add(() => {
       const now = performance.now();
@@ -160,7 +168,7 @@ export class TrackingSimulation3D {
       this.observer = null;
     }
     this.deactivateBall();
-    this.disposeMeshes();
+    this.vis.disposeMeshes();
   }
 
   public getScore(): TrackingSimScore {
@@ -169,9 +177,9 @@ export class TrackingSimulation3D {
 
   public reset(): void {
     this.deactivateBall();
-    this.disposeMeshes();
+    this.vis.disposeMeshes();
     this.initState();
-    this.createMeshes();
+    this.vis.createMeshes();
   }
 
   // =========================================================================
@@ -188,15 +196,10 @@ export class TrackingSimulation3D {
     this.ballTrailPositions = [];
   }
 
-  /**
-   * Fire ball with arc trajectory using Ball.ts's shootWithArcHeight
-   * Uses DeterministicTrajectory internally for physics-based parabolic flight
-   */
   private fireBallArc(startX: number, startZ: number, targetX: number, targetZ: number): boolean {
     const startPos = new Vector3(startX, BALL_LAUNCH_Y, startZ);
     const targetPos = new Vector3(targetX, BALL_LAUNCH_Y, targetZ);
     const distance = dist2d(startX, startZ, targetX, targetZ);
-    // Arc height proportional to distance (higher arc = slower ball)
     const arcHeight = Math.max(0.3, distance * 0.10);
 
     this.ball.mesh.setEnabled(true);
@@ -218,6 +221,12 @@ export class TrackingSimulation3D {
     restoreRandom(this.obstacles[2], OB_C_IDLE_SPEED);
     restoreRandom(this.obstacles[3], OB_D_IDLE_SPEED);
     restoreRandom(this.obstacles[4], OB_E_IDLE_SPEED);
+
+    // Reset role states
+    this.launcherState = { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 };
+    this.slasherState = { dest: null, reevalTimer: 0, vcutPhase: this.slasherState.vcutPhase, vcutActive: false };
+    this.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
+    this.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
   }
 
   // =========================================================================
@@ -257,83 +266,12 @@ export class TrackingSimulation3D {
       makeScanMemory(lx, lz, INIT_TARGETS[3].x, INIT_TARGETS[3].z),
       makeScanMemory(lx, lz, INIT_TARGETS[4].x, INIT_TARGETS[4].z),
     ];
-  }
 
-  // =========================================================================
-  // Mesh creation / disposal
-  // =========================================================================
-
-  private createMeshes(): void {
-    // Launcher (green box)
-    this.launcherMesh = MeshBuilder.CreateBox("simLauncher", {
-      width: LAUNCHER_SIZE, height: ENTITY_HEIGHT, depth: LAUNCHER_SIZE,
-    }, this.scene);
-    const launcherMat = new StandardMaterial("simLauncherMat", this.scene);
-    launcherMat.diffuseColor = new Color3(0.27, 0.8, 0.27);
-    launcherMat.specularColor = Color3.Black();
-    this.launcherMesh.material = launcherMat;
-
-    // Targets (colored boxes)
-    for (let i = 0; i < 5; i++) {
-      const mesh = MeshBuilder.CreateBox(`simTarget${i}`, {
-        width: TARGET_SIZE, height: ENTITY_HEIGHT, depth: TARGET_SIZE,
-      }, this.scene);
-      const mat = new StandardMaterial(`simTargetMat${i}`, this.scene);
-      const c = TARGET_COLORS_3D[i];
-      mat.diffuseColor = new Color3(c.r, c.g, c.b);
-      mat.specularColor = Color3.Black();
-      mesh.material = mat;
-      this.targetMeshes.push(mesh);
-    }
-
-    // Obstacles (purple boxes)
-    for (let i = 0; i < 5; i++) {
-      const mesh = MeshBuilder.CreateBox(`simOb${i}`, {
-        width: OBSTACLE_SIZE, height: ENTITY_HEIGHT, depth: OBSTACLE_SIZE,
-      }, this.scene);
-      const mat = new StandardMaterial(`simObMat${i}`, this.scene);
-      mat.diffuseColor = new Color3(0.6, 0.4, 0.8);
-      mat.specularColor = Color3.Black();
-      mesh.material = mat;
-      this.obstacleMeshes.push(mesh);
-    }
-
-    // FOV lines (one pair per obstacle)
-    for (let i = 0; i < 5; i++) {
-      const line = MeshBuilder.CreateLines(`simFov${i}`, {
-        points: [Vector3.Zero(), Vector3.Zero(), Vector3.Zero()],
-        updatable: true,
-      }, this.scene);
-      line.color = new Color3(0.6, 0.4, 0.8);
-      this.fovLines.push(line);
-    }
-  }
-
-  private disposeMeshes(): void {
-    this.launcherMesh?.dispose();
-    this.targetMeshes.forEach(m => m.dispose());
-    this.targetMeshes = [];
-    this.obstacleMeshes.forEach(m => m.dispose());
-    this.obstacleMeshes = [];
-    this.fovLines.forEach(l => l.dispose());
-    this.fovLines = [];
-    this.fovWindowLines.forEach(l => l.dispose());
-    this.fovWindowLines = [];
-    this.reachLines.forEach(l => l.dispose());
-    this.reachLines = [];
-    if (this.trajectoryLine) {
-      this.trajectoryLine.dispose();
-      this.trajectoryLine = null;
-    }
-    if (this.ballTrailLine) {
-      this.ballTrailLine.dispose();
-      this.ballTrailLine = null;
-    }
-    if (this.interceptMarkerLine) {
-      this.interceptMarkerLine.dispose();
-      this.interceptMarkerLine = null;
-    }
-    this.ballTrailPositions = [];
+    // Role-based state
+    this.launcherState = { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 };
+    this.slasherState = { dest: null, reevalTimer: 0, vcutPhase: 0, vcutActive: false };
+    this.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
+    this.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
   }
 
   // =========================================================================
@@ -344,19 +282,19 @@ export class TrackingSimulation3D {
     const yh = ENTITY_HEIGHT / 2;
 
     // Launcher
-    this.launcherMesh.position.set(this.launcher.x, yh, this.launcher.z);
-    this.launcherMesh.rotation.y = -this.launcher.facing;
+    this.vis.launcherMesh.position.set(this.launcher.x, yh, this.launcher.z);
+    this.vis.launcherMesh.rotation.y = -this.launcher.facing;
 
     // Targets
     for (let i = 0; i < 5; i++) {
-      this.targetMeshes[i].position.set(this.targets[i].x, yh, this.targets[i].z);
-      this.targetMeshes[i].rotation.y = -this.targets[i].facing;
+      this.vis.targetMeshes[i].position.set(this.targets[i].x, yh, this.targets[i].z);
+      this.vis.targetMeshes[i].rotation.y = -this.targets[i].facing;
     }
 
     // Obstacles
     for (let i = 0; i < 5; i++) {
-      this.obstacleMeshes[i].position.set(this.obstacles[i].x, yh, this.obstacles[i].z);
-      this.obstacleMeshes[i].rotation.y = -this.obstacles[i].facing;
+      this.vis.obstacleMeshes[i].position.set(this.obstacles[i].x, yh, this.obstacles[i].z);
+      this.vis.obstacleMeshes[i].rotation.y = -this.obstacles[i].facing;
     }
 
     // Ball visibility (position controlled by Havok physics when in flight)
@@ -364,238 +302,24 @@ export class TrackingSimulation3D {
 
     // Visualization (wrapped in try-catch to prevent silent failures)
     try {
-      this.syncFovVisualization();
-      this.syncReachVisualization();
-      this.syncTrajectoryVisualization();
-      this.syncBallTrailVisualization();
-      this.syncInterceptMarker();
+      this.vis.syncAll({
+        launcher: this.launcher,
+        targets: this.targets,
+        obstacles: this.obstacles,
+        obMems: this.obMems,
+        obFocusDists: this.obFocusDists,
+        preFire: this.preFire,
+        ballActive: this.ballActive,
+        interceptPt: this.interceptPt,
+        ballTrailPositions: this.ballTrailPositions,
+      });
     } catch (e) {
       console.error('[TrackingSimulation3D] visualization error:', e);
     }
   }
 
   // =========================================================================
-  // Helper: create a line mesh with solid color + alpha
-  // (More reliable than per-vertex Color4 across WebGL implementations)
-  // =========================================================================
-
-  private createLine(name: string, points: Vector3[], r: number, g: number, b: number, alpha = 1.0): LinesMesh {
-    const line = MeshBuilder.CreateLines(name, { points }, this.scene);
-    line.color = new Color3(r, g, b);
-    if (alpha < 1.0) {
-      line.alpha = alpha;
-    }
-    return line;
-  }
-
-  // =========================================================================
-  // FOV visualization: edge lines + sliding window
-  // =========================================================================
-
-  private syncFovVisualization(): void {
-    const VIS_Y = 0.15;
-
-    for (let i = 0; i < 5; i++) {
-      const ob = this.obstacles[i];
-      const mem = this.obMems[i];
-      const searching = mem.searching;
-      const fovHalf = searching
-        ? Math.PI / 6
-        : fovHalfAtDist(this.obFocusDists[i]);
-
-      // --- Edge lines (full length FOV boundaries) ---
-      const len = FOV_FULL_LEN;
-      const leftAngle = ob.facing + fovHalf;
-      const rightAngle = ob.facing - fovHalf;
-      const origin = new Vector3(ob.x, VIS_Y, ob.z);
-      const leftEnd = new Vector3(
-        ob.x + Math.cos(leftAngle) * len, VIS_Y,
-        ob.z + Math.sin(leftAngle) * len,
-      );
-      const rightEnd = new Vector3(
-        ob.x + Math.cos(rightAngle) * len, VIS_Y,
-        ob.z + Math.sin(rightAngle) * len,
-      );
-
-      this.fovLines[i].dispose();
-      if (searching) {
-        this.fovLines[i] = this.createLine(`simFov${i}`, [leftEnd, origin, rightEnd], 1.0, 0.78, 0.39, 0.5);
-      } else {
-        this.fovLines[i] = this.createLine(`simFov${i}`, [leftEnd, origin, rightEnd], 0.6, 0.4, 0.8, 0.5);
-      }
-
-      // --- Sliding window (annular sector at focus distance) ---
-      if (this.fovWindowLines[i]) this.fovWindowLines[i].dispose();
-
-      const focusDist = this.obFocusDists[i];
-      const halfWin = FOV_WINDOW_LEN / 2;
-      const innerR = Math.max(0.1, focusDist - halfWin);
-      const outerR = focusDist + halfWin;
-      const arcSteps = 20;
-
-      // Check if trajectory is in FOV for highlight color
-      let trajInFov = false;
-      if (this.preFire) {
-        trajInFov = isTrajectoryInFOV(ob, this.launcher.x, this.launcher.z,
-          this.preFire.estIPx, this.preFire.estIPz);
-      }
-
-      // Build window outline: inner arc → right radial → outer arc (reversed) → left radial
-      const windowPoints: Vector3[] = [];
-
-      // Inner arc (left to right)
-      for (let s = 0; s <= arcSteps; s++) {
-        const t = s / arcSteps;
-        const angle = ob.facing - fovHalf + (2 * fovHalf) * t;
-        windowPoints.push(new Vector3(
-          ob.x + Math.cos(angle) * innerR, VIS_Y - 0.01,
-          ob.z + Math.sin(angle) * innerR,
-        ));
-      }
-      // Right radial (inner to outer)
-      windowPoints.push(new Vector3(
-        ob.x + Math.cos(ob.facing + fovHalf) * outerR, VIS_Y - 0.01,
-        ob.z + Math.sin(ob.facing + fovHalf) * outerR,
-      ));
-      // Outer arc (right to left, reversed)
-      for (let s = arcSteps; s >= 0; s--) {
-        const t = s / arcSteps;
-        const angle = ob.facing - fovHalf + (2 * fovHalf) * t;
-        windowPoints.push(new Vector3(
-          ob.x + Math.cos(angle) * outerR, VIS_Y - 0.01,
-          ob.z + Math.sin(angle) * outerR,
-        ));
-      }
-      // Left radial (outer to inner, close the shape)
-      windowPoints.push(new Vector3(
-        ob.x + Math.cos(ob.facing - fovHalf) * innerR, VIS_Y - 0.01,
-        ob.z + Math.sin(ob.facing - fovHalf) * innerR,
-      ));
-
-      const [wr, wg, wb, wa] = trajInFov
-        ? [1.0, 0.6, 0.2, 0.8]
-        : searching
-          ? [1.0, 0.78, 0.39, 0.6]
-          : [0.6, 0.4, 0.8, 0.6];
-
-      this.fovWindowLines[i] = this.createLine(
-        `simFovWin${i}`, windowPoints, wr, wg, wb, wa,
-      );
-    }
-  }
-
-  // =========================================================================
-  // Directional reach visualization (egg-shaped interception range)
-  // =========================================================================
-
-  private syncReachVisualization(): void {
-    for (let i = 0; i < this.reachLines.length; i++) {
-      if (this.reachLines[i]) this.reachLines[i].dispose();
-    }
-    this.reachLines = [];
-
-    // Only draw reach circles when pre-fire info is available
-    if (!this.preFire) return;
-
-    const pf = this.preFire;
-    const VIS_Y = 0.12;
-
-    for (let i = 0; i < 5; i++) {
-      const ob = this.obstacles[i];
-      const baseReach = pf.obReaches[i];
-      const isBlocking = pf.obBlocks[i];
-      const segments = 32;
-      const points: Vector3[] = [];
-
-      for (let s = 0; s <= segments; s++) {
-        const angle = (s / segments) * Math.PI * 2;
-        const mult = dirSpeedMult(ob.facing, angle);
-        const r = baseReach * mult;
-        points.push(new Vector3(
-          ob.x + Math.cos(angle) * r, VIS_Y,
-          ob.z + Math.sin(angle) * r,
-        ));
-      }
-
-      if (isBlocking) {
-        this.reachLines.push(this.createLine(`simReach${i}`, points, 1.0, 0.3, 0.3, 0.7));
-      } else {
-        this.reachLines.push(this.createLine(`simReach${i}`, points, 0.6, 0.4, 0.8, 0.4));
-      }
-    }
-  }
-
-  // =========================================================================
-  // Pre-fire trajectory line
-  // =========================================================================
-
-  private syncTrajectoryVisualization(): void {
-    if (this.trajectoryLine) {
-      this.trajectoryLine.dispose();
-      this.trajectoryLine = null;
-    }
-    if (this.preFire) {
-      const pf = this.preFire;
-      const VIS_Y = 0.18;
-      const from = new Vector3(this.launcher.x, VIS_Y, this.launcher.z);
-      const to = new Vector3(pf.estIPx, VIS_Y, pf.estIPz);
-      if (pf.blocked) {
-        this.trajectoryLine = this.createLine("simTraj", [from, to], 1.0, 0.3, 0.3, 1.0);
-      } else {
-        this.trajectoryLine = this.createLine("simTraj", [from, to], 0.4, 1.0, 0.4, 1.0);
-      }
-    }
-  }
-
-  // =========================================================================
-  // Ball trail visualization (3D arc trail during flight)
-  // =========================================================================
-
-  private syncBallTrailVisualization(): void {
-    if (this.ballTrailLine) {
-      this.ballTrailLine.dispose();
-      this.ballTrailLine = null;
-    }
-
-    if (this.ballTrailPositions.length >= 2) {
-      this.ballTrailLine = this.createLine(
-        "simBallTrail", this.ballTrailPositions,
-        1.0, 0.85, 0.2, 0.6,
-      );
-    }
-  }
-
-  // =========================================================================
-  // Intercept point marker (X at predicted intercept)
-  // =========================================================================
-
-  private syncInterceptMarker(): void {
-    if (this.interceptMarkerLine) {
-      this.interceptMarkerLine.dispose();
-      this.interceptMarkerLine = null;
-    }
-
-    if (this.interceptPt && this.ballActive) {
-      const ix = this.interceptPt.x;
-      const iz = this.interceptPt.z;
-      const s = 0.3;
-      const VIS_Y = 0.16;
-      this.interceptMarkerLine = this.createLine(
-        "simIntercept",
-        [
-          new Vector3(ix - s, VIS_Y, iz - s),
-          new Vector3(ix + s, VIS_Y, iz + s),
-          new Vector3(ix, VIS_Y, iz),
-          new Vector3(ix + s, VIS_Y, iz - s),
-          new Vector3(ix - s, VIS_Y, iz + s),
-        ],
-        1.0, 0.4, 0.4, 0.8,
-      );
-    }
-  }
-
-  // =========================================================================
-  // Main update (ported from 2D lines 829-1367)
+  // Main update
   // =========================================================================
 
   private update(dt: number): void {
@@ -606,8 +330,8 @@ export class TrackingSimulation3D {
       OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED,
     ];
 
-    // Launcher: random movement
-    stepMover(launcher, dt);
+    // Launcher: role-based smart movement (PG / MAIN_HANDLER)
+    moveLauncherSmart(launcher, this.launcherState, targets, allObs, dt);
 
     // Obstacle B: chase launcher (unless searching)
     if (!this.obMems[1].searching) {
@@ -617,43 +341,35 @@ export class TrackingSimulation3D {
 
     const selTarget = targets[this.selectedTargetIdx];
 
-    if (!this.ballActive) {
-      // === All targets: move toward open space ===
-      for (let ti = 0; ti < targets.length; ti++) {
-        const areaInfo = ti === 3 ? { x1: T4_X1, z1: T4_Z1, x2: T4_X2, z2: T4_Z2 }
-          : ti === 4 ? { x1: T5_X1, z1: T5_Z1, x2: T5_X2, z2: T5_Z2 }
-          : null;
+    // Helper: get other targets (excluding index ti)
+    const getOtherTargets = (ti: number): SimMover[] =>
+      targets.filter((_, i) => i !== ti);
 
-        if (areaInfo) {
-          const tgt = targets[ti];
-          this.targetReevalTimers[ti] -= dt;
-          const atD = this.targetDests[ti] && dist2d(tgt.x, tgt.z, this.targetDests[ti]!.x, this.targetDests[ti]!.z) < 10 * 0.015;
-          if (this.targetReevalTimers[ti] <= 0 || !this.targetDests[ti] || atD) {
-            this.targetDests[ti] = {
-              x: areaInfo.x1 + Math.random() * (areaInfo.x2 - areaInfo.x1),
-              z: areaInfo.z1 + Math.random() * (areaInfo.z2 - areaInfo.z1),
-            };
-            this.targetReevalTimers[ti] = 0.8 + Math.random() * 0.8;
-          }
-          const dx = this.targetDests[ti]!.x - tgt.x;
-          const dz = this.targetDests[ti]!.z - tgt.z;
-          const d = Math.sqrt(dx * dx + dz * dz);
-          if (d > 3 * 0.015) {
-            tgt.vx = (dx / d) * TARGET_RANDOM_SPEED * 0.5;
-            tgt.vz = (dz / d) * TARGET_RANDOM_SPEED * 0.5;
-          } else {
-            tgt.vx = 0; tgt.vz = 0;
-          }
-          moveWithFacing(tgt, TARGET_RANDOM_SPEED * 0.5, dt);
-          tgt.x = Math.max(areaInfo.x1 + 5 * 0.015, Math.min(areaInfo.x2 - 5 * 0.015, tgt.x));
-          tgt.z = Math.max(areaInfo.z1 + 5 * 0.015, Math.min(areaInfo.z2 - 5 * 0.015, tgt.z));
-        } else {
-          const res = moveTargetToOpenSpace(
-            targets[ti], this.targetDests[ti], this.targetReevalTimers[ti], dt, launcher, allObs,
-          );
-          this.targetDests[ti] = res.dest;
-          this.targetReevalTimers[ti] = res.reevalTimer;
-        }
+    if (!this.ballActive) {
+      // === Role-based target movement ===
+      // Target 0: SG / SECOND_HANDLER
+      {
+        const res = moveSecondHandler(
+          targets[0], this.targetDests[0], this.targetReevalTimers[0],
+          dt, launcher, allObs, getOtherTargets(0),
+        );
+        this.targetDests[0] = res.dest;
+        this.targetReevalTimers[0] = res.reevalTimer;
+      }
+      // Target 1: SF / SLASHER
+      moveSlasher(targets[1], this.slasherState, dt, launcher, allObs, getOtherTargets(1));
+      // Target 2: C / SCREENER
+      moveScreener(targets[2], this.screenerState, dt, launcher, allObs, getOtherTargets(2));
+      // Target 3: PF / DUNKER
+      moveDunker(targets[3], this.dunkerState, dt, launcher, allObs, getOtherTargets(3));
+      // Target 4: SG / SPACER
+      {
+        const res = moveSpacer(
+          targets[4], this.targetDests[4], this.targetReevalTimers[4],
+          dt, launcher, allObs, getOtherTargets(4),
+        );
+        this.targetDests[4] = res.dest;
+        this.targetReevalTimers[4] = res.reevalTimer;
       }
 
       // Obstacle A: move to midpoint of launcher and selected target
@@ -679,6 +395,13 @@ export class TrackingSimulation3D {
         moveKeepFacing(allObs[4], OB_E_IDLE_SPEED, dt);
       }
 
+      // === Separate overlapping entities ===
+      separateEntities([
+        { mover: launcher, radius: LAUNCHER_RADIUS },
+        ...targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
+        ...obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
+      ]);
+
       // === Pre-fire evaluation ===
       let bestIdx = 0;
       let bestScore = -Infinity;
@@ -702,7 +425,11 @@ export class TrackingSimulation3D {
 
         const blocked = obBlocks.some(b => b) || !tgtCanReach;
         const blockerCount = obBlocks.filter(b => b).length;
-        const score = -blockerCount * 10 + (tgtCanReach ? 5 : 0) - estDist * 0.01;
+        const rolePriority: Record<string, number> = {
+          DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SPACER: 1.0, SCREENER: 0.5,
+        };
+        const roleBonus = rolePriority[ROLE_ASSIGNMENTS.targets[ti].role] ?? 0;
+        const score = -blockerCount * 10 + (tgtCanReach ? 5 : 0) - estDist * 0.01 + roleBonus;
 
         const pf: SimPreFireInfo = {
           targetIdx: ti, estFlightTime: estFT, estIPx, estIPz,
@@ -848,42 +575,38 @@ export class TrackingSimulation3D {
         }
       }
 
-      // Other targets continue normal movement
+      // Other targets continue role-based movement during ball flight
       for (let ti = 0; ti < targets.length; ti++) {
         if (ti === this.selectedTargetIdx) continue;
-        const areaInfo = ti === 3 ? { x1: T4_X1, z1: T4_Z1, x2: T4_X2, z2: T4_Z2 }
-          : ti === 4 ? { x1: T5_X1, z1: T5_Z1, x2: T5_X2, z2: T5_Z2 }
-          : null;
-
-        if (areaInfo) {
-          const tgt = targets[ti];
-          this.targetReevalTimers[ti] -= dt;
-          const atD = this.targetDests[ti] && dist2d(tgt.x, tgt.z, this.targetDests[ti]!.x, this.targetDests[ti]!.z) < 10 * 0.015;
-          if (this.targetReevalTimers[ti] <= 0 || !this.targetDests[ti] || atD) {
-            this.targetDests[ti] = {
-              x: areaInfo.x1 + Math.random() * (areaInfo.x2 - areaInfo.x1),
-              z: areaInfo.z1 + Math.random() * (areaInfo.z2 - areaInfo.z1),
-            };
-            this.targetReevalTimers[ti] = 0.8 + Math.random() * 0.8;
+        const others = getOtherTargets(ti);
+        switch (ti) {
+          case 0: {
+            const res = moveSecondHandler(
+              targets[0], this.targetDests[0], this.targetReevalTimers[0],
+              dt, launcher, allObs, others,
+            );
+            this.targetDests[0] = res.dest;
+            this.targetReevalTimers[0] = res.reevalTimer;
+            break;
           }
-          const dx = this.targetDests[ti]!.x - tgt.x;
-          const dz = this.targetDests[ti]!.z - tgt.z;
-          const d = Math.sqrt(dx * dx + dz * dz);
-          if (d > 3 * 0.015) {
-            tgt.vx = (dx / d) * TARGET_RANDOM_SPEED * 0.5;
-            tgt.vz = (dz / d) * TARGET_RANDOM_SPEED * 0.5;
-          } else {
-            tgt.vx = 0; tgt.vz = 0;
+          case 1:
+            moveSlasher(targets[1], this.slasherState, dt, launcher, allObs, others);
+            break;
+          case 2:
+            moveScreener(targets[2], this.screenerState, dt, launcher, allObs, others);
+            break;
+          case 3:
+            moveDunker(targets[3], this.dunkerState, dt, launcher, allObs, others);
+            break;
+          case 4: {
+            const res = moveSpacer(
+              targets[4], this.targetDests[4], this.targetReevalTimers[4],
+              dt, launcher, allObs, others,
+            );
+            this.targetDests[4] = res.dest;
+            this.targetReevalTimers[4] = res.reevalTimer;
+            break;
           }
-          moveWithFacing(tgt, TARGET_RANDOM_SPEED * 0.5, dt);
-          tgt.x = Math.max(areaInfo.x1 + 5 * 0.015, Math.min(areaInfo.x2 - 5 * 0.015, tgt.x));
-          tgt.z = Math.max(areaInfo.z1 + 5 * 0.015, Math.min(areaInfo.z2 - 5 * 0.015, tgt.z));
-        } else {
-          const res = moveTargetToOpenSpace(
-            targets[ti], this.targetDests[ti], this.targetReevalTimers[ti], dt, launcher, allObs,
-          );
-          this.targetDests[ti] = res.dest;
-          this.targetReevalTimers[ti] = res.reevalTimer;
         }
       }
 
@@ -914,6 +637,13 @@ export class TrackingSimulation3D {
         setChaserVelocity(allObs[4], targets[4].x, targets[4].z, OB_E_IDLE_SPEED, OB_E_HOVER_RADIUS, dt);
         moveKeepFacing(allObs[4], OB_E_IDLE_SPEED, dt);
       }
+
+      // === Separate overlapping entities ===
+      separateEntities([
+        { mover: launcher, radius: LAUNCHER_RADIUS },
+        ...targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
+        ...obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
+      ]);
 
       // Block collision (XZ distance + Y range check)
       for (const ob of allObs) {
@@ -952,7 +682,6 @@ export class TrackingSimulation3D {
     }
 
     // === Scan updates ===
-    // Create SimBall proxy for updateScan (pure logic module)
     const scanBallPos = this.ballActive ? this.ball.getPosition() : Vector3.Zero();
     const simBall: SimBall = {
       active: this.ballActive,
