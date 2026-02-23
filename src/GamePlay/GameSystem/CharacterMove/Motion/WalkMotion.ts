@@ -64,21 +64,21 @@ const WF_ADDITIONS: Record<string, number[]> = {
   headZ: [0, 0, 0, 0, 0],
 
   // 腕振り（対側: 左足前→右腕前）
-  leftShoulderX: [0, 25, 0, -25, 0],
-  leftShoulderY: [0, 0, 0, 0, 0],
-  leftShoulderZ: [0, 0, 0, 0, 0],
+  leftShoulderX: [0, 0, 0, 0, 0],
+  leftShoulderY: [65, 0, -25, 0, 65],
+  leftShoulderZ: [-12, -12, -12, -12, -12],
 
-  rightShoulderX: [0, -25, 0, 25, 0],
-  rightShoulderY: [0, 0, 0, 0, 0],
+  rightShoulderX: [0, 0, 0, 0, 0],
+  rightShoulderY: [-25, 0, 65, 0, -25],
   rightShoulderZ: [0, 0, 0, 0, 0],
 
-  leftElbowX: [0, 5, 0, -15, 0],
+  leftElbowX: [50, 55, 50, 55, 50],
   leftElbowY: [0, 0, 0, 0, 0],
-  leftElbowZ: [0, 0, 0, 0, 0],
+  leftElbowZ: [30, 0, 0, 6, 30],
 
-  rightElbowX: [0, -15, 0, 5, 0],
+  rightElbowX: [50, 55, 50, 55, 50],
   rightElbowY: [0, 0, 0, 0, 0],
-  rightElbowZ: [0, 0, 0, 0, 0],
+  rightElbowZ: [0, 0, 30, 0, 0],
 
   // 脚（太ももで前進を駆動: 負=前、正=後）
   leftHipX: [0, -25, 0, 18, 0],
@@ -90,11 +90,11 @@ const WF_ADDITIONS: Record<string, number[]> = {
   rightHipZ: [0, 0, 0, 0, 0],
 
   // 膝：スイングフェーズで曲げる（正=屈曲）
-  leftKneeX: [0, 5, 0, 25, 0],
+  leftKneeX: [0, 5, -30, 25, 0],
   leftKneeY: [0, 0, 0, 0, 0],
   leftKneeZ: [0, 0, 0, 0, 0],
 
-  rightKneeX: [0, 25, 0, 5, 0],
+  rightKneeX: [0, 25, 0, -20, 0],
   rightKneeY: [0, 0, 0, 0, 0],
   rightKneeZ: [0, 0, 0, 0, 0],
 
@@ -158,21 +158,21 @@ const WB_ADDITIONS: Record<string, number[]> = {
   headZ: [0, 0, 0, 0, 0],
 
   // 腕振り（対側: 左足後退→左腕前）
-  leftShoulderX: [0, -18, 0, 18, 0],
-  leftShoulderY: [0, 0, 0, 0, 0],
-  leftShoulderZ: [0, 0, 0, 0, 0],
+  leftShoulderX: [-75, -75, -75, -75, -75],
+  leftShoulderY: [65, 0, -25, 0, 65],
+  leftShoulderZ: [-6, -6, -6, -6, -6],
 
-  rightShoulderX: [0, 18, 0, -18, 0],
-  rightShoulderY: [0, 0, 0, 0, 0],
-  rightShoulderZ: [0, 0, 0, 0, 0],
+  rightShoulderX: [-75, -75, -75, -75, -75],
+  rightShoulderY: [-25, 0, 65, 0, -25],
+  rightShoulderZ: [-6, -6, -6, -6, -6],
 
-  leftElbowX: [0, -12, 0, 5, 0],
+  leftElbowX: [50, 55, 50, 55, 50],
   leftElbowY: [0, 0, 0, 0, 0],
-  leftElbowZ: [0, 0, 0, 0, 0],
+  leftElbowZ: [6, 6, 6, 6, 6],
 
-  rightElbowX: [0, 5, 0, -12, 0],
+  rightElbowX: [50, 55, 50, 55, 50],
   rightElbowY: [0, 0, 0, 0, 0],
-  rightElbowZ: [0, 0, 0, 0, 0],
+  rightElbowZ: [6, 6, 6, 6, 6],
 
   // 脚（太ももで後退: 正=後、負=前）
   leftHipX: [0, 18, 0, -15, 0],

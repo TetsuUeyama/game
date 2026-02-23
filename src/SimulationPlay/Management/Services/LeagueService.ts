@@ -117,8 +117,9 @@ export async function generateLeague(
       .filter((i) => i !== myUniIndex)
   ).slice(0, TEAM_COUNT - 1);
 
-  const shuffledTeamIndices = shuffle(
+  const otherTeamIndices = shuffle(
     Array.from({ length: teamNames.length }, (_, i) => i)
+      .filter((i) => i !== myTeamIndex)
   );
 
   const playerPool = shuffle([...allPlayerIds]);
@@ -149,7 +150,7 @@ export async function generateLeague(
   for (let i = 0; i < TEAM_COUNT - 1; i++) {
     const teamId = `team_${i + 1}`;
     const uniIdx = otherUniIndices[i];
-    const teamIdx = shuffledTeamIndices[i % shuffledTeamIndices.length];
+    const teamIdx = otherTeamIndices[i % otherTeamIndices.length];
     const players = createTeamPlayers(teamId, playerPool, namePool, playerCounter);
     for (const p of players) allPlayers[p.id] = p;
     allTeams.push({
@@ -177,11 +178,9 @@ export async function fetchLeagueTeams(
   userId: string
 ): Promise<LeagueTeam[]> {
   const teams = leagueTeamsStore.get(userId) ?? [];
-  return [...teams].sort((a, b) => {
-    if (a.isMyTeam) return -1;
-    if (b.isMyTeam) return 1;
-    return a.universityName.localeCompare(b.universityName, 'ja');
-  });
+  const others = shuffle(teams.filter((t) => !t.isMyTeam));
+  const myTeam = teams.filter((t) => t.isMyTeam);
+  return [...others, ...myTeam];
 }
 
 /**

@@ -1,75 +1,18 @@
-CharacterMove1on1Game.tsx:53 [CharacterMove1on1Game] ゲーム初期化開始...
-CharacterMove1on1Game.tsx:63 [CharacterMove1on1Game] GameScene初期化中...
-logger.ts:107 BJS - [15:22:23]: Babylon.js v8.50.5 - WebGL2 - Parallel shader compilation
-CharacterMove1on1Game.tsx:76 [CharacterMove1on1Game] ゲーム初期化完了
-PhysicsManager.ts:99 [PhysicsManager] Initialized with Havok physics engine
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="__root__" material="(none)" type=undefined subMeshes=0
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42__Eyelashes" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Body1" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Hair1" material="Ch42_Hair" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shirt" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Shorts" material="Ch42_Body" type=PBRMaterial subMeshes=1
-MatchCharacterModel.ts:489 [GLB] mesh="Ch42_Sneakers" material="Ch42_Body" type=PBRMaterial subMeshes=1
+ 1. 名前のフィールド構成について                                                                    現在は「名前」が1つのテキストフィールドです。CSVデータは姓(LastName.csv)と名(FirstName.csv)が別々  になっています。                                                                                                                                                                                    
+  → 登録フォームを「姓」「名」の2フィールドに分けます。
+                                                                                                                                                                             
+  2. 名前の除外ロジックについて  ユーザーが選んだ姓・名をプールから除外する際、例えばユーザーが姓「田中」名「太郎」を選んだ場合：   - A) 「田中」をLastNameプールから、「太郎」をFirstNameプールから、それぞれ除外する                 - B) 「田中太郎」という組み合わせだけを選手生成時に避ける（「田中」や「太郎」は他の選手に使える）                                                                                                     どちらですか？
+→　考えましたが姓名共に選択肢が多く、またどちらかが被ってしまっても別に問題ありませんので除外は不要です。
+                                                                                                                                                                                        3. 大学名・チーム名の除外について                                                                
+  現在200大学・260チーム名があり、119チーム分必要です。ユーザーが選んだ大学名・チーム名を119チーム
+  のプールから除外する（＝ユーザーのチームだけがその大学名・チーム名を持つ）という理解で合っていま
+  すか？
+→はい、こちらはかぶると良くないので、もし(大学名を自分で入力した以外の場合)その大学名はかぶり防止のため他チームが使用できないようにしたいです。
+もし入力で既存の大学名・チーム名と全く同じ名前が入力された場合、その名前を選んだものとして被り防止をしてほしいです。
+
+
+  4. 上書き入力について
+  現在「オリジナル入力」チェックボックスで自由入力に切り替える仕組みがあります。新しい仕様では、ラ 
+  ンダム値がプリフィルされたテキストフィールドをそのまま編集可能にする形（チェックボックス不要）に 
+  しますか？
+→その形がいいです
