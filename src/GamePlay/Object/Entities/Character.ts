@@ -16,6 +16,15 @@ import { CharacterPhysicsManager } from "@/GamePlay/Object/Physics/Collision/Cha
 import { CharacterBlockJumpController } from "@/GamePlay/GameSystem/CharacterMove/Controllers/CharacterBlockJumpController";
 import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
 
+/** 手首→手のひら中心の距離（前腕→手首方向を延長、約7cm） */
+const PALM_CHAIN_DISTANCE = 0.07;
+
+/** 手のひら法線方向（ボーンローカル空間: 手の甲→手のひら方向） */
+const PALM_NORMAL_LOCAL = new Vector3(0, 0, 1);
+
+/** ボール半径（バスケットボール規格） */
+const BALL_RADIUS = 0.12;
+
 // キャラクター設定
 export const CHARACTER_CONFIG = {
   height: 1.8, // キャラクターの身長（m）
@@ -184,6 +193,11 @@ export class Character {
   private balanceSphereMesh: Mesh | null = null;
   private balanceSphereVisible: boolean = false;
 
+  // パーム位置の可視化
+  private palmSphereRight: Mesh | null = null;
+  private palmSphereLeft: Mesh | null = null;
+  private palmSphereVisible: boolean = false;
+
   // 半透明モード
   private isBodyTransparent: boolean = false;
   private originalMaterialAlphas: Map<Mesh, number> = new Map();
@@ -267,6 +281,9 @@ export class Character {
 
     // ブロックジャンプコントローラーを初期化
     this.blockJumpController = new CharacterBlockJumpController();
+
+    // パーム位置球を常時表示
+    this.setPalmSphereVisible(true);
   }
 
   /**
@@ -796,6 +813,11 @@ export class Character {
       this.updateBalanceSpherePosition();
     }
 
+    // パーム球の位置を更新（表示中のみ）
+    if (this.palmSphereVisible) {
+      this.updatePalmSpherePositions();
+    }
+
     // ブロックジャンプの横移動を更新
     this.updateBlockJump(deltaTime);
 
@@ -935,6 +957,14 @@ export class Character {
     if (this.balanceSphereMesh) {
       this.balanceSphereMesh.setEnabled(visible);
     }
+
+    // パーム球
+    if (this.palmSphereRight) {
+      this.palmSphereRight.setEnabled(visible);
+    }
+    if (this.palmSphereLeft) {
+      this.palmSphereLeft.setEnabled(visible);
+    }
   }
 
   /**
@@ -962,9 +992,10 @@ export class Character {
   public getRightHandPosition(): Vector3 {
     this._adapter.forceWorldMatrixUpdate();
     const bone = this._adapter.findBone("rightHand");
-    const handWorldPosition = bone ? this._adapter.getBoneWorldPosition(bone) : Vector3.Zero();
-    const handRadius = 0.07;
-    return handWorldPosition.add(new Vector3(0, -handRadius, 0));
+    if (!bone) return Vector3.Zero();
+    const palmCenter = this._adapter.getBoneChainExtendedPosition(bone, PALM_CHAIN_DISTANCE);
+    const palmNormal = this._adapter.getBoneLocalAxisInWorld(bone, PALM_NORMAL_LOCAL);
+    return palmCenter.add(palmNormal.scale(BALL_RADIUS));
   }
 
   /**
@@ -973,9 +1004,10 @@ export class Character {
   public getLeftHandPosition(): Vector3 {
     this._adapter.forceWorldMatrixUpdate();
     const bone = this._adapter.findBone("leftHand");
-    const handWorldPosition = bone ? this._adapter.getBoneWorldPosition(bone) : Vector3.Zero();
-    const handRadius = 0.07;
-    return handWorldPosition.add(new Vector3(0, -handRadius, 0));
+    if (!bone) return Vector3.Zero();
+    const palmCenter = this._adapter.getBoneChainExtendedPosition(bone, PALM_CHAIN_DISTANCE);
+    const palmNormal = this._adapter.getBoneLocalAxisInWorld(bone, PALM_NORMAL_LOCAL);
+    return palmCenter.add(palmNormal.scale(BALL_RADIUS));
   }
 
   /**
@@ -2010,6 +2042,77 @@ export class Character {
   }
 
   /**
+   * パーム位置球の表示/非表示を設定
+   */
+  public setPalmSphereVisible(visible: boolean): void {
+    this.palmSphereVisible = visible;
+
+    if (visible) {
+      if (!this.palmSphereRight) {
+        this.createPalmSphereMeshes();
+      }
+      this.palmSphereRight!.isVisible = true;
+      this.palmSphereLeft!.isVisible = true;
+    } else {
+      if (this.palmSphereRight) {
+        this.palmSphereRight.isVisible = false;
+      }
+      if (this.palmSphereLeft) {
+        this.palmSphereLeft.isVisible = false;
+      }
+    }
+  }
+
+  /**
+   * パーム位置球メッシュを作成（左右）
+   */
+  private createPalmSphereMeshes(): void {
+    if (this.palmSphereRight) return;
+
+    const diameter = 0.06;
+    const segments = 12;
+
+    // 右手パーム球
+    this.palmSphereRight = MeshBuilder.CreateSphere(
+      `${this.team}_palm_R`,
+      { diameter, segments },
+      this.scene
+    );
+    const matR = new StandardMaterial(`${this.team}_palm_mat_R`, this.scene);
+    matR.diffuseColor = new Color3(1.0, 0.8, 0.0);   // 黄色
+    matR.emissiveColor = new Color3(0.6, 0.5, 0.0);
+    matR.alpha = 0.8;
+    this.palmSphereRight.material = matR;
+
+    // 左手パーム球
+    this.palmSphereLeft = MeshBuilder.CreateSphere(
+      `${this.team}_palm_L`,
+      { diameter, segments },
+      this.scene
+    );
+    const matL = new StandardMaterial(`${this.team}_palm_mat_L`, this.scene);
+    matL.diffuseColor = new Color3(0.0, 1.0, 0.6);    // 緑
+    matL.emissiveColor = new Color3(0.0, 0.5, 0.3);
+    matL.alpha = 0.8;
+    this.palmSphereLeft.material = matL;
+
+    this.updatePalmSpherePositions();
+  }
+
+  /**
+   * パーム位置球の位置を毎フレーム更新
+   */
+  private updatePalmSpherePositions(): void {
+    if (!this.palmSphereRight || !this.palmSphereLeft) return;
+
+    const rightPos = this.getRightHandPosition();
+    const leftPos = this.getLeftHandPosition();
+
+    this.palmSphereRight.position.copyFrom(rightPos);
+    this.palmSphereLeft.position.copyFrom(leftPos);
+  }
+
+  /**
    * 身体の透明度を設定
    * @param alpha 透明度（0.0 = 完全透明, 1.0 = 不透明）
    */
@@ -2128,6 +2231,16 @@ export class Character {
     if (this.balanceSphereMesh) {
       this.balanceSphereMesh.dispose();
       this.balanceSphereMesh = null;
+    }
+
+    // パーム球を破棄
+    if (this.palmSphereRight) {
+      this.palmSphereRight.dispose();
+      this.palmSphereRight = null;
+    }
+    if (this.palmSphereLeft) {
+      this.palmSphereLeft.dispose();
+      this.palmSphereLeft = null;
     }
 
     // 名前ラベルを破棄
