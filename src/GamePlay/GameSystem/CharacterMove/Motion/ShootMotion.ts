@@ -52,7 +52,7 @@ const SHOOT_3PT_JOINT_ANIMATIONS: Record<string, Record<number, number>> = {
   // 右腕（シュートハンド）：ボールを持ち上げてリリース
   rightShoulderX: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 30, [SHOOT_3PT_T2]: 30, [SHOOT_3PT_T3]: 30, [SHOOT_3PT_T4]: 30},
   rightShoulderY: {[SHOOT_3PT_T0]: 30, [SHOOT_3PT_T1]: 30, [SHOOT_3PT_T2]: 41, [SHOOT_3PT_T3]: 30, [SHOOT_3PT_T4]: 30},
-  rightShoulderZ: {[SHOOT_3PT_T0]: -60, [SHOOT_3PT_T1]: -60, [SHOOT_3PT_T2]: -60, [SHOOT_3PT_T3]: -60, [SHOOT_3PT_T4]: 0},
+  rightShoulderZ: {[SHOOT_3PT_T0]: 96, [SHOOT_3PT_T1]: 96, [SHOOT_3PT_T2]: 96, [SHOOT_3PT_T3]: 96, [SHOOT_3PT_T4]: 96},
 
   rightElbowX: {[SHOOT_3PT_T0]: -30, [SHOOT_3PT_T1]: -90, [SHOOT_3PT_T2]: -110, [SHOOT_3PT_T3]: -20, [SHOOT_3PT_T4]: -30},
   rightElbowY: {[SHOOT_3PT_T0]: 0, [SHOOT_3PT_T1]: 0, [SHOOT_3PT_T2]: 0, [SHOOT_3PT_T3]: 0, [SHOOT_3PT_T4]: 0},
