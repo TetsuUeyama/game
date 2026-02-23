@@ -1,8 +1,8 @@
-import CharacterMove1on1Game from '@/GamePlay/MatchEngine/CharacterMove1on1Game';
+import { TrackingSimulationPanel } from '@/GamePlay/MatchEngine/TrackingSimulationPanel';
 
 /**
- * Character Move 1対1テストページ
+ * 追跡シミュレーションページ
  */
 export default function CharacterMove1on1Page() {
-  return <CharacterMove1on1Game />;
+  return <TrackingSimulationPanel />;
 }

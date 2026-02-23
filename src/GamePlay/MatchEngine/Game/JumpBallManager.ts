@@ -3,7 +3,7 @@
  * ジャンプボールに関するロジックを管理
  */
 
-import { Vector3 } from "@babylonjs/core";
+import { Vector3, Quaternion, Matrix, Bone, TransformNode } from "@babylonjs/core";
 import { Character } from "@/GamePlay/Object/Entities/Character";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 import { CharacterState } from "@/GamePlay/GameSystem/StatusCheckSystem/CharacterState";
@@ -67,6 +67,9 @@ export class JumpBallManager {
 
   // ルーズボールタイマー（誰もボールを保持していない状態のタイマー）
   private looseBallTimer: number = 0;
+
+  // ジャンプ中の腕回転状態
+  private jumpArmSlerp: number = 0;
 
   constructor(context: JumpBallContext) {
     this.context = context;
@@ -286,6 +289,11 @@ export class JumpBallManager {
           this.triggerJumperJumps();
         }
 
+        // 腕slerp更新（postUpdate で実際のボーン回転を適用）
+        if (this.jumpersTriggered) {
+          this.updateJumperArmSlerp(deltaTime);
+        }
+
         // 手-ボール接触判定
         if (this.jumpersTriggered) {
           const winner = this.checkHandBallContact();
@@ -437,6 +445,8 @@ export class JumpBallManager {
    * 両ジャンパーにジャンプモーション＋物理力を発動
    */
   private triggerJumperJumps(): void {
+    this.jumpArmSlerp = 0;
+
     const jumpers = [this.jumpBallAllyJumper, this.jumpBallEnemyJumper];
     for (const jumper of jumpers) {
       if (!jumper) continue;
@@ -446,6 +456,21 @@ export class JumpBallManager {
       jumper.getActionController().startAction('jump_ball');
     }
     this.jumpersTriggered = true;
+  }
+
+  /**
+   * ジャンプ中の腕slerp量を毎フレーム更新
+   */
+  private updateJumperArmSlerp(deltaTime: number): void {
+    const SLERP_SPEED = 6.0; // 素早く腕を伸ばす（~0.17sでフル）
+    this.jumpArmSlerp = Math.min(this.jumpArmSlerp + SLERP_SPEED * deltaTime, 1.0);
+  }
+
+  /**
+   * ジャンパーの腕回転状態をクリーンアップ
+   */
+  private cleanupJumperArms(): void {
+    this.jumpArmSlerp = 0;
   }
 
   /**
@@ -501,6 +526,9 @@ export class JumpBallManager {
    * @param winner チップに勝った選手
    */
   private executeTipForWinner(winner: Character): void {
+    // 腕IKクリーンアップ（チップ後は不要）
+    this.cleanupJumperArms();
+
     // キネマティックトスを停止
     this.tossActive = false;
 
@@ -525,6 +553,9 @@ export class JumpBallManager {
   private complete(): void {
     this.jumpBallInfo.phase = 'completed';
     this.jumpBallInfo.ballTipped = true;
+
+    // 腕IKクリーンアップ
+    this.cleanupJumperArms();
 
     // キネマティックトスを停止
     this.tossActive = false;
@@ -617,6 +648,124 @@ export class JumpBallManager {
   }
 
   // =============================================================================
+  // ポスト更新（character.update() の後に呼ぶ）
+  // =============================================================================
+
+  /**
+   * character.update() の後に呼び出し、ワールドスペース直接回転で
+   * 両ジャンパーの腕をボール方向に伸ばす。
+   * CatchPoseCheckPanel と同じ手法（FK結果を上書き）。
+   */
+  public postUpdate(): void {
+    if (!this.jumpersTriggered || this.jumpArmSlerp <= 0) return;
+    if (this.jumpBallInfo.phase !== 'tossing') return;
+
+    const ballPos = this.context.ball.getPosition();
+    const jumpers = [this.jumpBallAllyJumper, this.jumpBallEnemyJumper];
+
+    for (const jumper of jumpers) {
+      if (!jumper) continue;
+      this.applyArmRotationTowardBall(jumper, ballPos, this.jumpArmSlerp);
+    }
+  }
+
+  /**
+   * 1体のキャラクターの両腕をボール方向にワールドスペース回転。
+   * 肩（upperArm）→ ボール方向に回転、次に前腕（foreArm）→ ボール方向に回転。
+   */
+  private applyArmRotationTowardBall(
+    character: Character,
+    ballPos: Vector3,
+    slerpAmount: number,
+  ): void {
+    const adapter = character.getSkeletonAdapter();
+    if (!adapter) return;
+
+    // 両腕に適用
+    const sides: Array<{ arm: 'rightArm' | 'leftArm'; foreArm: 'rightForeArm' | 'leftForeArm'; hand: 'rightHand' | 'leftHand' }> = [
+      { arm: 'rightArm', foreArm: 'rightForeArm', hand: 'rightHand' },
+      { arm: 'leftArm', foreArm: 'leftForeArm', hand: 'leftHand' },
+    ];
+
+    for (const side of sides) {
+      const upperArmBone = adapter.findBone(side.arm);
+      const foreArmBone = adapter.findBone(side.foreArm);
+      const handBone = adapter.findBone(side.hand);
+      const upperArmNode = upperArmBone?.getTransformNode();
+      const foreArmNode = foreArmBone?.getTransformNode();
+      const handNode = handBone?.getTransformNode();
+
+      if (!upperArmBone || !foreArmBone || !upperArmNode || !foreArmNode) continue;
+
+      // ── 肩回転: upperArm → ボール方向 ──
+      // cross/dot はワールドスペースなので sign 補正不要
+      adapter.forceWorldMatrixUpdate();
+
+      const armWorldPos = upperArmNode.absolutePosition.clone();
+      const elbowWorldPos = foreArmNode.absolutePosition.clone();
+      const restArmDir = elbowWorldPos.subtract(armWorldPos).normalize();
+      const targetDir = ballPos.subtract(armWorldPos).normalize();
+      const cross = Vector3.Cross(restArmDir, targetDir);
+      const dot = Vector3.Dot(restArmDir, targetDir);
+
+      if (cross.length() > 0.001) {
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+        const axis = cross.normalize();
+        const worldDeltaQ = Quaternion.RotationAxis(axis, angle * slerpAmount);
+
+        const parentBone = upperArmBone.getParent();
+        const parentNode = parentBone?.getTransformNode();
+        if (parentNode) {
+          JumpBallManager.applyWorldRotationToBone(upperArmBone, upperArmNode, parentNode, worldDeltaQ);
+        }
+      }
+
+      // ── 前腕回転: foreArm → ボール方向 ──
+      adapter.skeleton.computeAbsoluteMatrices(true);
+      adapter.forceWorldMatrixUpdate();
+
+      if (handBone && handNode) {
+        const elbowWorldPos2 = foreArmNode.absolutePosition.clone();
+        const wristWorldPos = handNode.absolutePosition.clone();
+        const restForearmDir = wristWorldPos.subtract(elbowWorldPos2).normalize();
+        const targetDir2 = ballPos.subtract(elbowWorldPos2).normalize();
+        const cross2 = Vector3.Cross(restForearmDir, targetDir2);
+        const dot2 = Vector3.Dot(restForearmDir, targetDir2);
+
+        if (cross2.length() > 0.001) {
+          const angle2 = Math.acos(Math.max(-1, Math.min(1, dot2)));
+          const axis2 = cross2.normalize();
+          const worldDeltaQ2 = Quaternion.RotationAxis(axis2, angle2 * slerpAmount);
+          JumpBallManager.applyWorldRotationToBone(foreArmBone, foreArmNode, upperArmNode, worldDeltaQ2);
+        }
+      }
+    }
+
+    // 最終的にワールド行列を更新
+    adapter.skeleton.computeAbsoluteMatrices(true);
+    adapter.forceWorldMatrixUpdate();
+  }
+
+  /**
+   * ワールドスペース回転をボーンローカルに変換して適用 + bone matrix同期
+   */
+  private static applyWorldRotationToBone(
+    bone: Bone,
+    node: TransformNode,
+    parentNode: TransformNode,
+    worldDeltaQ: Quaternion,
+  ): void {
+    const parentWorldQ = new Quaternion();
+    parentNode.getWorldMatrix().decompose(undefined, parentWorldQ, undefined);
+    const pInv = Quaternion.Inverse(parentWorldQ);
+    const localDelta = pInv.multiply(worldDeltaQ).multiply(parentWorldQ);
+    const currentQ = node.rotationQuaternion!.clone();
+    node.rotationQuaternion = localDelta.multiply(currentQ);
+    const mat = Matrix.Compose(node.scaling, node.rotationQuaternion, node.position);
+    bone.updateMatrix(mat, false, true);
+  }
+
+  // =============================================================================
   // パブリックAPI
   // =============================================================================
 
@@ -638,6 +787,7 @@ export class JumpBallManager {
    * ジャンプボール情報をリセット
    */
   public reset(): void {
+    this.cleanupJumperArms();
     this.jumpBallInfo = { ...DEFAULT_JUMP_BALL_INFO };
     this.jumpBallAllyJumper = null;
     this.jumpBallEnemyJumper = null;

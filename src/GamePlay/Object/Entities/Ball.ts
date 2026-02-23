@@ -10,6 +10,9 @@ import {
   PhysicsMotionType,
   PhysicsMaterialCombineMode,
   TransformNode,
+  Quaternion,
+  Matrix,
+  Bone,
 } from "@babylonjs/core";
 import type { Character } from "@/GamePlay/Object/Entities/Character";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
@@ -59,10 +62,14 @@ export class Ball {
   // ── ボール保持エリア ──
   // 手のひらの先にある保持ゾーン。IKで手がボールに向かい、
   // 保持エリアがボールに触れた瞬間に保持が成立する。
-  /** 保持エリアの半径(m) — ボール中心と手のひら位置がこの距離以内で保持成立 */
-  private static readonly HOLD_ZONE_RADIUS = 0.25;
   /** IKがどうしても届かない場合の安全フォールバック(秒) */
   private static readonly CATCH_SAFETY_TIMEOUT = 0.5;
+  /** キャッチ完了の最小時間(秒) — 腕が十分伸びる時間を確保 */
+  private static readonly CATCH_MIN_TIME = 0.15;
+  /** 腕slerpがこの値以上でキャッチ完了判定 */
+  private static readonly CATCH_SLERP_THRESHOLD = 0.85;
+  /** プレキャッチ対象（キャッチ中はholderをまだ設定しない） */
+  private _preCatchTarget: Character | null = null;
   /** IKで手を伸ばしている最中か（保持エリア到達待ち） */
   private _catching = false;
   /** キャッチ時のボール位置（キャラクター相対オフセット） */
@@ -73,6 +80,18 @@ export class Ball {
   private _catchArm: 'left' | 'right' | null = null;
   /** IKターゲット用の軽量ノード */
   private _catchTargetNode: TransformNode | null = null;
+  /** 腕IKのslerp増加速度(/秒) */
+  private static readonly CATCH_SLERP_SPEED = 6.0;
+  /** ボール→保持位置への収束速度(/秒) — 遅めにしてIKが手を伸ばす時間を確保 */
+  private static readonly CATCH_CONVERGE_SPEED = 1.0;
+  /** 体幹調整の補間速度(/秒) */
+  private static readonly CATCH_OVERLAY_LERP = 10.0;
+  /** 腕slerpの現在値 */
+  private _catchSlerp = 0;
+  /** 体幹調整: 現在のspine pitch */
+  private _currentSpinePitch = 0;
+  /** 体幹調整: 現在のspine roll */
+  private _currentSpineRoll = 0;
 
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
@@ -387,7 +406,7 @@ export class Ball {
    * ボールが保持されているかどうか
    */
   isHeld(): boolean {
-    return this.holder !== null;
+    return this.holder !== null || this._preCatchTarget !== null;
   }
 
   /**
@@ -398,32 +417,188 @@ export class Ball {
   }
 
   /**
-   * キャッチ中のIK解除と状態リセット
+   * キャッチ中のIK解除と状態リセット（shoot/pass等からも呼ばれる）
    */
   private _endCatch(): void {
-    if (!this._catching) return;
-    if (this.holder && this._catchArm) {
-      const ik = this.holder.getIKSystem();
-      if (ik) ik.setArmTarget(this._catchArm, null);
+    // プレキャッチ中なら先にキャンセル
+    if (this._preCatchTarget) {
+      this._cancelPreCatch();
+      return;
     }
+    if (!this._catching) return;
     this._catching = false;
     this._catchElapsed = 0;
     this._catchArm = null;
+    this._catchSlerp = 0;
+    this._currentSpinePitch = 0;
+    this._currentSpineRoll = 0;
+  }
+
+  /**
+   * プレキャッチ完了 → holderを設定してボールを保持位置へ
+   */
+  private _completeCatch(): void {
+    const character = this._preCatchTarget;
+    if (!character) return;
+
+    // ルックアット/overlay クリーンアップ
+    const ik = character.getIKSystem();
+    if (ik) {
+      ik.setLookAtTarget(null);
+    }
+    character.clearCatchBodyOverlay();
+
+    // ここで初めて holder を設定（ゲームロジック上の保持成立）
+    this.holder = character;
+    this.mesh.position = character.getBallHoldingPosition();
+
+    // プレキャッチ状態をクリア
+    this._preCatchTarget = null;
+    this._catching = false;
+    this._catchElapsed = 0;
+    this._catchArm = null;
+    this._catchSlerp = 0;
+    this._currentSpinePitch = 0;
+    this._currentSpineRoll = 0;
+  }
+
+  /**
+   * プレキャッチをキャンセル（スティール、ボール解放等）
+   */
+  private _cancelPreCatch(): void {
+    const character = this._preCatchTarget;
+    if (!character) return;
+
+    const ik = character.getIKSystem();
+    if (ik) {
+      ik.setLookAtTarget(null);
+    }
+    character.clearCatchBodyOverlay();
+
+    this._preCatchTarget = null;
+    this._catching = false;
+    this._catchElapsed = 0;
+    this._catchArm = null;
+    this._catchSlerp = 0;
+    this._currentSpinePitch = 0;
+    this._currentSpineRoll = 0;
+  }
+
+  /**
+   * character.update() の後に呼び出し、プレキャッチ中のキャラクターの腕を
+   * ボール方向にワールドスペース直接回転で伸ばす。
+   * CatchPoseCheckPanel と同じ手法（FK結果を上書き）。
+   */
+  applyPreCatchArmOverlay(): void {
+    if (!this._preCatchTarget || !this._catching || this._catchSlerp <= 0) return;
+    if (!this._catchArm) return;
+
+    const character = this._preCatchTarget;
+    const adapter = character.getSkeletonAdapter();
+    if (!adapter) return;
+
+    const ballPos = this.mesh.position;
+    const isRight = this._catchArm === 'right';
+
+    const upperArmBone = adapter.findBone(isRight ? 'rightArm' : 'leftArm');
+    const foreArmBone = adapter.findBone(isRight ? 'rightForeArm' : 'leftForeArm');
+    const handBone = adapter.findBone(isRight ? 'rightHand' : 'leftHand');
+    const upperArmNode = upperArmBone?.getTransformNode();
+    const foreArmNode = foreArmBone?.getTransformNode();
+    const handNode = handBone?.getTransformNode();
+
+    if (!upperArmBone || !foreArmBone || !upperArmNode || !foreArmNode) return;
+
+    // ── 肩回転: upperArm → ボール方向 ──
+    // cross/dot で計算した回転はワールドスペースなので sign 補正不要
+    // （applyWorldRotationToBone の親Q変換が mirror を正しく処理する）
+    adapter.forceWorldMatrixUpdate();
+
+    const armWorldPos = upperArmNode.absolutePosition.clone();
+    const elbowWorldPos = foreArmNode.absolutePosition.clone();
+    const restArmDir = elbowWorldPos.subtract(armWorldPos).normalize();
+    const targetDir = ballPos.subtract(armWorldPos).normalize();
+    const cross = Vector3.Cross(restArmDir, targetDir);
+    const dot = Vector3.Dot(restArmDir, targetDir);
+
+    if (cross.length() > 0.001) {
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      const axis = cross.normalize();
+      const worldDeltaQ = Quaternion.RotationAxis(axis, angle * this._catchSlerp);
+
+      const parentBone = upperArmBone.getParent();
+      const parentNode = parentBone?.getTransformNode();
+      if (parentNode) {
+        Ball._applyWorldRotationToBone(upperArmBone, upperArmNode, parentNode, worldDeltaQ);
+      }
+    }
+
+    // ── 前腕回転: foreArm → ボール方向 ──
+    adapter.skeleton.computeAbsoluteMatrices(true);
+    adapter.forceWorldMatrixUpdate();
+
+    if (handBone && handNode) {
+      const elbowWorldPos2 = foreArmNode.absolutePosition.clone();
+      const wristWorldPos = handNode.absolutePosition.clone();
+      const restForearmDir = wristWorldPos.subtract(elbowWorldPos2).normalize();
+      const targetDir2 = ballPos.subtract(elbowWorldPos2).normalize();
+      const cross2 = Vector3.Cross(restForearmDir, targetDir2);
+      const dot2 = Vector3.Dot(restForearmDir, targetDir2);
+
+      if (cross2.length() > 0.001) {
+        const angle2 = Math.acos(Math.max(-1, Math.min(1, dot2)));
+        const axis2 = cross2.normalize();
+        const worldDeltaQ2 = Quaternion.RotationAxis(axis2, angle2 * this._catchSlerp);
+        Ball._applyWorldRotationToBone(foreArmBone, foreArmNode, upperArmNode, worldDeltaQ2);
+      }
+    }
+
+    // 最終ワールド行列更新
+    adapter.skeleton.computeAbsoluteMatrices(true);
+    adapter.forceWorldMatrixUpdate();
+  }
+
+  /**
+   * ワールドスペース回転をボーンローカルに変換して適用 + bone matrix同期
+   */
+  private static _applyWorldRotationToBone(
+    bone: Bone,
+    node: TransformNode,
+    parentNode: TransformNode,
+    worldDeltaQ: Quaternion,
+  ): void {
+    const parentWorldQ = new Quaternion();
+    parentNode.getWorldMatrix().decompose(undefined, parentWorldQ, undefined);
+    const pInv = Quaternion.Inverse(parentWorldQ);
+    const localDelta = pInv.multiply(worldDeltaQ).multiply(parentWorldQ);
+    const currentQ = node.rotationQuaternion!.clone();
+    node.rotationQuaternion = localDelta.multiply(currentQ);
+    const mat = Matrix.Compose(node.scaling, node.rotationQuaternion, node.position);
+    bone.updateMatrix(mat, false, true);
   }
 
   /**
    * ボールの保持者を設定
    * @param character 新しい保持者（nullで解放）
+   *
+   * IKが有効な場合はプレキャッチフェーズを開始:
+   * - holderはまだ設定しない（ゲームロジック上は未保持）
+   * - ボールは実際の位置に留まり、キャラクターが体を合わせる
+   * - 手がボールに届いた時点でholderを設定（保持成立）
    */
   setHolder(character: Character | null): void {
-    // 別のキャラクターへ切り替わる場合、前のキャッチIKを解除
+    // 別のキャラクターへ切り替わる場合、進行中のプレキャッチ/キャッチを解除
+    if (this._preCatchTarget && this._preCatchTarget !== character) {
+      this._cancelPreCatch();
+    }
     if (this._catching && this.holder && this.holder !== character) {
       this._endCatch();
     }
 
-    this.holder = character;
-
     if (character !== null) {
+      // 同じキャラクターで既にプレキャッチ中なら何もしない
+      if (this._preCatchTarget === character) return;
+
       this.lastToucher = character;
       // チーム変更時はアシスト候補をクリア（ターンオーバー）
       if (this.pendingAssistFrom && character.team !== this.pendingAssistFrom.team) {
@@ -449,41 +624,33 @@ export class Ball {
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
       }
 
-      // ── IKでボールに手を伸ばす → 保持エリアがボールに届くまで待つ ──
       const ik = character.getIKSystem();
       if (ik) {
+        // ── プレキャッチ開始: holderはまだ設定しない ──
+        this._preCatchTarget = character;
         this._catchArm = character.getCurrentHoldingHand();
 
-        // 現在の保持位置（FK手のひら先端）からボールへの方向を計算
-        const holdPos = character.getBallHoldingPosition();
-        const toBall = this.mesh.position.subtract(holdPos);
-        const distToHold = toBall.length();
-
-        // ボール位置を保持位置から MAX_CATCH_OFFSET 以内にクランプ
-        // これにより IK が届く範囲にボールを配置する
-        const MAX_CATCH_OFFSET = 0.15; // m — 保持位置からの最大距離
-        if (distToHold > MAX_CATCH_OFFSET) {
-          if (distToHold > 0.01) {
-            toBall.normalize().scaleInPlace(MAX_CATCH_OFFSET);
-          }
-          this.mesh.position.copyFrom(holdPos).addInPlace(toBall);
-        }
-
-        // キャラクター相対オフセットとして記録（移動に追従するため）
+        // ボールの実際の位置をそのまま維持（クランプしない）
         const charPos = character.getPosition();
         this._catchOffset.copyFrom(this.mesh.position).subtractInPlace(charPos);
 
         this._catching = true;
         this._catchElapsed = 0;
+        this._catchSlerp = 0;
+        this._currentSpinePitch = 0;
+        this._currentSpineRoll = 0;
 
-        // IKターゲットノード（手がここに向かう）
+        // IKターゲットノード（頭部ルックアット用）
         if (!this._catchTargetNode) {
           this._catchTargetNode = new TransformNode("ball_catch_target", this.scene);
         }
         this._catchTargetNode.position.copyFrom(this.mesh.position);
-        ik.setArmTarget(this._catchArm, this._catchTargetNode);
+
+        // 頭部ルックアット開始（腕IKはpostUpdate方式で適用）
+        ik.setLookAtTarget(this._catchTargetNode);
       } else {
-        // IK未初期化 → 即座に保持位置へ
+        // IK未初期化 → 即座に保持
+        this.holder = character;
         this.mesh.position = character.getBallHoldingPosition();
       }
 
@@ -491,10 +658,17 @@ export class Ball {
         this.physicsAggregate.body.disablePreStep = false;
       }
     } else {
-      // holder解放時はキャッチ状態もリセット
+      // 解放
+      if (this._preCatchTarget) {
+        this._cancelPreCatch();
+      }
+      this.holder = null;
       this._catching = false;
       this._catchElapsed = 0;
       this._catchArm = null;
+      this._catchSlerp = 0;
+      this._currentSpinePitch = 0;
+      this._currentSpineRoll = 0;
     }
   }
 
@@ -540,40 +714,83 @@ export class Ball {
       this.lastPasser = null;
     }
 
-    if (this.holder) {
-      if (this._catching) {
-        // ── 手を伸ばし中: ボールはキャッチ位置に留まり、IKで手が向かう ──
-        this._catchElapsed += Ball.FIXED_DT;
+    if (this._preCatchTarget && this._catching) {
+      // ── プレキャッチ中: ボールは実位置、キャラクターが体を合わせる ──
+      const character = this._preCatchTarget;
+      this._catchElapsed += Ball.FIXED_DT;
 
-        // ボールをキャッチ位置に維持（キャラクター相対で移動に追従）
-        const charPos = this.holder.getPosition();
-        this.mesh.position.copyFrom(charPos).addInPlace(this._catchOffset);
+      // ボールをキャラクター相対で移動に追従
+      const charPos = character.getPosition();
+      this.mesh.position.copyFrom(charPos).addInPlace(this._catchOffset);
 
-        // IKターゲットをボール位置に設定（手がボールに向かう）
-        if (this._catchTargetNode) {
-          this._catchTargetNode.position.copyFrom(this.mesh.position);
-        }
+      // ボールを保持位置に向かって徐々に収束（手とボールが出会う）
+      const holdPos = character.getBallHoldingPosition();
+      const toHold = holdPos.subtract(this.mesh.position);
+      this.mesh.position.addInPlace(toHold.scale(Ball.CATCH_CONVERGE_SPEED * Ball.FIXED_DT));
+      // 収束後の位置でオフセットを更新
+      this._catchOffset.copyFrom(this.mesh.position).subtractInPlace(charPos);
 
-        // IKを毎フレーム再設定（BallReachSystemによるクリアを防止）
-        if (this._catchArm) {
-          const ik = this.holder.getIKSystem();
-          if (ik && this._catchTargetNode) {
-            ik.setArmTarget(this._catchArm, this._catchTargetNode);
-          }
-        }
-
-        // ── 保持エリア判定: 手のひら保持位置がボールに届いたか ──
-        const holdPos = this.holder.getBallHoldingPosition();
-        const dist = Vector3.Distance(holdPos, this.mesh.position);
-        if (dist < Ball.HOLD_ZONE_RADIUS ||
-            this._catchElapsed >= Ball.CATCH_SAFETY_TIMEOUT) {
-          // 保持成立 → IK解除、次フレームからFK保持位置に追従
-          this._endCatch();
-        }
-      } else {
-        // ── 保持中: ボールは保持位置に追従 ──
-        this.mesh.position = this.holder.getBallHoldingPosition();
+      // IKターゲットをボール位置に設定（手がボールに向かう）
+      if (this._catchTargetNode) {
+        this._catchTargetNode.position.copyFrom(this.mesh.position);
       }
+
+      // ── 腕slerp徐々に増加（applyPreCatchArmOverlay で使用） ──
+      this._catchSlerp = Math.min(this._catchSlerp + Ball.CATCH_SLERP_SPEED * Ball.FIXED_DT, 1.0);
+
+      // ── 体幹調整の目標値を計算 ──
+      const ballY = this.mesh.position.y;
+      const charY = charPos.y;
+      const relHeight = ballY - charY;
+      const charHeight = character.config.physical.height;
+      const heightRatio = relHeight / charHeight;  // 0=足元, 1.0=頭上
+
+      let targetPitch = 0;
+      if (heightRatio > 1.0) {
+        targetPitch = -0.15;  // 頭上: 軽い後傾 ~-8°
+      } else if (heightRatio > 0.6) {
+        targetPitch = 0.08;   // 胸〜肩: わずかな前傾 ~5°
+      } else if (heightRatio > 0.3) {
+        targetPitch = 0.30;   // 腰〜胸: 前傾 ~17°
+      } else if (heightRatio > 0.1) {
+        targetPitch = 0.45;   // 膝〜腰: 深い前傾 ~26°
+      } else {
+        targetPitch = 0.55;   // 地面付近: 最大前傾 ~32°
+      }
+
+      // 目標 spine roll（横傾き）
+      let targetRoll = 0;
+      const charForward = character.getForwardDirection();
+      const toBall = this.mesh.position.subtract(charPos);
+      toBall.y = 0;
+      if (toBall.length() > 0.1) {
+        toBall.normalize();
+        const cross = charForward.x * toBall.z - charForward.z * toBall.x;
+        targetRoll = Math.max(-0.25, Math.min(0.25, cross * 0.5));
+      }
+
+      // スムーズ補間
+      const lerpRate = Ball.CATCH_OVERLAY_LERP * Ball.FIXED_DT;
+      this._currentSpinePitch += (targetPitch - this._currentSpinePitch) * lerpRate;
+      this._currentSpineRoll += (targetRoll - this._currentSpineRoll) * lerpRate;
+
+      character.setCatchBodyOverlay({
+        spinePitch: this._currentSpinePitch,
+        spineRoll: this._currentSpineRoll,
+      });
+
+      // ── キャッチ完了判定: 腕IKが十分到達 + 最小時間経過 ──
+      if ((this._catchSlerp >= Ball.CATCH_SLERP_THRESHOLD && this._catchElapsed >= Ball.CATCH_MIN_TIME) ||
+          this._catchElapsed >= Ball.CATCH_SAFETY_TIMEOUT) {
+        this._completeCatch();
+      }
+
+      if (this.physicsAggregate) {
+        this.physicsAggregate.body.disablePreStep = false;
+      }
+    } else if (this.holder) {
+      // ── 保持中: ボールは保持位置に追従 ──
+      this.mesh.position = this.holder.getBallHoldingPosition();
 
       if (this.physicsAggregate) {
         this.physicsAggregate.body.disablePreStep = false;
