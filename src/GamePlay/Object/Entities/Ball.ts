@@ -9,6 +9,7 @@ import {
   PhysicsShapeType,
   PhysicsMotionType,
   PhysicsMaterialCombineMode,
+  TransformNode,
 } from "@babylonjs/core";
 import type { Character } from "@/GamePlay/Object/Entities/Character";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
@@ -54,6 +55,24 @@ export class Ball {
   // 弾き後のクールダウン（tickベース、秒単位）
   private deflectionCooldown: number = 0;
   private static readonly DEFLECTION_COOLDOWN_TIME = 0.3;
+
+  // ── ボール保持エリア ──
+  // 手のひらの先にある保持ゾーン。IKで手がボールに向かい、
+  // 保持エリアがボールに触れた瞬間に保持が成立する。
+  /** 保持エリアの半径(m) — ボール中心と手のひら位置がこの距離以内で保持成立 */
+  private static readonly HOLD_ZONE_RADIUS = 0.25;
+  /** IKがどうしても届かない場合の安全フォールバック(秒) */
+  private static readonly CATCH_SAFETY_TIMEOUT = 0.5;
+  /** IKで手を伸ばしている最中か（保持エリア到達待ち） */
+  private _catching = false;
+  /** キャッチ時のボール位置（キャラクター相対オフセット） */
+  private _catchOffset = Vector3.Zero();
+  /** キャッチ経過時間（安全タイムアウト用） */
+  private _catchElapsed = 0;
+  /** IKを設定した腕 */
+  private _catchArm: 'left' | 'right' | null = null;
+  /** IKターゲット用の軽量ノード */
+  private _catchTargetNode: TransformNode | null = null;
 
   // 最後にボールに触れた選手
   private lastToucher: Character | null = null;
@@ -372,10 +391,36 @@ export class Ball {
   }
 
   /**
+   * IKで手を伸ばしている最中か（保持エリア到達待ち）
+   */
+  public isCatching(): boolean {
+    return this._catching;
+  }
+
+  /**
+   * キャッチ中のIK解除と状態リセット
+   */
+  private _endCatch(): void {
+    if (!this._catching) return;
+    if (this.holder && this._catchArm) {
+      const ik = this.holder.getIKSystem();
+      if (ik) ik.setArmTarget(this._catchArm, null);
+    }
+    this._catching = false;
+    this._catchElapsed = 0;
+    this._catchArm = null;
+  }
+
+  /**
    * ボールの保持者を設定
    * @param character 新しい保持者（nullで解放）
    */
   setHolder(character: Character | null): void {
+    // 別のキャラクターへ切り替わる場合、前のキャッチIKを解除
+    if (this._catching && this.holder && this.holder !== character) {
+      this._endCatch();
+    }
+
     this.holder = character;
 
     if (character !== null) {
@@ -396,8 +441,7 @@ export class Ball {
       // ボールサイズを元に戻す
       this.mesh.scaling = Vector3.One();
 
-      // ホルダーが設定された場合は常に物理演算を停止（ANIMATEDモードに切り替え）
-      // inFlightの状態に関係なく、保持されたボールは手動制御になる
+      // 飛行停止・キネマティックに切り替え
       this.inFlight = false;
       this.setKinematic(true);
       if (this.physicsAggregate) {
@@ -405,12 +449,52 @@ export class Ball {
         this.physicsAggregate.body.setAngularVelocity(Vector3.Zero());
       }
 
-      // ボールの位置を即座にホルダーの位置に移動（次のフレームを待たない）
-      const ballHoldingPosition = character.getBallHoldingPosition();
-      this.mesh.position = ballHoldingPosition;
+      // ── IKでボールに手を伸ばす → 保持エリアがボールに届くまで待つ ──
+      const ik = character.getIKSystem();
+      if (ik) {
+        this._catchArm = character.getCurrentHoldingHand();
+
+        // 現在の保持位置（FK手のひら先端）からボールへの方向を計算
+        const holdPos = character.getBallHoldingPosition();
+        const toBall = this.mesh.position.subtract(holdPos);
+        const distToHold = toBall.length();
+
+        // ボール位置を保持位置から MAX_CATCH_OFFSET 以内にクランプ
+        // これにより IK が届く範囲にボールを配置する
+        const MAX_CATCH_OFFSET = 0.15; // m — 保持位置からの最大距離
+        if (distToHold > MAX_CATCH_OFFSET) {
+          if (distToHold > 0.01) {
+            toBall.normalize().scaleInPlace(MAX_CATCH_OFFSET);
+          }
+          this.mesh.position.copyFrom(holdPos).addInPlace(toBall);
+        }
+
+        // キャラクター相対オフセットとして記録（移動に追従するため）
+        const charPos = character.getPosition();
+        this._catchOffset.copyFrom(this.mesh.position).subtractInPlace(charPos);
+
+        this._catching = true;
+        this._catchElapsed = 0;
+
+        // IKターゲットノード（手がここに向かう）
+        if (!this._catchTargetNode) {
+          this._catchTargetNode = new TransformNode("ball_catch_target", this.scene);
+        }
+        this._catchTargetNode.position.copyFrom(this.mesh.position);
+        ik.setArmTarget(this._catchArm, this._catchTargetNode);
+      } else {
+        // IK未初期化 → 即座に保持位置へ
+        this.mesh.position = character.getBallHoldingPosition();
+      }
+
       if (this.physicsAggregate) {
         this.physicsAggregate.body.disablePreStep = false;
       }
+    } else {
+      // holder解放時はキャッチ状態もリセット
+      this._catching = false;
+      this._catchElapsed = 0;
+      this._catchArm = null;
     }
   }
 
@@ -457,11 +541,40 @@ export class Ball {
     }
 
     if (this.holder) {
-      // 保持者に追従（ANIMATEDモード）
-      const ballHoldingPosition = this.holder.getBallHoldingPosition();
-      this.mesh.position = ballHoldingPosition;
+      if (this._catching) {
+        // ── 手を伸ばし中: ボールはキャッチ位置に留まり、IKで手が向かう ──
+        this._catchElapsed += Ball.FIXED_DT;
 
-      // 物理ボディの位置も更新
+        // ボールをキャッチ位置に維持（キャラクター相対で移動に追従）
+        const charPos = this.holder.getPosition();
+        this.mesh.position.copyFrom(charPos).addInPlace(this._catchOffset);
+
+        // IKターゲットをボール位置に設定（手がボールに向かう）
+        if (this._catchTargetNode) {
+          this._catchTargetNode.position.copyFrom(this.mesh.position);
+        }
+
+        // IKを毎フレーム再設定（BallReachSystemによるクリアを防止）
+        if (this._catchArm) {
+          const ik = this.holder.getIKSystem();
+          if (ik && this._catchTargetNode) {
+            ik.setArmTarget(this._catchArm, this._catchTargetNode);
+          }
+        }
+
+        // ── 保持エリア判定: 手のひら保持位置がボールに届いたか ──
+        const holdPos = this.holder.getBallHoldingPosition();
+        const dist = Vector3.Distance(holdPos, this.mesh.position);
+        if (dist < Ball.HOLD_ZONE_RADIUS ||
+            this._catchElapsed >= Ball.CATCH_SAFETY_TIMEOUT) {
+          // 保持成立 → IK解除、次フレームからFK保持位置に追従
+          this._endCatch();
+        }
+      } else {
+        // ── 保持中: ボールは保持位置に追従 ──
+        this.mesh.position = this.holder.getBallHoldingPosition();
+      }
+
       if (this.physicsAggregate) {
         this.physicsAggregate.body.disablePreStep = false;
       }
@@ -597,6 +710,7 @@ export class Ball {
     if (this.inFlight) return false;
 
     const previousHolder = this.holder;
+    this._endCatch();
     this.holder = null;
 
     if (previousHolder) {
@@ -699,6 +813,7 @@ export class Ball {
     if (this.inFlight) return false;
 
     const previousHolder = this.holder;
+    this._endCatch();
     this.holder = null;
 
     if (previousHolder) {
@@ -957,6 +1072,7 @@ export class Ball {
     if (this.inFlight) return false;
 
     const previousHolder = this.holder;
+    this._endCatch();
     this.holder = null;
 
     if (previousHolder) {
@@ -1311,6 +1427,7 @@ export class Ball {
     }
 
     // ホルダーをクリア（setPositionが動作するように先にクリア）
+    this._endCatch();
     this.holder = null;
 
     // ボールの位置を正確にセンターに設定（X=0, Z=0）
@@ -1358,6 +1475,7 @@ export class Ball {
     if (this.physicsAggregate) {
       this.physicsAggregate.dispose();
     }
+    this._catchTargetNode?.dispose();
     this.mesh.dispose();
   }
 }

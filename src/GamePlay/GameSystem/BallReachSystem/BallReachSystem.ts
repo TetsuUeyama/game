@@ -64,7 +64,12 @@ export class BallReachSystem {
 
       // ON_BALL_PLAYERはスキップ（ボール保持者）
       if (character.getState() === CharacterState.ON_BALL_PLAYER) {
-        this.clearReach(character, ikSystem);
+        if (this.ball.isCatching()) {
+          // 手を伸ばし中: キャッチIKをクリアせずトラッキングだけ除去
+          this.reachStates.delete(character);
+        } else {
+          this.clearReach(character, ikSystem);
+        }
         continue;
       }
 
