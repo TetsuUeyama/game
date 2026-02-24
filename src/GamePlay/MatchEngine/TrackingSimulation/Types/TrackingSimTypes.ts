@@ -81,6 +81,9 @@ export interface ScanResult {
 /** アクションのフェーズ */
 export type ActionPhase = 'idle' | 'startup' | 'active' | 'recovery';
 
+/** アクションの種類 */
+export type ActionType = 'idle' | 'pass' | 'move' | 'catch' | 'obstacle_react';
+
 /**
  * アクションのタイミング定義（秒）
  * startup → active → recovery の順に遷移する
@@ -96,6 +99,8 @@ export interface ActionTiming {
 
 /** アクションの実行時ランタイム状態 */
 export interface ActionState {
+  /** アクションの種類 */
+  type: ActionType;
   phase: ActionPhase;
   /** 現在フェーズの経過時間 */
   elapsed: number;
@@ -152,4 +157,37 @@ export type BallResultType = 'block' | 'hit' | 'miss' | 'none';
 export interface BallResultDetection {
   result: BallResultType;
   cooldownTime: number;
+}
+
+// =========================================================================
+// Simulation state (shared across update modules)
+// =========================================================================
+
+/** TrackingSimulation3D の全ランタイム状態を集約 */
+export interface SimState {
+  launcher: SimMover;
+  targets: SimMover[];
+  obstacles: SimMover[];
+  ballActive: boolean;
+  ballAge: number;
+  score: TrackingSimScore;
+  cooldown: number;
+  selectedTargetIdx: number;
+  preFire: SimPreFireInfo | null;
+  interceptPt: { x: number; z: number } | null;
+  obReacting: boolean[];
+  actionStates: ActionState[];
+  pendingFire: FireSolution | null;
+  pendingCooldown: number;
+  moveDistAccum: number[];
+  obScanAtLauncher: boolean[];
+  obScanTimers: number[];
+  obFocusDists: number[];
+  obMems: SimScanMemory[];
+  targetDests: ({ x: number; z: number } | null)[];
+  targetReevalTimers: number[];
+  launcherState: LauncherState;
+  slasherState: SlasherState;
+  screenerState: ScreenerState;
+  dunkerState: DunkerState;
 }

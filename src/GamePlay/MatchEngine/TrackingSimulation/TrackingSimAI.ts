@@ -18,8 +18,10 @@ export {
   type BallResultType,
   type BallResultDetection,
   type ActionPhase,
+  type ActionType,
   type ActionTiming,
   type ActionState,
+  type SimState,
 } from "./Types/TrackingSimTypes";
 
 export {
@@ -77,15 +79,32 @@ export {
 } from "./Movement/RoleMovement";
 
 export {
-  PASS_TIMING,
-  OBSTACLE_REACT_TIMING,
-  TARGET_RECEIVE_TIMING,
-  evaluatePreFire,
-  attemptFire,
-  computeObstacleReactions,
-  detectBallResult,
   createIdleAction,
   startAction,
   tickActionState,
   forceRecovery,
+} from "./Action/ActionCore";
+
+export {
+  PASS_TIMING,
+  evaluatePreFire,
+  attemptFire,
+  computeObstacleReactions,
+  detectBallResult,
 } from "./Action/PassAction";
+
+export {
+  MOVE_TIMING,
+  MOVE_RECOVERY_BASE,
+  MOVE_RECOVERY_PER_UNIT,
+  computeMoveRecovery,
+} from "./Action/MoveAction";
+
+export {
+  CATCH_TIMING,
+} from "./Action/CatchAction";
+
+export {
+  OBSTACLE_REACT_TIMING,
+  TARGET_RECEIVE_TIMING,
+} from "./Action/ObstacleReactAction";
