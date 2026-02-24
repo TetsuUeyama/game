@@ -1,6 +1,7 @@
 /**
- * TrackingSimulation3D - Orchestrator for 3D tracking simulation
- * Delegates visualization to SimVisualization, AI to specialized modules
+ * TrackingSimulation3D - Thin orchestrator for 3D tracking simulation.
+ * Delegates to SimActionManager, SimBallManager, SimEntityUpdate for update logic.
+ * Visualization is handled by SimVisualization.
  */
 
 import {
@@ -21,19 +22,11 @@ import {
   TARGET_RANDOM_SPEED,
   TARGET_INTERCEPT_SPEED,
   OB_A_IDLE_SPEED,
-  OB_A_INTERCEPT_SPEED,
   OB_B_CHASE_SPEED,
   OB_C_IDLE_SPEED,
-  OB_C_INTERCEPT_SPEED,
   OB_D_IDLE_SPEED,
-  OB_D_INTERCEPT_SPEED,
   OB_E_IDLE_SPEED,
-  OB_E_INTERCEPT_SPEED,
-  OB_A_HOVER_RADIUS,
   OB_B_HOVER_RADIUS,
-  OB_C_HOVER_RADIUS,
-  OB_D_HOVER_RADIUS,
-  OB_E_HOVER_RADIUS,
   SOLVER_CFG_3D,
   INIT_LAUNCHER,
   INIT_TARGETS,
@@ -43,19 +36,9 @@ import {
 import { ROLE_ASSIGNMENTS } from "./Config/RoleConfig";
 
 import type {
-  SimMover,
-  SimBall,
-  SimScanMemory,
-  SimPreFireInfo,
+  SimState,
   TrackingSimScore,
-  LauncherState,
-  SlasherState,
-  ScreenerState,
-  DunkerState,
   BallFireContext,
-  ActionState,
-  ActionTiming,
-  FireSolution,
 } from "./Types/TrackingSimTypes";
 
 import {
@@ -64,47 +47,24 @@ import {
   setChaserVelocity,
   moveKeepFacing,
   moveWithFacing,
-  restoreRandom,
   dist2d,
   separateEntities,
 } from "./Movement/MovementCore";
 
-import { updateScan } from "./Decision/ScanSystem";
-
-import {
-  evaluatePreFire,
-  attemptFire,
-  computeObstacleReactions,
-  detectBallResult,
-  createIdleAction,
-  startAction,
-  tickActionState,
-  forceRecovery,
-  PASS_TIMING,
-  OBSTACLE_REACT_TIMING,
-  TARGET_RECEIVE_TIMING,
-} from "./Action/PassAction";
-
 import {
   moveLauncherSmart,
-  moveSecondHandler,
-  moveSlasher,
-  moveScreener,
-  moveDunker,
-  moveSpacer,
 } from "./Movement/RoleMovement";
+
+import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
+import { evaluatePreFire, attemptFire, detectBallResult } from "./Action/PassAction";
+import { CATCH_TIMING } from "./Action/CatchAction";
+
+import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
+import { deactivateBall, executePendingFire, resetAfterResult, OB_INT_SPEEDS, PASS_TIMING } from "./Update/SimBallManager";
+import { updateTargetRoleMovements, updateObstacleMovements, updateScans } from "./Update/SimEntityUpdate";
 
 import { SimVisualization } from "./Visualization/SimVisualization";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
-
-/** Ball launch/target Y height (upper portion of entity boxes) */
-const BALL_LAUNCH_Y = ENTITY_HEIGHT * 0.7;
-
-/** Obstacle intercept speeds (shared between update and executePendingFire) */
-const OB_INT_SPEEDS = [
-  OB_A_INTERCEPT_SPEED, OB_B_CHASE_SPEED, OB_C_INTERCEPT_SPEED,
-  OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED,
-];
 
 export class TrackingSimulation3D {
   private scene: Scene;
@@ -115,42 +75,7 @@ export class TrackingSimulation3D {
   private ballTrailPositions: Vector3[] = [];
   private static readonly BALL_TRAIL_MAX = 40;
 
-  // Simulation state
-  private launcher!: SimMover;
-  private targets: SimMover[] = [];
-  private obstacles: SimMover[] = [];
-  private ballActive = false;
-  private ballAge = 0;
-  private score: TrackingSimScore = { hit: 0, block: 0, miss: 0 };
-
-  private cooldown = 2.0;
-  private selectedTargetIdx = 0;
-  private preFire: SimPreFireInfo | null = null;
-  private interceptPt: { x: number; z: number } | null = null;
-
-  private obReacting = [false, false, false, false, false];
-
-  // Action state: [launcher, t0, t1, t2, t3, t4, ob0, ob1, ob2, ob3, ob4]
-  private actionStates: ActionState[] = [];
-  private pendingFire: FireSolution | null = null;
-  private pendingCooldown = 0;
-
-  // Scan state
-  private obScanAtLauncher = [true, true, false, false, true];
-  private obScanTimers = [2.0, 1.5, 1.0, 1.8, 1.2];
-  private obFocusDists = [4.5, 2.25, 3.0, 3.75, 3.0];
-  private obMems: SimScanMemory[] = [];
-
-  // Target movement
-  private targetDests: ({ x: number; z: number } | null)[] = [null, null, null, null, null];
-  private targetReevalTimers = [0.5, 0.7, 0.9, 1.1, 0.6];
-
-  // Role-based state
-  private launcherState!: LauncherState;
-  private slasherState!: SlasherState;
-  private screenerState!: ScreenerState;
-  private dunkerState!: DunkerState;
-
+  private state!: SimState;
   private prevTime = 0;
 
   constructor(scene: Scene, ball: Ball) {
@@ -178,111 +103,19 @@ export class TrackingSimulation3D {
       this.scene.onBeforeRenderObservable.remove(this.observer);
       this.observer = null;
     }
-    this.deactivateBall();
+    deactivateBall(this.state, this.ball, this.ballTrailPositions);
     this.vis.disposeMeshes();
   }
 
   public getScore(): TrackingSimScore {
-    return { ...this.score };
+    return { ...this.state.score };
   }
 
   public reset(): void {
-    this.deactivateBall();
+    deactivateBall(this.state, this.ball, this.ballTrailPositions);
     this.vis.disposeMeshes();
     this.initState();
     this.vis.createMeshes();
-  }
-
-  // =========================================================================
-  // Ball helpers
-  // =========================================================================
-
-  private deactivateBall(): void {
-    if (this.ball.isInFlight()) {
-      this.ball.endFlight();
-    }
-    this.ball.mesh.setEnabled(false);
-    this.ballActive = false;
-    this.ballAge = 0;
-    this.ballTrailPositions = [];
-  }
-
-  private fireBallArc(startX: number, startZ: number, targetX: number, targetZ: number): boolean {
-    const startPos = new Vector3(startX, BALL_LAUNCH_Y, startZ);
-    const targetPos = new Vector3(targetX, BALL_LAUNCH_Y, targetZ);
-    const distance = dist2d(startX, startZ, targetX, targetZ);
-    const arcHeight = Math.max(0.3, distance * 0.10);
-
-    this.ball.mesh.setEnabled(true);
-    const success = this.ball.shootWithArcHeight(targetPos, arcHeight, startPos);
-    if (success) {
-      this.ballActive = true;
-      this.ballAge = 0;
-    }
-    return success;
-  }
-
-  private resetAfterResult(): void {
-    this.interceptPt = null;
-    this.obReacting = [false, false, false, false, false];
-    for (let ti = 0; ti < this.targets.length; ti++) this.targetDests[ti] = null;
-    for (const t of this.targets) restoreRandom(t, TARGET_RANDOM_SPEED);
-    restoreRandom(this.obstacles[0], OB_A_IDLE_SPEED);
-    restoreRandom(this.obstacles[2], OB_C_IDLE_SPEED);
-    restoreRandom(this.obstacles[3], OB_D_IDLE_SPEED);
-    restoreRandom(this.obstacles[4], OB_E_IDLE_SPEED);
-
-    // Reset role states
-    this.launcherState = { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 };
-    this.slasherState = { dest: null, reevalTimer: 0, vcutPhase: this.slasherState.vcutPhase, vcutActive: false };
-    this.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
-    this.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
-  }
-
-  /** startup完了後にボールを実際に発射 */
-  private executePendingFire(): void {
-    if (!this.pendingFire) return;
-    const sol = this.pendingFire;
-    this.pendingFire = null;
-
-    const success = this.fireBallArc(this.launcher.x, this.launcher.z, sol.interceptX, sol.interceptZ);
-    if (!success) {
-      // 発射失敗 → アイドルに戻す
-      this.actionStates[0] = createIdleAction();
-      this.cooldown = 0.3;
-      return;
-    }
-
-    this.interceptPt = { x: sol.interceptX, z: sol.interceptZ };
-    this.selectedTargetIdx = sol.targetIdx;
-    this.preFire = null;
-
-    // ターゲット速度設定
-    const tgt = this.targets[sol.targetIdx];
-    tgt.vx = sol.targetVelocity.vx;
-    tgt.vz = sol.targetVelocity.vz;
-
-    // ターゲットアクション: active（受け取り体勢）
-    this.actionStates[1 + sol.targetIdx] = startAction(TARGET_RECEIVE_TIMING);
-
-    // 障害物リアクション
-    const bPos = this.ball.getPosition();
-    const bVel = this.ball.getVelocity();
-    const reactions = computeObstacleReactions(
-      this.obstacles, OB_INT_SPEEDS, sol.obInFOVs,
-      bPos.x, bPos.z, bVel.x, bVel.z, SOLVER_CFG_3D,
-    );
-    const reactingObs = [false, false, false, false, false];
-    for (const r of reactions) {
-      reactingObs[r.obstacleIdx] = r.reacting;
-      if (r.reacting) {
-        this.obstacles[r.obstacleIdx].vx = r.vx;
-        this.obstacles[r.obstacleIdx].vz = r.vz;
-        // 障害物アクション: active（インターセプト）
-        this.actionStates[6 + r.obstacleIdx] = startAction(OBSTACLE_REACT_TIMING);
-      }
-    }
-    this.obReacting = reactingObs;
   }
 
   // =========================================================================
@@ -290,47 +123,48 @@ export class TrackingSimulation3D {
   // =========================================================================
 
   private initState(): void {
-    this.launcher = makeMover(INIT_LAUNCHER.x, INIT_LAUNCHER.z, LAUNCHER_SPEED);
-    this.targets = INIT_TARGETS.map(p => makeMover(p.x, p.z, TARGET_RANDOM_SPEED));
-    this.obstacles = [
-      makeMover(INIT_OBSTACLES[0].x, INIT_OBSTACLES[0].z, OB_A_IDLE_SPEED),
-      makeMover(INIT_OBSTACLES[1].x, INIT_OBSTACLES[1].z, OB_B_CHASE_SPEED),
-      makeMover(INIT_OBSTACLES[2].x, INIT_OBSTACLES[2].z, OB_C_IDLE_SPEED),
-      makeMover(INIT_OBSTACLES[3].x, INIT_OBSTACLES[3].z, OB_D_IDLE_SPEED),
-      makeMover(INIT_OBSTACLES[4].x, INIT_OBSTACLES[4].z, OB_E_IDLE_SPEED),
-    ];
-    this.ballActive = false;
-    this.ballAge = 0;
-    this.score = { hit: 0, block: 0, miss: 0 };
-    this.cooldown = 2.0;
-    this.selectedTargetIdx = 0;
-    this.preFire = null;
-    this.interceptPt = null;
-    this.obReacting = [false, false, false, false, false];
-    this.actionStates = Array.from({ length: 11 }, () => createIdleAction());
-    this.pendingFire = null;
-    this.pendingCooldown = 0;
-    this.obScanAtLauncher = [true, true, false, false, true];
-    this.obScanTimers = [2.0, 1.5, 1.0, 1.8, 1.2];
-    this.obFocusDists = [4.5, 2.25, 3.0, 3.75, 3.0];
-    this.targetDests = [null, null, null, null, null];
-    this.targetReevalTimers = [0.5, 0.7, 0.9, 1.1, 0.6];
-
     const lx = INIT_LAUNCHER.x;
     const lz = INIT_LAUNCHER.z;
-    this.obMems = [
-      makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
-      makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
-      makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
-      makeScanMemory(lx, lz, INIT_TARGETS[3].x, INIT_TARGETS[3].z),
-      makeScanMemory(lx, lz, INIT_TARGETS[4].x, INIT_TARGETS[4].z),
-    ];
 
-    // Role-based state
-    this.launcherState = { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 };
-    this.slasherState = { dest: null, reevalTimer: 0, vcutPhase: 0, vcutActive: false };
-    this.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
-    this.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
+    this.state = {
+      launcher: makeMover(INIT_LAUNCHER.x, INIT_LAUNCHER.z, LAUNCHER_SPEED),
+      targets: INIT_TARGETS.map(p => makeMover(p.x, p.z, TARGET_RANDOM_SPEED)),
+      obstacles: [
+        makeMover(INIT_OBSTACLES[0].x, INIT_OBSTACLES[0].z, OB_A_IDLE_SPEED),
+        makeMover(INIT_OBSTACLES[1].x, INIT_OBSTACLES[1].z, OB_B_CHASE_SPEED),
+        makeMover(INIT_OBSTACLES[2].x, INIT_OBSTACLES[2].z, OB_C_IDLE_SPEED),
+        makeMover(INIT_OBSTACLES[3].x, INIT_OBSTACLES[3].z, OB_D_IDLE_SPEED),
+        makeMover(INIT_OBSTACLES[4].x, INIT_OBSTACLES[4].z, OB_E_IDLE_SPEED),
+      ],
+      ballActive: false,
+      ballAge: 0,
+      score: { hit: 0, block: 0, miss: 0 },
+      cooldown: 2.0,
+      selectedTargetIdx: 0,
+      preFire: null,
+      interceptPt: null,
+      obReacting: [false, false, false, false, false],
+      actionStates: Array.from({ length: 11 }, () => createIdleAction()),
+      pendingFire: null,
+      pendingCooldown: 0,
+      moveDistAccum: new Array(6).fill(0),
+      obScanAtLauncher: [true, true, false, false, true],
+      obScanTimers: [2.0, 1.5, 1.0, 1.8, 1.2],
+      obFocusDists: [4.5, 2.25, 3.0, 3.75, 3.0],
+      obMems: [
+        makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
+        makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
+        makeScanMemory(lx, lz, INIT_TARGETS[0].x, INIT_TARGETS[0].z),
+        makeScanMemory(lx, lz, INIT_TARGETS[3].x, INIT_TARGETS[3].z),
+        makeScanMemory(lx, lz, INIT_TARGETS[4].x, INIT_TARGETS[4].z),
+      ],
+      targetDests: [null, null, null, null, null],
+      targetReevalTimers: [0.5, 0.7, 0.9, 1.1, 0.6],
+      launcherState: { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 },
+      slasherState: { dest: null, reevalTimer: 0, vcutPhase: 0, vcutActive: false },
+      screenerState: { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 },
+      dunkerState: { dest: null, reevalTimer: 0, sealing: false },
+    };
   }
 
   // =========================================================================
@@ -338,40 +172,41 @@ export class TrackingSimulation3D {
   // =========================================================================
 
   private syncMeshes(): void {
+    const s = this.state;
     const yh = ENTITY_HEIGHT / 2;
 
     // Launcher
-    this.vis.launcherMesh.position.set(this.launcher.x, yh, this.launcher.z);
-    this.vis.launcherMesh.rotation.y = -this.launcher.facing;
+    this.vis.launcherMesh.position.set(s.launcher.x, yh, s.launcher.z);
+    this.vis.launcherMesh.rotation.y = -s.launcher.facing;
 
     // Targets
     for (let i = 0; i < 5; i++) {
-      this.vis.targetMeshes[i].position.set(this.targets[i].x, yh, this.targets[i].z);
-      this.vis.targetMeshes[i].rotation.y = -this.targets[i].facing;
+      this.vis.targetMeshes[i].position.set(s.targets[i].x, yh, s.targets[i].z);
+      this.vis.targetMeshes[i].rotation.y = -s.targets[i].facing;
     }
 
     // Obstacles
     for (let i = 0; i < 5; i++) {
-      this.vis.obstacleMeshes[i].position.set(this.obstacles[i].x, yh, this.obstacles[i].z);
-      this.vis.obstacleMeshes[i].rotation.y = -this.obstacles[i].facing;
+      this.vis.obstacleMeshes[i].position.set(s.obstacles[i].x, yh, s.obstacles[i].z);
+      this.vis.obstacleMeshes[i].rotation.y = -s.obstacles[i].facing;
     }
 
     // Ball visibility (position controlled by Havok physics when in flight)
-    this.ball.mesh.setEnabled(this.ballActive);
+    this.ball.mesh.setEnabled(s.ballActive);
 
     // Visualization (wrapped in try-catch to prevent silent failures)
     try {
       this.vis.syncAll({
-        launcher: this.launcher,
-        targets: this.targets,
-        obstacles: this.obstacles,
-        obMems: this.obMems,
-        obFocusDists: this.obFocusDists,
-        preFire: this.preFire,
-        ballActive: this.ballActive,
-        interceptPt: this.interceptPt,
+        launcher: s.launcher,
+        targets: s.targets,
+        obstacles: s.obstacles,
+        obMems: s.obMems,
+        obFocusDists: s.obFocusDists,
+        preFire: s.preFire,
+        ballActive: s.ballActive,
+        interceptPt: s.interceptPt,
         ballTrailPositions: this.ballTrailPositions,
-        actionStates: this.actionStates,
+        actionStates: s.actionStates,
       });
     } catch (e) {
       console.error('[TrackingSimulation3D] visualization error:', e);
@@ -383,130 +218,61 @@ export class TrackingSimulation3D {
   // =========================================================================
 
   private update(dt: number): void {
-    const { launcher, targets, obstacles } = this;
-    const allObs = obstacles;
+    const s = this.state;
 
     // === Tick action states ===
-    const prevLauncherPhase = this.actionStates[0].phase;
-    for (let i = 0; i < this.actionStates.length; i++) {
-      this.actionStates[i] = tickActionState(this.actionStates[i], dt);
+    const shouldFireBall = tickAndTransitionActions(s, dt);
+    if (shouldFireBall) {
+      executePendingFire(s, this.ball);
     }
 
-    // Launcher startup → active: fire ball
-    if (prevLauncherPhase === 'startup' && this.actionStates[0].phase === 'active') {
-      this.executePendingFire();
+    // === Launcher: role-based smart movement ===
+    if (canEntityMove(s.actionStates, 0)) {
+      moveLauncherSmart(s.launcher, s.launcherState, s.targets, s.obstacles, dt);
     }
-    // Launcher recovery → idle: set new cooldown
-    if (prevLauncherPhase === 'recovery' && this.actionStates[0].phase === 'idle') {
-      this.cooldown = this.pendingCooldown;
-    }
+    applyMoveAction(s, 0, s.launcher, dt);
 
-    // Launcher: role-based smart movement (PG / MAIN_HANDLER)
-    moveLauncherSmart(launcher, this.launcherState, targets, allObs, dt);
-
-    // Obstacle B: chase launcher (unless searching)
-    if (!this.obMems[1].searching) {
-      setChaserVelocity(allObs[1], launcher.x, launcher.z, OB_B_CHASE_SPEED, OB_B_HOVER_RADIUS, dt);
-      moveKeepFacing(allObs[1], OB_B_CHASE_SPEED, dt);
+    // === Obstacle B: chase launcher (unless searching) ===
+    if (!s.obMems[1].searching) {
+      setChaserVelocity(s.obstacles[1], s.launcher.x, s.launcher.z, OB_B_CHASE_SPEED, OB_B_HOVER_RADIUS, dt);
+      moveKeepFacing(s.obstacles[1], OB_B_CHASE_SPEED, dt);
     }
 
-    const selTarget = targets[this.selectedTargetIdx];
+    if (!s.ballActive) {
+      // === Ball not active: all targets move, evaluate pre-fire ===
+      updateTargetRoleMovements(s, dt, -1);
 
-    // Helper: get other targets (excluding index ti)
-    const getOtherTargets = (ti: number): SimMover[] =>
-      targets.filter((_, i) => i !== ti);
-
-    if (!this.ballActive) {
-      // === Role-based target movement ===
-      // Target 0: SG / SECOND_HANDLER
-      {
-        const res = moveSecondHandler(
-          targets[0], this.targetDests[0], this.targetReevalTimers[0],
-          dt, launcher, allObs, getOtherTargets(0),
-        );
-        this.targetDests[0] = res.dest;
-        this.targetReevalTimers[0] = res.reevalTimer;
-      }
-      // Target 1: SF / SLASHER
-      moveSlasher(targets[1], this.slasherState, dt, launcher, allObs, getOtherTargets(1));
-      // Target 2: C / SCREENER
-      moveScreener(targets[2], this.screenerState, dt, launcher, allObs, getOtherTargets(2));
-      // Target 3: PF / DUNKER
-      moveDunker(targets[3], this.dunkerState, dt, launcher, allObs, getOtherTargets(3));
-      // Target 4: SG / SPACER
-      {
-        const res = moveSpacer(
-          targets[4], this.targetDests[4], this.targetReevalTimers[4],
-          dt, launcher, allObs, getOtherTargets(4),
-        );
-        this.targetDests[4] = res.dest;
-        this.targetReevalTimers[4] = res.reevalTimer;
-      }
-
-      // Obstacle A: move to midpoint of launcher and selected target
-      if (!this.obMems[0].searching) {
-        const midX = (launcher.x + selTarget.x) / 2;
-        const midZ = (launcher.z + selTarget.z) / 2;
-        setChaserVelocity(allObs[0], midX, midZ, OB_A_IDLE_SPEED, OB_A_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[0], OB_A_IDLE_SPEED, dt);
-      }
-      // Obstacle C: chase target 1
-      if (!this.obMems[2].searching) {
-        setChaserVelocity(allObs[2], targets[0].x, targets[0].z, OB_C_IDLE_SPEED, OB_C_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[2], OB_C_IDLE_SPEED, dt);
-      }
-      // Obstacle D: chase target 4
-      if (!this.obMems[3].searching) {
-        setChaserVelocity(allObs[3], targets[3].x, targets[3].z, OB_D_IDLE_SPEED, OB_D_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[3], OB_D_IDLE_SPEED, dt);
-      }
-      // Obstacle E: chase target 5
-      if (!this.obMems[4].searching) {
-        setChaserVelocity(allObs[4], targets[4].x, targets[4].z, OB_E_IDLE_SPEED, OB_E_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[4], OB_E_IDLE_SPEED, dt);
-      }
-
-      // === Separate overlapping entities ===
-      separateEntities([
-        { mover: launcher, radius: LAUNCHER_RADIUS },
-        ...targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
-        ...obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
-      ]);
-
-      // === Pre-fire evaluation ===
-      const ctx: BallFireContext = { launcher, targets, obstacles: allObs, obIntSpeeds: OB_INT_SPEEDS };
+      // Pre-fire evaluation
+      const ctx: BallFireContext = {
+        launcher: s.launcher, targets: s.targets,
+        obstacles: s.obstacles, obIntSpeeds: OB_INT_SPEEDS,
+      };
       const evalResult = evaluatePreFire(ctx, ROLE_ASSIGNMENTS);
-      this.selectedTargetIdx = evalResult.selectedTargetIdx;
-      this.preFire = evalResult.preFire;
+      s.selectedTargetIdx = evalResult.selectedTargetIdx;
+      s.preFire = evalResult.preFire;
 
-      // === Fire cooldown (only when launcher is idle) ===
-      if (this.actionStates[0].phase === 'idle') {
-        this.cooldown -= dt;
-        if (this.cooldown <= 0) {
-          const fireResult = attemptFire(ctx, this.selectedTargetIdx, SOLVER_CFG_3D);
+      // Fire cooldown (idle or move-active can fire)
+      if (canEntityMove(s.actionStates, 0)) {
+        s.cooldown -= dt;
+        if (s.cooldown <= 0) {
+          const fireResult = attemptFire(ctx, s.selectedTargetIdx, SOLVER_CFG_3D);
           if (fireResult.fired && fireResult.solution) {
-            const sol = fireResult.solution;
-            this.pendingFire = sol;
-            this.pendingCooldown = fireResult.newCooldown;
-            // Start pass action (startup → active → recovery)
-            const timing: ActionTiming = {
-              startup: PASS_TIMING.startup,
-              active: sol.flightTime,
-              recovery: PASS_TIMING.recovery,
-            };
-            this.actionStates[0] = startAction(timing);
+            s.pendingFire = fireResult.solution;
+            s.pendingCooldown = fireResult.newCooldown;
+            s.actionStates[0] = startAction('pass', PASS_TIMING);
+            s.moveDistAccum[0] = 0;
           } else {
-            this.cooldown = fireResult.newCooldown;
+            s.cooldown = fireResult.newCooldown;
           }
         }
       }
     } else {
       // === Ball in flight ===
-      this.preFire = null;
+      s.preFire = null;
 
       // Update Ball physics (Havok handles trajectory)
       this.ball.update(dt);
-      this.ballAge += dt;
+      s.ballAge += dt;
 
       // Get ball 3D position for collision checks
       const ballPos = this.ball.getPosition();
@@ -518,125 +284,69 @@ export class TrackingSimulation3D {
       }
 
       // Selected target: move toward intercept point
-      const selTgt = targets[this.selectedTargetIdx];
-      if (this.interceptPt) {
-        const idx = this.interceptPt.x - selTgt.x;
-        const idz = this.interceptPt.z - selTgt.z;
-        if (Math.sqrt(idx * idx + idz * idz) > 5 * 0.015) {
-          moveWithFacing(selTgt, TARGET_INTERCEPT_SPEED, dt);
-        } else {
-          selTgt.vx = 0;
-          selTgt.vz = 0;
+      const selTgt = s.targets[s.selectedTargetIdx];
+      if (canEntityMove(s.actionStates, 1 + s.selectedTargetIdx)) {
+        if (s.interceptPt) {
+          const idx = s.interceptPt.x - selTgt.x;
+          const idz = s.interceptPt.z - selTgt.z;
+          if (Math.sqrt(idx * idx + idz * idz) > 5 * 0.015) {
+            moveWithFacing(selTgt, TARGET_INTERCEPT_SPEED, dt);
+          } else {
+            selTgt.vx = 0;
+            selTgt.vz = 0;
+          }
         }
       }
+      applyMoveAction(s, 1 + s.selectedTargetIdx, selTgt, dt);
 
       // Other targets continue role-based movement during ball flight
-      for (let ti = 0; ti < targets.length; ti++) {
-        if (ti === this.selectedTargetIdx) continue;
-        const others = getOtherTargets(ti);
-        switch (ti) {
-          case 0: {
-            const res = moveSecondHandler(
-              targets[0], this.targetDests[0], this.targetReevalTimers[0],
-              dt, launcher, allObs, others,
-            );
-            this.targetDests[0] = res.dest;
-            this.targetReevalTimers[0] = res.reevalTimer;
-            break;
-          }
-          case 1:
-            moveSlasher(targets[1], this.slasherState, dt, launcher, allObs, others);
-            break;
-          case 2:
-            moveScreener(targets[2], this.screenerState, dt, launcher, allObs, others);
-            break;
-          case 3:
-            moveDunker(targets[3], this.dunkerState, dt, launcher, allObs, others);
-            break;
-          case 4: {
-            const res = moveSpacer(
-              targets[4], this.targetDests[4], this.targetReevalTimers[4],
-              dt, launcher, allObs, others,
-            );
-            this.targetDests[4] = res.dest;
-            this.targetReevalTimers[4] = res.reevalTimer;
-            break;
-          }
-        }
-      }
+      updateTargetRoleMovements(s, dt, s.selectedTargetIdx);
 
-      // Obstacle movement during ball flight
-      if (this.obReacting[0]) {
-        moveWithFacing(allObs[0], OB_A_INTERCEPT_SPEED, dt);
-      } else if (!this.obMems[0].searching) {
-        const midX = (launcher.x + selTgt.x) / 2;
-        const midZ = (launcher.z + selTgt.z) / 2;
-        setChaserVelocity(allObs[0], midX, midZ, OB_A_IDLE_SPEED, OB_A_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[0], OB_A_IDLE_SPEED, dt);
-      }
-      if (this.obReacting[2]) {
-        moveWithFacing(allObs[2], OB_C_INTERCEPT_SPEED, dt);
-      } else if (!this.obMems[2].searching) {
-        setChaserVelocity(allObs[2], targets[0].x, targets[0].z, OB_C_IDLE_SPEED, OB_C_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[2], OB_C_IDLE_SPEED, dt);
-      }
-      if (this.obReacting[3]) {
-        moveWithFacing(allObs[3], OB_D_INTERCEPT_SPEED, dt);
-      } else if (!this.obMems[3].searching) {
-        setChaserVelocity(allObs[3], targets[3].x, targets[3].z, OB_D_IDLE_SPEED, OB_D_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[3], OB_D_IDLE_SPEED, dt);
-      }
-      if (this.obReacting[4]) {
-        moveWithFacing(allObs[4], OB_E_INTERCEPT_SPEED, dt);
-      } else if (!this.obMems[4].searching) {
-        setChaserVelocity(allObs[4], targets[4].x, targets[4].z, OB_E_IDLE_SPEED, OB_E_HOVER_RADIUS, dt);
-        moveKeepFacing(allObs[4], OB_E_IDLE_SPEED, dt);
-      }
-
-      // === Separate overlapping entities ===
-      separateEntities([
-        { mover: launcher, radius: LAUNCHER_RADIUS },
-        ...targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
-        ...obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
-      ]);
-
-      // === Ball result detection (block → hit → miss) ===
+      // Ball result detection (block → hit → miss)
       const detection = detectBallResult(
         ballPos.x, ballPos.y, ballPos.z,
-        this.ball.isInFlight(), this.ballAge,
-        targets, allObs,
+        this.ball.isInFlight(), s.ballAge,
+        s.targets, s.obstacles,
       );
       if (detection.result !== 'none') {
-        this.deactivateBall();
-        this.score[detection.result]++;
-        // Force all active entities to recovery
-        this.pendingCooldown = detection.cooldownTime;
-        for (let i = 0; i < this.actionStates.length; i++) {
-          if (this.actionStates[i].phase !== 'idle') {
-            this.actionStates[i] = forceRecovery(this.actionStates[i]);
+        deactivateBall(s, this.ball, this.ballTrailPositions);
+        s.score[detection.result]++;
+
+        // Hit → キャッチアクションを設定
+        if (detection.result === 'hit') {
+          let hitIdx = 0;
+          let minDist = Infinity;
+          for (let ti = 0; ti < s.targets.length; ti++) {
+            const d = dist2d(ballPos.x, ballPos.z, s.targets[ti].x, s.targets[ti].z);
+            if (d < minDist) { minDist = d; hitIdx = ti; }
+          }
+          s.actionStates[1 + hitIdx] = startAction('catch', CATCH_TIMING);
+        }
+
+        // Force obstacles/targets to recovery (launcher runs independently, catch preserved)
+        for (let i = 1; i < s.actionStates.length; i++) {
+          if (s.actionStates[i].type === 'catch') continue;
+          if (s.actionStates[i].phase !== 'idle') {
+            s.actionStates[i] = forceRecovery(s.actionStates[i]);
           }
         }
-        this.resetAfterResult();
+        for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+        resetAfterResult(s);
       }
     }
 
+    // === Obstacle A/C/D/E movement (unified for both branches) ===
+    updateObstacleMovements(s, dt);
+
+    // === Separate overlapping entities ===
+    separateEntities([
+      { mover: s.launcher, radius: LAUNCHER_RADIUS },
+      ...s.targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
+      ...s.obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
+    ]);
+
     // === Scan updates ===
-    const scanBallPos = this.ballActive ? this.ball.getPosition() : Vector3.Zero();
-    const simBall: SimBall = {
-      active: this.ballActive,
-      x: scanBallPos.x, z: scanBallPos.z,
-      vx: 0, vz: 0, age: this.ballAge,
-    };
-    const watchTargets = [targets[0], targets[0], targets[0], targets[3], targets[4]];
-    for (let oi = 0; oi < 5; oi++) {
-      const result = updateScan(
-        allObs[oi], this.obScanAtLauncher[oi], this.obScanTimers[oi],
-        this.obFocusDists[oi], this.obReacting[oi], this.obMems[oi],
-        watchTargets[oi], launcher, simBall, dt,
-      );
-      this.obScanAtLauncher[oi] = result.atLauncher;
-      this.obScanTimers[oi] = result.timer;
-      this.obFocusDists[oi] = result.focusDist;
-    }
+    const scanBallPos = s.ballActive ? this.ball.getPosition() : Vector3.Zero();
+    updateScans(s, s.ballActive, scanBallPos, dt);
   }
 }

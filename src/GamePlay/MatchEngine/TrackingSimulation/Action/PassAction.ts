@@ -14,7 +14,6 @@ import type {
   BallResultType,
   BallResultDetection,
   ActionTiming,
-  ActionState,
 } from "../Types/TrackingSimTypes";
 
 import { dist2d, randFire } from "../Movement/MovementCore";
@@ -47,22 +46,8 @@ const BALL_COLLISION_Y_MAX = ENTITY_HEIGHT + 0.5;
 /** パスアクションのタイミング定義 */
 export const PASS_TIMING: ActionTiming = {
   startup: 0.15,   // パスモーション予備動作（腕を引く等）
-  active: 0.0,     // ボール飛行時間は動的（solveLaunchで決定）のため0
+  active: 0.2,     // パスモーション実行時間（投げ動作）
   recovery: 0.4,   // パス後の硬直（フォロースルー）
-};
-
-/** 障害物リアクションのタイミング定義 */
-export const OBSTACLE_REACT_TIMING: ActionTiming = {
-  startup: 0.0,    // 即座にリアクション
-  active: 10.0,    // イベント駆動（ボール結果まで）
-  recovery: 0.3,   // リアクション後の硬直
-};
-
-/** ターゲット受け取りのタイミング定義 */
-export const TARGET_RECEIVE_TIMING: ActionTiming = {
-  startup: 0.0,    // 即座にキャッチ体勢
-  active: 10.0,    // イベント駆動（ボール結果まで）
-  recovery: 0.3,   // キャッチ後の硬直
 };
 
 // =========================================================================
@@ -300,54 +285,3 @@ export function detectBallResult(
   return none;
 }
 
-// =========================================================================
-// Action state utilities
-// =========================================================================
-
-/** アクションなし（アイドル状態） */
-export function createIdleAction(): ActionState {
-  return { phase: 'idle', elapsed: 0, timing: null };
-}
-
-/** 新しいアクションを開始 */
-export function startAction(timing: ActionTiming): ActionState {
-  if (timing.startup > 0) return { phase: 'startup', elapsed: 0, timing };
-  if (timing.active > 0) return { phase: 'active', elapsed: 0, timing };
-  if (timing.recovery > 0) return { phase: 'recovery', elapsed: 0, timing };
-  return createIdleAction();
-}
-
-/**
- * アクション状態を dt 分進める
- * - startup → active: 自動遷移（タイマー）
- * - active → recovery: 手動遷移（forceRecovery で明示的に）
- * - recovery → idle: 自動遷移（タイマー）
- */
-export function tickActionState(state: ActionState, dt: number): ActionState {
-  if (state.phase === 'idle' || !state.timing) return state;
-
-  const t = state.timing;
-  let phase = state.phase;
-  let elapsed = state.elapsed + dt;
-
-  // startup → active（自動遷移）
-  if (phase === 'startup' && elapsed >= t.startup) {
-    elapsed -= t.startup;
-    phase = 'active';
-  }
-  // recovery → idle（自動遷移）
-  if (phase === 'recovery' && elapsed >= t.recovery) {
-    return createIdleAction();
-  }
-
-  return { phase, elapsed, timing: t };
-}
-
-/** 強制的にリカバリーフェーズへ遷移 */
-export function forceRecovery(state: ActionState, recoveryDuration?: number): ActionState {
-  if (!state.timing) return createIdleAction();
-  const timing = recoveryDuration !== undefined
-    ? { ...state.timing, recovery: recoveryDuration }
-    : state.timing;
-  return { phase: 'recovery', elapsed: 0, timing };
-}

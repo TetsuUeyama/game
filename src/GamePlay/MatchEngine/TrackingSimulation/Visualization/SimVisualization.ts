@@ -7,6 +7,7 @@ import {
   Mesh,
   LinesMesh,
   TransformNode,
+  VertexData,
 } from "@babylonjs/core";
 
 import {
@@ -38,7 +39,7 @@ export interface SimVisState {
 // --- Action gauge constants ---
 const GAUGE_W = 0.5;
 const GAUGE_H = 0.04;
-const GAUGE_Y_OFFSET = 0.15;
+const GAUGE_Y_OFFSET = 0.7;
 
 interface ActionGaugeMeshes {
   root: TransformNode;
@@ -61,43 +62,72 @@ export class SimVisualization {
   ballTrailLine: LinesMesh | null = null;
   interceptMarkerLine: LinesMesh | null = null;
   private gauges: ActionGaugeMeshes[] = [];
+  private facingIndicators: Mesh[] = [];
 
   constructor(scene: Scene) {
     this.scene = scene;
   }
 
-  createMeshes(): void {
-    // Launcher (green box)
-    this.launcherMesh = MeshBuilder.CreateBox("simLauncher", {
-      width: LAUNCHER_SIZE, height: ENTITY_HEIGHT, depth: LAUNCHER_SIZE,
-    }, this.scene);
-    const launcherMat = new StandardMaterial("simLauncherMat", this.scene);
-    launcherMat.diffuseColor = new Color3(0.27, 0.8, 0.27);
-    launcherMat.specularColor = Color3.Black();
-    this.launcherMesh.material = launcherMat;
+  /**
+   * 上下2段の8角柱エンティティを作成する。
+   * 上段は明るめ、下段はやや暗めの色になる。
+   * 返すのは親 TransformNode 的な空 Mesh（位置更新用）。
+   */
+  private createOctEntity(
+    name: string, size: number, color: Color3,
+  ): Mesh {
+    const halfH = ENTITY_HEIGHT / 2;
+    // 8角柱の外接円半径: size/2 は辺間の幅に近い値なのでそのまま使う
+    const radius = size / 2;
 
-    // Targets (colored boxes)
+    // 上段（明るい色）
+    const upper = MeshBuilder.CreateCylinder(`${name}_upper`, {
+      height: halfH, diameter: radius * 2, tessellation: 8,
+    }, this.scene);
+    upper.position.y = halfH / 2; // 中心が halfH/2
+    const upperMat = new StandardMaterial(`${name}_upperMat`, this.scene);
+    upperMat.diffuseColor = color;
+    upperMat.specularColor = Color3.Black();
+    upper.material = upperMat;
+
+    // 下段（暗めの色）
+    const lower = MeshBuilder.CreateCylinder(`${name}_lower`, {
+      height: halfH, diameter: radius * 2, tessellation: 8,
+    }, this.scene);
+    lower.position.y = -halfH / 2; // 中心が -halfH/2
+    const lowerMat = new StandardMaterial(`${name}_lowerMat`, this.scene);
+    lowerMat.diffuseColor = new Color3(color.r * 0.55, color.g * 0.55, color.b * 0.55);
+    lowerMat.specularColor = Color3.Black();
+    lower.material = lowerMat;
+
+    // 親メッシュ（位置制御用の空ノード）
+    const root = new Mesh(name, this.scene);
+    upper.parent = root;
+    lower.parent = root;
+
+    return root;
+  }
+
+  createMeshes(): void {
+    // Launcher (green octagonal prism)
+    this.launcherMesh = this.createOctEntity(
+      "simLauncher", LAUNCHER_SIZE, new Color3(0.27, 0.8, 0.27),
+    );
+
+    // Targets (colored octagonal prisms)
     for (let i = 0; i < 5; i++) {
-      const mesh = MeshBuilder.CreateBox(`simTarget${i}`, {
-        width: TARGET_SIZE, height: ENTITY_HEIGHT, depth: TARGET_SIZE,
-      }, this.scene);
-      const mat = new StandardMaterial(`simTargetMat${i}`, this.scene);
       const c = TARGET_COLORS_3D[i];
-      mat.diffuseColor = new Color3(c.r, c.g, c.b);
-      mat.specularColor = Color3.Black();
-      mesh.material = mat;
+      const mesh = this.createOctEntity(
+        `simTarget${i}`, TARGET_SIZE, new Color3(c.r, c.g, c.b),
+      );
       this.targetMeshes.push(mesh);
     }
 
-    // Obstacles (purple boxes)
+    // Obstacles (purple octagonal prisms)
     for (let i = 0; i < 5; i++) {
-      const mesh = MeshBuilder.CreateBox(`simOb${i}`, {
-        width: OBSTACLE_SIZE, height: ENTITY_HEIGHT, depth: OBSTACLE_SIZE,
-      }, this.scene);
-      const mat = new StandardMaterial(`simObMat${i}`, this.scene);
-      mat.diffuseColor = new Color3(0.6, 0.4, 0.8);
-      mat.specularColor = Color3.Black();
-      mesh.material = mat;
+      const mesh = this.createOctEntity(
+        `simOb${i}`, OBSTACLE_SIZE, new Color3(0.6, 0.4, 0.8),
+      );
       this.obstacleMeshes.push(mesh);
     }
 
@@ -110,6 +140,9 @@ export class SimVisualization {
       line.color = new Color3(0.6, 0.4, 0.8);
       this.fovLines.push(line);
     }
+
+    // Facing indicators (semi-ellipse on top of each entity)
+    this.createFacingIndicators();
 
     // Action gauges (1 launcher + 5 targets + 5 obstacles = 11)
     this.createActionGauges(11);
@@ -139,6 +172,11 @@ export class SimVisualization {
       this.interceptMarkerLine.dispose();
       this.interceptMarkerLine = null;
     }
+    for (const ind of this.facingIndicators) {
+      ind.material?.dispose();
+      ind.dispose();
+    }
+    this.facingIndicators = [];
     this.disposeActionGauges();
   }
 
@@ -347,6 +385,134 @@ export class SimVisualization {
   }
 
   // =========================================================================
+  // Facing indicator (3D half-ellipsoid dome on top of each entity)
+  // =========================================================================
+
+  /**
+   * 半楕円体（ドーム）メッシュを生成。
+   * 前方(+Z)が frontColor、後方は暗色。頂点カラーでグラデーション。
+   * 親メッシュにアタッチすることで facing に自動追従する。
+   */
+  private createHalfEllipsoid(
+    name: string,
+    rx: number, ry: number, rz: number,
+    frontColor: Color3,
+    segments: number = 16,
+  ): Mesh {
+    const latSegs = Math.max(4, Math.floor(segments / 2));
+    const lonSegs = segments;
+
+    const positions: number[] = [];
+    const normals: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    // 緯度(phi: 0=赤道/底面 → π/2=頂点) × 経度(theta: 0→2π)
+    for (let lat = 0; lat <= latSegs; lat++) {
+      const phi = (lat / latSegs) * Math.PI / 2;
+      const sinPhi = Math.sin(phi);
+      const cosPhi = Math.cos(phi);
+
+      for (let lon = 0; lon <= lonSegs; lon++) {
+        const theta = (lon / lonSegs) * Math.PI * 2;
+        const sinTheta = Math.sin(theta);
+        const cosTheta = Math.cos(theta);
+
+        positions.push(
+          rx * cosPhi * cosTheta,
+          ry * sinPhi,
+          rz * cosPhi * sinTheta,
+        );
+        normals.push(cosPhi * cosTheta, sinPhi, cosPhi * sinTheta);
+
+        // 前方着色: sinTheta > 0 が前方(+Z)
+        const frontness = Math.max(0, sinTheta);
+        const dark = 0.12;
+        colors.push(
+          frontColor.r * frontness + dark * (1 - frontness),
+          frontColor.g * frontness + dark * (1 - frontness),
+          frontColor.b * frontness + dark * (1 - frontness),
+          1.0,
+        );
+      }
+    }
+
+    // 三角形インデックス
+    for (let lat = 0; lat < latSegs; lat++) {
+      for (let lon = 0; lon < lonSegs; lon++) {
+        const v0 = lat * (lonSegs + 1) + lon;
+        const v1 = v0 + 1;
+        const v2 = v0 + (lonSegs + 1);
+        const v3 = v2 + 1;
+        indices.push(v0, v2, v1);
+        indices.push(v1, v2, v3);
+      }
+    }
+
+    const vertexData = new VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.colors = colors;
+
+    const mesh = new Mesh(name, this.scene);
+    vertexData.applyToMesh(mesh);
+    mesh.isPickable = false;
+    return mesh;
+  }
+
+  /** 全エンティティに半楕円体の facing indicator を作成・アタッチ */
+  private createFacingIndicators(): void {
+    const makeMat = (matName: string): StandardMaterial => {
+      const mat = new StandardMaterial(matName, this.scene);
+      mat.emissiveColor = Color3.White();
+      mat.disableLighting = true;
+      mat.backFaceCulling = false;
+      return mat;
+    };
+
+    // Launcher
+    {
+      const s = LAUNCHER_SIZE;
+      const ind = this.createHalfEllipsoid(
+        "facingLauncher", s * 0.3, s * 0.5, s * 0.3,
+        new Color3(0.35, 0.9, 0.35),
+      );
+      ind.material = makeMat("facingLauncherMat");
+      ind.parent = this.launcherMesh;
+      ind.position.y = ENTITY_HEIGHT / 2;
+      this.facingIndicators.push(ind);
+    }
+
+    // Targets
+    for (let i = 0; i < 5; i++) {
+      const c = TARGET_COLORS_3D[i];
+      const s = TARGET_SIZE;
+      const ind = this.createHalfEllipsoid(
+        `facingTarget${i}`, s * 0.3, s * 0.5, s * 0.3,
+        new Color3(c.r, c.g, c.b),
+      );
+      ind.material = makeMat(`facingTargetMat${i}`);
+      ind.parent = this.targetMeshes[i];
+      ind.position.y = ENTITY_HEIGHT / 2;
+      this.facingIndicators.push(ind);
+    }
+
+    // Obstacles
+    for (let i = 0; i < 5; i++) {
+      const s = OBSTACLE_SIZE;
+      const ind = this.createHalfEllipsoid(
+        `facingOb${i}`, s * 0.3, s * 0.5, s * 0.3,
+        new Color3(0.7, 0.45, 0.95),
+      );
+      ind.material = makeMat(`facingObMat${i}`);
+      ind.parent = this.obstacleMeshes[i];
+      ind.position.y = ENTITY_HEIGHT / 2;
+      this.facingIndicators.push(ind);
+    }
+  }
+
+  // =========================================================================
   // Action gauge visualization
   // =========================================================================
 
@@ -425,7 +591,8 @@ export class SimVisualization {
       const as = state.actionStates[i];
       const ent = entities[i];
 
-      if (as.phase === 'idle' || !as.timing) {
+      // idle / move は常時発生するためゲージ非表示
+      if (as.phase === 'idle' || !as.timing || as.type === 'move') {
         g.root.setEnabled(false);
         continue;
       }
