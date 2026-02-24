@@ -12,12 +12,13 @@ import {
 
 import {
   ENTITY_HEIGHT,
-  LAUNCHER_SIZE,
-  TARGET_SIZE,
   OBSTACLE_SIZE,
   FOV_FULL_LEN,
   FOV_WINDOW_LEN,
 } from "../Config/FieldConfig";
+
+/** 全エンティティの描画サイズを障害物サイズに統一 */
+const VISUAL_SIZE = OBSTACLE_SIZE;
 import { TARGET_COLORS_3D } from "../Config/EntityConfig";
 import type { SimMover, SimPreFireInfo, SimScanMemory, ActionState } from "../Types/TrackingSimTypes";
 import { dirSpeedMult } from "../Movement/MovementCore";
@@ -63,6 +64,7 @@ export class SimVisualization {
   interceptMarkerLine: LinesMesh | null = null;
   private gauges: ActionGaugeMeshes[] = [];
   private facingIndicators: Mesh[] = [];
+  private armMeshes: Mesh[] = [];
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -108,26 +110,80 @@ export class SimVisualization {
     return root;
   }
 
+  /**
+   * エンティティの両サイドに腕（棒）と拳（球）を付ける。
+   * 60度下向きに垂れた自然なポーズ。親メッシュの子として追加。
+   */
+  private createEntityArms(parent: Mesh, size: number, color: Color3): void {
+    const bodyRadius = size / 2;
+    const armLength = size * 0.55;
+    const armDiameter = size * 0.12;
+    const handDiameter = size * 0.22;
+    // 肩の高さ: 上段の上部付近（rootの中心からの相対Y）
+    const shoulderY = ENTITY_HEIGHT * 0.2;
+    // 60度下向き（rad）
+    const armAngle = (60 * Math.PI) / 180;
+    // 腕の中心オフセット
+    const armCenterDx = bodyRadius + (armLength / 2) * Math.cos(armAngle);
+    const armCenterDy = -(armLength / 2) * Math.sin(armAngle);
+    // 拳の先端オフセット
+    const handDx = bodyRadius + armLength * Math.cos(armAngle);
+    const handDy = -armLength * Math.sin(armAngle);
+
+    for (const side of [-1, 1] as const) {
+      // 腕（薄い円柱、回転して下向き斜めに）
+      const arm = MeshBuilder.CreateCylinder(`${parent.name}_arm${side}`, {
+        height: armLength,
+        diameter: armDiameter,
+        tessellation: 6,
+      }, this.scene);
+      // Z軸回転で横に倒し、60度下向きに調整
+      arm.rotation.z = side * ((Math.PI / 2) - armAngle);
+      arm.position.set(side * armCenterDx, shoulderY + armCenterDy, 0);
+      const armMat = new StandardMaterial(`${parent.name}_armMat${side}`, this.scene);
+      armMat.diffuseColor = new Color3(color.r * 0.7, color.g * 0.7, color.b * 0.7);
+      armMat.specularColor = Color3.Black();
+      arm.material = armMat;
+      arm.parent = parent;
+      arm.isPickable = false;
+      this.armMeshes.push(arm);
+
+      // 拳（小さな球）
+      const hand = MeshBuilder.CreateSphere(`${parent.name}_hand${side}`, {
+        diameter: handDiameter,
+        segments: 8,
+      }, this.scene);
+      hand.position.set(side * handDx, shoulderY + handDy, 0);
+      const handMat = new StandardMaterial(`${parent.name}_handMat${side}`, this.scene);
+      handMat.diffuseColor = color;
+      handMat.specularColor = Color3.Black();
+      hand.material = handMat;
+      hand.parent = parent;
+      hand.isPickable = false;
+      this.armMeshes.push(hand);
+    }
+  }
+
   createMeshes(): void {
     // Launcher (green octagonal prism)
-    this.launcherMesh = this.createOctEntity(
-      "simLauncher", LAUNCHER_SIZE, new Color3(0.27, 0.8, 0.27),
-    );
+    const launcherColor = new Color3(0.27, 0.8, 0.27);
+    this.launcherMesh = this.createOctEntity("simLauncher", VISUAL_SIZE, launcherColor);
+    this.createEntityArms(this.launcherMesh, VISUAL_SIZE, launcherColor);
 
     // Targets (colored octagonal prisms)
     for (let i = 0; i < 5; i++) {
       const c = TARGET_COLORS_3D[i];
-      const mesh = this.createOctEntity(
-        `simTarget${i}`, TARGET_SIZE, new Color3(c.r, c.g, c.b),
-      );
+      const color = new Color3(c.r, c.g, c.b);
+      const mesh = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color);
+      this.createEntityArms(mesh, VISUAL_SIZE, color);
       this.targetMeshes.push(mesh);
     }
 
     // Obstacles (purple octagonal prisms)
+    const obColor = new Color3(0.6, 0.4, 0.8);
     for (let i = 0; i < 5; i++) {
-      const mesh = this.createOctEntity(
-        `simOb${i}`, OBSTACLE_SIZE, new Color3(0.6, 0.4, 0.8),
-      );
+      const mesh = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor);
+      this.createEntityArms(mesh, VISUAL_SIZE, obColor);
       this.obstacleMeshes.push(mesh);
     }
 
@@ -177,6 +233,11 @@ export class SimVisualization {
       ind.dispose();
     }
     this.facingIndicators = [];
+    for (const arm of this.armMeshes) {
+      arm.material?.dispose();
+      arm.dispose();
+    }
+    this.armMeshes = [];
     this.disposeActionGauges();
   }
 
@@ -471,9 +532,10 @@ export class SimVisualization {
       return mat;
     };
 
+    const s = VISUAL_SIZE;
+
     // Launcher
     {
-      const s = LAUNCHER_SIZE;
       const ind = this.createHalfEllipsoid(
         "facingLauncher", s * 0.3, s * 0.5, s * 0.3,
         new Color3(0.35, 0.9, 0.35),
@@ -487,7 +549,6 @@ export class SimVisualization {
     // Targets
     for (let i = 0; i < 5; i++) {
       const c = TARGET_COLORS_3D[i];
-      const s = TARGET_SIZE;
       const ind = this.createHalfEllipsoid(
         `facingTarget${i}`, s * 0.3, s * 0.5, s * 0.3,
         new Color3(c.r, c.g, c.b),
@@ -500,7 +561,6 @@ export class SimVisualization {
 
     // Obstacles
     for (let i = 0; i < 5; i++) {
-      const s = OBSTACLE_SIZE;
       const ind = this.createHalfEllipsoid(
         `facingOb${i}`, s * 0.3, s * 0.5, s * 0.3,
         new Color3(0.7, 0.45, 0.95),
