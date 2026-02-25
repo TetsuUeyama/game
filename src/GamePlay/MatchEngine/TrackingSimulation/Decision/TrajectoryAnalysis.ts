@@ -32,21 +32,21 @@ export function isPhysicallyClose(
   return dist2d(cx, cz, ob.x, ob.z) < PHYSICAL_MARGIN;
 }
 
-/** Is a point within obstacle FOV? */
+/** Is a point within obstacle FOV? (uses neckFacing = gaze direction) */
 export function isPointInFOV(m: SimMover, px: number, pz: number): boolean {
   const d = dist2d(m.x, m.z, px, pz);
   const fovHalf = fovHalfAtDist(d);
   const angle = Math.atan2(pz - m.z, px - m.x);
-  return Math.abs(normAngleDiff(m.facing, angle)) <= fovHalf;
+  return Math.abs(normAngleDiff(m.neckFacing, angle)) <= fovHalf;
 }
 
-/** Search FOV (no distance narrowing) */
+/** Search FOV (no distance narrowing, uses neckFacing) */
 export function isPointInSearchFOV(m: SimMover, px: number, pz: number): boolean {
   const angle = Math.atan2(pz - m.z, px - m.x);
-  return Math.abs(normAngleDiff(m.facing, angle)) <= OB_FOV_HALF_NEAR;
+  return Math.abs(normAngleDiff(m.neckFacing, angle)) <= OB_FOV_HALF_NEAR;
 }
 
-/** Is trajectory within obstacle FOV? */
+/** Is trajectory within obstacle FOV? (uses neckFacing) */
 export function isTrajectoryInFOV(
   m: SimMover, x1: number, z1: number, x2: number, z2: number,
 ): boolean {
@@ -58,7 +58,7 @@ export function isTrajectoryInFOV(
     const d = dist2d(m.x, m.z, px, pz);
     const fovHalf = fovHalfAtDist(d);
     const angle = Math.atan2(pz - m.z, px - m.x);
-    if (Math.abs(normAngleDiff(m.facing, angle)) <= fovHalf) return true;
+    if (Math.abs(normAngleDiff(m.neckFacing, angle)) <= fovHalf) return true;
   }
   return false;
 }

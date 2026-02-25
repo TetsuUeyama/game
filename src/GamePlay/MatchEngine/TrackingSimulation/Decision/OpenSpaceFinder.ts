@@ -39,7 +39,7 @@ export function findOpenSpace(
       const d = dist2d(px, pz, ob.x, ob.z);
       const fovHalf = fovHalfAtDist(d);
       const angle = Math.atan2(pz - ob.z, px - ob.x);
-      if (Math.abs(normAngleDiff(ob.facing, angle)) > fovHalf) {
+      if (Math.abs(normAngleDiff(ob.neckFacing, angle)) > fovHalf) {
         score += 100 * 0.015; // scaled
       }
     }
@@ -108,7 +108,7 @@ export function findOpenSpaceInZone(
       const d = dist2d(px, pz, ob.x, ob.z);
       const fovHalf = fovHalfAtDist(d);
       const angle = Math.atan2(pz - ob.z, px - ob.x);
-      if (Math.abs(normAngleDiff(ob.facing, angle)) > fovHalf) {
+      if (Math.abs(normAngleDiff(ob.neckFacing, angle)) > fovHalf) {
         score += 1.5;
       }
     }
