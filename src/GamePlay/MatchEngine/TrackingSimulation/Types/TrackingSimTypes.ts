@@ -192,4 +192,5 @@ export interface SimState {
   slasherState: SlasherState;
   screenerState: ScreenerState;
   dunkerState: DunkerState;
+  obstacleDeflectCooldowns: number[];
 }

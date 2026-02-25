@@ -16,6 +16,8 @@ import {
   LAUNCHER_RADIUS,
   TARGET_RADIUS,
   OBSTACLE_RADIUS,
+  DEFLECT_IMPULSE,
+  DEFLECT_COOLDOWN,
 } from "./Config/FieldConfig";
 
 import {
@@ -56,7 +58,7 @@ import {
 } from "./Movement/RoleMovement";
 
 import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
-import { evaluatePreFire, attemptFire, detectBallResult } from "./Action/PassAction";
+import { evaluatePreFire, attemptFire, detectBallResult, checkObstacleDeflection } from "./Action/PassAction";
 import { CATCH_TIMING } from "./Action/CatchAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
@@ -171,6 +173,7 @@ export class TrackingSimulation3D {
       slasherState: { dest: null, reevalTimer: 0, vcutPhase: 0, vcutActive: false },
       screenerState: { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 },
       dunkerState: { dest: null, reevalTimer: 0, sealing: false },
+      obstacleDeflectCooldowns: [0, 0, 0, 0, 0],
     };
   }
 
@@ -278,6 +281,44 @@ export class TrackingSimulation3D {
       }
     }
 
+    // === キャッチ保持中の弾き（スティール） ===
+    if (this.catchHoldInfo) {
+      const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+      const allHands = this.vis.getHandWorldPositions(allMovers);
+      const obstacleHands = allHands.slice(6, 11);
+      const heldPos = this.ball.mesh.position;
+
+      const stealDeflection = checkObstacleDeflection(
+        heldPos.x, heldPos.y, heldPos.z,
+        obstacleHands, s.obstacleDeflectCooldowns,
+      );
+      if (stealDeflection.deflected) {
+        // 保持解除
+        const catcherIdx = this.catchHoldInfo.entityIdx;
+        this.catchHoldInfo = null;
+        s.actionStates[catcherIdx] = forceRecovery(s.actionStates[catcherIdx]);
+
+        // Havok DYNAMIC モードに復帰 → インパルスで弾く
+        this.ball.startFlight();
+        this.ball.applyImpulse(stealDeflection.direction.scale(DEFLECT_IMPULSE));
+
+        s.ballActive = true;
+        s.ballAge = 0;
+        s.score.miss++;
+        s.obstacleDeflectCooldowns[stealDeflection.obstacleIdx] = DEFLECT_COOLDOWN;
+
+        // 状態リセット
+        for (let i = 1; i < s.actionStates.length; i++) {
+          if (s.actionStates[i].type === 'catch') continue;
+          if (s.actionStates[i].phase !== 'idle') {
+            s.actionStates[i] = forceRecovery(s.actionStates[i]);
+          }
+        }
+        for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+        resetAfterResult(s);
+      }
+    }
+
     // === Launcher: role-based smart movement ===
     if (canEntityMove(s.actionStates, 0)) {
       moveLauncherSmart(s.launcher, s.launcherState, s.targets, s.obstacles, dt);
@@ -360,12 +401,28 @@ export class TrackingSimulation3D {
       const targetHands = allHands.slice(1, 6);    // targets[0..4]
       const obstacleHands = allHands.slice(6, 11); // obstacles[0..4]
 
-      // Ball result detection (block → hit → miss)
+      // ① 弾きクールダウン更新
+      for (let oi = 0; oi < s.obstacleDeflectCooldowns.length; oi++) {
+        if (s.obstacleDeflectCooldowns[oi] > 0) {
+          s.obstacleDeflectCooldowns[oi] = Math.max(0, s.obstacleDeflectCooldowns[oi] - dt);
+        }
+      }
+
+      // ② 障害物の手によるボール弾き判定
+      const deflection = checkObstacleDeflection(
+        ballPos.x, ballPos.y, ballPos.z,
+        obstacleHands, s.obstacleDeflectCooldowns,
+      );
+      if (deflection.deflected) {
+        this.ball.applyImpulse(deflection.direction.scale(DEFLECT_IMPULSE));
+        s.obstacleDeflectCooldowns[deflection.obstacleIdx] = DEFLECT_COOLDOWN;
+      }
+
+      // ③ Ball result detection (hit → miss)
       const detection = detectBallResult(
         ballPos.x, ballPos.y, ballPos.z,
         this.ball.isInFlight(), s.ballAge,
-        s.targets, s.obstacles,
-        targetHands, obstacleHands,
+        targetHands,
       );
       if (detection.result !== 'none') {
         deactivateBall(s, this.ball, this.ballTrailPositions);

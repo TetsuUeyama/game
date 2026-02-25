@@ -55,3 +55,7 @@ export const FIRE_MAX = 3.0;
 export const TURN_MIN = 1.0;
 export const TURN_MAX = 3.0;
 export const BALL_TIMEOUT = 6.0;
+
+// --- Deflection ---
+export const DEFLECT_IMPULSE = 1.2;    // 弾きインパルス強度 (kg·m/s)
+export const DEFLECT_COOLDOWN = 0.3;   // 同一障害物の連続弾き防止 (秒)
