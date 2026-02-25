@@ -4,17 +4,21 @@ import {
   StandardMaterial,
   Color3,
   Vector3,
+  Quaternion,
   Mesh,
   LinesMesh,
   TransformNode,
-  VertexData,
 } from "@babylonjs/core";
+
+import { loadVoxHeadMesh } from "./VoxHeadMesh";
 
 import {
   ENTITY_HEIGHT,
   OBSTACLE_SIZE,
   FOV_FULL_LEN,
   FOV_WINDOW_LEN,
+  ARM_LERP_SPEED,
+  NECK_VISUAL_LERP_SPEED,
 } from "../Config/FieldConfig";
 
 /** 全エンティティの描画サイズを障害物サイズに統一 */
@@ -35,6 +39,40 @@ export interface SimVisState {
   interceptPt: { x: number; z: number } | null;
   ballTrailPositions: Vector3[];
   actionStates: ActionState[];
+  ballPosition: Vector3 | null;
+  dt: number;
+}
+
+// --- Arm constants (shared by all entities) ---
+const ARM_BODY_RADIUS = VISUAL_SIZE / 2;
+const ARM_LENGTH = VISUAL_SIZE * 1.1;
+const ARM_DIAMETER = VISUAL_SIZE * 0.12;
+const HAND_DIAMETER = VISUAL_SIZE * 0.22;
+const SHOULDER_Y = ENTITY_HEIGHT * 0.35;
+const DEFAULT_ARM_ANGLE = (60 * Math.PI) / 180;
+/** ボールがこの距離以内なら両手をボール方向へ向ける */
+const BALL_REACT_RADIUS = 2.0;
+
+// Default arm pose offsets (precomputed)
+const DEF_ARM_CENTER_DX = ARM_BODY_RADIUS + (ARM_LENGTH / 2) * Math.cos(DEFAULT_ARM_ANGLE);
+const DEF_ARM_CENTER_DY = -(ARM_LENGTH / 2) * Math.sin(DEFAULT_ARM_ANGLE);
+const DEF_HAND_DX = ARM_BODY_RADIUS + ARM_LENGTH * Math.cos(DEFAULT_ARM_ANGLE);
+const DEF_HAND_DY = -ARM_LENGTH * Math.sin(DEFAULT_ARM_ANGLE);
+const DEF_ARM_ROT_Z = (Math.PI / 2) - DEFAULT_ARM_ANGLE;
+
+/** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
+const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
+
+/** 腕ポーズ補間用: 肩→手方向ベクトル（ローカル座標、正規化済み） */
+interface ArmLerpState {
+  leftDir: Vector3;   // 現在の左腕方向
+  rightDir: Vector3;  // 現在の右腕方向
+}
+
+interface EntityArmSet {
+  parent: Mesh;
+  leftArm: Mesh; leftHand: Mesh;
+  rightArm: Mesh; rightHand: Mesh;
 }
 
 // --- Action gauge constants ---
@@ -64,7 +102,13 @@ export class SimVisualization {
   interceptMarkerLine: LinesMesh | null = null;
   private gauges: ActionGaugeMeshes[] = [];
   private facingIndicators: Mesh[] = [];
-  private armMeshes: Mesh[] = [];
+  private entityArmSets: EntityArmSet[] = [];
+  private armLerpStates: ArmLerpState[] = [];
+  private neckVisualAngles: number[] = [];
+  /** 顔前面までの距離（メッシュ中心からローカルZ+方向） */
+  private headFaceForwardOffset = 0;
+  /** 顔中心のワールドY座標（entity root基準からの高さ） */
+  private headFaceCenterY = 0;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -112,70 +156,68 @@ export class SimVisualization {
 
   /**
    * エンティティの両サイドに腕（棒）と拳（球）を付ける。
-   * 60度下向きに垂れた自然なポーズ。親メッシュの子として追加。
+   * デフォルトは60度下向きのポーズ。ボールが近いと動的に向きを変える。
    */
-  private createEntityArms(parent: Mesh, size: number, color: Color3): void {
-    const bodyRadius = size / 2;
-    const armLength = size * 0.55;
-    const armDiameter = size * 0.12;
-    const handDiameter = size * 0.22;
-    // 肩の高さ: 上段の上部付近（rootの中心からの相対Y）
-    const shoulderY = ENTITY_HEIGHT * 0.2;
-    // 60度下向き（rad）
-    const armAngle = (60 * Math.PI) / 180;
-    // 腕の中心オフセット
-    const armCenterDx = bodyRadius + (armLength / 2) * Math.cos(armAngle);
-    const armCenterDy = -(armLength / 2) * Math.sin(armAngle);
-    // 拳の先端オフセット
-    const handDx = bodyRadius + armLength * Math.cos(armAngle);
-    const handDy = -armLength * Math.sin(armAngle);
-
-    for (const side of [-1, 1] as const) {
-      // 腕（薄い円柱、回転して下向き斜めに）
+  private createEntityArms(parent: Mesh, color: Color3): void {
+    const createArmMesh = (side: -1 | 1): { arm: Mesh; hand: Mesh } => {
+      // 腕（薄い円柱）
       const arm = MeshBuilder.CreateCylinder(`${parent.name}_arm${side}`, {
-        height: armLength,
-        diameter: armDiameter,
+        height: ARM_LENGTH,
+        diameter: ARM_DIAMETER,
         tessellation: 6,
       }, this.scene);
-      // Z軸回転で横に倒し、60度下向きに調整
-      arm.rotation.z = side * ((Math.PI / 2) - armAngle);
-      arm.position.set(side * armCenterDx, shoulderY + armCenterDy, 0);
+      arm.rotation.z = side * DEF_ARM_ROT_Z;
+      arm.position.set(side * DEF_ARM_CENTER_DX, SHOULDER_Y + DEF_ARM_CENTER_DY, 0);
       const armMat = new StandardMaterial(`${parent.name}_armMat${side}`, this.scene);
       armMat.diffuseColor = new Color3(color.r * 0.7, color.g * 0.7, color.b * 0.7);
       armMat.specularColor = Color3.Black();
       arm.material = armMat;
       arm.parent = parent;
       arm.isPickable = false;
-      this.armMeshes.push(arm);
 
       // 拳（小さな球）
       const hand = MeshBuilder.CreateSphere(`${parent.name}_hand${side}`, {
-        diameter: handDiameter,
+        diameter: HAND_DIAMETER,
         segments: 8,
       }, this.scene);
-      hand.position.set(side * handDx, shoulderY + handDy, 0);
+      hand.position.set(side * DEF_HAND_DX, SHOULDER_Y + DEF_HAND_DY, 0);
       const handMat = new StandardMaterial(`${parent.name}_handMat${side}`, this.scene);
       handMat.diffuseColor = color;
       handMat.specularColor = Color3.Black();
       hand.material = handMat;
       hand.parent = parent;
       hand.isPickable = false;
-      this.armMeshes.push(hand);
-    }
+
+      return { arm, hand };
+    };
+
+    const left = createArmMesh(-1);
+    const right = createArmMesh(1);
+
+    this.entityArmSets.push({
+      parent,
+      leftArm: left.arm, leftHand: left.hand,
+      rightArm: right.arm, rightHand: right.hand,
+    });
+
+    this.armLerpStates.push({
+      leftDir: DEF_ARM_DIR.clone(),
+      rightDir: DEF_ARM_DIR.clone(),
+    });
   }
 
   createMeshes(): void {
     // Launcher (green octagonal prism)
     const launcherColor = new Color3(0.27, 0.8, 0.27);
     this.launcherMesh = this.createOctEntity("simLauncher", VISUAL_SIZE, launcherColor);
-    this.createEntityArms(this.launcherMesh, VISUAL_SIZE, launcherColor);
+    this.createEntityArms(this.launcherMesh, launcherColor);
 
     // Targets (colored octagonal prisms)
     for (let i = 0; i < 5; i++) {
       const c = TARGET_COLORS_3D[i];
       const color = new Color3(c.r, c.g, c.b);
       const mesh = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color);
-      this.createEntityArms(mesh, VISUAL_SIZE, color);
+      this.createEntityArms(mesh, color);
       this.targetMeshes.push(mesh);
     }
 
@@ -183,7 +225,7 @@ export class SimVisualization {
     const obColor = new Color3(0.6, 0.4, 0.8);
     for (let i = 0; i < 5; i++) {
       const mesh = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor);
-      this.createEntityArms(mesh, VISUAL_SIZE, obColor);
+      this.createEntityArms(mesh, obColor);
       this.obstacleMeshes.push(mesh);
     }
 
@@ -197,8 +239,11 @@ export class SimVisualization {
       this.fovLines.push(line);
     }
 
-    // Facing indicators (semi-ellipse on top of each entity)
-    this.createFacingIndicators();
+    // Facing indicators (vox head on top of each entity) — fire-and-forget async
+    this.loadAndAttachHeads();
+
+    // Neck visual angles for smooth interpolation (1 launcher + 5 targets + 5 obstacles)
+    this.neckVisualAngles = new Array(11).fill(0);
 
     // Action gauges (1 launcher + 5 targets + 5 obstacles = 11)
     this.createActionGauges(11);
@@ -233,11 +278,15 @@ export class SimVisualization {
       ind.dispose();
     }
     this.facingIndicators = [];
-    for (const arm of this.armMeshes) {
-      arm.material?.dispose();
-      arm.dispose();
+    for (const set of this.entityArmSets) {
+      for (const m of [set.leftArm, set.leftHand, set.rightArm, set.rightHand]) {
+        m.material?.dispose();
+        m.dispose();
+      }
     }
-    this.armMeshes = [];
+    this.entityArmSets = [];
+    this.armLerpStates = [];
+    this.neckVisualAngles = [];
     this.disposeActionGauges();
   }
 
@@ -247,6 +296,8 @@ export class SimVisualization {
     this.syncTrajectoryVisualization(state);
     this.syncBallTrailVisualization(state);
     this.syncInterceptMarker(state);
+    this.syncNeckRotation(state);
+    this.syncArms(state);
     this.syncActionGauges(state);
   }
 
@@ -259,8 +310,34 @@ export class SimVisualization {
     return line;
   }
 
+  /**
+   * 全エンティティの頭メッシュに首の相対回転を適用（スムーズ補間付き）。
+   * facingIndicators: [0]=launcher, [1-5]=targets, [6-10]=obstacles
+   * 指数減衰Lerpで角度を補間し、カクつきを防ぐ。
+   */
+  private syncNeckRotation(state: SimVisState): void {
+    const alpha = 1 - Math.exp(-NECK_VISUAL_LERP_SPEED * state.dt);
+
+    // 全エンティティをフラット配列として扱う: launcher, targets[0..4], obstacles[0..4]
+    const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
+
+    for (let i = 0; i < allMovers.length; i++) {
+      if (i >= this.facingIndicators.length) continue;
+      if (i >= this.neckVisualAngles.length) continue;
+      const head = this.facingIndicators[i];
+      const mover = allMovers[i];
+      // Head is child of body mesh which has rotation.y = PI/2 - facing.
+      // To make head face neckFacing: local Y rotation = facing - neckFacing
+      const target = mover.facing - mover.neckFacing;
+      this.neckVisualAngles[i] += (target - this.neckVisualAngles[i]) * alpha;
+      head.rotation.y = this.neckVisualAngles[i];
+    }
+  }
+
   private syncFovVisualization(state: SimVisState): void {
-    const VIS_Y = 0.15;
+    // FOV発生位置: 顔の前面（顔高さ + facing方向にオフセット）
+    const faceY = this.headFaceCenterY;
+    const fwd = this.headFaceForwardOffset;
 
     for (let i = 0; i < 5; i++) {
       const ob = state.obstacles[i];
@@ -270,18 +347,24 @@ export class SimVisualization {
         ? Math.PI / 6
         : fovHalfAtDist(state.obFocusDists[i]);
 
+      // 顔前面のワールド座標（neckFacing方向にオフセット）
+      const cosF = Math.cos(ob.neckFacing);
+      const sinF = Math.sin(ob.neckFacing);
+      const faceX = ob.x + cosF * fwd;
+      const faceZ = ob.z + sinF * fwd;
+
       // --- Edge lines (full length FOV boundaries) ---
       const len = FOV_FULL_LEN;
-      const leftAngle = ob.facing + fovHalf;
-      const rightAngle = ob.facing - fovHalf;
-      const origin = new Vector3(ob.x, VIS_Y, ob.z);
+      const leftAngle = ob.neckFacing + fovHalf;
+      const rightAngle = ob.neckFacing - fovHalf;
+      const origin = new Vector3(faceX, faceY, faceZ);
       const leftEnd = new Vector3(
-        ob.x + Math.cos(leftAngle) * len, VIS_Y,
-        ob.z + Math.sin(leftAngle) * len,
+        faceX + Math.cos(leftAngle) * len, faceY,
+        faceZ + Math.sin(leftAngle) * len,
       );
       const rightEnd = new Vector3(
-        ob.x + Math.cos(rightAngle) * len, VIS_Y,
-        ob.z + Math.sin(rightAngle) * len,
+        faceX + Math.cos(rightAngle) * len, faceY,
+        faceZ + Math.sin(rightAngle) * len,
       );
 
       this.fovLines[i].dispose();
@@ -308,35 +391,36 @@ export class SimVisualization {
       }
 
       // Build window outline: inner arc -> right radial -> outer arc (reversed) -> left radial
+      // ウィンドウも顔前面を基点にする
       const windowPoints: Vector3[] = [];
 
       // Inner arc (left to right)
       for (let s = 0; s <= arcSteps; s++) {
         const t = s / arcSteps;
-        const angle = ob.facing - fovHalf + (2 * fovHalf) * t;
+        const angle = ob.neckFacing - fovHalf + (2 * fovHalf) * t;
         windowPoints.push(new Vector3(
-          ob.x + Math.cos(angle) * innerR, VIS_Y - 0.01,
-          ob.z + Math.sin(angle) * innerR,
+          faceX + Math.cos(angle) * innerR, faceY - 0.01,
+          faceZ + Math.sin(angle) * innerR,
         ));
       }
       // Right radial (inner to outer)
       windowPoints.push(new Vector3(
-        ob.x + Math.cos(ob.facing + fovHalf) * outerR, VIS_Y - 0.01,
-        ob.z + Math.sin(ob.facing + fovHalf) * outerR,
+        faceX + Math.cos(ob.neckFacing + fovHalf) * outerR, faceY - 0.01,
+        faceZ + Math.sin(ob.neckFacing + fovHalf) * outerR,
       ));
       // Outer arc (right to left, reversed)
       for (let s = arcSteps; s >= 0; s--) {
         const t = s / arcSteps;
-        const angle = ob.facing - fovHalf + (2 * fovHalf) * t;
+        const angle = ob.neckFacing - fovHalf + (2 * fovHalf) * t;
         windowPoints.push(new Vector3(
-          ob.x + Math.cos(angle) * outerR, VIS_Y - 0.01,
-          ob.z + Math.sin(angle) * outerR,
+          faceX + Math.cos(angle) * outerR, faceY - 0.01,
+          faceZ + Math.sin(angle) * outerR,
         ));
       }
       // Left radial (outer to inner, close the shape)
       windowPoints.push(new Vector3(
-        ob.x + Math.cos(ob.facing - fovHalf) * innerR, VIS_Y - 0.01,
-        ob.z + Math.sin(ob.facing - fovHalf) * innerR,
+        faceX + Math.cos(ob.neckFacing - fovHalf) * innerR, faceY - 0.01,
+        faceZ + Math.sin(ob.neckFacing - fovHalf) * innerR,
       ));
 
       const [wr, wg, wb, wa] = trajInFov
@@ -446,129 +530,145 @@ export class SimVisualization {
   }
 
   // =========================================================================
-  // Facing indicator (3D half-ellipsoid dome on top of each entity)
+  // Arm dynamic sync — ボール方向に手を向ける（スムーズ補間付き）
   // =========================================================================
 
   /**
-   * 半楕円体（ドーム）メッシュを生成。
-   * 前方(+Z)が frontColor、後方は暗色。頂点カラーでグラデーション。
-   * 親メッシュにアタッチすることで facing に自動追従する。
+   * 全エンティティの腕を更新。
+   * ボールが上半身基準点から2m以内なら両手をボール方向へ向ける。
+   * 指数減衰Lerpで方向ベクトルを補間し、スムーズに遷移する。
    */
-  private createHalfEllipsoid(
-    name: string,
-    rx: number, ry: number, rz: number,
-    frontColor: Color3,
-    segments: number = 16,
-  ): Mesh {
-    const latSegs = Math.max(4, Math.floor(segments / 2));
-    const lonSegs = segments;
+  private syncArms(state: SimVisState): void {
+    const ballPos = state.ballPosition;
+    const alpha = 1 - Math.exp(-ARM_LERP_SPEED * state.dt);
 
-    const positions: number[] = [];
-    const normals: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
+    for (let idx = 0; idx < this.entityArmSets.length; idx++) {
+      const armSet = this.entityArmSets[idx];
+      const lerpState = this.armLerpStates[idx];
+      if (!lerpState) continue;
 
-    // 緯度(phi: 0=赤道/底面 → π/2=頂点) × 経度(theta: 0→2π)
-    for (let lat = 0; lat <= latSegs; lat++) {
-      const phi = (lat / latSegs) * Math.PI / 2;
-      const sinPhi = Math.sin(phi);
-      const cosPhi = Math.cos(phi);
+      const parent = armSet.parent;
+      const ex = parent.position.x;
+      const ey = parent.position.y;
+      const ez = parent.position.z;
 
-      for (let lon = 0; lon <= lonSegs; lon++) {
-        const theta = (lon / lonSegs) * Math.PI * 2;
-        const sinTheta = Math.sin(theta);
-        const cosTheta = Math.cos(theta);
+      // 上半身基準点（ワールド座標）
+      const refY = ey + SHOULDER_Y;
 
-        positions.push(
-          rx * cosPhi * cosTheta,
-          ry * sinPhi,
-          rz * cosPhi * sinTheta,
-        );
-        normals.push(cosPhi * cosTheta, sinPhi, cosPhi * sinTheta);
+      let targetLeftDir = DEF_ARM_DIR;
+      let targetRightDir = DEF_ARM_DIR;
 
-        // 前方着色: sinTheta > 0 が前方(+Z)
-        const frontness = Math.max(0, sinTheta);
-        const dark = 0.12;
-        colors.push(
-          frontColor.r * frontness + dark * (1 - frontness),
-          frontColor.g * frontness + dark * (1 - frontness),
-          frontColor.b * frontness + dark * (1 - frontness),
-          1.0,
-        );
+      if (ballPos && state.ballActive) {
+        const dx = ballPos.x - ex;
+        const dy = ballPos.y - refY;
+        const dz = ballPos.z - ez;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        if (dist < BALL_REACT_RADIUS && dist > 0.01) {
+          // ボールが範囲内 → エンティティのローカル座標に変換
+          parent.computeWorldMatrix(true);
+          const localBall = Vector3.TransformCoordinates(
+            ballPos, parent.getWorldMatrix().clone().invert(),
+          );
+
+          // 各肩からボールへの方向ベクトルを計算
+          targetLeftDir = this.computeArmDir(-1, localBall);
+          targetRightDir = this.computeArmDir(1, localBall);
+        }
       }
+
+      // 指数減衰Lerpで補間
+      Vector3.LerpToRef(lerpState.leftDir, targetLeftDir, alpha, lerpState.leftDir);
+      lerpState.leftDir.normalize();
+      Vector3.LerpToRef(lerpState.rightDir, targetRightDir, alpha, lerpState.rightDir);
+      lerpState.rightDir.normalize();
+
+      // 補間後の方向ベクトルから腕の位置・回転を適用
+      this.applyArmFromDir(armSet.leftArm, armSet.leftHand, -1, lerpState.leftDir);
+      this.applyArmFromDir(armSet.rightArm, armSet.rightHand, 1, lerpState.rightDir);
     }
-
-    // 三角形インデックス
-    for (let lat = 0; lat < latSegs; lat++) {
-      for (let lon = 0; lon < lonSegs; lon++) {
-        const v0 = lat * (lonSegs + 1) + lon;
-        const v1 = v0 + 1;
-        const v2 = v0 + (lonSegs + 1);
-        const v3 = v2 + 1;
-        indices.push(v0, v2, v1);
-        indices.push(v1, v2, v3);
-      }
-    }
-
-    const vertexData = new VertexData();
-    vertexData.positions = positions;
-    vertexData.indices = indices;
-    vertexData.normals = normals;
-    vertexData.colors = colors;
-
-    const mesh = new Mesh(name, this.scene);
-    vertexData.applyToMesh(mesh);
-    mesh.isPickable = false;
-    return mesh;
   }
 
-  /** 全エンティティに半楕円体の facing indicator を作成・アタッチ */
-  private createFacingIndicators(): void {
-    const makeMat = (matName: string): StandardMaterial => {
-      const mat = new StandardMaterial(matName, this.scene);
+  /** 肩位置からターゲットへの正規化方向ベクトルを計算（ローカル座標系） */
+  private computeArmDir(side: -1 | 1, localTarget: Vector3): Vector3 {
+    const shoulderX = side * ARM_BODY_RADIUS;
+    const dx = localTarget.x - shoulderX;
+    const dy = localTarget.y - SHOULDER_Y;
+    const dz = localTarget.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 0.01) return DEF_ARM_DIR;
+    return new Vector3(dx / len, dy / len, dz / len);
+  }
+
+  /** 方向ベクトルから腕のposition/rotationを設定 */
+  private applyArmFromDir(arm: Mesh, hand: Mesh, side: -1 | 1, dir: Vector3): void {
+    const shoulderX = side * ARM_BODY_RADIUS;
+
+    // 腕の中心位置と拳の位置
+    arm.position.set(
+      shoulderX + dir.x * ARM_LENGTH / 2,
+      SHOULDER_Y + dir.y * ARM_LENGTH / 2,
+      dir.z * ARM_LENGTH / 2,
+    );
+    hand.position.set(
+      shoulderX + dir.x * ARM_LENGTH,
+      SHOULDER_Y + dir.y * ARM_LENGTH,
+      dir.z * ARM_LENGTH,
+    );
+
+    // 円柱をデフォルト軸(Y)からdir方向へ回転
+    const yAxis = Vector3.Up();
+    const dot = Vector3.Dot(yAxis, dir);
+
+    if (Math.abs(dot) > 0.9999) {
+      arm.rotationQuaternion = dot > 0
+        ? Quaternion.Identity()
+        : Quaternion.RotationAxis(Vector3.Right(), Math.PI);
+    } else {
+      const cross = Vector3.Cross(yAxis, dir);
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      arm.rotationQuaternion = Quaternion.RotationAxis(cross.normalize(), angle);
+    }
+  }
+
+  // =========================================================================
+  // Facing indicator (VOX head on top of each entity)
+  // =========================================================================
+
+  /** VOXヘッドモデルを読み込み、全エンティティにクローンしてアタッチ */
+  private async loadAndAttachHeads(): Promise<void> {
+    try {
+      const result = await loadVoxHeadMesh(this.scene, "/box/head.vox");
+      result.mesh.setEnabled(false);
+
+      // 顔寸法を保存（FOV描画で使用）
+      this.headFaceForwardOffset = result.faceForwardOffset;
+      // 顔中心のワールドY = entity root offset(ENTITY_HEIGHT/2) + head child offset(ENTITY_HEIGHT/2) + faceCenterHeight
+      this.headFaceCenterY = ENTITY_HEIGHT / 2 + result.faceCenterHeight;
+
+      const mat = new StandardMaterial("voxHeadMat", this.scene);
       mat.emissiveColor = Color3.White();
       mat.disableLighting = true;
       mat.backFaceCulling = false;
-      return mat;
-    };
 
-    const s = VISUAL_SIZE;
+      const parents = [
+        this.launcherMesh,
+        ...this.targetMeshes,
+        ...this.obstacleMeshes,
+      ];
 
-    // Launcher
-    {
-      const ind = this.createHalfEllipsoid(
-        "facingLauncher", s * 0.3, s * 0.5, s * 0.3,
-        new Color3(0.35, 0.9, 0.35),
-      );
-      ind.material = makeMat("facingLauncherMat");
-      ind.parent = this.launcherMesh;
-      ind.position.y = ENTITY_HEIGHT / 2;
-      this.facingIndicators.push(ind);
-    }
+      for (let i = 0; i < parents.length; i++) {
+        const clone = result.mesh.clone(`facingHead_${i}`);
+        clone.material = mat;
+        clone.parent = parents[i];
+        clone.position.y = ENTITY_HEIGHT / 2;
+        clone.setEnabled(true);
+        this.facingIndicators.push(clone);
+      }
 
-    // Targets
-    for (let i = 0; i < 5; i++) {
-      const c = TARGET_COLORS_3D[i];
-      const ind = this.createHalfEllipsoid(
-        `facingTarget${i}`, s * 0.3, s * 0.5, s * 0.3,
-        new Color3(c.r, c.g, c.b),
-      );
-      ind.material = makeMat(`facingTargetMat${i}`);
-      ind.parent = this.targetMeshes[i];
-      ind.position.y = ENTITY_HEIGHT / 2;
-      this.facingIndicators.push(ind);
-    }
-
-    // Obstacles
-    for (let i = 0; i < 5; i++) {
-      const ind = this.createHalfEllipsoid(
-        `facingOb${i}`, s * 0.3, s * 0.5, s * 0.3,
-        new Color3(0.7, 0.45, 0.95),
-      );
-      ind.material = makeMat(`facingObMat${i}`);
-      ind.parent = this.obstacleMeshes[i];
-      ind.position.y = ENTITY_HEIGHT / 2;
-      this.facingIndicators.push(ind);
+      result.mesh.dispose();
+    } catch (e) {
+      console.error("[SimVisualization] Failed to load VOX head:", e);
     }
   }
 

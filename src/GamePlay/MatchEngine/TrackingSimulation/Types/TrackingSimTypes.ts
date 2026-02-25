@@ -3,6 +3,7 @@ export interface SimMover {
   vx: number; vz: number;
   speed: number;
   facing: number;
+  neckFacing: number;
   nextTurn: number;
 }
 

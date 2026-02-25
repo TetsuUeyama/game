@@ -10,7 +10,9 @@ import {
   setChaserVelocity,
   moveKeepFacing,
   moveWithFacing,
+  turnNeckToward,
 } from "../Movement/MovementCore";
+import { NECK_TURN_RATE } from "../Config/FieldConfig";
 import {
   moveSecondHandler,
   moveSlasher,
@@ -125,6 +127,49 @@ export function updateObstacleMovements(state: SimState, dt: number): void {
 /**
  * 5障害物のスキャン状態を更新
  */
+/**
+ * オフェンス側（launcher + targets）の neckFacing を更新。
+ * - Launcher: パス時は選択ターゲット方向、それ以外はbody facing方向へ戻る
+ * - Targets: キャッチ時 or ボール飛行中の選択ターゲットはボール方向、それ以外はfacing方向へ戻る
+ */
+export function updateOffenseNeckFacing(
+  state: SimState, ballActive: boolean, ballPosition: Vector3 | null, dt: number,
+): void {
+  const { launcher, targets } = state;
+  const neckDelta = NECK_TURN_RATE * dt;
+
+  // --- Launcher ---
+  const launcherAction = state.actionStates[0];
+  if (launcherAction.type === 'pass') {
+    // パス中: 選択ターゲットの方向を見る
+    const tgt = targets[state.selectedTargetIdx];
+    const angle = Math.atan2(tgt.z - launcher.z, tgt.x - launcher.x);
+    launcher.neckFacing = turnNeckToward(launcher.facing, launcher.neckFacing, angle, neckDelta);
+  } else {
+    // デフォルト: 体の向きに戻す
+    launcher.neckFacing = turnNeckToward(launcher.facing, launcher.neckFacing, launcher.facing, neckDelta);
+  }
+
+  // --- Targets ---
+  for (let ti = 0; ti < targets.length; ti++) {
+    const tgt = targets[ti];
+    const action = state.actionStates[1 + ti];
+
+    if (action.type === 'catch' && ballPosition) {
+      // キャッチ中: ボール方向を見る
+      const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
+      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, angle, neckDelta);
+    } else if (ballActive && ti === state.selectedTargetIdx && ballPosition) {
+      // ボール飛行中の選択ターゲット: ボール方向を見る
+      const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
+      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, angle, neckDelta);
+    } else {
+      // デフォルト: 体の向きに戻す
+      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, tgt.facing, neckDelta);
+    }
+  }
+}
+
 export function updateScans(state: SimState, ballActive: boolean, ballPosition: Vector3, dt: number): void {
   const { launcher, targets, obstacles } = state;
   const scanBallPos = ballActive ? ballPosition : Vector3.Zero();

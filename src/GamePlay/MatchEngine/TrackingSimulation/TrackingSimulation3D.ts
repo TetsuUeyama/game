@@ -61,7 +61,7 @@ import { CATCH_TIMING } from "./Action/CatchAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
 import { deactivateBall, executePendingFire, resetAfterResult, OB_INT_SPEEDS, PASS_TIMING } from "./Update/SimBallManager";
-import { updateTargetRoleMovements, updateObstacleMovements, updateScans } from "./Update/SimEntityUpdate";
+import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseNeckFacing } from "./Update/SimEntityUpdate";
 
 import { SimVisualization } from "./Visualization/SimVisualization";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
@@ -77,6 +77,7 @@ export class TrackingSimulation3D {
 
   private state!: SimState;
   private prevTime = 0;
+  private lastDt = 0;
 
   constructor(scene: Scene, ball: Ball) {
     this.scene = scene;
@@ -93,6 +94,7 @@ export class TrackingSimulation3D {
       const now = performance.now();
       const dt = Math.min((now - this.prevTime) / 1000, 0.1);
       this.prevTime = now;
+      this.lastDt = dt;
       this.update(dt);
       this.syncMeshes();
     });
@@ -176,19 +178,20 @@ export class TrackingSimulation3D {
     const yh = ENTITY_HEIGHT / 2;
 
     // Launcher
+    // rotation.y = π/2 - facing で local+Z を game facing (cos,sin) に一致させる
     this.vis.launcherMesh.position.set(s.launcher.x, yh, s.launcher.z);
-    this.vis.launcherMesh.rotation.y = -s.launcher.facing;
+    this.vis.launcherMesh.rotation.y = Math.PI / 2 - s.launcher.facing;
 
     // Targets
     for (let i = 0; i < 5; i++) {
       this.vis.targetMeshes[i].position.set(s.targets[i].x, yh, s.targets[i].z);
-      this.vis.targetMeshes[i].rotation.y = -s.targets[i].facing;
+      this.vis.targetMeshes[i].rotation.y = Math.PI / 2 - s.targets[i].facing;
     }
 
     // Obstacles
     for (let i = 0; i < 5; i++) {
       this.vis.obstacleMeshes[i].position.set(s.obstacles[i].x, yh, s.obstacles[i].z);
-      this.vis.obstacleMeshes[i].rotation.y = -s.obstacles[i].facing;
+      this.vis.obstacleMeshes[i].rotation.y = Math.PI / 2 - s.obstacles[i].facing;
     }
 
     // Ball visibility (position controlled by Havok physics when in flight)
@@ -207,6 +210,8 @@ export class TrackingSimulation3D {
         interceptPt: s.interceptPt,
         ballTrailPositions: this.ballTrailPositions,
         actionStates: s.actionStates,
+        ballPosition: s.ballActive ? this.ball.getPosition() : null,
+        dt: this.lastDt,
       });
     } catch (e) {
       console.error('[TrackingSimulation3D] visualization error:', e);
@@ -348,5 +353,9 @@ export class TrackingSimulation3D {
     // === Scan updates ===
     const scanBallPos = s.ballActive ? this.ball.getPosition() : Vector3.Zero();
     updateScans(s, s.ballActive, scanBallPos, dt);
+
+    // === Offense neck facing ===
+    const offenseBallPos = s.ballActive ? this.ball.getPosition() : null;
+    updateOffenseNeckFacing(s, s.ballActive, offenseBallPos, dt);
   }
 }

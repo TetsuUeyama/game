@@ -37,6 +37,12 @@ export const FOV_WINDOW_LEN = 220 * S;               // 3.3 m
 export const FOV_FOCUS_SPEED = 400 * S;              // 6.0 m/s
 export const SEARCH_SWEEP_SPEED = 1.5;               // rad/s
 export const SEARCH_SWEEP_MAX = Math.PI / 3;         // 60deg
+export const NECK_TURN_RATE = 6.0;                    // rad/s (faster than body TURN_RATE)
+export const NECK_MAX_ANGLE = Math.PI / 2;            // ±90deg from body facing
+
+// --- Visual interpolation ---
+export const ARM_LERP_SPEED = 10.0;          // 腕の補間速度
+export const NECK_VISUAL_LERP_SPEED = 12.0;  // 首の視覚補間速度
 
 // --- Timing ---
 export const FIRE_MIN = 1.5;
