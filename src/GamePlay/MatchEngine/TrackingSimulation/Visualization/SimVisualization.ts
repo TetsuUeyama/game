@@ -40,6 +40,7 @@ export interface SimVisState {
   ballTrailPositions: Vector3[];
   actionStates: ActionState[];
   ballPosition: Vector3 | null;
+  ballHeldPosition: Vector3 | null;
   dt: number;
 }
 
@@ -412,7 +413,6 @@ export class SimVisualization {
       const lerpState = this.armLerpStates[idx];
       if (!lerpState) continue;
 
-      const pivot = armSet.pivot;
       const parent = armSet.parent;
       const ex = parent.position.x;
       const ey = parent.position.y;
@@ -424,28 +424,50 @@ export class SimVisualization {
       let targetLeftDir = DEF_ARM_DIR;
       let targetRightDir = DEF_ARM_DIR;
 
-      if (ballPos && state.ballActive) {
-        const dx = ballPos.x - ex;
-        const dy = ballPos.y - refY;
-        const dz = ballPos.z - ez;
+      // 飛行中のボール、またはキャッチ保持中のボールを追跡
+      const trackBallPos = (state.ballActive && ballPos) ? ballPos : state.ballHeldPosition;
+      if (trackBallPos) {
+        const dx = trackBallPos.x - ex;
+        const dy = trackBallPos.y - refY;
+        const dz = trackBallPos.z - ez;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         if (dist < BALL_REACT_RADIUS && dist > 0.01) {
           // 視野判定: ボール方向がneckFacingから±NECK_MAX_ANGLE以内か
           const mover = allMovers[idx];
-          const angleToBall = Math.atan2(ballPos.z - ez, ballPos.x - ex);
+          const angleToBall = Math.atan2(trackBallPos.z - ez, trackBallPos.x - ex);
           const angleDiff = normAngleDiff(mover.neckFacing, angleToBall);
 
           if (Math.abs(angleDiff) <= NECK_MAX_ANGLE) {
-            // ボールが視野内かつ範囲内 → 上半身ピボットのローカル座標に変換
-            pivot.computeWorldMatrix(true);
+            // ルート（下半身）のローカル座標でボール位置を計算。
+            // ピボット（上半身）空間ではなくルート空間で計算することで、
+            // 上半身回転が追いつかない分を腕が横方向にカバーする。
+            parent.computeWorldMatrix(true);
             const localBall = Vector3.TransformCoordinates(
-              ballPos, pivot.getWorldMatrix().clone().invert(),
+              trackBallPos, parent.getWorldMatrix().clone().invert(),
             );
 
-            // 各肩からボールへの方向ベクトルを計算
-            targetLeftDir = this.computeArmDir(-1, localBall);
-            targetRightDir = this.computeArmDir(1, localBall);
+            // ルート空間での腕方向を計算
+            const rootLeftDir = this.computeArmDir(-1, localBall);
+            const rootRightDir = this.computeArmDir(1, localBall);
+
+            // ルート空間 → ピボット空間に変換（ピボットのローカルY回転を逆適用）
+            // ピボットは腕メッシュの親なので、描画にはピボット空間の方向が必要
+            const pivotAngle = this.torsoVisualAngles[idx] || 0;
+            const cosA = Math.cos(pivotAngle);
+            const sinA = Math.sin(pivotAngle);
+
+            targetLeftDir = new Vector3(
+              rootLeftDir.x * cosA - rootLeftDir.z * sinA,
+              rootLeftDir.y,
+              rootLeftDir.x * sinA + rootLeftDir.z * cosA,
+            ).normalize();
+
+            targetRightDir = new Vector3(
+              rootRightDir.x * cosA - rootRightDir.z * sinA,
+              rootRightDir.y,
+              rootRightDir.x * sinA + rootRightDir.z * cosA,
+            ).normalize();
           }
         }
       }

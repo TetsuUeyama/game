@@ -32,11 +32,14 @@ import {
   SIM_MARGIN,
   HAND_CATCH_RADIUS,
   HAND_BLOCK_RADIUS,
+  BALL_DIAMETER,
   BALL_TIMEOUT,
 } from "../Config/FieldConfig";
 import type { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
 
 import { Vector3 } from "@babylonjs/core";
+
+const BALL_RADIUS = BALL_DIAMETER / 2;
 
 // =========================================================================
 // Pass action timing
@@ -268,22 +271,22 @@ export function detectBallResult(
 ): BallResultDetection {
   const none: BallResultDetection = { result: 'none' as BallResultType, cooldownTime: 0 };
 
-  // Block check: each obstacle's left/right hand
+  // Block check: each obstacle's left/right hand (ball surface to hand)
   for (let oi = 0; oi < obstacles.length; oi++) {
     const hands = obstacleHandPositions[oi];
     if (!hands) continue;
-    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_BLOCK_RADIUS
-      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_BLOCK_RADIUS) {
+    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_BLOCK_RADIUS + BALL_RADIUS
+      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_BLOCK_RADIUS + BALL_RADIUS) {
       return { result: 'block', cooldownTime: 1.0 };
     }
   }
 
-  // Hit check: each target's left/right hand
+  // Hit check: each target's left/right hand (ball surface to hand)
   for (let ti = 0; ti < targets.length; ti++) {
     const hands = targetHandPositions[ti];
     if (!hands) continue;
-    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_CATCH_RADIUS
-      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_CATCH_RADIUS) {
+    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_CATCH_RADIUS + BALL_RADIUS
+      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_CATCH_RADIUS + BALL_RADIUS) {
       return { result: 'hit', cooldownTime: 1.5 };
     }
   }
