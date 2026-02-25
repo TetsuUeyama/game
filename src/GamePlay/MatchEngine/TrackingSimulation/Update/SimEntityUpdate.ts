@@ -11,8 +11,9 @@ import {
   moveKeepFacing,
   moveWithFacing,
   turnNeckToward,
+  turnTorsoToward,
 } from "../Movement/MovementCore";
-import { NECK_TURN_RATE } from "../Config/FieldConfig";
+import { NECK_TURN_RATE, TORSO_TURN_RATE } from "../Config/FieldConfig";
 import {
   moveSecondHandler,
   moveSlasher,
@@ -128,15 +129,17 @@ export function updateObstacleMovements(state: SimState, dt: number): void {
  * 5障害物のスキャン状態を更新
  */
 /**
- * オフェンス側（launcher + targets）の neckFacing を更新。
+ * オフェンス側（launcher + targets）の torsoFacing + neckFacing を更新。
+ * 下半身 → 上半身 → 首 の3段階回転階層。
  * - Launcher: パス時は選択ターゲット方向、それ以外はbody facing方向へ戻る
  * - Targets: キャッチ時 or ボール飛行中の選択ターゲットはボール方向、それ以外はfacing方向へ戻る
  */
-export function updateOffenseNeckFacing(
+export function updateOffenseTorsoNeckFacing(
   state: SimState, ballActive: boolean, ballPosition: Vector3 | null, dt: number,
 ): void {
   const { launcher, targets } = state;
   const neckDelta = NECK_TURN_RATE * dt;
+  const torsoDelta = TORSO_TURN_RATE * dt;
 
   // --- Launcher ---
   const launcherAction = state.actionStates[0];
@@ -144,10 +147,12 @@ export function updateOffenseNeckFacing(
     // パス中: 選択ターゲットの方向を見る
     const tgt = targets[state.selectedTargetIdx];
     const angle = Math.atan2(tgt.z - launcher.z, tgt.x - launcher.x);
-    launcher.neckFacing = turnNeckToward(launcher.facing, launcher.neckFacing, angle, neckDelta);
+    launcher.torsoFacing = turnTorsoToward(launcher.facing, launcher.torsoFacing, angle, torsoDelta);
+    launcher.neckFacing = turnNeckToward(launcher.torsoFacing, launcher.neckFacing, angle, neckDelta);
   } else {
     // デフォルト: 体の向きに戻す
-    launcher.neckFacing = turnNeckToward(launcher.facing, launcher.neckFacing, launcher.facing, neckDelta);
+    launcher.torsoFacing = turnTorsoToward(launcher.facing, launcher.torsoFacing, launcher.facing, torsoDelta);
+    launcher.neckFacing = turnNeckToward(launcher.torsoFacing, launcher.neckFacing, launcher.facing, neckDelta);
   }
 
   // --- Targets ---
@@ -158,14 +163,17 @@ export function updateOffenseNeckFacing(
     if (action.type === 'catch' && ballPosition) {
       // キャッチ中: ボール方向を見る
       const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
-      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, angle, neckDelta);
+      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, angle, torsoDelta);
+      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, angle, neckDelta);
     } else if (ballActive && ti === state.selectedTargetIdx && ballPosition) {
       // ボール飛行中の選択ターゲット: ボール方向を見る
       const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
-      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, angle, neckDelta);
+      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, angle, torsoDelta);
+      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, angle, neckDelta);
     } else {
       // デフォルト: 体の向きに戻す
-      tgt.neckFacing = turnNeckToward(tgt.facing, tgt.neckFacing, tgt.facing, neckDelta);
+      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, tgt.facing, torsoDelta);
+      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, tgt.facing, neckDelta);
     }
   }
 }

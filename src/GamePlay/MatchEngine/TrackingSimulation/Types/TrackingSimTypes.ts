@@ -2,8 +2,9 @@ export interface SimMover {
   x: number; z: number;
   vx: number; vz: number;
   speed: number;
-  facing: number;
-  neckFacing: number;
+  facing: number;        // 下半身の向き
+  torsoFacing: number;   // 上半身の向き
+  neckFacing: number;    // 首の向き（基準が上半身）
   nextTurn: number;
 }
 

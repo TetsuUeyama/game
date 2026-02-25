@@ -30,14 +30,13 @@ import {
   SIM_FIELD_X_HALF,
   SIM_FIELD_Z_HALF,
   SIM_MARGIN,
-  HIT_RADIUS,
-  BLOCK_RADIUS,
+  HAND_CATCH_RADIUS,
+  HAND_BLOCK_RADIUS,
   BALL_TIMEOUT,
-  ENTITY_HEIGHT,
 } from "../Config/FieldConfig";
 import type { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
 
-const BALL_COLLISION_Y_MAX = ENTITY_HEIGHT + 0.5;
+import { Vector3 } from "@babylonjs/core";
 
 // =========================================================================
 // Pass action timing
@@ -247,7 +246,15 @@ export function computeObstacleReactions(
 // detectBallResult
 // =========================================================================
 
-/** Check block → hit → miss in priority order */
+/** 3D distance between ball and hand position */
+function dist3d(bx: number, by: number, bz: number, h: Vector3): number {
+  const dx = bx - h.x;
+  const dy = by - h.y;
+  const dz = bz - h.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+/** Check block → hit → miss in priority order (hand-based 3D collision) */
 export function detectBallResult(
   ballPosX: number,
   ballPosY: number,
@@ -256,19 +263,27 @@ export function detectBallResult(
   ballAge: number,
   targets: SimMover[],
   obstacles: SimMover[],
+  targetHandPositions: { left: Vector3; right: Vector3 }[],
+  obstacleHandPositions: { left: Vector3; right: Vector3 }[],
 ): BallResultDetection {
   const none: BallResultDetection = { result: 'none' as BallResultType, cooldownTime: 0 };
 
-  // Block check
-  for (const ob of obstacles) {
-    if (dist2d(ballPosX, ballPosZ, ob.x, ob.z) < BLOCK_RADIUS && ballPosY < BALL_COLLISION_Y_MAX) {
+  // Block check: each obstacle's left/right hand
+  for (let oi = 0; oi < obstacles.length; oi++) {
+    const hands = obstacleHandPositions[oi];
+    if (!hands) continue;
+    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_BLOCK_RADIUS
+      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_BLOCK_RADIUS) {
       return { result: 'block', cooldownTime: 1.0 };
     }
   }
 
-  // Hit check
-  for (const tgt of targets) {
-    if (dist2d(ballPosX, ballPosZ, tgt.x, tgt.z) < HIT_RADIUS && ballPosY < BALL_COLLISION_Y_MAX) {
+  // Hit check: each target's left/right hand
+  for (let ti = 0; ti < targets.length; ti++) {
+    const hands = targetHandPositions[ti];
+    if (!hands) continue;
+    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_CATCH_RADIUS
+      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_CATCH_RADIUS) {
       return { result: 'hit', cooldownTime: 1.5 };
     }
   }
