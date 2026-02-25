@@ -12,6 +12,7 @@ import {
 
 import {
   ENTITY_HEIGHT,
+  BALL_DIAMETER,
   LAUNCHER_RADIUS,
   TARGET_RADIUS,
   OBSTACLE_RADIUS,
@@ -74,6 +75,9 @@ export class TrackingSimulation3D {
   private ballTrailPositions: Vector3[] = [];
   private static readonly BALL_TRAIL_MAX = 40;
 
+  /** キャッチ保持中の情報（ボールを手に表示し続ける） */
+  private catchHoldInfo: { entityIdx: number } | null = null;
+
   private state!: SimState;
   private prevTime = 0;
   private lastDt = 0;
@@ -104,6 +108,7 @@ export class TrackingSimulation3D {
       this.scene.onBeforeRenderObservable.remove(this.observer);
       this.observer = null;
     }
+    this.catchHoldInfo = null;
     deactivateBall(this.state, this.ball, this.ballTrailPositions);
     this.vis.disposeMeshes();
   }
@@ -113,6 +118,7 @@ export class TrackingSimulation3D {
   }
 
   public reset(): void {
+    this.catchHoldInfo = null;
     deactivateBall(this.state, this.ball, this.ballTrailPositions);
     this.vis.disposeMeshes();
     this.initState();
@@ -193,8 +199,41 @@ export class TrackingSimulation3D {
       this.vis.obstacleMeshes[i].rotation.y = Math.PI / 2 - s.obstacles[i].facing;
     }
 
-    // Ball visibility (position controlled by Havok physics when in flight)
-    this.ball.mesh.setEnabled(s.ballActive);
+    // キャッチ保持中: ボールをキャッチャーの両手中間位置に追従させる
+    // ボール半径分だけ体の外側にオフセットし、表面で保持する見た目にする
+    let ballHeldPosition: Vector3 | null = null;
+    if (this.catchHoldInfo) {
+      const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+      const allHands = this.vis.getHandWorldPositions(allMovers);
+      const hands = allHands[this.catchHoldInfo.entityIdx];
+      if (hands) {
+        const midX = (hands.left.x + hands.right.x) / 2;
+        const midY = (hands.left.y + hands.right.y) / 2;
+        const midZ = (hands.left.z + hands.right.z) / 2;
+
+        // 体の中心 → 手の中間点への方向にボール半径分オフセット
+        const mover = allMovers[this.catchHoldInfo.entityIdx];
+        const dx = midX - mover.x;
+        const dy = midY - yh;
+        const dz = midZ - mover.z;
+        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const ballR = BALL_DIAMETER / 2;
+
+        if (len > 0.01) {
+          ballHeldPosition = new Vector3(
+            midX + (dx / len) * ballR,
+            midY + (dy / len) * ballR,
+            midZ + (dz / len) * ballR,
+          );
+        } else {
+          ballHeldPosition = new Vector3(midX, midY, midZ);
+        }
+        this.ball.mesh.position.copyFrom(ballHeldPosition);
+      }
+    }
+
+    // Ball visibility (in flight or held by catcher)
+    this.ball.mesh.setEnabled(s.ballActive || this.catchHoldInfo !== null);
 
     // Visualization (wrapped in try-catch to prevent silent failures)
     try {
@@ -210,6 +249,7 @@ export class TrackingSimulation3D {
         ballTrailPositions: this.ballTrailPositions,
         actionStates: s.actionStates,
         ballPosition: s.ballActive ? this.ball.getPosition() : null,
+        ballHeldPosition,
         dt: this.lastDt,
       });
     } catch (e) {
@@ -228,6 +268,14 @@ export class TrackingSimulation3D {
     const shouldFireBall = tickAndTransitionActions(s, dt);
     if (shouldFireBall) {
       executePendingFire(s, this.ball);
+    }
+
+    // === キャッチ保持の終了判定 ===
+    if (this.catchHoldInfo) {
+      const action = s.actionStates[this.catchHoldInfo.entityIdx];
+      if (action.type !== 'catch') {
+        this.catchHoldInfo = null;
+      }
     }
 
     // === Launcher: role-based smart movement ===
@@ -336,6 +384,7 @@ export class TrackingSimulation3D {
             if (d < minDist) { minDist = d; hitIdx = ti; }
           }
           s.actionStates[1 + hitIdx] = startAction('catch', CATCH_TIMING);
+          this.catchHoldInfo = { entityIdx: 1 + hitIdx };
         }
 
         // Force obstacles/targets to recovery (launcher runs independently, catch preserved)
