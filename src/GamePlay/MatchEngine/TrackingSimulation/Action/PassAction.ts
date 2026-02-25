@@ -257,32 +257,19 @@ function dist3d(bx: number, by: number, bz: number, h: Vector3): number {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-/** Check block → hit → miss in priority order (hand-based 3D collision) */
+/** Check hit → miss in priority order (hand-based 3D collision) */
 export function detectBallResult(
   ballPosX: number,
   ballPosY: number,
   ballPosZ: number,
   ballInFlight: boolean,
   ballAge: number,
-  targets: SimMover[],
-  obstacles: SimMover[],
   targetHandPositions: { left: Vector3; right: Vector3 }[],
-  obstacleHandPositions: { left: Vector3; right: Vector3 }[],
 ): BallResultDetection {
   const none: BallResultDetection = { result: 'none' as BallResultType, cooldownTime: 0 };
 
-  // Block check: each obstacle's left/right hand (ball surface to hand)
-  for (let oi = 0; oi < obstacles.length; oi++) {
-    const hands = obstacleHandPositions[oi];
-    if (!hands) continue;
-    if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_BLOCK_RADIUS + BALL_RADIUS
-      || dist3d(ballPosX, ballPosY, ballPosZ, hands.right) < HAND_BLOCK_RADIUS + BALL_RADIUS) {
-      return { result: 'block', cooldownTime: 1.0 };
-    }
-  }
-
   // Hit check: each target's left/right hand (ball surface to hand)
-  for (let ti = 0; ti < targets.length; ti++) {
+  for (let ti = 0; ti < targetHandPositions.length; ti++) {
     const hands = targetHandPositions[ti];
     if (!hands) continue;
     if (dist3d(ballPosX, ballPosY, ballPosZ, hands.left) < HAND_CATCH_RADIUS + BALL_RADIUS
@@ -301,5 +288,61 @@ export function detectBallResult(
   }
 
   return none;
+}
+
+// =========================================================================
+// checkObstacleDeflection
+// =========================================================================
+
+/** 弾き判定の結果 */
+export interface DeflectionResult {
+  deflected: boolean;
+  obstacleIdx: number;
+  direction: Vector3;  // 手→ボール中心への正規化方向
+}
+
+/** 障害物の手によるボール弾き判定 */
+export function checkObstacleDeflection(
+  ballPosX: number,
+  ballPosY: number,
+  ballPosZ: number,
+  obstacleHandPositions: { left: Vector3; right: Vector3 }[],
+  deflectCooldowns: number[],
+): DeflectionResult {
+  const noDeflection: DeflectionResult = { deflected: false, obstacleIdx: -1, direction: Vector3.Zero() };
+
+  for (let oi = 0; oi < obstacleHandPositions.length; oi++) {
+    if (deflectCooldowns[oi] > 0) continue;
+
+    const hands = obstacleHandPositions[oi];
+    if (!hands) continue;
+
+    const distL = dist3d(ballPosX, ballPosY, ballPosZ, hands.left);
+    const distR = dist3d(ballPosX, ballPosY, ballPosZ, hands.right);
+    const threshold = HAND_BLOCK_RADIUS + BALL_RADIUS;
+
+    let contactHand: Vector3 | null = null;
+    if (distL < threshold && distR < threshold) {
+      contactHand = distL <= distR ? hands.left : hands.right;
+    } else if (distL < threshold) {
+      contactHand = hands.left;
+    } else if (distR < threshold) {
+      contactHand = hands.right;
+    }
+
+    if (contactHand) {
+      const dx = ballPosX - contactHand.x;
+      const dy = ballPosY - contactHand.y;
+      const dz = ballPosZ - contactHand.z;
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      return {
+        deflected: true,
+        obstacleIdx: oi,
+        direction: new Vector3(dx / len, dy / len, dz / len),
+      };
+    }
+  }
+
+  return noDeflection;
 }
 
