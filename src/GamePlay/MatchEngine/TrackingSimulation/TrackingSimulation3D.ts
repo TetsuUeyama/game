@@ -47,7 +47,6 @@ import {
   setChaserVelocity,
   moveKeepFacing,
   moveWithFacing,
-  dist2d,
   separateEntities,
 } from "./Movement/MovementCore";
 
@@ -61,7 +60,7 @@ import { CATCH_TIMING } from "./Action/CatchAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
 import { deactivateBall, executePendingFire, resetAfterResult, OB_INT_SPEEDS, PASS_TIMING } from "./Update/SimBallManager";
-import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseNeckFacing } from "./Update/SimEntityUpdate";
+import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseTorsoNeckFacing } from "./Update/SimEntityUpdate";
 
 import { SimVisualization } from "./Visualization/SimVisualization";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
@@ -307,22 +306,33 @@ export class TrackingSimulation3D {
       // Other targets continue role-based movement during ball flight
       updateTargetRoleMovements(s, dt, s.selectedTargetIdx);
 
+      // 手のワールド座標を取得（前フレームの腕方向ベクトルに基づく）
+      const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+      const allHands = this.vis.getHandWorldPositions(allMovers);
+      const targetHands = allHands.slice(1, 6);    // targets[0..4]
+      const obstacleHands = allHands.slice(6, 11); // obstacles[0..4]
+
       // Ball result detection (block → hit → miss)
       const detection = detectBallResult(
         ballPos.x, ballPos.y, ballPos.z,
         this.ball.isInFlight(), s.ballAge,
         s.targets, s.obstacles,
+        targetHands, obstacleHands,
       );
       if (detection.result !== 'none') {
         deactivateBall(s, this.ball, this.ballTrailPositions);
         s.score[detection.result]++;
 
-        // Hit → キャッチアクションを設定
+        // Hit → 最も近い手を持つターゲットにキャッチアクションを設定
         if (detection.result === 'hit') {
           let hitIdx = 0;
           let minDist = Infinity;
           for (let ti = 0; ti < s.targets.length; ti++) {
-            const d = dist2d(ballPos.x, ballPos.z, s.targets[ti].x, s.targets[ti].z);
+            const lh = targetHands[ti].left;
+            const rh = targetHands[ti].right;
+            const dl = Math.sqrt((ballPos.x - lh.x) ** 2 + (ballPos.y - lh.y) ** 2 + (ballPos.z - lh.z) ** 2);
+            const dr = Math.sqrt((ballPos.x - rh.x) ** 2 + (ballPos.y - rh.y) ** 2 + (ballPos.z - rh.z) ** 2);
+            const d = Math.min(dl, dr);
             if (d < minDist) { minDist = d; hitIdx = ti; }
           }
           s.actionStates[1 + hitIdx] = startAction('catch', CATCH_TIMING);
@@ -356,6 +366,6 @@ export class TrackingSimulation3D {
 
     // === Offense neck facing ===
     const offenseBallPos = s.ballActive ? this.ball.getPosition() : null;
-    updateOffenseNeckFacing(s, s.ballActive, offenseBallPos, dt);
+    updateOffenseTorsoNeckFacing(s, s.ballActive, offenseBallPos, dt);
   }
 }

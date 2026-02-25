@@ -8,6 +8,7 @@ import {
   FIRE_MIN,
   FIRE_MAX,
   NECK_MAX_ANGLE,
+  TORSO_MAX_ANGLE,
 } from "../Config/FieldConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 
@@ -64,6 +65,17 @@ export function turnNeckToward(
   return bodyFacing + rel;
 }
 
+/** Turn torso toward target angle, clamped to ±TORSO_MAX_ANGLE from lower body facing */
+export function turnTorsoToward(
+  bodyFacing: number, currentTorso: number, targetAngle: number, maxDelta: number,
+): number {
+  const turned = turnToward(currentTorso, targetAngle, maxDelta);
+  let rel = normAngleDiff(bodyFacing, turned);
+  if (rel > TORSO_MAX_ANGLE) rel = TORSO_MAX_ANGLE;
+  if (rel < -TORSO_MAX_ANGLE) rel = -TORSO_MAX_ANGLE;
+  return bodyFacing + rel;
+}
+
 // ============================================================================
 // Mover creation / helpers
 // ============================================================================
@@ -73,7 +85,7 @@ export function makeMover(x: number, z: number, speed: number): SimMover {
   return {
     x, z,
     vx: Math.cos(a) * speed, vz: Math.sin(a) * speed,
-    speed, facing: a, neckFacing: a, nextTurn: randTurn(),
+    speed, facing: a, torsoFacing: a, neckFacing: a, nextTurn: randTurn(),
   };
 }
 
