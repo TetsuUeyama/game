@@ -189,6 +189,8 @@ export function updateScans(state: SimState, ballActive: boolean, ballPosition: 
   const watchTargets = [targets[0], targets[0], targets[0], targets[3], targets[4]];
 
   for (let oi = 0; oi < 5; oi++) {
+    // OB B (oi=1): 常にランチャーを注視するためスキャン不要
+    if (oi === 1) continue;
     const result = updateScan(
       obstacles[oi], state.obScanAtLauncher[oi], state.obScanTimers[oi],
       state.obFocusDists[oi], state.obReacting[oi], state.obMems[oi],

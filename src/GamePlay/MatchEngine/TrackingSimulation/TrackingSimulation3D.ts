@@ -18,6 +18,9 @@ import {
   OBSTACLE_RADIUS,
   DEFLECT_IMPULSE,
   DEFLECT_COOLDOWN,
+  TURN_RATE,
+  NECK_TURN_RATE,
+  TORSO_TURN_RATE,
 } from "./Config/FieldConfig";
 
 import {
@@ -29,7 +32,8 @@ import {
   OB_C_IDLE_SPEED,
   OB_D_IDLE_SPEED,
   OB_E_IDLE_SPEED,
-  OB_B_HOVER_RADIUS,
+  OB_B_MARK_DISTANCE,
+  OB_B_MARK_HOVER,
   SOLVER_CFG_3D,
   INIT_LAUNCHER,
   INIT_TARGETS,
@@ -51,6 +55,9 @@ import {
   moveKeepFacing,
   moveWithFacing,
   separateEntities,
+  turnToward,
+  turnTorsoToward,
+  turnNeckToward,
 } from "./Movement/MovementCore";
 
 import {
@@ -238,6 +245,35 @@ export class TrackingSimulation3D {
     // Ball visibility (in flight or held by catcher)
     this.ball.mesh.setEnabled(s.ballActive || this.catchHoldInfo !== null);
 
+    // OB B パスレーン守備スタンス: 左右腕を別々のターゲットに向ける
+    // ボール側の手 → ランチャー上方, ディナイ側の手 → パスターゲット方向
+    let obBLeftArmTarget: Vector3 | null = null;
+    let obBRightArmTarget: Vector3 | null = null;
+    if (!s.obMems[1].searching) {
+      const obB = s.obstacles[1];
+      const tgt = s.targets[s.selectedTargetIdx];
+
+      // ボール側: ランチャー位置の頭上（ボールを遮る）
+      const ballArm = new Vector3(s.launcher.x, ENTITY_HEIGHT * 1.3, s.launcher.z);
+      // ディナイ側: パスターゲット方向、肩高さ（パスレーンを塞ぐ）
+      const denyArm = new Vector3(tgt.x, ENTITY_HEIGHT * 0.9, tgt.z);
+
+      // パスターゲットが OB B の facing に対してどちら側かを外積で判定
+      const tdx = tgt.x - obB.x;
+      const tdz = tgt.z - obB.z;
+      const cross = Math.cos(obB.facing) * tdz - Math.sin(obB.facing) * tdx;
+
+      if (cross >= 0) {
+        // ターゲットは左側 → 左手がディナイ、右手がボール
+        obBLeftArmTarget = denyArm;
+        obBRightArmTarget = ballArm;
+      } else {
+        // ターゲットは右側 → 右手がディナイ、左手がボール
+        obBLeftArmTarget = ballArm;
+        obBRightArmTarget = denyArm;
+      }
+    }
+
     // Visualization (wrapped in try-catch to prevent silent failures)
     try {
       this.vis.syncAll({
@@ -253,6 +289,8 @@ export class TrackingSimulation3D {
         actionStates: s.actionStates,
         ballPosition: s.ballActive ? this.ball.getPosition() : null,
         ballHeldPosition,
+        obBLeftArmTarget,
+        obBRightArmTarget,
         dt: this.lastDt,
       });
     } catch (e) {
@@ -325,10 +363,31 @@ export class TrackingSimulation3D {
     }
     applyMoveAction(s, 0, s.launcher, dt);
 
-    // === Obstacle B: chase launcher (unless searching) ===
+    // === Obstacle B: mark position between launcher and pass target ===
     if (!s.obMems[1].searching) {
-      setChaserVelocity(s.obstacles[1], s.launcher.x, s.launcher.z, OB_B_CHASE_SPEED, OB_B_HOVER_RADIUS, dt);
-      moveKeepFacing(s.obstacles[1], OB_B_CHASE_SPEED, dt);
+      const obB = s.obstacles[1];
+      const tgt = s.targets[s.selectedTargetIdx];
+      // launcher → selectedTarget 方向を計算
+      const ldx = tgt.x - s.launcher.x;
+      const ldz = tgt.z - s.launcher.z;
+      const lDist = Math.sqrt(ldx * ldx + ldz * ldz);
+      // markPos = launcher + dir * OB_B_MARK_DISTANCE（ランチャー正面）
+      let markX: number, markZ: number;
+      if (lDist > 0.01) {
+        markX = s.launcher.x + (ldx / lDist) * OB_B_MARK_DISTANCE;
+        markZ = s.launcher.z + (ldz / lDist) * OB_B_MARK_DISTANCE;
+      } else {
+        // ターゲットとランチャーが重なっている場合、ランチャー前方にマーク
+        markX = s.launcher.x + Math.cos(s.launcher.facing) * OB_B_MARK_DISTANCE;
+        markZ = s.launcher.z + Math.sin(s.launcher.facing) * OB_B_MARK_DISTANCE;
+      }
+      setChaserVelocity(obB, markX, markZ, OB_B_CHASE_SPEED, OB_B_MARK_HOVER, dt);
+      moveKeepFacing(obB, OB_B_CHASE_SPEED, dt);
+      // facing / torsoFacing / neckFacing をランチャー方向に turnToward
+      const angleToLauncher = Math.atan2(s.launcher.z - obB.z, s.launcher.x - obB.x);
+      obB.facing = turnToward(obB.facing, angleToLauncher, TURN_RATE * dt);
+      obB.torsoFacing = turnTorsoToward(obB.facing, obB.torsoFacing, angleToLauncher, TORSO_TURN_RATE * dt);
+      obB.neckFacing = turnNeckToward(obB.torsoFacing, obB.neckFacing, angleToLauncher, NECK_TURN_RATE * dt);
     }
 
     if (!s.ballActive) {
