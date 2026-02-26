@@ -174,7 +174,8 @@ export interface SimState {
   ballAge: number;
   score: TrackingSimScore;
   cooldown: number;
-  selectedTargetIdx: number;
+  onBallEntityIdx: number;
+  selectedReceiverEntityIdx: number;
   preFire: SimPreFireInfo | null;
   interceptPt: { x: number; z: number } | null;
   obReacting: boolean[];

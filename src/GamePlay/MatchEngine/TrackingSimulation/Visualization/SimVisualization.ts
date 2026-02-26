@@ -41,8 +41,9 @@ export interface SimVisState {
   actionStates: ActionState[];
   ballPosition: Vector3 | null;
   ballHeldPosition: Vector3 | null;
-  obBLeftArmTarget: Vector3 | null;
-  obBRightArmTarget: Vector3 | null;
+  ballMarkerLeftArmTarget: Vector3 | null;
+  ballMarkerRightArmTarget: Vector3 | null;
+  ballMarkerEntityIdx: number | null;
   dt: number;
 }
 
@@ -472,7 +473,7 @@ export class SimVisualization {
             ).normalize();
           }
         }
-      } else if (idx === 7 && state.obBLeftArmTarget && state.obBRightArmTarget) {
+      } else if (idx === state.ballMarkerEntityIdx && state.ballMarkerLeftArmTarget && state.ballMarkerRightArmTarget) {
         // OB B: ボール非追跡時、左右で異なるパスレーン守備スタンス
         // ボール側の手 → ランチャー上方（ボールを遮る）
         // ディナイ側の手 → パスターゲット方向（パスレーンを塞ぐ）
@@ -483,7 +484,7 @@ export class SimVisualization {
         const cosA = Math.cos(pivotAngle);
         const sinA = Math.sin(pivotAngle);
 
-        const localLeft = Vector3.TransformCoordinates(state.obBLeftArmTarget, invMatrix);
+        const localLeft = Vector3.TransformCoordinates(state.ballMarkerLeftArmTarget, invMatrix);
         const rootLeft = this.computeArmDir(-1, localLeft);
         targetLeftDir = new Vector3(
           rootLeft.x * cosA - rootLeft.z * sinA,
@@ -491,7 +492,7 @@ export class SimVisualization {
           rootLeft.x * sinA + rootLeft.z * cosA,
         ).normalize();
 
-        const localRight = Vector3.TransformCoordinates(state.obBRightArmTarget, invMatrix);
+        const localRight = Vector3.TransformCoordinates(state.ballMarkerRightArmTarget, invMatrix);
         const rootRight = this.computeArmDir(1, localRight);
         targetRightDir = new Vector3(
           rootRight.x * cosA - rootRight.z * sinA,
