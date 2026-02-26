@@ -53,7 +53,7 @@ export function updateScan(
     timer -= dt;
     if (timer <= 0) {
       atLauncher = !atLauncher;
-      timer = 1.5 + Math.random();
+      timer = 0.6 + Math.random() * 0.4;
     }
     const lookAngle1 = Math.atan2(lookEntity.z - ob.z, lookEntity.x - ob.x);
     ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, lookAngle1, TORSO_TURN_RATE * dt);
@@ -111,7 +111,7 @@ export function updateScan(
         atLauncher = !atLauncher;
         mem.searching = false;
         mem.searchSweep = 0;
-        timer = 1.5 + Math.random();
+        timer = 0.6 + Math.random() * 0.4;
       }
     }
   }

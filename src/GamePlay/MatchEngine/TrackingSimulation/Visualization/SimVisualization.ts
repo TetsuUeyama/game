@@ -46,6 +46,7 @@ export interface SimVisState {
   ballMarkerRightArmTarget: Vector3 | null;
   ballMarkerEntityIdx: number | null;
   pushObstructions: PushObstructionInfo[];
+  onBallEntityIdx: number;
   dt: number;
 }
 
@@ -68,6 +69,10 @@ const DEF_ARM_ROT_Z = (Math.PI / 2) - DEFAULT_ARM_ANGLE;
 
 /** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
 const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
+
+/** ドリブル姿勢の腕方向ベクトル（水平やや下: 約15度下向き前方） */
+const DRIBBLE_ARM_ANGLE = (15 * Math.PI) / 180;
+const DRIBBLE_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_ARM_ANGLE), Math.cos(DRIBBLE_ARM_ANGLE)).normalize();
 
 /** 腕ポーズ補間用: 肩→手方向ベクトル（ローカル座標、正規化済み） */
 export interface ArmLerpState {
@@ -524,6 +529,15 @@ export class SimVisualization {
               rootDir.x * sinA + rootDir.z * cosA,
             ).normalize();
           }
+        }
+      }
+
+      // ボール保持中の移動時: 右腕を水平やや下に構える（ドリブル姿勢）
+      if (idx === state.onBallEntityIdx && !state.ballActive) {
+        const mover = allMovers[idx];
+        const vel = Math.sqrt(mover.vx * mover.vx + mover.vz * mover.vz);
+        if (vel > 0.01) {
+          targetRightDir = DRIBBLE_ARM_DIR;
         }
       }
 

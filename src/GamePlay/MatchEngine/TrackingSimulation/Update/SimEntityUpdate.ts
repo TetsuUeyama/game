@@ -14,16 +14,18 @@ import {
   turnNeckToward,
   turnTorsoToward,
 } from "../Movement/MovementCore";
-import { TURN_RATE, NECK_TURN_RATE, TORSO_TURN_RATE, ONBALL_MARK_DISTANCE, ONBALL_MARK_HOVER, PUSH_ACTIVATION_DIST, PUSH_SPEED_MULT, PUSH_HAND_REACH, PUSH_DENY_OFFSET, PUSH_DENY_HOVER } from "../Config/FieldConfig";
+import { TURN_RATE, NECK_TURN_RATE, TORSO_TURN_RATE, ONBALL_MARK_DISTANCE, ONBALL_MARK_HOVER, PUSH_ACTIVATION_DIST, PUSH_SPEED_MULT, PUSH_HAND_REACH, PUSH_DENY_OFFSET, PUSH_DENY_HOVER, DEFENSE_ENGAGE_Z } from "../Config/FieldConfig";
 import {
   moveSecondHandler,
   moveSlasher,
   moveScreener,
   moveDunker,
+  moveTransitToHome,
 } from "../Movement/RoleMovement";
 import { updateScan } from "../Decision/ScanSystem";
 import { canEntityMove, applyMoveAction } from "./SimActionManager";
 import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
+import { INIT_OBSTACLES } from "../Config/EntityConfig";
 
 /**
  * MAN_MARKER がターゲットに近接している場合のプッシュ妨害情報を計算する。
@@ -82,6 +84,14 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
     if (ti === skipIdx) continue;
     const entityIdx = 1 + ti;
     if (!canEntityMove(state.actionStates, entityIdx)) {
+      applyMoveAction(state, entityIdx, targets[ti], dt);
+      continue;
+    }
+
+    // Transit mode: move toward home position, skip role movement
+    if (state.offenseInTransit[entityIdx]) {
+      const arrived = moveTransitToHome(targets[ti], entityIdx, dt);
+      if (arrived) state.offenseInTransit[entityIdx] = false;
       applyMoveAction(state, entityIdx, targets[ti], dt);
       continue;
     }
@@ -176,13 +186,27 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
       ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
       ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
       ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
-    } else if (!state.obMems[oi].searching) {
-      // --- オフボール: マーク対象追跡 ---
-      const tdx = markTarget.x - ob.x;
-      const tdz = markTarget.z - ob.z;
+    } else if (markTarget.z < DEFENSE_ENGAGE_Z) {
+      // --- マーク対象が3Pエリア外: 初期位置で待機 ---
+      const waitPos = INIT_OBSTACLES[oi];
+      setChaserVelocity(ob, waitPos.x, waitPos.z, cfg.idleSpeed, cfg.hoverRadius, dt);
+      moveKeepFacing(ob, cfg.idleSpeed, dt);
+      // マーク対象の方向を見て待機
+      const angle = Math.atan2(markTarget.z - ob.z, markTarget.x - ob.x);
+      ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
+      ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
+      ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
+    } else {
+      // --- オフボール: マーク対象追跡（searching 中も最終確認位置へ移動） ---
+      const mem = state.obMems[oi];
+      // searching 中は最終確認位置、通常時はマーク対象の実位置を追う
+      const chaseX = mem.searching ? mem.lastSeenTargetX : markTarget.x;
+      const chaseZ = mem.searching ? mem.lastSeenTargetZ : markTarget.z;
+      const tdx = chaseX - ob.x;
+      const tdz = chaseZ - ob.z;
       const tDist = Math.sqrt(tdx * tdx + tdz * tdz);
 
-      if (tDist < PUSH_ACTIVATION_DIST) {
+      if (!mem.searching && tDist < PUSH_ACTIVATION_DIST) {
         // ディナイモード: パッサーとマーク対象の間に入りつつプッシュ
         const pdx = passerMover.x - markTarget.x;
         const pdz = passerMover.z - markTarget.z;
@@ -203,8 +227,8 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
         ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
         ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
       } else {
-        // 通常追跡
-        setChaserVelocity(ob, markTarget.x, markTarget.z, cfg.idleSpeed, cfg.hoverRadius, dt);
+        // 通常追跡 or サーチ中の最終確認位置への移動
+        setChaserVelocity(ob, chaseX, chaseZ, cfg.idleSpeed, cfg.hoverRadius, dt);
         moveKeepFacing(ob, cfg.idleSpeed, dt);
       }
     }
@@ -251,6 +275,14 @@ export function updateOffenseTorsoNeckFacing(
       const angle = Math.atan2(ballPosition.z - mover.z, ballPosition.x - mover.x);
       mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+    } else if (state.offenseInTransit[ei] && ei !== state.onBallEntityIdx) {
+      // トランジット中のオフボール: オンボール選手の方向を見る
+      const onBallMover = ei === 0 ? launcher : (state.onBallEntityIdx === 0 ? launcher : targets[state.onBallEntityIdx - 1]);
+      if (onBallMover !== mover) {
+        const angle = Math.atan2(onBallMover.z - mover.z, onBallMover.x - mover.x);
+        mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
+        mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+      }
     } else {
       // デフォルト: 体の向きに戻す
       mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, mover.facing, torsoDelta);

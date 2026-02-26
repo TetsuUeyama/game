@@ -42,6 +42,7 @@ export interface TrackingSimScore {
   hit: number;
   block: number;
   miss: number;
+  steal: number;   // ディフェンス成功（ルーズボール確保）
 }
 
 export interface LauncherState {
@@ -208,4 +209,6 @@ export interface SimState {
   dunkerState: DunkerState;
   obstacleDeflectCooldowns: number[];
   pushObstructions: PushObstructionInfo[];
+  looseBall: boolean;  // ルーズボール状態フラグ
+  offenseInTransit: boolean[];  // オフェンスがゾーンへ移動中フラグ (launcher + targets)
 }

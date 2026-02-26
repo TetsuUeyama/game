@@ -24,21 +24,18 @@ export const SOLVER_CFG_3D: SolverConfig = {
   bisectIterations: 10,
 };
 
-// --- Initial positions (converted from 2D px) ---
-function px2x(px: number): number { return (px - 400) * S; }
-function px2z(pz: number): number { return (pz - 300) * S; }
-
-export const INIT_LAUNCHER = { x: -4.2, z: 0 };
+// --- Initial positions (metres, basketball court: goal1 at +Z≈13.4) ---
+export const INIT_LAUNCHER = { x: 0, z: 6.2 };     // PG - Top of Key
 export const INIT_TARGETS = [
-  { x: 0.25, z: -3.0 },   // SG / SECOND_HANDLER - Wing right
-  { x: 0.25, z: 3.0 },    // SF / SLASHER - Wing left
-  { x: 1.5, z: 0 },       // C  / SCREENER - High post
-  { x: 4.2, z: -1.5 },    // PF / DUNKER - Low post
+  { x: 5.1,  z: 8.3 },   // SG / SECOND_HANDLER - Right Wing
+  { x: -5.1, z: 8.3 },   // SF / SLASHER - Left Wing
+  { x: 0,    z: 8.8 },   // C  / SCREENER - High Post
+  { x: 2.4,  z: 13.0 },  // PF / DUNKER - Low Post Right
 ];
 export const INIT_OBSTACLES = [
-  { x: px2x(350), z: px2z(300) },  // A
-  { x: px2x(200), z: px2z(350) },  // B
-  { x: px2x(550), z: px2z(200) },  // C
-  { x: px2x(600), z: px2z(400) },  // D
-  { x: px2x(300), z: px2z(150) },  // E
+  { x: 0,    z: 5.5 },   // A - guards PG (near Top)
+  { x: -4.5, z: 7.5 },   // B - guards SF (near Left Wing)
+  { x: 4.5,  z: 7.5 },   // C - guards SG (near Right Wing)
+  { x: 3.0,  z: 12.0 },  // D - guards PF (near Low Post)
+  { x: 0.5,  z: 8.0 },   // E - guards C (near High Post)
 ];

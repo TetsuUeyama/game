@@ -26,7 +26,7 @@ export function TrackingSimulationPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const simRef = useRef<TrackingSimulation3D | null>(null);
-  const [score, setScore] = useState({ hit: 0, block: 0, miss: 0 });
+  const [score, setScore] = useState({ hit: 0, block: 0, miss: 0, steal: 0 });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -130,7 +130,7 @@ export function TrackingSimulationPanel() {
   const handleReset = () => {
     if (simRef.current) {
       simRef.current.reset();
-      setScore({ hit: 0, block: 0, miss: 0 });
+      setScore({ hit: 0, block: 0, miss: 0, steal: 0 });
     }
   };
 
@@ -165,6 +165,10 @@ export function TrackingSimulationPanel() {
             <div className="flex justify-between items-center">
               <span className="text-gray-400 font-bold">MISS</span>
               <span className="text-gray-400 font-mono text-lg">{score.miss}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-red-400 font-bold">STEAL</span>
+              <span className="text-red-400 font-mono text-lg">{score.steal}</span>
             </div>
             <div className="border-t border-gray-600 pt-2 flex justify-between items-center">
               <span className="text-gray-300 text-sm">命中率</span>
