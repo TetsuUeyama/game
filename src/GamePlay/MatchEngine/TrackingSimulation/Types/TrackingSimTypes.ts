@@ -162,6 +162,19 @@ export interface BallResultDetection {
 }
 
 // =========================================================================
+// Push Obstruction
+// =========================================================================
+
+/** プッシュ妨害情報 */
+export interface PushObstructionInfo {
+  obstacleIdx: number;       // 障害物インデックス (0-4)
+  targetEntityIdx: number;   // マーク対象entityIdx (0=launcher, 1-4=targets)
+  pushArm: 'left' | 'right'; // 使用する腕
+  armTargetX: number;        // 腕ターゲットX
+  armTargetZ: number;        // 腕ターゲットZ
+}
+
+// =========================================================================
 // Simulation state (shared across update modules)
 // =========================================================================
 
@@ -194,4 +207,5 @@ export interface SimState {
   screenerState: ScreenerState;
   dunkerState: DunkerState;
   obstacleDeflectCooldowns: number[];
+  pushObstructions: PushObstructionInfo[];
 }

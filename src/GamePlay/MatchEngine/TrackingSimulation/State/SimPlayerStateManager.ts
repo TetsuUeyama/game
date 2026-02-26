@@ -10,7 +10,7 @@ import { SimEntityState, SimDefenseRole } from "../Types/SimPlayerStateTypes";
 import type { SimEntitySnapshot } from "../Types/SimPlayerStateTypes";
 import { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
 import type { SimOffenseRole } from "../Config/RoleConfig";
-import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
+import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
 import { dist2d } from "../Movement/MovementCore";
 
 export class SimPlayerStateManager {
@@ -24,7 +24,8 @@ export class SimPlayerStateManager {
 
   // --- オフェンスロール（RoleConfig から構築） ---
   private static readonly OFFENSE_ROLES: (SimOffenseRole | null)[] = (() => {
-    const roles: (SimOffenseRole | null)[] = new Array(11).fill(null);
+    const totalEntities = 1 + ROLE_ASSIGNMENTS.targets.length + OBSTACLE_COUNT;
+    const roles: (SimOffenseRole | null)[] = new Array(totalEntities).fill(null);
     roles[0] = ROLE_ASSIGNMENTS.launcher.role;
     for (let i = 0; i < ROLE_ASSIGNMENTS.targets.length; i++) {
       roles[1 + i] = ROLE_ASSIGNMENTS.targets[i].role;
@@ -53,9 +54,10 @@ export class SimPlayerStateManager {
       this.buildOffenseSnapshot(state, 1 + i, state.targets[i]);
     }
 
-    // --- Obstacles (entityIdx 6-10) ---
+    // --- Obstacles (entityIdx = 1 + targets.length + oi) ---
+    const obstacleEntityStart = 1 + state.targets.length;
     for (let oi = 0; oi < state.obstacles.length; oi++) {
-      this.buildDefenseSnapshot(state, 6 + oi, state.obstacles[oi], oi);
+      this.buildDefenseSnapshot(state, obstacleEntityStart + oi, state.obstacles[oi], oi);
     }
   }
 
@@ -113,7 +115,6 @@ export class SimPlayerStateManager {
   ): void {
     const action = state.actionStates[entityIdx];
     const cfg = OB_CONFIGS[oi];
-    const defenseRole = cfg.role;
     const mem = state.obMems[oi];
     const atLauncher = state.obScanAtLauncher[oi];
 
@@ -123,8 +124,6 @@ export class SimPlayerStateManager {
       entityState = SimEntityState.INTERCEPTING;
     } else if (mem.searching) {
       entityState = SimEntityState.SEARCHING;
-    } else if (defenseRole === SimDefenseRole.HELP_DEFENDER) {
-      entityState = SimEntityState.HELP;
     } else {
       entityState = SimEntityState.MARKING;
     }
@@ -139,7 +138,7 @@ export class SimPlayerStateManager {
       facing: mover.facing,
       entityState,
       offenseRole: null,
-      defenseRole,
+      defenseRole: SimDefenseRole.MAN_MARKER,
       markTargetIdx: cfg.markTargetEntityIdx,
       actionType: action.type,
       actionPhase: action.phase,

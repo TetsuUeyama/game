@@ -14,7 +14,6 @@ export enum SimEntityState {
   CATCHING = "CATCHING",         // キャッチ中
   // 守備側
   MARKING = "MARKING",           // マンマーク / マーク移動中
-  HELP = "HELP",                 // ヘルプポジション（中間地点等）
   INTERCEPTING = "INTERCEPTING", // ボール反応・インターセプト中
   SEARCHING = "SEARCHING",       // 見失い中（スキャンサーチ）
 }
@@ -25,9 +24,7 @@ export enum SimEntityState {
 
 /** 守備ロール */
 export enum SimDefenseRole {
-  BALL_MARKER = "BALL_MARKER",   // ボール保持者を直接マーク（現OB B）
-  HELP_DEFENDER = "HELP_DEFENDER", // パスレーン中間のヘルプ（現OB A）
-  MAN_MARKER = "MAN_MARKER",     // 特定ターゲットをマンマーク（現OB C/D/E）
+  MAN_MARKER = "MAN_MARKER",     // 特定ターゲットをマンマーク（全5障害物）
 }
 
 // =========================================================================
@@ -36,7 +33,7 @@ export enum SimDefenseRole {
 
 /** エンティティスナップショット */
 export interface SimEntitySnapshot {
-  entityIdx: number;          // 0=launcher, 1-5=targets, 6-10=obstacles
+  entityIdx: number;          // 0=launcher, 1-4=targets, 5-9=obstacles
   team: "offense" | "defense";
 
   // 物理（SimMover から転写）
@@ -52,7 +49,7 @@ export interface SimEntitySnapshot {
   defenseRole: SimDefenseRole | null;   // 守備側のみ
 
   // マーク対象（守備側）
-  markTargetIdx: number | null;         // entityIdx（0=launcher, 1-5=targets）
+  markTargetIdx: number | null;         // entityIdx（0=launcher, 1-4=targets）
 
   // アクション参照
   actionType: ActionType;

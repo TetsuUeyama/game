@@ -4,7 +4,7 @@ import {
   SIM_MARGIN,
 } from "../Config/FieldConfig";
 import { TARGET_RANDOM_SPEED } from "../Config/EntityConfig";
-import { SPACER_SPREAD_MIN, type SimZone } from "../Config/RoleConfig";
+import type { SimZone } from "../Config/RoleConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 import { dist2d, normAngleDiff, moveWithFacing } from "../Movement/MovementCore";
 import { isPhysicallyClose, fovHalfAtDist } from "./TrajectoryAnalysis";
@@ -120,8 +120,9 @@ export function findOpenSpaceInZone(
     // Teammate spacing
     for (const mate of otherTargets) {
       const mateDist = dist2d(px, pz, mate.x, mate.z);
-      if (mateDist < SPACER_SPREAD_MIN) {
-        score -= (SPACER_SPREAD_MIN - mateDist) * 2;
+      const SPREAD_MIN = 2.0;
+      if (mateDist < SPREAD_MIN) {
+        score -= (SPREAD_MIN - mateDist) * 2;
       }
     }
 

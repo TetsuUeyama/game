@@ -62,3 +62,14 @@ export const BALL_TIMEOUT = 6.0;
 // --- Deflection ---
 export const DEFLECT_IMPULSE = 1.2;    // 弾きインパルス強度 (kg·m/s)
 export const DEFLECT_COOLDOWN = 0.3;   // 同一障害物の連続弾き防止 (秒)
+
+// --- On-ball defense ---
+export const ONBALL_MARK_DISTANCE = 1.3;   // オンボールディフェンス時のマーク距離 (m)
+export const ONBALL_MARK_HOVER = 0.15;     // オンボールディフェンス時のホバー半径 (m)
+
+// --- Hand Push Obstruction ---
+export const PUSH_ACTIVATION_DIST = 1.2;   // プッシュ発動距離 — ディナイモード切替 (m)
+export const PUSH_SPEED_MULT = 0.55;       // 被プッシュ時の速度倍率
+export const PUSH_HAND_REACH = 0.6;        // 手が届く距離（速度減衰が発生する距離）
+export const PUSH_DENY_OFFSET = 0.4;       // ターゲットからパッサー方向へのディナイ位置オフセット (m)
+export const PUSH_DENY_HOVER = 0.1;        // ディナイ時のホバー半径 (m)（密着に近い）

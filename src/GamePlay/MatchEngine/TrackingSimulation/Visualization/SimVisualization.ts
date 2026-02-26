@@ -24,8 +24,9 @@ import {
 
 /** 全エンティティの描画サイズを障害物サイズに統一 */
 const VISUAL_SIZE = OBSTACLE_SIZE;
-import { TARGET_COLORS_3D } from "../Config/EntityConfig";
-import type { SimMover, SimScanMemory, SimPreFireInfo, ActionState } from "../Types/TrackingSimTypes";
+import { TARGET_COLORS_3D, INIT_TARGETS } from "../Config/EntityConfig";
+import { OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
+import type { SimMover, SimScanMemory, SimPreFireInfo, ActionState, PushObstructionInfo } from "../Types/TrackingSimTypes";
 import { normAngleDiff } from "../Movement/MovementCore";
 
 export interface SimVisState {
@@ -44,6 +45,7 @@ export interface SimVisState {
   ballMarkerLeftArmTarget: Vector3 | null;
   ballMarkerRightArmTarget: Vector3 | null;
   ballMarkerEntityIdx: number | null;
+  pushObstructions: PushObstructionInfo[];
   dt: number;
 }
 
@@ -229,7 +231,7 @@ export class SimVisualization {
     this.createEntityArms(launcherEnt.root, launcherEnt.pivot, launcherColor);
 
     // Targets (colored octagonal prisms)
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < TARGET_COLORS_3D.length; i++) {
       const c = TARGET_COLORS_3D[i];
       const color = new Color3(c.r, c.g, c.b);
       const ent = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color);
@@ -239,7 +241,7 @@ export class SimVisualization {
 
     // Obstacles (purple octagonal prisms)
     const obColor = new Color3(0.6, 0.4, 0.8);
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < OBSTACLE_COUNT; i++) {
       const ent = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor);
       this.createEntityArms(ent.root, ent.pivot, obColor);
       this.obstacleMeshes.push(ent.root);
@@ -251,12 +253,13 @@ export class SimVisualization {
     // Facing indicators (vox head on top of each entity) — fire-and-forget async
     this.loadAndAttachHeads();
 
-    // Torso + Neck visual angles for smooth interpolation (1 launcher + 5 targets + 5 obstacles)
-    this.torsoVisualAngles = new Array(11).fill(0);
-    this.neckVisualAngles = new Array(11).fill(0);
+    // Torso + Neck visual angles for smooth interpolation
+    const totalEntities = 1 + INIT_TARGETS.length + OBSTACLE_COUNT;
+    this.torsoVisualAngles = new Array(totalEntities).fill(0);
+    this.neckVisualAngles = new Array(totalEntities).fill(0);
 
-    // Action gauges (1 launcher + 5 targets + 5 obstacles = 11)
-    this.gaugeRenderer.create(11);
+    // Action gauges
+    this.gaugeRenderer.create(totalEntities);
   }
 
   disposeMeshes(): void {
@@ -302,7 +305,7 @@ export class SimVisualization {
 
   /**
    * 全エンティティの左右手のワールド座標を返す。
-   * 順序: [launcher, targets[0..4], obstacles[0..4]]
+   * 順序: [launcher, targets[0..N-1], obstacles[0..M-1]]
    * detectBallResult から利用される（前フレームの armLerpStates を使用）。
    */
   getHandWorldPositions(allMovers: SimMover[]): { left: Vector3; right: Vector3 }[] {
@@ -350,7 +353,7 @@ export class SimVisualization {
 
   /**
    * 全エンティティの上半身ピボットに torso 回転を適用（スムーズ補間付き）。
-   * upperBodyPivots: [0]=launcher, [1-5]=targets, [6-10]=obstacles
+   * upperBodyPivots: [0]=launcher, [1..N]=targets, [N+1..]=obstacles
    * pivot.rotation.y = facing - torsoFacing （下半身ローカル空間での上半身ねじり）
    */
   private syncTorsoRotation(state: SimVisState): void {
@@ -372,7 +375,7 @@ export class SimVisualization {
 
   /**
    * 全エンティティの頭メッシュに首の相対回転を適用（スムーズ補間付き）。
-   * facingIndicators: [0]=launcher, [1-5]=targets, [6-10]=obstacles
+   * facingIndicators: [0]=launcher, [1..N]=targets, [N+1..]=obstacles
    * 指数減衰Lerpで角度を補間し、カクつきを防ぐ。
    * 首は上半身ピボットの子なので、ローカル回転は torsoFacing - neckFacing
    */
@@ -427,57 +430,10 @@ export class SimVisualization {
       let targetLeftDir = DEF_ARM_DIR;
       let targetRightDir = DEF_ARM_DIR;
 
-      // 飛行中のボール、またはキャッチ保持中のボールを追跡
-      const trackBallPos = (state.ballActive && ballPos) ? ballPos : state.ballHeldPosition;
-      if (trackBallPos) {
-        const dx = trackBallPos.x - ex;
-        const dy = trackBallPos.y - refY;
-        const dz = trackBallPos.z - ez;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-        if (dist < BALL_REACT_RADIUS && dist > 0.01) {
-          // 視野判定: ボール方向がneckFacingから±NECK_MAX_ANGLE以内か
-          const mover = allMovers[idx];
-          const angleToBall = Math.atan2(trackBallPos.z - ez, trackBallPos.x - ex);
-          const angleDiff = normAngleDiff(mover.neckFacing, angleToBall);
-
-          if (Math.abs(angleDiff) <= NECK_MAX_ANGLE) {
-            // ルート（下半身）のローカル座標でボール位置を計算。
-            // ピボット（上半身）空間ではなくルート空間で計算することで、
-            // 上半身回転が追いつかない分を腕が横方向にカバーする。
-            parent.computeWorldMatrix(true);
-            const localBall = Vector3.TransformCoordinates(
-              trackBallPos, parent.getWorldMatrix().clone().invert(),
-            );
-
-            // ルート空間での腕方向を計算
-            const rootLeftDir = this.computeArmDir(-1, localBall);
-            const rootRightDir = this.computeArmDir(1, localBall);
-
-            // ルート空間 → ピボット空間に変換（ピボットのローカルY回転を逆適用）
-            // ピボットは腕メッシュの親なので、描画にはピボット空間の方向が必要
-            const pivotAngle = this.torsoVisualAngles[idx] || 0;
-            const cosA = Math.cos(pivotAngle);
-            const sinA = Math.sin(pivotAngle);
-
-            targetLeftDir = new Vector3(
-              rootLeftDir.x * cosA - rootLeftDir.z * sinA,
-              rootLeftDir.y,
-              rootLeftDir.x * sinA + rootLeftDir.z * cosA,
-            ).normalize();
-
-            targetRightDir = new Vector3(
-              rootRightDir.x * cosA - rootRightDir.z * sinA,
-              rootRightDir.y,
-              rootRightDir.x * sinA + rootRightDir.z * cosA,
-            ).normalize();
-          }
-        }
-      } else if (idx === state.ballMarkerEntityIdx && state.ballMarkerLeftArmTarget && state.ballMarkerRightArmTarget) {
-        // OB B: ボール非追跡時、左右で異なるパスレーン守備スタンス
-        // ボール側の手 → ランチャー上方（ボールを遮る）
-        // ディナイ側の手 → パスターゲット方向（パスレーンを塞ぐ）
-        // 意図的な守備ポジショニングのため視野・距離チェック不要
+      if (idx === state.ballMarkerEntityIdx && state.ballMarkerLeftArmTarget && state.ballMarkerRightArmTarget) {
+        // オンボールディフェンダー: パスレーン守備スタンス（最優先）
+        // 片手 → オンボール選手方向（ボールを遮る）
+        // 片手 → 選択レシーバー方向（パスレーンを塞ぐ）
         parent.computeWorldMatrix(true);
         const invMatrix = parent.getWorldMatrix().clone().invert();
         const pivotAngle = this.torsoVisualAngles[idx] || 0;
@@ -499,6 +455,76 @@ export class SimVisualization {
           rootRight.y,
           rootRight.x * sinA + rootRight.z * cosA,
         ).normalize();
+      } else {
+        // 飛行中のボール、またはキャッチ保持中のボールを追跡
+        const trackBallPos = (state.ballActive && ballPos) ? ballPos : state.ballHeldPosition;
+        if (trackBallPos) {
+          const dx = trackBallPos.x - ex;
+          const dy = trackBallPos.y - refY;
+          const dz = trackBallPos.z - ez;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          if (dist < BALL_REACT_RADIUS && dist > 0.01) {
+            const mover = allMovers[idx];
+            const angleToBall = Math.atan2(trackBallPos.z - ez, trackBallPos.x - ex);
+            const angleDiff = normAngleDiff(mover.neckFacing, angleToBall);
+
+            if (Math.abs(angleDiff) <= NECK_MAX_ANGLE) {
+              parent.computeWorldMatrix(true);
+              const localBall = Vector3.TransformCoordinates(
+                trackBallPos, parent.getWorldMatrix().clone().invert(),
+              );
+
+              const rootLeftDir = this.computeArmDir(-1, localBall);
+              const rootRightDir = this.computeArmDir(1, localBall);
+
+              const pivotAngle = this.torsoVisualAngles[idx] || 0;
+              const cosA = Math.cos(pivotAngle);
+              const sinA = Math.sin(pivotAngle);
+
+              targetLeftDir = new Vector3(
+                rootLeftDir.x * cosA - rootLeftDir.z * sinA,
+                rootLeftDir.y,
+                rootLeftDir.x * sinA + rootLeftDir.z * cosA,
+              ).normalize();
+
+              targetRightDir = new Vector3(
+                rootRightDir.x * cosA - rootRightDir.z * sinA,
+                rootRightDir.y,
+                rootRightDir.x * sinA + rootRightDir.z * cosA,
+              ).normalize();
+            }
+          }
+        }
+
+        // プッシュ妨害: 該当 obstacle なら片腕をターゲット方向（肩高さ）に伸ばす
+        const obEntityStart = 1 + state.targets.length;
+        const pushInfo = (idx >= obEntityStart) ? state.pushObstructions.find(p => p.obstacleIdx === idx - obEntityStart) : undefined;
+        if (pushInfo) {
+          const pushTarget = new Vector3(pushInfo.armTargetX, ENTITY_HEIGHT * 0.9, pushInfo.armTargetZ);
+          parent.computeWorldMatrix(true);
+          const invMatrix = parent.getWorldMatrix().clone().invert();
+          const pivotAngle = this.torsoVisualAngles[idx] || 0;
+          const cosA = Math.cos(pivotAngle);
+          const sinA = Math.sin(pivotAngle);
+
+          const localPush = Vector3.TransformCoordinates(pushTarget, invMatrix);
+          if (pushInfo.pushArm === 'left') {
+            const rootDir = this.computeArmDir(-1, localPush);
+            targetLeftDir = new Vector3(
+              rootDir.x * cosA - rootDir.z * sinA,
+              rootDir.y,
+              rootDir.x * sinA + rootDir.z * cosA,
+            ).normalize();
+          } else {
+            const rootDir = this.computeArmDir(1, localPush);
+            targetRightDir = new Vector3(
+              rootDir.x * cosA - rootDir.z * sinA,
+              rootDir.y,
+              rootDir.x * sinA + rootDir.z * cosA,
+            ).normalize();
+          }
+        }
       }
 
       // 指数減衰Lerpで補間
