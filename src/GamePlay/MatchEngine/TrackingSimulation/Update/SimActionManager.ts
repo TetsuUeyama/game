@@ -70,16 +70,17 @@ export function tickAndTransitionActions(state: SimState, dt: number): boolean {
     }
   }
 
-  // Launcher pass: startup → active → fire ball
+  // Passer pass: startup → active → fire ball
   let shouldFireBall = false;
-  if (prevStates[0].type === 'pass' && prevStates[0].phase === 'startup'
-      && state.actionStates[0].phase === 'active') {
+  const onBall = state.onBallEntityIdx;
+  if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'startup'
+      && state.actionStates[onBall].phase === 'active') {
     shouldFireBall = true;
   }
 
-  // Launcher pass: recovery → idle → set cooldown
-  if (prevStates[0].type === 'pass' && prevStates[0].phase === 'recovery'
-      && state.actionStates[0].phase === 'idle') {
+  // Passer pass: recovery → idle → set cooldown
+  if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'recovery'
+      && state.actionStates[onBall].phase === 'idle') {
     state.cooldown = state.pendingCooldown;
   }
 

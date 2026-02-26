@@ -5,27 +5,7 @@ import { S } from "./FieldConfig";
 export const LAUNCHER_SPEED = 60 * S;               // 0.90
 export const TARGET_RANDOM_SPEED = 80 * S;           // 1.20
 export const TARGET_INTERCEPT_SPEED = 180 * S;       // 2.70
-export const OB_A_IDLE_SPEED = 70 * S;               // 1.05
-export const OB_A_INTERCEPT_SPEED = 160 * S;         // 2.40
-export const OB_B_CHASE_SPEED = 65 * S;              // 0.975
-export const OB_C_IDLE_SPEED = 70 * S;               // 1.05
-export const OB_C_INTERCEPT_SPEED = 150 * S;         // 2.25
-export const OB_D_IDLE_SPEED = 65 * S;               // 0.975
-export const OB_D_INTERCEPT_SPEED = 155 * S;         // 2.325
-export const OB_E_IDLE_SPEED = 75 * S;               // 1.125
-export const OB_E_INTERCEPT_SPEED = 145 * S;         // 2.175
 export const BALL_SPEED = 250 * S;                   // 3.75
-
-// --- OB B mark positioning ---
-export const OB_B_MARK_DISTANCE = 1.3;    // ランチャー正面のマーク距離 (m)
-export const OB_B_MARK_HOVER = 0.15;      // マーク位置周辺のホバー半径 (m)
-
-// --- Hover radius (m) ---
-export const OB_A_HOVER_RADIUS = 60 * S;  // 0.90
-export const OB_B_HOVER_RADIUS = 50 * S;  // 0.75
-export const OB_C_HOVER_RADIUS = 50 * S;  // 0.75
-export const OB_D_HOVER_RADIUS = 55 * S;  // 0.825
-export const OB_E_HOVER_RADIUS = 60 * S;  // 0.90
 
 // --- Colors ---
 export const TARGET_COLORS_3D = [

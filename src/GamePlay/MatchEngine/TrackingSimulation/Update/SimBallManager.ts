@@ -7,38 +7,23 @@ import { Vector3 } from "@babylonjs/core";
 
 import type { SimState } from "../Types/TrackingSimTypes";
 import { createIdleAction, startAction } from "../Action/ActionCore";
-import { PASS_TIMING } from "../Action/PassAction";
 import { MOVE_TIMING } from "../Action/MoveAction";
 import { OBSTACLE_REACT_TIMING } from "../Action/ObstacleReactAction";
 import { computeObstacleReactions } from "../Action/PassAction";
 import { dist2d, restoreRandom } from "../Movement/MovementCore";
 import {
   TARGET_RANDOM_SPEED,
-  OB_A_IDLE_SPEED,
-  OB_C_IDLE_SPEED,
-  OB_D_IDLE_SPEED,
-  OB_E_IDLE_SPEED,
   SOLVER_CFG_3D,
 } from "../Config/EntityConfig";
+import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
 import { ENTITY_HEIGHT } from "../Config/FieldConfig";
 import type { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */
 const BALL_LAUNCH_Y = ENTITY_HEIGHT * 0.7;
 
-/** Obstacle intercept speeds (shared index) */
-import {
-  OB_A_INTERCEPT_SPEED,
-  OB_B_CHASE_SPEED,
-  OB_C_INTERCEPT_SPEED,
-  OB_D_INTERCEPT_SPEED,
-  OB_E_INTERCEPT_SPEED,
-} from "../Config/EntityConfig";
-
-const OB_INT_SPEEDS = [
-  OB_A_INTERCEPT_SPEED, OB_B_CHASE_SPEED, OB_C_INTERCEPT_SPEED,
-  OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED,
-];
+/** Obstacle intercept speeds (derived from OB_CONFIGS) */
+const OB_INT_SPEEDS = OB_CONFIGS.map(cfg => cfg.interceptSpeed);
 
 /** ボールを非アクティブにする */
 export function deactivateBall(state: SimState, ball: Ball, ballTrailPositions: Vector3[]): void {
@@ -71,29 +56,29 @@ export function fireBallArc(
 }
 
 /** startup完了後にボールを実際に発射 */
-export function executePendingFire(state: SimState, ball: Ball): void {
+export function executePendingFire(state: SimState, ball: Ball, passerMover: { x: number; z: number }): void {
   if (!state.pendingFire) return;
   const sol = state.pendingFire;
   state.pendingFire = null;
 
-  const success = fireBallArc(state, ball, state.launcher.x, state.launcher.z, sol.interceptX, sol.interceptZ);
+  const success = fireBallArc(state, ball, passerMover.x, passerMover.z, sol.interceptX, sol.interceptZ);
   if (!success) {
     // 発射失敗 → アイドルに戻す
-    state.actionStates[0] = createIdleAction();
+    state.actionStates[state.onBallEntityIdx] = createIdleAction();
     state.cooldown = 0.3;
     return;
   }
 
   state.interceptPt = { x: sol.interceptX, z: sol.interceptZ };
-  state.selectedTargetIdx = sol.targetIdx;
+  state.selectedReceiverEntityIdx = sol.targetIdx;
   state.preFire = null;
 
-  // ターゲット速度設定 & 即座にmove activeに（intercept地点への移動）
-  const tgt = state.targets[sol.targetIdx];
-  tgt.vx = sol.targetVelocity.vx;
-  tgt.vz = sol.targetVelocity.vz;
-  state.actionStates[1 + sol.targetIdx] = { type: 'move', phase: 'active', elapsed: 0, timing: MOVE_TIMING };
-  state.moveDistAccum[1 + sol.targetIdx] = 0;
+  // レシーバー速度設定 & 即座にmove activeに（intercept地点への移動）
+  const receiverMover = sol.targetIdx === 0 ? state.launcher : state.targets[sol.targetIdx - 1];
+  receiverMover.vx = sol.targetVelocity.vx;
+  receiverMover.vz = sol.targetVelocity.vz;
+  state.actionStates[sol.targetIdx] = { type: 'move', phase: 'active', elapsed: 0, timing: MOVE_TIMING };
+  state.moveDistAccum[sol.targetIdx] = 0;
 
   // 障害物リアクション
   const bPos = ball.getPosition();
@@ -102,7 +87,7 @@ export function executePendingFire(state: SimState, ball: Ball): void {
     state.obstacles, OB_INT_SPEEDS, sol.obInFOVs,
     bPos.x, bPos.z, bVel.x, bVel.z, SOLVER_CFG_3D,
   );
-  const reactingObs = [false, false, false, false, false];
+  const reactingObs = Array.from({ length: OBSTACLE_COUNT }, () => false);
   for (const r of reactions) {
     reactingObs[r.obstacleIdx] = r.reacting;
     if (r.reacting) {
@@ -118,13 +103,14 @@ export function executePendingFire(state: SimState, ball: Ball): void {
 /** ボール結果後の状態リセット */
 export function resetAfterResult(state: SimState): void {
   state.interceptPt = null;
-  state.obReacting = [false, false, false, false, false];
+  state.obReacting = Array.from({ length: OBSTACLE_COUNT }, () => false);
   for (let ti = 0; ti < state.targets.length; ti++) state.targetDests[ti] = null;
   for (const t of state.targets) restoreRandom(t, TARGET_RANDOM_SPEED);
-  restoreRandom(state.obstacles[0], OB_A_IDLE_SPEED);
-  restoreRandom(state.obstacles[2], OB_C_IDLE_SPEED);
-  restoreRandom(state.obstacles[3], OB_D_IDLE_SPEED);
-  restoreRandom(state.obstacles[4], OB_E_IDLE_SPEED);
+  for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
+    if (OB_CONFIGS[oi].restoreRandomOnReset) {
+      restoreRandom(state.obstacles[oi], OB_CONFIGS[oi].idleSpeed);
+    }
+  }
 
   // Reset role states
   state.launcherState = { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 };
@@ -133,5 +119,4 @@ export function resetAfterResult(state: SimState): void {
   state.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
 }
 
-// Re-export for orchestrator convenience
-export { OB_INT_SPEEDS, PASS_TIMING };
+export { OB_INT_SPEEDS };

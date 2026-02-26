@@ -10,10 +10,11 @@ import {
   setChaserVelocity,
   moveKeepFacing,
   moveWithFacing,
+  turnToward,
   turnNeckToward,
   turnTorsoToward,
 } from "../Movement/MovementCore";
-import { NECK_TURN_RATE, TORSO_TURN_RATE } from "../Config/FieldConfig";
+import { TURN_RATE, NECK_TURN_RATE, TORSO_TURN_RATE } from "../Config/FieldConfig";
 import {
   moveSecondHandler,
   moveSlasher,
@@ -23,26 +24,7 @@ import {
 } from "../Movement/RoleMovement";
 import { updateScan } from "../Decision/ScanSystem";
 import { canEntityMove, applyMoveAction } from "./SimActionManager";
-import {
-  OB_A_IDLE_SPEED,
-  OB_A_INTERCEPT_SPEED,
-  OB_C_IDLE_SPEED,
-  OB_C_INTERCEPT_SPEED,
-  OB_D_IDLE_SPEED,
-  OB_D_INTERCEPT_SPEED,
-  OB_E_IDLE_SPEED,
-  OB_E_INTERCEPT_SPEED,
-  OB_A_HOVER_RADIUS,
-  OB_C_HOVER_RADIUS,
-  OB_D_HOVER_RADIUS,
-  OB_E_HOVER_RADIUS,
-} from "../Config/EntityConfig";
-
-/** 障害物idle時のチェイスターゲット: [A→midpoint, B→skip, C→target0, D→target3, E→target4] */
-const OB_CHASE_TARGETS = [null, null, 0, 3, 4] as const;
-const OB_IDLE_SPEEDS = [OB_A_IDLE_SPEED, 0, OB_C_IDLE_SPEED, OB_D_IDLE_SPEED, OB_E_IDLE_SPEED];
-const OB_INT_SPEEDS_LOCAL = [OB_A_INTERCEPT_SPEED, 0, OB_C_INTERCEPT_SPEED, OB_D_INTERCEPT_SPEED, OB_E_INTERCEPT_SPEED];
-const OB_HOVER_RADII = [OB_A_HOVER_RADIUS, 0, OB_C_HOVER_RADIUS, OB_D_HOVER_RADIUS, OB_E_HOVER_RADIUS];
+import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
 
 /**
  * ターゲットのロール別移動を実行（重複除去）
@@ -96,31 +78,54 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
 }
 
 /**
- * 障害物 A/C/D/E の移動を統一（OB_B は別処理のためスキップ）
- * obReacting[i] が true ならインターセプト移動、false ならアイドル移動。
+ * 全5障害物の移動を統一処理。
+ * obReacting[i] が true ならインターセプト移動、false ならロール別アイドル移動。
  */
-export function updateObstacleMovements(state: SimState, dt: number): void {
-  const { launcher, targets, obstacles } = state;
-  // 選択ターゲット（OB_A の midpoint 計算用）
-  const selTarget = targets[state.selectedTargetIdx];
+export function updateObstacleMovements(state: SimState, dt: number, passerMover: SimMover): void {
+  const { targets, obstacles } = state;
+  const selReceiverIdx = state.selectedReceiverEntityIdx;
+  const selTarget = selReceiverIdx === 0 ? state.launcher : targets[selReceiverIdx - 1];
 
-  for (const oi of [0, 2, 3, 4]) {
+  for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
+    const cfg = OB_CONFIGS[oi];
+    const ob = obstacles[oi];
     if (state.obReacting[oi]) {
-      moveWithFacing(obstacles[oi], OB_INT_SPEEDS_LOCAL[oi], dt);
+      moveWithFacing(ob, cfg.interceptSpeed, dt);
     } else if (!state.obMems[oi].searching) {
-      let chaseX: number;
-      let chaseZ: number;
-      if (oi === 0) {
-        // OB_A: midpoint of launcher and selected target
-        chaseX = (launcher.x + selTarget.x) / 2;
-        chaseZ = (launcher.z + selTarget.z) / 2;
+      if (cfg.chaseTarget === 'mark') {
+        // --- BALL_MARKER: パッサー正面のマーク位置 ---
+        const tgt = selTarget;
+        const ldx = tgt.x - passerMover.x;
+        const ldz = tgt.z - passerMover.z;
+        const lDist = Math.sqrt(ldx * ldx + ldz * ldz);
+        let markX: number, markZ: number;
+        if (lDist > 0.01) {
+          markX = passerMover.x + (ldx / lDist) * cfg.markDistance;
+          markZ = passerMover.z + (ldz / lDist) * cfg.markDistance;
+        } else {
+          markX = passerMover.x + Math.cos(passerMover.facing) * cfg.markDistance;
+          markZ = passerMover.z + Math.sin(passerMover.facing) * cfg.markDistance;
+        }
+        setChaserVelocity(ob, markX, markZ, cfg.idleSpeed, cfg.markHover, dt);
+        moveKeepFacing(ob, cfg.idleSpeed, dt);
+        // facing をパッサー方向に向ける
+        const angle = Math.atan2(passerMover.z - ob.z, passerMover.x - ob.x);
+        ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
+        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
+        ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
+      } else if (cfg.chaseTarget === 'midpoint') {
+        // --- HELP_DEFENDER: パッサー⇔selectedReceiver の中間点 ---
+        const chaseX = (passerMover.x + selTarget.x) / 2;
+        const chaseZ = (passerMover.z + selTarget.z) / 2;
+        setChaserVelocity(ob, chaseX, chaseZ, cfg.idleSpeed, cfg.hoverRadius, dt);
+        moveKeepFacing(ob, cfg.idleSpeed, dt);
       } else {
-        const tgtIdx = OB_CHASE_TARGETS[oi]!;
-        chaseX = targets[tgtIdx].x;
-        chaseZ = targets[tgtIdx].z;
+        // --- MAN_MARKER: targets[n] を追跡 ---
+        const chaseX = targets[cfg.chaseTarget].x;
+        const chaseZ = targets[cfg.chaseTarget].z;
+        setChaserVelocity(ob, chaseX, chaseZ, cfg.idleSpeed, cfg.hoverRadius, dt);
+        moveKeepFacing(ob, cfg.idleSpeed, dt);
       }
-      setChaserVelocity(obstacles[oi], chaseX, chaseZ, OB_IDLE_SPEEDS[oi], OB_HOVER_RADII[oi], dt);
-      moveKeepFacing(obstacles[oi], OB_IDLE_SPEEDS[oi], dt);
     }
   }
 }
@@ -140,40 +145,35 @@ export function updateOffenseTorsoNeckFacing(
   const { launcher, targets } = state;
   const neckDelta = NECK_TURN_RATE * dt;
   const torsoDelta = TORSO_TURN_RATE * dt;
+  const allOffense: SimMover[] = [launcher, ...targets];
 
-  // --- Launcher ---
-  const launcherAction = state.actionStates[0];
-  if (launcherAction.type === 'pass') {
-    // パス中: 選択ターゲットの方向を見る
-    const tgt = targets[state.selectedTargetIdx];
-    const angle = Math.atan2(tgt.z - launcher.z, tgt.x - launcher.x);
-    launcher.torsoFacing = turnTorsoToward(launcher.facing, launcher.torsoFacing, angle, torsoDelta);
-    launcher.neckFacing = turnNeckToward(launcher.torsoFacing, launcher.neckFacing, angle, neckDelta);
-  } else {
-    // デフォルト: 体の向きに戻す
-    launcher.torsoFacing = turnTorsoToward(launcher.facing, launcher.torsoFacing, launcher.facing, torsoDelta);
-    launcher.neckFacing = turnNeckToward(launcher.torsoFacing, launcher.neckFacing, launcher.facing, neckDelta);
-  }
+  // --- 全オフェンスエンティティ ---
+  for (let ei = 0; ei < allOffense.length; ei++) {
+    const mover = allOffense[ei];
+    const action = state.actionStates[ei];
 
-  // --- Targets ---
-  for (let ti = 0; ti < targets.length; ti++) {
-    const tgt = targets[ti];
-    const action = state.actionStates[1 + ti];
-
-    if (action.type === 'catch' && ballPosition) {
+    if (action.type === 'pass') {
+      // パス中: 選択レシーバーの方向を見る
+      const receiver = ei === 0
+        ? targets[state.selectedReceiverEntityIdx - 1]  // launcher がパッサー → targets から
+        : (state.selectedReceiverEntityIdx === 0 ? launcher : targets[state.selectedReceiverEntityIdx - 1]);
+      const angle = Math.atan2(receiver.z - mover.z, receiver.x - mover.x);
+      mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
+      mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+    } else if (action.type === 'catch' && ballPosition) {
       // キャッチ中: ボール方向を見る
-      const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
-      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, angle, torsoDelta);
-      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, angle, neckDelta);
-    } else if (ballActive && ti === state.selectedTargetIdx && ballPosition) {
-      // ボール飛行中の選択ターゲット: ボール方向を見る
-      const angle = Math.atan2(ballPosition.z - tgt.z, ballPosition.x - tgt.x);
-      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, angle, torsoDelta);
-      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, angle, neckDelta);
+      const angle = Math.atan2(ballPosition.z - mover.z, ballPosition.x - mover.x);
+      mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
+      mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+    } else if (ballActive && ei === state.selectedReceiverEntityIdx && ballPosition) {
+      // ボール飛行中の選択レシーバー: ボール方向を見る
+      const angle = Math.atan2(ballPosition.z - mover.z, ballPosition.x - mover.x);
+      mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
+      mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
     } else {
       // デフォルト: 体の向きに戻す
-      tgt.torsoFacing = turnTorsoToward(tgt.facing, tgt.torsoFacing, tgt.facing, torsoDelta);
-      tgt.neckFacing = turnNeckToward(tgt.torsoFacing, tgt.neckFacing, tgt.facing, neckDelta);
+      mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, mover.facing, torsoDelta);
+      mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, mover.facing, neckDelta);
     }
   }
 }
@@ -186,15 +186,14 @@ export function updateScans(state: SimState, ballActive: boolean, ballPosition: 
     x: scanBallPos.x, z: scanBallPos.z,
     vx: 0, vz: 0, age: state.ballAge,
   };
-  const watchTargets = [targets[0], targets[0], targets[0], targets[3], targets[4]];
-
-  for (let oi = 0; oi < 5; oi++) {
-    // OB B (oi=1): 常にランチャーを注視するためスキャン不要
-    if (oi === 1) continue;
+  for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
+    const cfg = OB_CONFIGS[oi];
+    if (!cfg.scanEnabled) continue;
+    const watchTarget = targets[cfg.scanWatchTargetIdx];
     const result = updateScan(
       obstacles[oi], state.obScanAtLauncher[oi], state.obScanTimers[oi],
       state.obFocusDists[oi], state.obReacting[oi], state.obMems[oi],
-      watchTargets[oi], launcher, simBall, dt,
+      watchTarget, launcher, simBall, dt,
     );
     state.obScanAtLauncher[oi] = result.atLauncher;
     state.obScanTimers[oi] = result.timer;

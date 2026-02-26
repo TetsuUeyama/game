@@ -24,6 +24,7 @@ import {
   canTargetReach,
 } from "../Decision/TrajectoryAnalysis";
 import { canObIntercept, solveLaunch } from "../Decision/LaunchSolver";
+import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
 
 import { BALL_SPEED, TARGET_INTERCEPT_SPEED } from "../Config/EntityConfig";
 import {
@@ -34,9 +35,8 @@ import {
   HAND_BLOCK_RADIUS,
   BALL_DIAMETER,
   BALL_TIMEOUT,
+  TARGET_STOP_DIST,
 } from "../Config/FieldConfig";
-import type { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
-
 import { Vector3 } from "@babylonjs/core";
 
 const BALL_RADIUS = BALL_DIAMETER / 2;
@@ -59,7 +59,7 @@ export const PASS_TIMING: ActionTiming = {
 /** Score all targets and pick the best one for a pass */
 export function evaluatePreFire(
   ctx: BallFireContext,
-  roleAssignments: typeof ROLE_ASSIGNMENTS,
+  receiverRoles: string[],
 ): PreFireEvalResult {
   const { launcher, targets, obstacles, obIntSpeeds } = ctx;
 
@@ -86,9 +86,9 @@ export function evaluatePreFire(
     const blocked = obBlocks.some(b => b) || !tgtCanReach;
     const blockerCount = obBlocks.filter(b => b).length;
     const rolePriority: Record<string, number> = {
-      DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SPACER: 1.0, SCREENER: 0.5,
+      MAIN_HANDLER: 1.5, DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SPACER: 1.0, SCREENER: 0.5,
     };
-    const roleBonus = rolePriority[roleAssignments.targets[ti].role] ?? 0;
+    const roleBonus = rolePriority[receiverRoles[ti]] ?? 0;
     const score = -blockerCount * 10 + (tgtCanReach ? 5 : 0) - estDist * 0.01 + roleBonus;
 
     const pf: SimPreFireInfo = {
@@ -168,7 +168,7 @@ export function attemptFire(
     const tdz = ipz - tgt.z;
     const tdist = Math.sqrt(tdx * tdx + tdz * tdz);
     let tvx: number, tvz: number;
-    if (tdist < 5 * 0.015) {
+    if (tdist < TARGET_STOP_DIST) {
       tvx = 0; tvz = 0;
     } else {
       tvx = (tdx / tdist) * TARGET_INTERCEPT_SPEED;
@@ -210,8 +210,7 @@ export function computeObstacleReactions(
   const reactions: ObstacleReaction[] = [];
 
   for (let oi = 0; oi < obstacles.length; oi++) {
-    if (oi === 1) {
-      // obB is not reactive
+    if (!OB_CONFIGS[oi].reactive) {
       reactions.push({ obstacleIdx: oi, reacting: false, vx: 0, vz: 0 });
       continue;
     }

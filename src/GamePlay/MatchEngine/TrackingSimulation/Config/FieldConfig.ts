@@ -49,6 +49,9 @@ export const TORSO_VISUAL_LERP_SPEED = 8.0;           // 視覚補間速度（NE
 export const ARM_LERP_SPEED = 10.0;          // 腕の補間速度
 export const NECK_VISUAL_LERP_SPEED = 12.0;  // 首の視覚補間速度
 
+// --- Movement thresholds ---
+export const TARGET_STOP_DIST = 0.075;  // 5 * S = 0.075 m — target stops when within this distance
+
 // --- Timing ---
 export const FIRE_MIN = 1.5;
 export const FIRE_MAX = 3.0;
