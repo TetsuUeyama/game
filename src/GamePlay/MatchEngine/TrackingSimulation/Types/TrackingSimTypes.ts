@@ -1,3 +1,5 @@
+import type { ActionScorerResult } from "./ActionScorerTypes";
+
 export interface SimMover {
   x: number; z: number;
   vx: number; vz: number;
@@ -84,16 +86,18 @@ export interface ScanResult {
 // =========================================================================
 
 /** アクションのフェーズ */
-export type ActionPhase = 'idle' | 'startup' | 'active' | 'recovery';
+export type ActionPhase = 'idle' | 'charge' | 'startup' | 'active' | 'recovery';
 
 /** アクションの種類 */
 export type ActionType = 'idle' | 'pass' | 'shoot' | 'move' | 'catch' | 'obstacle_react';
 
 /**
  * アクションのタイミング定義（秒）
- * startup → active → recovery の順に遷移する
+ * charge → startup → active → recovery の順に遷移する
  */
 export interface ActionTiming {
+  /** チャージ時間（0 = チャージなし。シュートでは距離に応じて増加） */
+  charge: number;
   /** 実行し発生するまでの時間（予備動作） */
   startup: number;
   /** アクションの実行時間 */
@@ -215,4 +219,5 @@ export interface SimState {
   offenseInTransit: boolean[];  // オフェンスがゾーンへ移動中フラグ (launcher + targets)
   pendingShot: { x: number; y: number; z: number } | null;  // シュートターゲット座標
   prevBallY: number;  // 前フレームのボールY座標（ゴール通過判定用）
+  lastScorerResult: ActionScorerResult | null;  // 直近の ActionScorer 評価結果
 }

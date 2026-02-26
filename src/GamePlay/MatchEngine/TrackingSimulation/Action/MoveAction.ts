@@ -6,6 +6,7 @@ import type { ActionTiming } from "../Types/TrackingSimTypes";
 
 /** 移動アクションのタイミング定義 */
 export const MOVE_TIMING: ActionTiming = {
+  charge: 0,       // チャージなし
   startup: 0.08,   // 移動準備（姿勢変更等）
   active: 10.0,    // イベント駆動（目的地到達まで）
   recovery: 0.15,  // ベース硬直（距離に応じて増加）
