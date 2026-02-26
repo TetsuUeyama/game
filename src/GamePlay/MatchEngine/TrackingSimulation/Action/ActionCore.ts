@@ -16,6 +16,7 @@ export function createIdleAction(): ActionState {
 
 /** 新しいアクションを開始 */
 export function startAction(type: ActionType, timing: ActionTiming): ActionState {
+  if (timing.charge > 0) return { type, phase: 'charge', elapsed: 0, timing };
   if (timing.startup > 0) return { type, phase: 'startup', elapsed: 0, timing };
   if (timing.active > 0) return { type, phase: 'active', elapsed: 0, timing };
   if (timing.recovery > 0) return { type, phase: 'recovery', elapsed: 0, timing };
@@ -35,6 +36,11 @@ export function tickActionState(state: ActionState, dt: number): ActionState {
   let phase = state.phase;
   let elapsed = state.elapsed + dt;
 
+  // charge → startup（自動遷移）
+  if (phase === 'charge' && elapsed >= t.charge) {
+    elapsed -= t.charge;
+    phase = 'startup';
+  }
   // startup → active（自動遷移）
   if (phase === 'startup' && elapsed >= t.startup) {
     elapsed -= t.startup;

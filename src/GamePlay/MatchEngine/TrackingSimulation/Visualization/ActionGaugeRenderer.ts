@@ -14,11 +14,14 @@ const GAUGE_W = 0.5;
 const GAUGE_H = 0.04;
 const GAUGE_Y_OFFSET = 0.7;
 
+/** charge, startup, active, recovery の4フェーズ */
+type Phase4<T> = [T, T, T, T];
+
 interface ActionGaugeMeshes {
   root: TransformNode;
   bg: Mesh;
-  phases: [Mesh, Mesh, Mesh];
-  phaseMats: [StandardMaterial, StandardMaterial, StandardMaterial];
+  phases: Phase4<Mesh>;
+  phaseMats: Phase4<StandardMaterial>;
 }
 
 export class ActionGaugeRenderer {
@@ -31,6 +34,7 @@ export class ActionGaugeRenderer {
 
   create(count: number): void {
     const phaseColors = [
+      new Color3(1.0, 0.55, 0.0),   // charge: orange
       new Color3(1.0, 0.85, 0.0),   // startup: yellow
       new Color3(0.0, 0.8, 1.0),    // active: cyan
       new Color3(1.0, 0.25, 0.25),  // recovery: red
@@ -52,10 +56,10 @@ export class ActionGaugeRenderer {
       bg.position.z = 0.001;
       bg.isPickable = false;
 
-      // Phase fill planes
+      // Phase fill planes (4 phases: charge, startup, active, recovery)
       const phases: Mesh[] = [];
       const phaseMats: StandardMaterial[] = [];
-      for (let p = 0; p < 3; p++) {
+      for (let p = 0; p < 4; p++) {
         const mat = new StandardMaterial(`gaugePhMat_${i}_${p}`, this.scene);
         mat.diffuseColor = phaseColors[p];
         mat.specularColor = Color3.Black();
@@ -76,8 +80,8 @@ export class ActionGaugeRenderer {
       this.gauges.push({
         root,
         bg,
-        phases: phases as [Mesh, Mesh, Mesh],
-        phaseMats: phaseMats as [StandardMaterial, StandardMaterial, StandardMaterial],
+        phases: phases as Phase4<Mesh>,
+        phaseMats: phaseMats as Phase4<StandardMaterial>,
       });
     }
   }
@@ -103,20 +107,24 @@ export class ActionGaugeRenderer {
       g.root.position.set(ent.x, ENTITY_HEIGHT + GAUGE_Y_OFFSET, ent.z);
 
       const t = as.timing;
-      const total = t.startup + t.active + t.recovery;
+      const total = t.charge + t.startup + t.active + t.recovery;
       if (total <= 0) { g.root.setEnabled(false); continue; }
 
       const phaseWidths = [
+        GAUGE_W * (t.charge / total),
         GAUGE_W * (t.startup / total),
         GAUGE_W * (t.active / total),
         GAUGE_W * (t.recovery / total),
       ];
-      const phaseDurations = [t.startup, t.active, t.recovery];
-      const phaseIdx = as.phase === 'startup' ? 0 : as.phase === 'active' ? 1 : 2;
+      const phaseDurations = [t.charge, t.startup, t.active, t.recovery];
+      const phaseIdx = as.phase === 'charge' ? 0
+        : as.phase === 'startup' ? 1
+        : as.phase === 'active' ? 2
+        : 3;
 
       let xOffset = -GAUGE_W / 2;
 
-      for (let p = 0; p < 3; p++) {
+      for (let p = 0; p < 4; p++) {
         const pw = phaseWidths[p];
         const dur = phaseDurations[p];
 
