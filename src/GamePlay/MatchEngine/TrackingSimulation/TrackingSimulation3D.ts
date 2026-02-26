@@ -57,7 +57,7 @@ import { CATCH_TIMING } from "./Action/CatchAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
 import { deactivateBall, executePendingFire, resetAfterResult, OB_INT_SPEEDS } from "./Update/SimBallManager";
-import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseTorsoNeckFacing } from "./Update/SimEntityUpdate";
+import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseTorsoNeckFacing, computePushObstructions } from "./Update/SimEntityUpdate";
 
 import { SimVisualization } from "./Visualization/SimVisualization";
 import { SimPlayerStateManager } from "./State/SimPlayerStateManager";
@@ -190,12 +190,13 @@ export class TrackingSimulation3D {
         return makeScanMemory(lx, lz, INIT_TARGETS[watchIdx].x, INIT_TARGETS[watchIdx].z);
       }),
       targetDests: INIT_TARGETS.map(() => null),
-      targetReevalTimers: [0.5, 0.7, 0.9, 1.1, 0.6],
+      targetReevalTimers: [0.5, 0.7, 0.9, 1.1],
       launcherState: { dest: null, reevalTimer: 0, bestPassTargetIdx: 0 },
       slasherState: { dest: null, reevalTimer: 0, vcutPhase: 0, vcutActive: false },
       screenerState: { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 },
       dunkerState: { dest: null, reevalTimer: 0, sealing: false },
       obstacleDeflectCooldowns: new Array(OBSTACLE_COUNT).fill(0),
+      pushObstructions: [],
     };
   }
 
@@ -283,39 +284,39 @@ export class TrackingSimulation3D {
     // Ball visibility: 飛行中、キャッチ保持中、またはオンボール保持中は常に表示
     this.ball.mesh.setEnabled(s.ballActive || ballHeldPosition !== null);
 
-    // BALL_MARKER パスレーン守備スタンス: 左右腕を別々のターゲットに向ける
-    // ボール側の手 → ランチャー上方, ディナイ側の手 → パスターゲット方向
+    // オンボールディフェンス パスレーン守備スタンス: 左右腕を別々のターゲットに向ける
+    // マーク対象がオンボールの障害物のみ適用
     let ballMarkerLeftArmTarget: Vector3 | null = null;
     let ballMarkerRightArmTarget: Vector3 | null = null;
     let ballMarkerEntityIdx: number | null = null;
+    const obstacleEntityStart = 1 + s.targets.length;
     for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-      if (OB_CONFIGS[oi].chaseTarget !== 'mark') continue;
+      const cfg = OB_CONFIGS[oi];
+      if (cfg.markTargetEntityIdx !== s.onBallEntityIdx) continue;
       if (s.obMems[oi].searching) continue;
-      ballMarkerEntityIdx = 6 + oi;
+      ballMarkerEntityIdx = obstacleEntityStart + oi;
       const ob = s.obstacles[oi];
-      const passer = getOffenseMover(s, s.onBallEntityIdx);
-      const tgt = getOffenseMover(s, s.selectedReceiverEntityIdx);
+      const onBallMover = getOffenseMover(s, s.onBallEntityIdx);
+      const selReceiver = getOffenseMover(s, s.selectedReceiverEntityIdx);
 
-      // ボール側: パッサー位置の頭上（ボールを遮る）
-      const ballArm = new Vector3(passer.x, ENTITY_HEIGHT * 1.3, passer.z);
-      // ディナイ側: パスターゲット方向、肩高さ（パスレーンを塞ぐ）
-      const denyArm = new Vector3(tgt.x, ENTITY_HEIGHT * 0.9, tgt.z);
+      // ボール側: オンボール選手位置の頭上（ボールを遮る）
+      const ballArm = new Vector3(onBallMover.x, ENTITY_HEIGHT * 1.3, onBallMover.z);
+      // ディナイ側: 選択レシーバー方向、肩高さ（パスレーンを塞ぐ）
+      const denyArm = new Vector3(selReceiver.x, ENTITY_HEIGHT * 0.9, selReceiver.z);
 
-      // パスターゲットが BALL_MARKER の facing に対してどちら側かを外積で判定
-      const tdx = tgt.x - ob.x;
-      const tdz = tgt.z - ob.z;
+      // レシーバーが障害物の facing に対してどちら側かを外積で判定
+      const tdx = selReceiver.x - ob.x;
+      const tdz = selReceiver.z - ob.z;
       const cross = Math.cos(ob.facing) * tdz - Math.sin(ob.facing) * tdx;
 
       if (cross >= 0) {
-        // ターゲットは左側 → 左手がディナイ、右手がボール
         ballMarkerLeftArmTarget = denyArm;
         ballMarkerRightArmTarget = ballArm;
       } else {
-        // ターゲットは右側 → 右手がディナイ、左手がボール
         ballMarkerLeftArmTarget = ballArm;
         ballMarkerRightArmTarget = denyArm;
       }
-      break;  // 現状 BALL_MARKER は1体のみ
+      break;  // オンボールマーカーは1体のみ
     }
 
     // Visualization (wrapped in try-catch to prevent silent failures)
@@ -336,6 +337,7 @@ export class TrackingSimulation3D {
         ballMarkerLeftArmTarget,
         ballMarkerRightArmTarget,
         ballMarkerEntityIdx,
+        pushObstructions: s.pushObstructions,
         dt: this.lastDt,
       });
     } catch (e) {
@@ -373,7 +375,8 @@ export class TrackingSimulation3D {
     if (this.catchHoldInfo) {
       const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
       const allHands = this.vis.getHandWorldPositions(allMovers);
-      const obstacleHands = allHands.slice(6, 11);
+      const obStart = 1 + s.targets.length;
+      const obstacleHands = allHands.slice(obStart, obStart + s.obstacles.length);
       const heldPos = this.ball.mesh.position;
 
       const stealDeflection = checkObstacleDeflection(
@@ -408,6 +411,9 @@ export class TrackingSimulation3D {
       }
     }
 
+    // === Compute push obstructions (before target movements) ===
+    computePushObstructions(s);
+
     // === Launcher: role-based smart movement ===
     // ボール飛行中に launcher がレシーバーの場合はインターセプト移動を優先（後述）
     const launcherIsReceiver = s.ballActive && s.selectedReceiverEntityIdx === 0;
@@ -419,41 +425,83 @@ export class TrackingSimulation3D {
     }
 
     if (!s.ballActive && !this.catchHoldInfo) {
-      // === Ball not active & not held: evaluate pre-fire ===
-
-      // On-ball target: skip role movement (they hold the ball)
-      const onBallSkipTargetIdx = s.onBallEntityIdx > 0 ? s.onBallEntityIdx - 1 : -1;
-      updateTargetRoleMovements(s, dt, onBallSkipTargetIdx);
-      // On-ball target の applyMoveAction（updateTargetRoleMovements でスキップされた分）
-      if (s.onBallEntityIdx > 0) {
-        applyMoveAction(s, s.onBallEntityIdx, s.targets[s.onBallEntityIdx - 1], dt);
+      // === オンボール保持中のファンブル（スティール）判定 ===
+      // クールダウン減算（ボール非飛行時はball-in-flightブランチで減算されないため）
+      for (let oi = 0; oi < s.obstacleDeflectCooldowns.length; oi++) {
+        if (s.obstacleDeflectCooldowns[oi] > 0) {
+          s.obstacleDeflectCooldowns[oi] = Math.max(0, s.obstacleDeflectCooldowns[oi] - dt);
+        }
       }
 
-      // Build dynamic receiver context (exclude on-ball entity)
-      const currentPasser = getOffenseMover(s, s.onBallEntityIdx);
-      const { movers: receivers, entityIndices: receiverEntityIndices, roles: receiverRoles } = getReceiverInfo(s);
-      const ctx: BallFireContext = {
-        launcher: currentPasser, targets: receivers,
-        obstacles: s.obstacles, obIntSpeeds: OB_INT_SPEEDS,
-      };
-      const evalResult = evaluatePreFire(ctx, receiverRoles);
-      s.selectedReceiverEntityIdx = receiverEntityIndices[evalResult.selectedTargetIdx];
-      s.preFire = evalResult.preFire;
+      const heldPos = this.ball.mesh.position;  // 前フレームの syncMeshes でオンボールプレイヤーの手位置にセット済み
+      const allMoversForFumble = [s.launcher, ...s.targets, ...s.obstacles];
+      const allHandsForFumble = this.vis.getHandWorldPositions(allMoversForFumble);
+      const obStartForFumble = 1 + s.targets.length;
+      const obstacleHandsForFumble = allHandsForFumble.slice(obStartForFumble, obStartForFumble + s.obstacles.length);
 
-      // Fire cooldown (on-ball entity can fire when idle or move-active)
-      if (canEntityMove(s.actionStates, s.onBallEntityIdx)) {
-        s.cooldown -= dt;
-        if (s.cooldown <= 0) {
-          const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
-          if (fireResult.fired && fireResult.solution) {
-            // receiver-array index → entity index にマッピング
-            fireResult.solution.targetIdx = receiverEntityIndices[fireResult.solution.targetIdx];
-            s.pendingFire = fireResult.solution;
-            s.pendingCooldown = fireResult.newCooldown;
-            s.actionStates[s.onBallEntityIdx] = startAction('pass', PASS_TIMING);
-            s.moveDistAccum[s.onBallEntityIdx] = 0;
-          } else {
-            s.cooldown = fireResult.newCooldown;
+      const fumbleDeflection = checkObstacleDeflection(
+        heldPos.x, heldPos.y, heldPos.z,
+        obstacleHandsForFumble, s.obstacleDeflectCooldowns,
+      );
+      if (fumbleDeflection.deflected) {
+        // Havok DYNAMIC モードに復帰 → インパルスで弾く
+        this.ball.startFlight();
+        this.ball.applyImpulse(fumbleDeflection.direction.scale(DEFLECT_IMPULSE));
+
+        s.ballActive = true;
+        s.ballAge = 0;
+        s.score.miss++;
+        s.onBallEntityIdx = 0;  // ファンブル時は launcher に戻す
+        s.obstacleDeflectCooldowns[fumbleDeflection.obstacleIdx] = DEFLECT_COOLDOWN;
+
+        // 状態リセット
+        for (let i = 1; i < s.actionStates.length; i++) {
+          if (s.actionStates[i].type === 'catch') continue;
+          if (s.actionStates[i].phase !== 'idle') {
+            s.actionStates[i] = forceRecovery(s.actionStates[i]);
+          }
+        }
+        for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+        resetAfterResult(s);
+      }
+
+      // === Ball not active & not held: evaluate pre-fire ===
+      // ファンブルが発生した場合は ballActive = true になるためスキップ
+      if (!s.ballActive) {
+        // On-ball target: skip role movement (they hold the ball)
+        const onBallSkipTargetIdx = s.onBallEntityIdx > 0 ? s.onBallEntityIdx - 1 : -1;
+        updateTargetRoleMovements(s, dt, onBallSkipTargetIdx);
+        // On-ball target の applyMoveAction（updateTargetRoleMovements でスキップされた分）
+        if (s.onBallEntityIdx > 0) {
+          applyMoveAction(s, s.onBallEntityIdx, s.targets[s.onBallEntityIdx - 1], dt);
+        }
+
+        // Build dynamic receiver context (exclude on-ball entity)
+        const currentPasser = getOffenseMover(s, s.onBallEntityIdx);
+        const { movers: receivers, entityIndices: receiverEntityIndices, roles: receiverRoles } = getReceiverInfo(s);
+        const ctx: BallFireContext = {
+          launcher: currentPasser, targets: receivers,
+          obstacles: s.obstacles, obIntSpeeds: OB_INT_SPEEDS,
+        };
+        const evalResult = evaluatePreFire(ctx, receiverRoles);
+        s.selectedReceiverEntityIdx = receiverEntityIndices[evalResult.selectedTargetIdx];
+        s.preFire = evalResult.preFire;
+
+        // Fire cooldown (on-ball entity can fire when idle or move-active)
+        if (canEntityMove(s.actionStates, s.onBallEntityIdx)) {
+          s.cooldown -= dt;
+          if (s.cooldown <= 0) {
+            const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
+            if (fireResult.fired && fireResult.solution) {
+              // receiver-array index → entity index にマッピング
+              fireResult.solution.targetIdx = receiverEntityIndices[fireResult.solution.targetIdx];
+              s.pendingFire = fireResult.solution;
+              s.pendingCooldown = fireResult.newCooldown;
+              s.actionStates[s.onBallEntityIdx] = startAction('pass', PASS_TIMING);
+              s.moveDistAccum[s.onBallEntityIdx] = 0;
+            } else {
+              s.cooldown = fireResult.newCooldown;
+            }
           }
         }
       }
@@ -499,7 +547,8 @@ export class TrackingSimulation3D {
       // 手のワールド座標を取得（前フレームの腕方向ベクトルに基づく）
       const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
       const allHands = this.vis.getHandWorldPositions(allMovers);
-      const obstacleHands = allHands.slice(6, 11);
+      const obStartIdx = 1 + s.targets.length;
+      const obstacleHands = allHands.slice(obStartIdx, obStartIdx + s.obstacles.length);
 
       // レシーバーの手でキャッチ判定（パッサーを除く全オフェンス）
       const { entityIndices: receiverEntityIndices } = getReceiverInfo(s);

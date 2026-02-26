@@ -13,7 +13,6 @@ export const TARGET_COLORS_3D = [
   { r: 0.8, g: 0.47, b: 0.0 },   // orange
   { r: 0.13, g: 0.53, b: 0.67 }, // cyan
   { r: 0.4, g: 0.6, b: 0.0 },    // yellow-green
-  { r: 0.67, g: 0.27, b: 0.53 }, // pink
 ];
 
 // --- Solver ---
@@ -35,7 +34,6 @@ export const INIT_TARGETS = [
   { x: 0.25, z: 3.0 },    // SF / SLASHER - Wing left
   { x: 1.5, z: 0 },       // C  / SCREENER - High post
   { x: 4.2, z: -1.5 },    // PF / DUNKER - Low post
-  { x: 4.5, z: 3.25 },    // SG / SPACER - Corner
 ];
 export const INIT_OBSTACLES = [
   { x: px2x(350), z: px2z(300) },  // A

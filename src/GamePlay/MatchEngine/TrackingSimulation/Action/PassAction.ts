@@ -86,7 +86,7 @@ export function evaluatePreFire(
     const blocked = obBlocks.some(b => b) || !tgtCanReach;
     const blockerCount = obBlocks.filter(b => b).length;
     const rolePriority: Record<string, number> = {
-      MAIN_HANDLER: 1.5, DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SPACER: 1.0, SCREENER: 0.5,
+      MAIN_HANDLER: 1.5, DUNKER: 3.0, SECOND_HANDLER: 2.0, SLASHER: 1.5, SCREENER: 0.5,
     };
     const roleBonus = rolePriority[receiverRoles[ti]] ?? 0;
     const score = -blockerCount * 10 + (tgtCanReach ? 5 : 0) - estDist * 0.01 + roleBonus;
