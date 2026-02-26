@@ -26,8 +26,12 @@ export function TrackingSimulationPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const simRef = useRef<TrackingSimulation3D | null>(null);
-  const [score, setScore] = useState({ hit: 0, block: 0, miss: 0, steal: 0 });
+  const [score, setScore] = useState({ hit: 0, block: 0, miss: 0, steal: 0, goal: 0, shotMiss: 0 });
   const [ready, setReady] = useState(false);
+  const [overlayVis, setOverlayVis] = useState<{ global: boolean; entities: boolean[] }>({
+    global: true,
+    entities: Array(10).fill(true),
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -130,12 +134,40 @@ export function TrackingSimulationPanel() {
   const handleReset = () => {
     if (simRef.current) {
       simRef.current.reset();
-      setScore({ hit: 0, block: 0, miss: 0, steal: 0 });
+      setScore({ hit: 0, block: 0, miss: 0, steal: 0, goal: 0, shotMiss: 0 });
     }
   };
 
-  const total = score.hit + score.block + score.miss;
-  const hitRate = total > 0 ? ((score.hit / total) * 100).toFixed(1) : '0.0';
+  const handleGlobalToggle = () => {
+    const next = !overlayVis.global;
+    const nextEntities = next ? Array(10).fill(true) : Array(10).fill(false);
+    setOverlayVis({ global: next, entities: nextEntities });
+    if (simRef.current) {
+      simRef.current.setGlobalOverlayVisible(next);
+      for (let i = 0; i < 10; i++) {
+        simRef.current.setEntityOverlayVisible(i, nextEntities[i]);
+      }
+    }
+  };
+
+  const handleEntityToggle = (idx: number) => {
+    setOverlayVis(prev => {
+      const next = { ...prev, entities: [...prev.entities] };
+      next.entities[idx] = !next.entities[idx];
+      if (simRef.current) {
+        simRef.current.setEntityOverlayVisible(idx, next.entities[idx]);
+      }
+      return next;
+    });
+  };
+
+  const passTotal = score.hit + score.block + score.miss;
+  const passRate = passTotal > 0 ? ((score.hit / passTotal) * 100).toFixed(1) : '0.0';
+  const shotTotal = score.goal + score.shotMiss;
+  const shotRate = shotTotal > 0 ? ((score.goal / shotTotal) * 100).toFixed(1) : '0.0';
+  const offenseSuccess = score.hit + score.goal;
+  const offenseTotal = passTotal + shotTotal;
+  const offenseRate = offenseTotal > 0 ? ((offenseSuccess / offenseTotal) * 100).toFixed(1) : '0.0';
 
   return (
     <div className="w-full h-screen relative bg-gray-900">
@@ -155,6 +187,14 @@ export function TrackingSimulationPanel() {
 
           <div className="space-y-2 mb-4">
             <div className="flex justify-between items-center">
+              <span className="text-green-400 font-bold">GOAL</span>
+              <span className="text-green-400 font-mono text-lg">{score.goal}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-orange-400 font-bold">SHOT MISS</span>
+              <span className="text-orange-400 font-mono text-lg">{score.shotMiss}</span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-yellow-300 font-bold">HIT</span>
               <span className="text-yellow-300 font-mono text-lg">{score.hit}</span>
             </div>
@@ -170,9 +210,19 @@ export function TrackingSimulationPanel() {
               <span className="text-red-400 font-bold">STEAL</span>
               <span className="text-red-400 font-mono text-lg">{score.steal}</span>
             </div>
-            <div className="border-t border-gray-600 pt-2 flex justify-between items-center">
-              <span className="text-gray-300 text-sm">命中率</span>
-              <span className="text-white font-mono">{hitRate}%</span>
+            <div className="border-t border-gray-600 pt-2 space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 text-sm">シュート成功率</span>
+                <span className="text-white font-mono">{shotRate}%</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 text-sm">パス成功率</span>
+                <span className="text-white font-mono">{passRate}%</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 text-sm">攻撃成功率</span>
+                <span className="text-white font-mono font-bold">{offenseRate}%</span>
+              </div>
             </div>
           </div>
 
@@ -182,6 +232,54 @@ export function TrackingSimulationPanel() {
           >
             リセット
           </button>
+
+          {/* Overlay visibility toggles */}
+          <div className="mt-4 border-t border-gray-600 pt-3">
+            <h4 className="text-xs font-bold text-gray-400 mb-2">表示設定</h4>
+            <label className="flex items-center gap-2 mb-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={overlayVis.global}
+                onChange={handleGlobalToggle}
+                className="accent-blue-500"
+              />
+              <span className="text-sm text-gray-200">全体表示</span>
+            </label>
+
+            <div className="mb-1">
+              <span className="text-xs text-gray-400">オフェンス:</span>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                {['PG', 'SG', 'SF', 'C', 'PF'].map((name, i) => (
+                  <label key={i} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overlayVis.entities[i]}
+                      onChange={() => handleEntityToggle(i)}
+                      className="accent-green-400 w-3 h-3"
+                    />
+                    <span className="text-xs text-gray-300">{name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-xs text-gray-400">ディフェンス:</span>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                {['OB A', 'OB B', 'OB C', 'OB D', 'OB E'].map((name, i) => (
+                  <label key={i + 5} className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overlayVis.entities[i + 5]}
+                      onChange={() => handleEntityToggle(i + 5)}
+                      className="accent-purple-400 w-3 h-3"
+                    />
+                    <span className="text-xs text-gray-300">{name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

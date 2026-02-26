@@ -174,6 +174,42 @@ export function restoreRandom(m: SimMover, speed: number): void {
   m.nextTurn = randTurn();
 }
 
+/**
+ * ボール保持者の移動をディフェンダー方向にブロックする。
+ * 移動ベクトルのうちディフェンダーへ向かう成分を除去し、
+ * 垂直方向へのスライド移動は許可する。
+ */
+export function blockOnBallByDefenders(
+  mover: SimMover,
+  prevX: number,
+  prevZ: number,
+  obstacles: SimMover[],
+  blockRadius: number,
+): void {
+  let mx = mover.x - prevX;
+  let mz = mover.z - prevZ;
+  if (Math.abs(mx) < 0.0001 && Math.abs(mz) < 0.0001) return;
+
+  for (const ob of obstacles) {
+    const dx = ob.x - prevX;
+    const dz = ob.z - prevZ;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d > blockRadius || d < 0.01) continue;
+
+    const nx = dx / d;
+    const nz = dz / d;
+    const dot = mx * nx + mz * nz;
+    if (dot <= 0) continue; // ディフェンダーから離れる方向 → ブロックしない
+
+    // ディフェンダー方向の移動成分を除去
+    mx -= nx * dot;
+    mz -= nz * dot;
+  }
+
+  mover.x = prevX + mx;
+  mover.z = prevZ + mz;
+}
+
 /** Separate overlapping entities by pushing them apart */
 export function separateEntities(
   all: { mover: SimMover; radius: number }[],

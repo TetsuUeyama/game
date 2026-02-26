@@ -16,7 +16,7 @@ import {
   SOLVER_CFG_3D,
 } from "../Config/EntityConfig";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
-import { ENTITY_HEIGHT } from "../Config/FieldConfig";
+import { ENTITY_HEIGHT, SHOT_ARC_HEIGHT } from "../Config/FieldConfig";
 import {
   SPAWN_PAINT_X_HALF,
   SPAWN_PAINT_Z_MIN,
@@ -144,6 +144,28 @@ export function resetOffenseToBackcourt(state: SimState): void {
   }
   for (let i = 0; i < state.offenseInTransit.length; i++) {
     state.offenseInTransit[i] = true;
+  }
+}
+
+/** シュート発射: 頭上リリースからゴールへの放物線 */
+export function executePendingShot(
+  state: SimState,
+  ball: Ball,
+  shooterMover: { x: number; z: number },
+): void {
+  if (!state.pendingShot) return;
+  const target = state.pendingShot;
+  state.pendingShot = null;
+
+  const startPos = new Vector3(shooterMover.x, ENTITY_HEIGHT + 0.3, shooterMover.z);
+  const targetPos = new Vector3(target.x, target.y, target.z);
+
+  ball.mesh.setEnabled(true);
+  const success = ball.shootWithArcHeight(targetPos, SHOT_ARC_HEIGHT, startPos);
+  if (success) {
+    state.ballActive = true;
+    state.ballAge = 0;
+    state.prevBallY = startPos.y;
   }
 }
 

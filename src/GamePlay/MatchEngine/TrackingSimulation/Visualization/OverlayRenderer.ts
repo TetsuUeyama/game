@@ -50,11 +50,18 @@ export class OverlayRenderer {
     return line;
   }
 
-  syncFov(state: SimVisState): void {
+  syncFov(state: SimVisState, obstacleVisible: boolean[]): void {
     const faceY = this.headFaceCenterY;
     const fwd = this.headFaceForwardOffset;
 
     for (let i = 0; i < 5; i++) {
+      // 非表示 obstacle は FOV 線/ウィンドウを dispose してスキップ
+      if (!obstacleVisible[i]) {
+        if (this.fovLines[i]) { this.fovLines[i].dispose(); this.fovLines[i] = this.createLine(`simFov${i}`, [Vector3.Zero(), Vector3.Zero()], 0, 0, 0, 0); this.fovLines[i].setEnabled(false); }
+        if (this.fovWindowLines[i]) { this.fovWindowLines[i].dispose(); delete this.fovWindowLines[i]; }
+        continue;
+      }
+
       const ob = state.obstacles[i];
       const mem = state.obMems[i];
       const searching = mem.searching;
@@ -146,7 +153,7 @@ export class OverlayRenderer {
     }
   }
 
-  syncReach(state: SimVisState): void {
+  syncReach(state: SimVisState, obstacleVisible: boolean[]): void {
     for (let i = 0; i < this.reachLines.length; i++) {
       if (this.reachLines[i]) this.reachLines[i].dispose();
     }
@@ -158,6 +165,8 @@ export class OverlayRenderer {
     const VIS_Y = 0.12;
 
     for (let i = 0; i < 5; i++) {
+      if (!obstacleVisible[i]) continue;
+
       const ob = state.obstacles[i];
       const baseReach = pf.obReaches[i];
       const isBlocking = pf.obBlocks[i];
@@ -236,6 +245,27 @@ export class OverlayRenderer {
         ],
         1.0, 0.4, 0.4, 0.8,
       );
+    }
+  }
+
+  disposeTrajectory(): void {
+    if (this.trajectoryLine) {
+      this.trajectoryLine.dispose();
+      this.trajectoryLine = null;
+    }
+  }
+
+  disposeBallTrail(): void {
+    if (this.ballTrailLine) {
+      this.ballTrailLine.dispose();
+      this.ballTrailLine = null;
+    }
+  }
+
+  disposeInterceptMarker(): void {
+    if (this.interceptMarkerLine) {
+      this.interceptMarkerLine.dispose();
+      this.interceptMarkerLine = null;
     }
   }
 

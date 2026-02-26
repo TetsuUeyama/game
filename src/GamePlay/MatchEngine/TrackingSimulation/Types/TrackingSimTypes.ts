@@ -43,6 +43,8 @@ export interface TrackingSimScore {
   block: number;
   miss: number;
   steal: number;   // ディフェンス成功（ルーズボール確保）
+  goal: number;    // シュート成功
+  shotMiss: number; // シュートミス
 }
 
 export interface LauncherState {
@@ -85,7 +87,7 @@ export interface ScanResult {
 export type ActionPhase = 'idle' | 'startup' | 'active' | 'recovery';
 
 /** アクションの種類 */
-export type ActionType = 'idle' | 'pass' | 'move' | 'catch' | 'obstacle_react';
+export type ActionType = 'idle' | 'pass' | 'shoot' | 'move' | 'catch' | 'obstacle_react';
 
 /**
  * アクションのタイミング定義（秒）
@@ -211,4 +213,6 @@ export interface SimState {
   pushObstructions: PushObstructionInfo[];
   looseBall: boolean;  // ルーズボール状態フラグ
   offenseInTransit: boolean[];  // オフェンスがゾーンへ移動中フラグ (launcher + targets)
+  pendingShot: { x: number; y: number; z: number } | null;  // シュートターゲット座標
+  prevBallY: number;  // 前フレームのボールY座標（ゴール通過判定用）
 }

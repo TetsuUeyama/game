@@ -63,6 +63,7 @@ export const DEFLECT_COOLDOWN = 0.3;   // 同一障害物の連続弾き防止 (
 
 // --- On-ball movement ---
 export const ON_BALL_SPEED_MULT = 0.75;  // ボール保持時の移動速度倍率
+export const ONBALL_BLOCK_RADIUS = 1.2;  // ディフェンダーが進路を塞ぐ距離 (m)
 
 // --- Defense engage threshold ---
 export const DEFENSE_ENGAGE_Z = 6.0;  // 3Pアーク頂点付近（マーク対象がこのZ以上で追跡開始）
@@ -81,3 +82,13 @@ export const PUSH_DENY_HOVER = 0.1;        // ディナイ時のホバー半径 
 // --- Loose ball ---
 export const LOOSE_BALL_PICKUP_RADIUS = 0.5;  // ルーズボール地面回収半径 (m)
 export const LOOSE_BALL_GRACE_PERIOD = 0.6;   // ルーズボール突入後の回収不可時間 (秒)
+
+// --- Shoot ---
+export const SHOOT_ZONE_X_HALF = 2.44;     // シュート可能エリア X半幅 (ペイント幅)
+export const SHOOT_ZONE_Z_MIN = 10.0;      // シュート可能エリア Z下限
+export const SHOOT_ZONE_Z_MAX = 14.0;      // シュート可能エリア Z上限
+export const GOAL_RIM_X = 0;
+export const GOAL_RIM_Y = 3.05;            // リム高さ
+export const GOAL_RIM_Z = 13.4;            // Goal1 リム中央 Z
+export const GOAL_RIM_RADIUS = 0.23;       // リム半径 (m)
+export const SHOT_ARC_HEIGHT = 2.5;        // シュートの放物線高さ (m)
