@@ -82,7 +82,7 @@ export class ActionGaugeRenderer {
     }
   }
 
-  sync(state: SimVisState): void {
+  sync(state: SimVisState, entityVisible?: boolean[]): void {
     const entities: { x: number; z: number }[] = [
       state.launcher,
       ...state.targets,
@@ -94,7 +94,7 @@ export class ActionGaugeRenderer {
       const as = state.actionStates[i];
       const ent = entities[i];
 
-      if (as.phase === 'idle' || !as.timing || as.type === 'move') {
+      if (as.phase === 'idle' || !as.timing || as.type === 'move' || (entityVisible && !entityVisible[i])) {
         g.root.setEnabled(false);
         continue;
       }

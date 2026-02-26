@@ -27,6 +27,11 @@ import {
   LOOSE_BALL_PICKUP_RADIUS,
   LOOSE_BALL_GRACE_PERIOD,
   ON_BALL_SPEED_MULT,
+  ONBALL_BLOCK_RADIUS,
+  GOAL_RIM_X,
+  GOAL_RIM_Y,
+  GOAL_RIM_Z,
+  GOAL_RIM_RADIUS,
 } from "./Config/FieldConfig";
 
 import {
@@ -61,6 +66,7 @@ import {
   separateEntities,
   setChaserVelocity,
   dist2d,
+  blockOnBallByDefenders,
 } from "./Movement/MovementCore";
 
 import {
@@ -71,12 +77,13 @@ import {
 import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
 import { evaluatePreFire, attemptFire, detectBallResult, checkObstacleDeflection, PASS_TIMING } from "./Action/PassAction";
 import { CATCH_TIMING } from "./Action/CatchAction";
+import { canShoot, computeShotTarget, SHOOT_TIMING } from "./Action/ShootAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
-import { deactivateBall, executePendingFire, resetAfterResult, resetOffenseToBackcourt, OB_INT_SPEEDS } from "./Update/SimBallManager";
+import { deactivateBall, executePendingFire, executePendingShot, resetAfterResult, resetOffenseToBackcourt, OB_INT_SPEEDS } from "./Update/SimBallManager";
 import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseTorsoNeckFacing, computePushObstructions } from "./Update/SimEntityUpdate";
 
-import { SimVisualization } from "./Visualization/SimVisualization";
+import { SimVisualization, type OverlayVisibility } from "./Visualization/SimVisualization";
 import { SimPlayerStateManager } from "./State/SimPlayerStateManager";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "./Config/ObstacleDefenseConfig";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
@@ -164,6 +171,18 @@ export class TrackingSimulation3D {
     return this.playerStateManager;
   }
 
+  public setGlobalOverlayVisible(visible: boolean): void {
+    this.vis.setGlobalOverlayVisible(visible);
+  }
+
+  public setEntityOverlayVisible(entityIdx: number, visible: boolean): void {
+    this.vis.setEntityOverlayVisible(entityIdx, visible);
+  }
+
+  public getOverlayVisibility(): OverlayVisibility {
+    return this.vis.getVisibility();
+  }
+
   public reset(): void {
     this.catchHoldInfo = null;
     deactivateBall(this.state, this.ball, this.ballTrailPositions);
@@ -192,7 +211,7 @@ export class TrackingSimulation3D {
       ),
       ballActive: false,
       ballAge: 0,
-      score: { hit: 0, block: 0, miss: 0, steal: 0 },
+      score: { hit: 0, block: 0, miss: 0, steal: 0, goal: 0, shotMiss: 0 },
       cooldown: 2.0,
       onBallEntityIdx: 0,
       selectedReceiverEntityIdx: 1,
@@ -220,6 +239,8 @@ export class TrackingSimulation3D {
       pushObstructions: [],
       looseBall: false,
       offenseInTransit: new Array(1 + INIT_TARGETS.length).fill(true),
+      pendingShot: null,
+      prevBallY: 0,
     };
   }
 
@@ -379,9 +400,12 @@ export class TrackingSimulation3D {
     // === Tick action states ===
     // passer は tick 時点の on-ball entity（catch hold 変更前）
     const passer = getOffenseMover(s, s.onBallEntityIdx);
-    const shouldFireBall = tickAndTransitionActions(s, dt);
+    const { shouldFireBall, shouldShootBall } = tickAndTransitionActions(s, dt);
     if (shouldFireBall) {
       executePendingFire(s, this.ball, passer);
+    }
+    if (shouldShootBall) {
+      executePendingShot(s, this.ball, passer);
     }
 
     // === キャッチ保持の終了判定 → ボール保持者切替 ===
@@ -450,11 +474,12 @@ export class TrackingSimulation3D {
         }
         applyMoveAction(s, 0, s.launcher, dt);
 
-        // ボール保持時: 移動速度を0.75倍に制限
+        // ボール保持時: 移動速度を0.75倍に制限 + ディフェンダー方向ブロック
         if (launcherIsOnBall && !s.ballActive) {
           const dlx = s.launcher.x - prevLX, dlz = s.launcher.z - prevLZ;
           s.launcher.x = prevLX + dlx * ON_BALL_SPEED_MULT;
           s.launcher.z = prevLZ + dlz * ON_BALL_SPEED_MULT;
+          blockOnBallByDefenders(s.launcher, prevLX, prevLZ, s.obstacles, ONBALL_BLOCK_RADIUS);
         }
       }
     }
@@ -511,10 +536,11 @@ export class TrackingSimulation3D {
           }
           applyMoveAction(s, s.onBallEntityIdx, onBallTgt, dt);
 
-          // ボール保持時: 移動速度を0.75倍に制限
+          // ボール保持時: 移動速度を0.75倍に制限 + ディフェンダー方向ブロック
           const dtx = onBallTgt.x - prevTX, dtz = onBallTgt.z - prevTZ;
           onBallTgt.x = prevTX + dtx * ON_BALL_SPEED_MULT;
           onBallTgt.z = prevTZ + dtz * ON_BALL_SPEED_MULT;
+          blockOnBallByDefenders(onBallTgt, prevTX, prevTZ, s.obstacles, ONBALL_BLOCK_RADIUS);
         }
 
         // Build dynamic receiver context (exclude on-ball entity)
@@ -528,22 +554,32 @@ export class TrackingSimulation3D {
         s.selectedReceiverEntityIdx = receiverEntityIndices[evalResult.selectedTargetIdx];
         s.preFire = evalResult.preFire;
 
-        // Fire cooldown (on-ball entity can fire when idle or move-active)
-        // 味方がポジションにつくまでパスを出さない
-        const anyInTransit = s.offenseInTransit.some(t => t);
-        if (!anyInTransit && canEntityMove(s.actionStates, s.onBallEntityIdx)) {
+        // Fire/Shoot cooldown (on-ball entity can act when idle or move-active)
+        if (canEntityMove(s.actionStates, s.onBallEntityIdx)) {
           s.cooldown -= dt;
           if (s.cooldown <= 0) {
-            const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
-            if (fireResult.fired && fireResult.solution) {
-              // receiver-array index → entity index にマッピング
-              fireResult.solution.targetIdx = receiverEntityIndices[fireResult.solution.targetIdx];
-              s.pendingFire = fireResult.solution;
-              s.pendingCooldown = fireResult.newCooldown;
-              s.actionStates[s.onBallEntityIdx] = startAction('pass', PASS_TIMING);
+            // シュート優先: ペイントエリア内 → シュート（トランジット中でも即打ち可）
+            if (canShoot(currentPasser)) {
+              s.pendingShot = computeShotTarget();
+              s.pendingCooldown = 2.0;
+              s.actionStates[s.onBallEntityIdx] = startAction('shoot', SHOOT_TIMING);
               s.moveDistAccum[s.onBallEntityIdx] = 0;
             } else {
-              s.cooldown = fireResult.newCooldown;
+              // パス評価・実行（味方がポジションにつくまでパスは出さない）
+              const anyInTransit = s.offenseInTransit.some(t => t);
+              if (!anyInTransit) {
+                const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
+                if (fireResult.fired && fireResult.solution) {
+                  // receiver-array index → entity index にマッピング
+                  fireResult.solution.targetIdx = receiverEntityIndices[fireResult.solution.targetIdx];
+                  s.pendingFire = fireResult.solution;
+                  s.pendingCooldown = fireResult.newCooldown;
+                  s.actionStates[s.onBallEntityIdx] = startAction('pass', PASS_TIMING);
+                  s.moveDistAccum[s.onBallEntityIdx] = 0;
+                } else {
+                  s.cooldown = fireResult.newCooldown;
+                }
+              }
             }
           }
         }
@@ -659,7 +695,7 @@ export class TrackingSimulation3D {
             resetOffenseToBackcourt(s);
           }
         }
-      } else {
+      } else if (s.interceptPt) {
         // === NORMAL PASS FLIGHT (既存コード) ===
         s.preFire = null;
 
@@ -780,6 +816,61 @@ export class TrackingSimulation3D {
               resetOffenseToBackcourt(s);
             }
           }
+        }
+      } else {
+        // === SHOT FLIGHT (interceptPt === null) ===
+        s.preFire = null;
+
+        // Update Ball physics
+        this.ball.update(dt);
+        s.ballAge += dt;
+
+        const ballPos = this.ball.getPosition();
+
+        // Trail 更新
+        this.ballTrailPositions.push(ballPos.clone());
+        if (this.ballTrailPositions.length > TrackingSimulation3D.BALL_TRAIL_MAX) {
+          this.ballTrailPositions.shift();
+        }
+
+        // Targets continue role movement during shot flight
+        updateTargetRoleMovements(s, dt, -1);
+
+        // ゴール判定: Y がリム高さを上→下に通過 & XZ距離がリム半径内
+        const curBallY = ballPos.y;
+        const crossedDown = s.prevBallY > GOAL_RIM_Y && curBallY <= GOAL_RIM_Y;
+        const xzDist = Math.sqrt(
+          (ballPos.x - GOAL_RIM_X) ** 2 + (ballPos.z - GOAL_RIM_Z) ** 2,
+        );
+        let shotResolved = false;
+
+        if (crossedDown && xzDist < GOAL_RIM_RADIUS) {
+          // ゴール成功
+          deactivateBall(s, this.ball, this.ballTrailPositions);
+          s.score.goal++;
+          shotResolved = true;
+        } else {
+          // ミス判定: 着地 / OOB / タイムアウト
+          const ballLanded = !this.ball.isInFlight();
+          const margin = SIM_MARGIN * 2;
+          const isOOB = ballPos.x < -SIM_FIELD_X_HALF - margin || ballPos.x > SIM_FIELD_X_HALF + margin
+            || ballPos.z < -SIM_FIELD_Z_HALF - margin || ballPos.z > SIM_FIELD_Z_HALF + margin;
+          if ((ballLanded && s.ballAge > 1.0) || isOOB || s.ballAge > BALL_TIMEOUT) {
+            deactivateBall(s, this.ball, this.ballTrailPositions);
+            s.score.shotMiss++;
+            shotResolved = true;
+          }
+        }
+
+        s.prevBallY = curBallY;
+
+        if (shotResolved) {
+          // シュート結果後のリセット
+          for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+          for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+          resetAfterResult(s);
+          resetOffenseToBackcourt(s);
+          s.cooldown = 1.0;
         }
       }
     } else {

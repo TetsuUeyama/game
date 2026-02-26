@@ -29,6 +29,11 @@ import { OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
 import type { SimMover, SimScanMemory, SimPreFireInfo, ActionState, PushObstructionInfo } from "../Types/TrackingSimTypes";
 import { normAngleDiff } from "../Movement/MovementCore";
 
+export interface OverlayVisibility {
+  global: boolean;       // 一括トグル
+  entities: boolean[];   // 10要素: 個別エンティティ
+}
+
 export interface SimVisState {
   launcher: SimMover;
   targets: SimMover[];
@@ -91,6 +96,10 @@ export class SimVisualization {
   private scene: Scene;
   private overlay: OverlayRenderer;
   private gaugeRenderer: ActionGaugeRenderer;
+  private visibility: OverlayVisibility = {
+    global: true,
+    entities: Array(10).fill(true) as boolean[],
+  };
 
   // Meshes
   launcherMesh!: Mesh;
@@ -107,6 +116,20 @@ export class SimVisualization {
     this.scene = scene;
     this.overlay = new OverlayRenderer(scene);
     this.gaugeRenderer = new ActionGaugeRenderer(scene);
+  }
+
+  setGlobalOverlayVisible(visible: boolean): void {
+    this.visibility.global = visible;
+  }
+
+  setEntityOverlayVisible(entityIdx: number, visible: boolean): void {
+    if (entityIdx >= 0 && entityIdx < this.visibility.entities.length) {
+      this.visibility.entities[entityIdx] = visible;
+    }
+  }
+
+  getVisibility(): OverlayVisibility {
+    return this.visibility;
   }
 
   /**
@@ -297,15 +320,26 @@ export class SimVisualization {
   }
 
   syncAll(state: SimVisState): void {
-    this.overlay.syncFov(state);
-    this.overlay.syncReach(state);
-    this.overlay.syncTrajectory(state);
-    this.overlay.syncBallTrail(state);
-    this.overlay.syncInterceptMarker(state);
+    if (this.visibility.global) {
+      // obstacle visible: entities[5..9] → obstacleVisible[0..4]
+      const obstacleVisible = this.visibility.entities.slice(5, 10);
+      this.overlay.syncFov(state, obstacleVisible);
+      this.overlay.syncReach(state, obstacleVisible);
+      this.overlay.syncTrajectory(state);
+      this.overlay.syncBallTrail(state);
+      this.overlay.syncInterceptMarker(state);
+      this.gaugeRenderer.sync(state, this.visibility.entities);
+    } else {
+      this.overlay.syncFov(state, [false, false, false, false, false]);
+      this.overlay.syncReach(state, [false, false, false, false, false]);
+      this.overlay.disposeTrajectory();
+      this.overlay.disposeBallTrail();
+      this.overlay.disposeInterceptMarker();
+      this.gaugeRenderer.sync(state, Array(10).fill(false) as boolean[]);
+    }
     this.syncTorsoRotation(state);
     this.syncNeckRotation(state);
     this.syncArms(state);
-    this.gaugeRenderer.sync(state);
   }
 
   /**

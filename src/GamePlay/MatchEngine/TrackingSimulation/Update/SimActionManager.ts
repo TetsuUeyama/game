@@ -47,11 +47,17 @@ export function applyMoveAction(state: SimState, entityIdx: number, entity: { vx
   }
 }
 
+/** tickAndTransitionActions の返り値 */
+export interface ActionTransitionResult {
+  shouldFireBall: boolean;
+  shouldShootBall: boolean;
+}
+
 /**
  * 全アクション状態を dt 分 tick し、遷移を処理する。
- * @returns shouldFireBall - launcher の pass startup→active 遷移が発生した場合 true
+ * @returns shouldFireBall/shouldShootBall - pass/shoot の startup→active 遷移が発生した場合 true
  */
-export function tickAndTransitionActions(state: SimState, dt: number): boolean {
+export function tickAndTransitionActions(state: SimState, dt: number): ActionTransitionResult {
   const prevStates = state.actionStates.map(s => ({ phase: s.phase, type: s.type }));
 
   // Tick all action states
@@ -70,12 +76,20 @@ export function tickAndTransitionActions(state: SimState, dt: number): boolean {
     }
   }
 
-  // Passer pass: startup → active → fire ball
-  let shouldFireBall = false;
   const onBall = state.onBallEntityIdx;
+  let shouldFireBall = false;
+  let shouldShootBall = false;
+
+  // Passer pass: startup → active → fire ball
   if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'startup'
       && state.actionStates[onBall].phase === 'active') {
     shouldFireBall = true;
+  }
+
+  // Shooter shoot: startup → active → shoot ball
+  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'startup'
+      && state.actionStates[onBall].phase === 'active') {
+    shouldShootBall = true;
   }
 
   // Passer pass: recovery → idle → set cooldown
@@ -84,5 +98,11 @@ export function tickAndTransitionActions(state: SimState, dt: number): boolean {
     state.cooldown = state.pendingCooldown;
   }
 
-  return shouldFireBall;
+  // Shooter shoot: recovery → idle → set cooldown
+  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'recovery'
+      && state.actionStates[onBall].phase === 'idle') {
+    state.cooldown = state.pendingCooldown;
+  }
+
+  return { shouldFireBall, shouldShootBall };
 }
