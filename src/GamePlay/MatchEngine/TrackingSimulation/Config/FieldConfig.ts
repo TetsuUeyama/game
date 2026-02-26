@@ -1,11 +1,9 @@
 // --- Scale ---
-// 2D Board: 800x600 px  ->  3D Court XZ plane: 12m x 9m
-// SCALE_FACTOR = 0.015 m/px
-export const S = 0.015;
+export const S = 0.015;               // 速度・距離の変換用
 
-// --- Field ---
-export const SIM_FIELD_X_HALF = 6.0;   // m  (800 * 0.015 / 2)
-export const SIM_FIELD_Z_HALF = 4.5;   // m  (600 * 0.015 / 2)
+// --- Field (basketball court) ---
+export const SIM_FIELD_X_HALF = 7.5;  // コート幅 15m / 2
+export const SIM_FIELD_Z_HALF = 15.0; // コート長さ 30m / 2
 export const SIM_MARGIN = 30 * S;      // 0.45 m
 
 // --- Entity size ---
@@ -29,16 +27,16 @@ export const OBSTACLE_RADIUS = OBSTACLE_SIZE / 2;   // 0.22 m
 
 // --- Facing / FOV ---
 export const TURN_RATE = 3.0;                        // rad/s
-export const OB_FOV_HALF_NEAR = Math.PI / 6;         // 30deg
-export const OB_FOV_HALF_FAR = Math.PI / 18;         // 10deg
+export const OB_FOV_HALF_NEAR = Math.PI / 4;         // 45deg
+export const OB_FOV_HALF_FAR = Math.PI / 9;          // 20deg
 export const FOV_NARROW_DIST = 500 * S;              // 7.5 m
 export const FOV_FULL_LEN = Math.sqrt(
-  (800 * S) * (800 * S) + (600 * S) * (600 * S),
-);                                                    // ~15m
+  (SIM_FIELD_X_HALF * 2) ** 2 + (SIM_FIELD_Z_HALF * 2) ** 2,
+);                                                    // ~33.5m
 export const FOV_WINDOW_LEN = 220 * S;               // 3.3 m
 export const FOV_FOCUS_SPEED = 400 * S;              // 6.0 m/s
-export const SEARCH_SWEEP_SPEED = 1.5;               // rad/s
-export const SEARCH_SWEEP_MAX = Math.PI / 3;         // 60deg
+export const SEARCH_SWEEP_SPEED = 6.0;               // rad/s
+export const SEARCH_SWEEP_MAX = Math.PI / 2;         // 90deg
 export const NECK_TURN_RATE = 6.0;                    // rad/s (faster than body TURN_RATE)
 export const NECK_MAX_ANGLE = Math.PI / 2;            // ±90deg from body facing
 export const TORSO_TURN_RATE = 4.5;                   // rad/s（NECK_TURN_RATE より遅い）
@@ -63,6 +61,12 @@ export const BALL_TIMEOUT = 6.0;
 export const DEFLECT_IMPULSE = 1.2;    // 弾きインパルス強度 (kg·m/s)
 export const DEFLECT_COOLDOWN = 0.3;   // 同一障害物の連続弾き防止 (秒)
 
+// --- On-ball movement ---
+export const ON_BALL_SPEED_MULT = 0.75;  // ボール保持時の移動速度倍率
+
+// --- Defense engage threshold ---
+export const DEFENSE_ENGAGE_Z = 6.0;  // 3Pアーク頂点付近（マーク対象がこのZ以上で追跡開始）
+
 // --- On-ball defense ---
 export const ONBALL_MARK_DISTANCE = 1.3;   // オンボールディフェンス時のマーク距離 (m)
 export const ONBALL_MARK_HOVER = 0.15;     // オンボールディフェンス時のホバー半径 (m)
@@ -73,3 +77,7 @@ export const PUSH_SPEED_MULT = 0.55;       // 被プッシュ時の速度倍率
 export const PUSH_HAND_REACH = 0.6;        // 手が届く距離（速度減衰が発生する距離）
 export const PUSH_DENY_OFFSET = 0.4;       // ターゲットからパッサー方向へのディナイ位置オフセット (m)
 export const PUSH_DENY_HOVER = 0.1;        // ディナイ時のホバー半径 (m)（密着に近い）
+
+// --- Loose ball ---
+export const LOOSE_BALL_PICKUP_RADIUS = 0.5;  // ルーズボール地面回収半径 (m)
+export const LOOSE_BALL_GRACE_PERIOD = 0.6;   // ルーズボール突入後の回収不可時間 (秒)

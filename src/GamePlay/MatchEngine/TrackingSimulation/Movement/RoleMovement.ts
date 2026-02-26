@@ -8,11 +8,24 @@ import {
   DUNKER_SEAL_DIST,
   type SimZone,
 } from "../Config/RoleConfig";
-import { TARGET_RANDOM_SPEED } from "../Config/EntityConfig";
+import { TARGET_RANDOM_SPEED, TARGET_INTERCEPT_SPEED } from "../Config/EntityConfig";
 import type { SimMover, LauncherState, SlasherState, ScreenerState, DunkerState } from "../Types/TrackingSimTypes";
 import { dist2d, moveWithFacing } from "../Movement/MovementCore";
 import { isPhysicallyClose, isTrajectoryInFOV } from "../Decision/TrajectoryAnalysis";
 import { findOpenSpaceInZone } from "../Decision/OpenSpaceFinder";
+
+/**
+ * Transit mode: move toward home position at jogging speed.
+ * Returns true when player has entered their zone (transit complete).
+ */
+export function moveTransitToHome(m: SimMover, entityIdx: number, dt: number): boolean {
+  const role = entityIdx === 0
+    ? ROLE_ASSIGNMENTS.launcher
+    : ROLE_ASSIGNMENTS.targets[entityIdx - 1];
+  moveTowardDest(m, { x: role.homeX, z: role.homeZ }, TARGET_INTERCEPT_SPEED, dt);
+  const z = role.zone;
+  return m.x >= z.xMin && m.x <= z.xMax && m.z >= z.zMin && m.z <= z.zMax;
+}
 
 /** Clamp position to zone bounds */
 function clampToZone(m: SimMover, zone: SimZone): void {
@@ -144,10 +157,10 @@ export function moveSlasher(
 
   const sinVal = Math.sin(state.vcutPhase);
   if (sinVal > 0.5) {
-    // Cut phase: move toward goal (+X direction)
+    // Cut phase: move toward basket (+Z direction)
     state.vcutActive = true;
-    const cutX = role.homeX + SLASHER_VCUT_AMPLITUDE;
-    const cutZ = role.homeZ;
+    const cutX = role.homeX;
+    const cutZ = role.homeZ + SLASHER_VCUT_AMPLITUDE;
     state.dest = { x: cutX, z: cutZ };
   } else {
     // Reset phase: return to open space in zone
@@ -160,16 +173,16 @@ export function moveSlasher(
 
   const speed = TARGET_RANDOM_SPEED * role.speedMult * (state.vcutActive ? 1.3 : 1.0);
   moveTowardDest(tgt, state.dest!, speed, dt);
-  // During V-cut, allow movement beyond zone toward goal
+  // During V-cut, allow movement beyond zone toward basket (+Z)
   if (!state.vcutActive) {
     clampToZone(tgt, role.zone);
   } else {
-    // Extended zone during cut
+    // Extended zone during cut (expand toward basket)
     const extZone: SimZone = {
       xMin: role.zone.xMin,
-      xMax: role.zone.xMax + SLASHER_VCUT_AMPLITUDE + 0.5,
+      xMax: role.zone.xMax,
       zMin: role.zone.zMin,
-      zMax: role.zone.zMax,
+      zMax: role.zone.zMax + SLASHER_VCUT_AMPLITUDE + 0.5,
     };
     clampToZone(tgt, extZone);
   }
@@ -190,9 +203,9 @@ export function moveScreener(
   state.reevalTimer -= dt;
 
   if (!state.screenSet) {
-    // Phase 1: move to screen position (midpoint between launcher and +X)
-    const screenX = launcher.x + SCREENER_OFFSET;
-    const screenZ = launcher.z;
+    // Phase 1: move to screen position (between launcher and basket +Z)
+    const screenX = launcher.x;
+    const screenZ = launcher.z + SCREENER_OFFSET;
     state.dest = { x: screenX, z: screenZ };
 
     const distToScreen = dist2d(tgt.x, tgt.z, screenX, screenZ);
@@ -246,13 +259,14 @@ export function moveDunker(
   }
 
   if (nearestOb && nearestDist < OPEN_THRESHOLD * 2) {
-    // Seal: position between defender and goal (+X direction)
+    // Seal: position between defender and basket (+Z direction)
     state.sealing = true;
+    const dx = nearestOb.x - tgt.x;
     const dz = nearestOb.z - tgt.z;
-    const d = Math.sqrt((nearestOb.x - tgt.x) ** 2 + dz * dz) || 1;
-    // Position at SEAL_DIST toward +X from the defender
-    const sealX = nearestOb.x + DUNKER_SEAL_DIST;
-    const sealZ = nearestOb.z + (dz / d) * DUNKER_SEAL_DIST * 0.3;
+    const d = Math.sqrt(dx * dx + dz * dz) || 1;
+    // Position at SEAL_DIST toward +Z (basket) from the defender
+    const sealX = nearestOb.x + (dx / d) * DUNKER_SEAL_DIST * 0.3;
+    const sealZ = nearestOb.z + DUNKER_SEAL_DIST;
     state.dest = { x: sealX, z: sealZ };
   } else {
     state.sealing = false;

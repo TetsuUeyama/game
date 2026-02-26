@@ -19,6 +19,14 @@ import {
   DEFLECT_IMPULSE,
   DEFLECT_COOLDOWN,
   TARGET_STOP_DIST,
+  HAND_CATCH_RADIUS,
+  SIM_FIELD_X_HALF,
+  SIM_FIELD_Z_HALF,
+  SIM_MARGIN,
+  BALL_TIMEOUT,
+  LOOSE_BALL_PICKUP_RADIUS,
+  LOOSE_BALL_GRACE_PERIOD,
+  ON_BALL_SPEED_MULT,
 } from "./Config/FieldConfig";
 
 import {
@@ -31,7 +39,13 @@ import {
   INIT_OBSTACLES,
 } from "./Config/EntityConfig";
 
-import { ROLE_ASSIGNMENTS } from "./Config/RoleConfig";
+import {
+  ROLE_ASSIGNMENTS,
+  SPAWN_PAINT_X_HALF,
+  SPAWN_PAINT_Z_MIN,
+  SPAWN_PAINT_Z_MAX,
+  SPAWN_BASELINE_Z,
+} from "./Config/RoleConfig";
 
 import type {
   SimState,
@@ -45,10 +59,13 @@ import {
   makeScanMemory,
   moveWithFacing,
   separateEntities,
+  setChaserVelocity,
+  dist2d,
 } from "./Movement/MovementCore";
 
 import {
   moveLauncherSmart,
+  moveTransitToHome,
 } from "./Movement/RoleMovement";
 
 import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
@@ -56,7 +73,7 @@ import { evaluatePreFire, attemptFire, detectBallResult, checkObstacleDeflection
 import { CATCH_TIMING } from "./Action/CatchAction";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
-import { deactivateBall, executePendingFire, resetAfterResult, OB_INT_SPEEDS } from "./Update/SimBallManager";
+import { deactivateBall, executePendingFire, resetAfterResult, resetOffenseToBackcourt, OB_INT_SPEEDS } from "./Update/SimBallManager";
 import { updateTargetRoleMovements, updateObstacleMovements, updateScans, updateOffenseTorsoNeckFacing, computePushObstructions } from "./Update/SimEntityUpdate";
 
 import { SimVisualization } from "./Visualization/SimVisualization";
@@ -164,14 +181,18 @@ export class TrackingSimulation3D {
     const lz = INIT_LAUNCHER.z;
 
     this.state = {
-      launcher: makeMover(INIT_LAUNCHER.x, INIT_LAUNCHER.z, LAUNCHER_SPEED),
-      targets: INIT_TARGETS.map(p => makeMover(p.x, p.z, TARGET_RANDOM_SPEED)),
+      launcher: makeMover(0, SPAWN_BASELINE_Z, LAUNCHER_SPEED),
+      targets: INIT_TARGETS.map(() => makeMover(
+        (Math.random() * 2 - 1) * SPAWN_PAINT_X_HALF,
+        SPAWN_PAINT_Z_MIN + Math.random() * (SPAWN_PAINT_Z_MAX - SPAWN_PAINT_Z_MIN),
+        TARGET_RANDOM_SPEED,
+      )),
       obstacles: INIT_OBSTACLES.map((p, oi) =>
         makeMover(p.x, p.z, OB_CONFIGS[oi].idleSpeed),
       ),
       ballActive: false,
       ballAge: 0,
-      score: { hit: 0, block: 0, miss: 0 },
+      score: { hit: 0, block: 0, miss: 0, steal: 0 },
       cooldown: 2.0,
       onBallEntityIdx: 0,
       selectedReceiverEntityIdx: 1,
@@ -197,6 +218,8 @@ export class TrackingSimulation3D {
       dunkerState: { dest: null, reevalTimer: 0, sealing: false },
       obstacleDeflectCooldowns: new Array(OBSTACLE_COUNT).fill(0),
       pushObstructions: [],
+      looseBall: false,
+      offenseInTransit: new Array(1 + INIT_TARGETS.length).fill(true),
     };
   }
 
@@ -338,6 +361,7 @@ export class TrackingSimulation3D {
         ballMarkerRightArmTarget,
         ballMarkerEntityIdx,
         pushObstructions: s.pushObstructions,
+        onBallEntityIdx: s.onBallEntityIdx,
         dt: this.lastDt,
       });
     } catch (e) {
@@ -395,33 +419,44 @@ export class TrackingSimulation3D {
 
         s.ballActive = true;
         s.ballAge = 0;
-        s.score.miss++;
-        s.onBallEntityIdx = 0;  // スティール時は launcher に戻す
         s.obstacleDeflectCooldowns[stealDeflection.obstacleIdx] = DEFLECT_COOLDOWN;
 
-        // 状態リセット
-        for (let i = 1; i < s.actionStates.length; i++) {
-          if (s.actionStates[i].type === 'catch') continue;
-          if (s.actionStates[i].phase !== 'idle') {
-            s.actionStates[i] = forceRecovery(s.actionStates[i]);
-          }
-        }
+        // ルーズボール突入
+        s.looseBall = true;
+        s.interceptPt = null;
+        for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
         for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
-        resetAfterResult(s);
       }
     }
 
-    // === Compute push obstructions (before target movements) ===
-    computePushObstructions(s);
+    if (!s.looseBall) {
+      // === Compute push obstructions (before target movements) ===
+      computePushObstructions(s);
 
-    // === Launcher: role-based smart movement ===
-    // ボール飛行中に launcher がレシーバーの場合はインターセプト移動を優先（後述）
-    const launcherIsReceiver = s.ballActive && s.selectedReceiverEntityIdx === 0;
-    if (!launcherIsReceiver) {
-      if (canEntityMove(s.actionStates, 0)) {
-        moveLauncherSmart(s.launcher, s.launcherState, s.targets, s.obstacles, dt);
+      // === Launcher: role-based smart movement ===
+      // ボール飛行中に launcher がレシーバーの場合はインターセプト移動を優先（後述）
+      const launcherIsReceiver = s.ballActive && s.selectedReceiverEntityIdx === 0;
+      if (!launcherIsReceiver) {
+        const launcherIsOnBall = s.onBallEntityIdx === 0;
+        const prevLX = s.launcher.x, prevLZ = s.launcher.z;
+
+        if (canEntityMove(s.actionStates, 0)) {
+          if (s.offenseInTransit[0]) {
+            const arrived = moveTransitToHome(s.launcher, 0, dt);
+            if (arrived) s.offenseInTransit[0] = false;
+          } else {
+            moveLauncherSmart(s.launcher, s.launcherState, s.targets, s.obstacles, dt);
+          }
+        }
+        applyMoveAction(s, 0, s.launcher, dt);
+
+        // ボール保持時: 移動速度を0.75倍に制限
+        if (launcherIsOnBall && !s.ballActive) {
+          const dlx = s.launcher.x - prevLX, dlz = s.launcher.z - prevLZ;
+          s.launcher.x = prevLX + dlx * ON_BALL_SPEED_MULT;
+          s.launcher.z = prevLZ + dlz * ON_BALL_SPEED_MULT;
+        }
       }
-      applyMoveAction(s, 0, s.launcher, dt);
     }
 
     if (!s.ballActive && !this.catchHoldInfo) {
@@ -450,19 +485,13 @@ export class TrackingSimulation3D {
 
         s.ballActive = true;
         s.ballAge = 0;
-        s.score.miss++;
-        s.onBallEntityIdx = 0;  // ファンブル時は launcher に戻す
         s.obstacleDeflectCooldowns[fumbleDeflection.obstacleIdx] = DEFLECT_COOLDOWN;
 
-        // 状態リセット
-        for (let i = 1; i < s.actionStates.length; i++) {
-          if (s.actionStates[i].type === 'catch') continue;
-          if (s.actionStates[i].phase !== 'idle') {
-            s.actionStates[i] = forceRecovery(s.actionStates[i]);
-          }
-        }
+        // ルーズボール突入
+        s.looseBall = true;
+        s.interceptPt = null;
+        for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
         for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
-        resetAfterResult(s);
       }
 
       // === Ball not active & not held: evaluate pre-fire ===
@@ -471,9 +500,21 @@ export class TrackingSimulation3D {
         // On-ball target: skip role movement (they hold the ball)
         const onBallSkipTargetIdx = s.onBallEntityIdx > 0 ? s.onBallEntityIdx - 1 : -1;
         updateTargetRoleMovements(s, dt, onBallSkipTargetIdx);
-        // On-ball target の applyMoveAction（updateTargetRoleMovements でスキップされた分）
+        // On-ball target: transit or applyMoveAction（updateTargetRoleMovements でスキップされた分）
         if (s.onBallEntityIdx > 0) {
-          applyMoveAction(s, s.onBallEntityIdx, s.targets[s.onBallEntityIdx - 1], dt);
+          const onBallTgt = s.targets[s.onBallEntityIdx - 1];
+          const prevTX = onBallTgt.x, prevTZ = onBallTgt.z;
+
+          if (s.offenseInTransit[s.onBallEntityIdx]) {
+            const arrived = moveTransitToHome(onBallTgt, s.onBallEntityIdx, dt);
+            if (arrived) s.offenseInTransit[s.onBallEntityIdx] = false;
+          }
+          applyMoveAction(s, s.onBallEntityIdx, onBallTgt, dt);
+
+          // ボール保持時: 移動速度を0.75倍に制限
+          const dtx = onBallTgt.x - prevTX, dtz = onBallTgt.z - prevTZ;
+          onBallTgt.x = prevTX + dtx * ON_BALL_SPEED_MULT;
+          onBallTgt.z = prevTZ + dtz * ON_BALL_SPEED_MULT;
         }
 
         // Build dynamic receiver context (exclude on-ball entity)
@@ -488,7 +529,9 @@ export class TrackingSimulation3D {
         s.preFire = evalResult.preFire;
 
         // Fire cooldown (on-ball entity can fire when idle or move-active)
-        if (canEntityMove(s.actionStates, s.onBallEntityIdx)) {
+        // 味方がポジションにつくまでパスを出さない
+        const anyInTransit = s.offenseInTransit.some(t => t);
+        if (!anyInTransit && canEntityMove(s.actionStates, s.onBallEntityIdx)) {
           s.cooldown -= dt;
           if (s.cooldown <= 0) {
             const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
@@ -506,137 +549,266 @@ export class TrackingSimulation3D {
         }
       }
     } else if (s.ballActive) {
-      // === Ball in flight ===
-      s.preFire = null;
+      if (s.looseBall) {
+        // === LOOSE BALL ===
+        s.preFire = null;
 
-      // Update Ball physics (Havok handles trajectory)
-      this.ball.update(dt);
-      s.ballAge += dt;
+        // ボール物理更新
+        this.ball.update(dt);
+        s.ballAge += dt;
 
-      // Get ball 3D position for collision checks
-      const ballPos = this.ball.getPosition();
+        const ballPos = this.ball.getPosition();
 
-      // Track ball trail positions
-      this.ballTrailPositions.push(ballPos.clone());
-      if (this.ballTrailPositions.length > TrackingSimulation3D.BALL_TRAIL_MAX) {
-        this.ballTrailPositions.shift();
-      }
+        // Trail 更新
+        this.ballTrailPositions.push(ballPos.clone());
+        if (this.ballTrailPositions.length > TrackingSimulation3D.BALL_TRAIL_MAX) {
+          this.ballTrailPositions.shift();
+        }
 
-      // Selected receiver: move toward intercept point
-      const selReceiverIdx = s.selectedReceiverEntityIdx;
-      const selTgt = getOffenseMover(s, selReceiverIdx);
-      if (canEntityMove(s.actionStates, selReceiverIdx)) {
-        if (s.interceptPt) {
-          const ipDx = s.interceptPt.x - selTgt.x;
-          const ipDz = s.interceptPt.z - selTgt.z;
-          if (Math.sqrt(ipDx * ipDx + ipDz * ipDz) > TARGET_STOP_DIST) {
-            moveWithFacing(selTgt, TARGET_INTERCEPT_SPEED, dt);
-          } else {
-            selTgt.vx = 0;
-            selTgt.vz = 0;
+        // 弾きクールダウン減算
+        for (let oi = 0; oi < s.obstacleDeflectCooldowns.length; oi++) {
+          if (s.obstacleDeflectCooldowns[oi] > 0) {
+            s.obstacleDeflectCooldowns[oi] = Math.max(0, s.obstacleDeflectCooldowns[oi] - dt);
           }
         }
-      }
-      applyMoveAction(s, selReceiverIdx, selTgt, dt);
 
-      // Other targets continue role-based movement during ball flight
-      // skipIdx: selected receiver が target なら skip（既に上で処理済み）
-      const skipTargetIdx = selReceiverIdx > 0 ? selReceiverIdx - 1 : -1;
-      updateTargetRoleMovements(s, dt, skipTargetIdx);
-
-      // 手のワールド座標を取得（前フレームの腕方向ベクトルに基づく）
-      const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
-      const allHands = this.vis.getHandWorldPositions(allMovers);
-      const obStartIdx = 1 + s.targets.length;
-      const obstacleHands = allHands.slice(obStartIdx, obStartIdx + s.obstacles.length);
-
-      // レシーバーの手でキャッチ判定（パッサーを除く全オフェンス）
-      const { entityIndices: receiverEntityIndices } = getReceiverInfo(s);
-      const receiverHands = receiverEntityIndices.map(ei => allHands[ei]);
-
-      // ① 弾きクールダウン更新
-      for (let oi = 0; oi < s.obstacleDeflectCooldowns.length; oi++) {
-        if (s.obstacleDeflectCooldowns[oi] > 0) {
-          s.obstacleDeflectCooldowns[oi] = Math.max(0, s.obstacleDeflectCooldowns[oi] - dt);
+        // 全10エンティティがボールを追跡
+        const allMoversLB = [s.launcher, ...s.targets, ...s.obstacles];
+        const offenseCount = 1 + s.targets.length;  // 5
+        for (let ei = 0; ei < allMoversLB.length; ei++) {
+          const mover = allMoversLB[ei];
+          const isOffense = ei < offenseCount;
+          const chaseSpeed = isOffense
+            ? TARGET_INTERCEPT_SPEED
+            : OB_CONFIGS[ei - offenseCount].interceptSpeed;
+          setChaserVelocity(mover, ballPos.x, ballPos.z, chaseSpeed, 0.1, dt);
+          moveWithFacing(mover, chaseSpeed, dt);
         }
-      }
 
-      // ② 障害物の手によるボール弾き判定
-      const deflection = checkObstacleDeflection(
-        ballPos.x, ballPos.y, ballPos.z,
-        obstacleHands, s.obstacleDeflectCooldowns,
-      );
-      if (deflection.deflected) {
-        this.ball.applyImpulse(deflection.direction.scale(DEFLECT_IMPULSE));
-        s.obstacleDeflectCooldowns[deflection.obstacleIdx] = DEFLECT_COOLDOWN;
-      }
+        // 回収判定（grace period 中はスキップ — ボールが離れる時間を確保）
+        const ballInFlight = this.ball.isInFlight();
+        const allHandsLB = this.vis.getHandWorldPositions(allMoversLB);
+        const ballR = BALL_DIAMETER / 2;
+        const handCatchDist = HAND_CATCH_RADIUS + ballR;
+        let recoveredIdx = -1;
+        const pastGrace = s.ballAge > LOOSE_BALL_GRACE_PERIOD;
 
-      // ③ Ball result detection — レシーバーの手で判定
-      const detection = detectBallResult(
-        ballPos.x, ballPos.y, ballPos.z,
-        this.ball.isInFlight(), s.ballAge,
-        receiverHands,
-      );
-      if (detection.result !== 'none') {
-        deactivateBall(s, this.ball, this.ballTrailPositions);
-        s.score[detection.result]++;
-
-        // Hit → 最も近い手を持つレシーバーにキャッチアクションを設定
-        if (detection.result === 'hit') {
-          let hitReceiverArrayIdx = 0;
-          let minDist = Infinity;
-          for (let ri = 0; ri < receiverHands.length; ri++) {
-            const lh = receiverHands[ri].left;
-            const rh = receiverHands[ri].right;
-            const dl = Math.sqrt((ballPos.x - lh.x) ** 2 + (ballPos.y - lh.y) ** 2 + (ballPos.z - lh.z) ** 2);
-            const dr = Math.sqrt((ballPos.x - rh.x) ** 2 + (ballPos.y - rh.y) ** 2 + (ballPos.z - rh.z) ** 2);
+        if (pastGrace && ballInFlight) {
+          // ボール飛行中: 全エンティティの手で3D距離チェック
+          let minHandDist = Infinity;
+          for (let ei = 0; ei < allMoversLB.length; ei++) {
+            const hands = allHandsLB[ei];
+            const dl = Math.sqrt(
+              (ballPos.x - hands.left.x) ** 2 +
+              (ballPos.y - hands.left.y) ** 2 +
+              (ballPos.z - hands.left.z) ** 2,
+            );
+            const dr = Math.sqrt(
+              (ballPos.x - hands.right.x) ** 2 +
+              (ballPos.y - hands.right.y) ** 2 +
+              (ballPos.z - hands.right.z) ** 2,
+            );
             const d = Math.min(dl, dr);
-            if (d < minDist) { minDist = d; hitReceiverArrayIdx = ri; }
+            if (d < handCatchDist && d < minHandDist) {
+              minHandDist = d;
+              recoveredIdx = ei;
+            }
           }
-          const hitEntityIdx = receiverEntityIndices[hitReceiverArrayIdx];
-          s.actionStates[hitEntityIdx] = startAction('catch', CATCH_TIMING);
-          this.catchHoldInfo = { entityIdx: hitEntityIdx };
-        }
-
-        // ミス時: launcher に戻す
-        if (detection.result === 'miss') {
-          s.onBallEntityIdx = 0;
-        }
-
-        // Force obstacles/targets to recovery (passer runs independently, catch preserved)
-        for (let i = 1; i < s.actionStates.length; i++) {
-          if (s.actionStates[i].type === 'catch') continue;
-          if (s.actionStates[i].phase !== 'idle') {
-            s.actionStates[i] = forceRecovery(s.actionStates[i]);
+        } else if (pastGrace) {
+          // ボール着地後: 全エンティティの2Dボディ距離チェック
+          let minBodyDist = Infinity;
+          for (let ei = 0; ei < allMoversLB.length; ei++) {
+            const d = dist2d(allMoversLB[ei].x, allMoversLB[ei].z, ballPos.x, ballPos.z);
+            if (d < LOOSE_BALL_PICKUP_RADIUS && d < minBodyDist) {
+              minBodyDist = d;
+              recoveredIdx = ei;
+            }
           }
         }
-        for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
-        resetAfterResult(s);
+
+        // OOB/タイムアウト: 最寄りエンティティが自動回収
+        const isOOB = Math.abs(ballPos.x) > SIM_FIELD_X_HALF + SIM_MARGIN
+                   || Math.abs(ballPos.z) > SIM_FIELD_Z_HALF + SIM_MARGIN;
+        if (recoveredIdx < 0 && (isOOB || s.ballAge > BALL_TIMEOUT)) {
+          let minDist2 = Infinity;
+          for (let ei = 0; ei < allMoversLB.length; ei++) {
+            const d = dist2d(allMoversLB[ei].x, allMoversLB[ei].z, ballPos.x, ballPos.z);
+            if (d < minDist2) { minDist2 = d; recoveredIdx = ei; }
+          }
+        }
+
+        // 回収処理
+        if (recoveredIdx >= 0) {
+          deactivateBall(s, this.ball, this.ballTrailPositions);
+          s.looseBall = false;
+          for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+          resetAfterResult(s);
+
+          const isOffenseRecovery = recoveredIdx < offenseCount;
+          if (isOffenseRecovery) {
+            // オフェンス回収: そのプレイヤーが新しいボール保持者
+            s.onBallEntityIdx = recoveredIdx;
+            s.cooldown = 1.5;
+            // Enable transit for smooth return to zones (no backcourt teleport)
+            for (let i = 0; i < s.offenseInTransit.length; i++) s.offenseInTransit[i] = true;
+          } else {
+            // ディフェンス回収: スティール成功 → バックコートからリスタート
+            s.score.steal++;
+            s.onBallEntityIdx = 0;
+            s.cooldown = 1.5;
+            resetOffenseToBackcourt(s);
+          }
+        }
+      } else {
+        // === NORMAL PASS FLIGHT (既存コード) ===
+        s.preFire = null;
+
+        // Update Ball physics (Havok handles trajectory)
+        this.ball.update(dt);
+        s.ballAge += dt;
+
+        // Get ball 3D position for collision checks
+        const ballPos = this.ball.getPosition();
+
+        // Track ball trail positions
+        this.ballTrailPositions.push(ballPos.clone());
+        if (this.ballTrailPositions.length > TrackingSimulation3D.BALL_TRAIL_MAX) {
+          this.ballTrailPositions.shift();
+        }
+
+        // Selected receiver: move toward intercept point
+        const selReceiverIdx = s.selectedReceiverEntityIdx;
+        const selTgt = getOffenseMover(s, selReceiverIdx);
+        if (canEntityMove(s.actionStates, selReceiverIdx)) {
+          if (s.interceptPt) {
+            const ipDx = s.interceptPt.x - selTgt.x;
+            const ipDz = s.interceptPt.z - selTgt.z;
+            if (Math.sqrt(ipDx * ipDx + ipDz * ipDz) > TARGET_STOP_DIST) {
+              moveWithFacing(selTgt, TARGET_INTERCEPT_SPEED, dt);
+            } else {
+              selTgt.vx = 0;
+              selTgt.vz = 0;
+            }
+          }
+        }
+        applyMoveAction(s, selReceiverIdx, selTgt, dt);
+
+        // Other targets continue role-based movement during ball flight
+        // skipIdx: selected receiver が target なら skip（既に上で処理済み）
+        const skipTargetIdx = selReceiverIdx > 0 ? selReceiverIdx - 1 : -1;
+        updateTargetRoleMovements(s, dt, skipTargetIdx);
+
+        // 手のワールド座標を取得（前フレームの腕方向ベクトルに基づく）
+        const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+        const allHands = this.vis.getHandWorldPositions(allMovers);
+        const obStartIdx = 1 + s.targets.length;
+        const obstacleHands = allHands.slice(obStartIdx, obStartIdx + s.obstacles.length);
+
+        // レシーバーの手でキャッチ判定（パッサーを除く全オフェンス）
+        const { entityIndices: receiverEntityIndices } = getReceiverInfo(s);
+        const receiverHands = receiverEntityIndices.map(ei => allHands[ei]);
+
+        // ① 弾きクールダウン更新
+        for (let oi = 0; oi < s.obstacleDeflectCooldowns.length; oi++) {
+          if (s.obstacleDeflectCooldowns[oi] > 0) {
+            s.obstacleDeflectCooldowns[oi] = Math.max(0, s.obstacleDeflectCooldowns[oi] - dt);
+          }
+        }
+
+        // ② 障害物の手によるボール弾き判定
+        const deflection = checkObstacleDeflection(
+          ballPos.x, ballPos.y, ballPos.z,
+          obstacleHands, s.obstacleDeflectCooldowns,
+        );
+        if (deflection.deflected) {
+          this.ball.applyImpulse(deflection.direction.scale(DEFLECT_IMPULSE));
+          s.obstacleDeflectCooldowns[deflection.obstacleIdx] = DEFLECT_COOLDOWN;
+
+          // ルーズボール突入
+          s.looseBall = true;
+          s.ballAge = 0;  // grace period 用にリセット
+          s.interceptPt = null;
+          for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+          for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+        }
+
+        // ③ Ball result detection — レシーバーの手で判定（ルーズボール突入時はスキップ）
+        if (!s.looseBall) {
+          const detection = detectBallResult(
+            ballPos.x, ballPos.y, ballPos.z,
+            this.ball.isInFlight(), s.ballAge,
+            receiverHands,
+          );
+          if (detection.result !== 'none') {
+            deactivateBall(s, this.ball, this.ballTrailPositions);
+            s.score[detection.result]++;
+
+            // Hit → 最も近い手を持つレシーバーにキャッチアクションを設定
+            if (detection.result === 'hit') {
+              let hitReceiverArrayIdx = 0;
+              let minDist = Infinity;
+              for (let ri = 0; ri < receiverHands.length; ri++) {
+                const lh = receiverHands[ri].left;
+                const rh = receiverHands[ri].right;
+                const dl = Math.sqrt((ballPos.x - lh.x) ** 2 + (ballPos.y - lh.y) ** 2 + (ballPos.z - lh.z) ** 2);
+                const dr = Math.sqrt((ballPos.x - rh.x) ** 2 + (ballPos.y - rh.y) ** 2 + (ballPos.z - rh.z) ** 2);
+                const d = Math.min(dl, dr);
+                if (d < minDist) { minDist = d; hitReceiverArrayIdx = ri; }
+              }
+              const hitEntityIdx = receiverEntityIndices[hitReceiverArrayIdx];
+              s.actionStates[hitEntityIdx] = startAction('catch', CATCH_TIMING);
+              this.catchHoldInfo = { entityIdx: hitEntityIdx };
+            }
+
+            // ミス時: launcher に戻す
+            if (detection.result === 'miss') {
+              s.onBallEntityIdx = 0;
+            }
+
+            // Force obstacles/targets to recovery (passer runs independently, catch preserved)
+            for (let i = 1; i < s.actionStates.length; i++) {
+              if (s.actionStates[i].type === 'catch') continue;
+              if (s.actionStates[i].phase !== 'idle') {
+                s.actionStates[i] = forceRecovery(s.actionStates[i]);
+              }
+            }
+            for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+            resetAfterResult(s);
+
+            // Miss/block: バックコートからリスタート（hit はキャッチ継続なのでスキップ）
+            if (detection.result !== 'hit') {
+              resetOffenseToBackcourt(s);
+            }
+          }
+        }
       }
     } else {
       // === Catch hold 中: targets continue role movement ===
       updateTargetRoleMovements(s, dt, -1);
     }
 
-    // === All 5 obstacles movement (unified for all branches) ===
-    updateObstacleMovements(s, dt, getOffenseMover(s, s.onBallEntityIdx));
+    // === Gated processing (skip during loose ball — handled in branch above) ===
+    if (!s.looseBall) {
+      // === All 5 obstacles movement (unified for all branches) ===
+      updateObstacleMovements(s, dt, getOffenseMover(s, s.onBallEntityIdx));
 
-    // === Separate overlapping entities ===
+      // === Scan updates ===
+      const scanBallPos = s.ballActive ? this.ball.getPosition() : Vector3.Zero();
+      updateScans(s, s.ballActive, scanBallPos, dt);
+
+      // === Offense neck facing ===
+      const offenseBallPos = s.ballActive ? this.ball.getPosition() : null;
+      updateOffenseTorsoNeckFacing(s, s.ballActive, offenseBallPos, dt);
+    }
+
+    // === Separate overlapping entities (always) ===
     separateEntities([
       { mover: s.launcher, radius: LAUNCHER_RADIUS },
       ...s.targets.map(t => ({ mover: t, radius: TARGET_RADIUS })),
       ...s.obstacles.map(o => ({ mover: o, radius: OBSTACLE_RADIUS })),
     ]);
 
-    // === Scan updates ===
-    const scanBallPos = s.ballActive ? this.ball.getPosition() : Vector3.Zero();
-    updateScans(s, s.ballActive, scanBallPos, dt);
-
-    // === Offense neck facing ===
-    const offenseBallPos = s.ballActive ? this.ball.getPosition() : null;
-    updateOffenseTorsoNeckFacing(s, s.ballActive, offenseBallPos, dt);
-
-    // === Player state snapshot ===
+    // === Player state snapshot (always) ===
     this.playerStateManager.update(s);
   }
 }

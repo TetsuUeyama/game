@@ -17,6 +17,12 @@ import {
 } from "../Config/EntityConfig";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
 import { ENTITY_HEIGHT } from "../Config/FieldConfig";
+import {
+  SPAWN_PAINT_X_HALF,
+  SPAWN_PAINT_Z_MIN,
+  SPAWN_PAINT_Z_MAX,
+  SPAWN_BASELINE_Z,
+} from "../Config/RoleConfig";
 import type { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */
@@ -117,6 +123,28 @@ export function resetAfterResult(state: SimState): void {
   state.slasherState = { dest: null, reevalTimer: 0, vcutPhase: state.slasherState.vcutPhase, vcutActive: false };
   state.screenerState = { dest: null, reevalTimer: 0, screenSet: false, holdTimer: 0 };
   state.dunkerState = { dest: null, reevalTimer: 0, sealing: false };
+}
+
+/** Move offense to backcourt spawn positions and enable transit mode.
+ *  Ball holder → baseline (goal line), other 4 → random in red paint area. */
+export function resetOffenseToBackcourt(state: SimState): void {
+  const allOffense = [state.launcher, ...state.targets];
+  for (let i = 0; i < allOffense.length; i++) {
+    if (i === state.onBallEntityIdx) {
+      // ボールホルダー: ゴールライン（ベースライン）中央からスタート
+      allOffense[i].x = 0;
+      allOffense[i].z = SPAWN_BASELINE_Z;
+    } else {
+      // その他: 赤ペイントエリア内のランダム位置
+      allOffense[i].x = (Math.random() * 2 - 1) * SPAWN_PAINT_X_HALF;
+      allOffense[i].z = SPAWN_PAINT_Z_MIN + Math.random() * (SPAWN_PAINT_Z_MAX - SPAWN_PAINT_Z_MIN);
+    }
+    allOffense[i].vx = 0;
+    allOffense[i].vz = 0;
+  }
+  for (let i = 0; i < state.offenseInTransit.length; i++) {
+    state.offenseInTransit[i] = true;
+  }
 }
 
 export { OB_INT_SPEEDS };

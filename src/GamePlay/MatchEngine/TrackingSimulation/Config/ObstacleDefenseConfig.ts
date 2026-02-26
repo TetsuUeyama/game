@@ -40,8 +40,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 0,
     reactive: true,
-    idleSpeed: 70 * S,         // 1.05
-    interceptSpeed: 160 * S,   // 2.40
+    idleSpeed: 80 * S,         // 1.20 (= TARGET_RANDOM_SPEED)
+    interceptSpeed: 180 * S,   // 2.70 (= TARGET_INTERCEPT_SPEED)
     hoverRadius: 60 * S,       // 0.90
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 2.0, focusDist: 4.5 },
@@ -52,8 +52,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 1,
     reactive: true,
-    idleSpeed: 65 * S,        // 0.975
-    interceptSpeed: 160 * S,  // 2.40
+    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
+    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
     hoverRadius: 50 * S,      // 0.75
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 1.5, focusDist: 2.25 },
@@ -64,8 +64,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 0,
     reactive: true,
-    idleSpeed: 70 * S,        // 1.05
-    interceptSpeed: 150 * S,  // 2.25
+    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
+    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
     hoverRadius: 50 * S,      // 0.75
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: false, timer: 1.0, focusDist: 3.0 },
@@ -76,8 +76,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 3,
     reactive: true,
-    idleSpeed: 65 * S,        // 0.975
-    interceptSpeed: 155 * S,  // 2.325
+    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
+    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
     hoverRadius: 55 * S,      // 0.825
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: false, timer: 1.8, focusDist: 3.75 },
@@ -88,8 +88,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 2,
     reactive: true,
-    idleSpeed: 75 * S,        // 1.125
-    interceptSpeed: 145 * S,  // 2.175
+    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
+    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
     hoverRadius: 60 * S,      // 0.90
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 1.2, focusDist: 3.0 },
