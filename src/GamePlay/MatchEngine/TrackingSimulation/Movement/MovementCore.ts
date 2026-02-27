@@ -2,14 +2,20 @@ import {
   SIM_FIELD_X_HALF,
   SIM_FIELD_Z_HALF,
   SIM_MARGIN,
+} from "../Config/FieldConfig";
+import {
   TURN_RATE,
+  NECK_MAX_ANGLE,
+  TORSO_MAX_ANGLE,
+  NECK_TURN_RATE,
+  TORSO_TURN_RATE,
+} from "../Config/BodyDynamicsConfig";
+import {
   TURN_MIN,
   TURN_MAX,
   FIRE_MIN,
   FIRE_MAX,
-  NECK_MAX_ANGLE,
-  TORSO_MAX_ANGLE,
-} from "../Config/FieldConfig";
+} from "../Config/BallTimingConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 
 export function randAngle(): number {
@@ -74,6 +80,16 @@ export function turnTorsoToward(
   if (rel > TORSO_MAX_ANGLE) rel = TORSO_MAX_ANGLE;
   if (rel < -TORSO_MAX_ANGLE) rel = -TORSO_MAX_ANGLE;
   return bodyFacing + rel;
+}
+
+/** エンティティの facing / torsoFacing / neckFacing を対象方向に一括回転 */
+export function orientToward(
+  mover: SimMover, targetX: number, targetZ: number, dt: number,
+): void {
+  const angle = Math.atan2(targetZ - mover.z, targetX - mover.x);
+  mover.facing = turnToward(mover.facing, angle, TURN_RATE * dt);
+  mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, TORSO_TURN_RATE * dt);
+  mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, NECK_TURN_RATE * dt);
 }
 
 // ============================================================================

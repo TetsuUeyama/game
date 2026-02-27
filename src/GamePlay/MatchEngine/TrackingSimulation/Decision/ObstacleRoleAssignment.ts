@@ -1,11 +1,12 @@
 /**
- * ObstacleDefenseConfig — 障害物（守備側）のロール設定テーブル
+ * ObstacleRoleAssignment — 障害物（守備側）のロール割り当てテーブル
  *
  * 全5障害物をMAN_MARKERに統一。各自に1人のマーク対象を割り当て。
  * マーク対象がオンボールになった際はBALL_MARKER的挙動（パスコース遮断スタンス）に自動切替。
  */
 
-import { S } from "./FieldConfig";
+import { S } from "../Config/FieldConfig";
+import { OBSTACLE_IDLE_SPEED, OBSTACLE_INTERCEPT_SPEED } from "../Config/DefenseConfig";
 
 /** 障害物（守備側）の行動設定 */
 export interface ObstacleRoleConfig {
@@ -40,8 +41,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 0,
     reactive: true,
-    idleSpeed: 80 * S,         // 1.20 (= TARGET_RANDOM_SPEED)
-    interceptSpeed: 180 * S,   // 2.70 (= TARGET_INTERCEPT_SPEED)
+    idleSpeed: OBSTACLE_IDLE_SPEED,
+    interceptSpeed: OBSTACLE_INTERCEPT_SPEED,
     hoverRadius: 60 * S,       // 0.90
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 2.0, focusDist: 4.5 },
@@ -52,8 +53,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 1,
     reactive: true,
-    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
-    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
+    idleSpeed: OBSTACLE_IDLE_SPEED,
+    interceptSpeed: OBSTACLE_INTERCEPT_SPEED,
     hoverRadius: 50 * S,      // 0.75
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 1.5, focusDist: 2.25 },
@@ -64,8 +65,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 0,
     reactive: true,
-    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
-    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
+    idleSpeed: OBSTACLE_IDLE_SPEED,
+    interceptSpeed: OBSTACLE_INTERCEPT_SPEED,
     hoverRadius: 50 * S,      // 0.75
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: false, timer: 1.0, focusDist: 3.0 },
@@ -76,8 +77,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 3,
     reactive: true,
-    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
-    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
+    idleSpeed: OBSTACLE_IDLE_SPEED,
+    interceptSpeed: OBSTACLE_INTERCEPT_SPEED,
     hoverRadius: 55 * S,      // 0.825
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: false, timer: 1.8, focusDist: 3.75 },
@@ -88,8 +89,8 @@ const OB_CONFIGS: readonly ObstacleRoleConfig[] = [
     scanEnabled: true,
     scanWatchTargetIdx: 2,
     reactive: true,
-    idleSpeed: 80 * S,        // 1.20 (= TARGET_RANDOM_SPEED)
-    interceptSpeed: 180 * S,  // 2.70 (= TARGET_INTERCEPT_SPEED)
+    idleSpeed: OBSTACLE_IDLE_SPEED,
+    interceptSpeed: OBSTACLE_INTERCEPT_SPEED,
     hoverRadius: 60 * S,      // 0.90
     restoreRandomOnReset: true,
     scanInitial: { atLauncher: true, timer: 1.2, focusDist: 3.0 },

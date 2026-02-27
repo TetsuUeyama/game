@@ -19,9 +19,9 @@ import type {
   BallFireContext,
 } from "../Types/TrackingSimTypes";
 import { DEFAULT_FACTORS } from "./ActionScorerFactors";
-import { evaluatePreFire } from "../Action/PassAction";
-import { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
-import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
+import { evaluatePreFire } from "./PassEvaluation";
+import { ROLE_ASSIGNMENTS } from "./OffenseRoleAssignment";
+import { OB_CONFIGS } from "./ObstacleRoleAssignment";
 
 // OB_INT_SPEEDS derived locally to avoid cross-module dependency
 const OB_INT_SPEEDS = OB_CONFIGS.map(cfg => cfg.interceptSpeed);

@@ -8,9 +8,9 @@
 import type { SimState } from "../Types/TrackingSimTypes";
 import { SimEntityState, SimDefenseRole } from "../Types/SimPlayerStateTypes";
 import type { SimEntitySnapshot } from "../Types/SimPlayerStateTypes";
-import { ROLE_ASSIGNMENTS } from "../Config/RoleConfig";
-import type { SimOffenseRole } from "../Config/RoleConfig";
-import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
+import { ROLE_ASSIGNMENTS } from "../Decision/OffenseRoleAssignment";
+import type { SimOffenseRole } from "../Decision/OffenseRoleAssignment";
+import { OB_CONFIGS, OBSTACLE_COUNT } from "../Decision/ObstacleRoleAssignment";
 import { dist2d } from "../Movement/MovementCore";
 
 export class SimPlayerStateManager {

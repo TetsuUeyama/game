@@ -1,9 +1,9 @@
+import { PHYSICAL_MARGIN } from "../Config/CollisionConfig";
 import {
-  PHYSICAL_MARGIN,
   OB_FOV_HALF_NEAR,
   OB_FOV_HALF_FAR,
   FOV_NARROW_DIST,
-} from "../Config/FieldConfig";
+} from "../Config/FOVConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 import { normAngleDiff, dist2d, dirSpeedMult } from "../Movement/MovementCore";
 

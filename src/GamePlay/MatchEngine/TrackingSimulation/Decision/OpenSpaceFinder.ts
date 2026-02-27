@@ -4,7 +4,7 @@ import {
   SIM_MARGIN,
 } from "../Config/FieldConfig";
 import { TARGET_RANDOM_SPEED } from "../Config/EntityConfig";
-import type { SimZone } from "../Config/RoleConfig";
+import type { SimZone } from "../Config/FieldConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 import { dist2d, normAngleDiff, moveWithFacing } from "../Movement/MovementCore";
 import { isPhysicallyClose, fovHalfAtDist } from "./TrajectoryAnalysis";

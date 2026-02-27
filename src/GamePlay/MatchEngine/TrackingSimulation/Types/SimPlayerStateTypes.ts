@@ -1,4 +1,4 @@
-import type { SimOffenseRole } from "../Config/RoleConfig";
+import type { SimOffenseRole } from "../Decision/OffenseRoleAssignment";
 import type { ActionType, ActionPhase } from "./TrackingSimTypes";
 
 // =========================================================================
