@@ -16,16 +16,18 @@ import { ActionGaugeRenderer } from "./ActionGaugeRenderer";
 import {
   ENTITY_HEIGHT,
   OBSTACLE_SIZE,
+} from "../Config/FieldConfig";
+import {
   ARM_LERP_SPEED,
   NECK_VISUAL_LERP_SPEED,
   NECK_MAX_ANGLE,
   TORSO_VISUAL_LERP_SPEED,
-} from "../Config/FieldConfig";
+} from "../Config/BodyDynamicsConfig";
 
 /** 全エンティティの描画サイズを障害物サイズに統一 */
 const VISUAL_SIZE = OBSTACLE_SIZE;
 import { TARGET_COLORS_3D, INIT_TARGETS } from "../Config/EntityConfig";
-import { OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
+import { OBSTACLE_COUNT } from "../Decision/ObstacleRoleAssignment";
 import type { SimMover, SimScanMemory, SimPreFireInfo, ActionState, PushObstructionInfo } from "../Types/TrackingSimTypes";
 import { normAngleDiff } from "../Movement/MovementCore";
 
@@ -134,27 +136,30 @@ export class SimVisualization {
 
   /**
    * 上下2段の8角柱エンティティを作成する。
-   * 上段は明るめ、下段はやや暗めの色になる。
+   * 上段はチームカラー、下段はベースカラーのやや暗めになる。
    * 返すのは親 TransformNode 的な空 Mesh（位置更新用）。
+   *
+   * @param upperColor 上半身のチームカラー（省略時は color と同じ）
    */
   private createOctEntity(
-    name: string, size: number, color: Color3,
+    name: string, size: number, color: Color3, upperColor?: Color3,
   ): { root: Mesh; pivot: TransformNode } {
     const halfH = ENTITY_HEIGHT / 2;
     // 8角柱の外接円半径: size/2 は辺間の幅に近い値なのでそのまま使う
     const radius = size / 2;
+    const uc = upperColor ?? color;
 
-    // 上段（明るい色）
+    // 上段（チームカラー）
     const upper = MeshBuilder.CreateCylinder(`${name}_upper`, {
       height: halfH, diameter: radius * 2, tessellation: 8,
     }, this.scene);
     upper.position.y = halfH / 2; // 中心が halfH/2
     const upperMat = new StandardMaterial(`${name}_upperMat`, this.scene);
-    upperMat.diffuseColor = color;
+    upperMat.diffuseColor = uc;
     upperMat.specularColor = Color3.Black();
     upper.material = upperMat;
 
-    // 下段（暗めの色）
+    // 下段（ベースカラーの暗め）
     const lower = MeshBuilder.CreateCylinder(`${name}_lower`, {
       height: halfH, diameter: radius * 2, tessellation: 8,
     }, this.scene);
@@ -201,8 +206,11 @@ export class SimVisualization {
   /**
    * エンティティの両サイドに腕（棒）と拳（球）を付ける。
    * デフォルトは60度下向きのポーズ。ボールが近いと動的に向きを変える。
+   *
+   * @param upperColor 上半身チームカラー（腕・拳に適用。省略時は color）
    */
-  private createEntityArms(parent: Mesh, pivot: TransformNode, color: Color3): void {
+  private createEntityArms(parent: Mesh, pivot: TransformNode, color: Color3, upperColor?: Color3): void {
+    const uc = upperColor ?? color;
     const createArmMesh = (side: -1 | 1): { arm: Mesh; hand: Mesh } => {
       // 腕（薄い円柱）— 上半身ピボットの子
       const arm = MeshBuilder.CreateCylinder(`${parent.name}_arm${side}`, {
@@ -213,7 +221,7 @@ export class SimVisualization {
       arm.rotation.z = side * DEF_ARM_ROT_Z;
       arm.position.set(side * DEF_ARM_CENTER_DX, SHOULDER_Y + DEF_ARM_CENTER_DY, 0);
       const armMat = new StandardMaterial(`${parent.name}_armMat${side}`, this.scene);
-      armMat.diffuseColor = new Color3(color.r * 0.7, color.g * 0.7, color.b * 0.7);
+      armMat.diffuseColor = new Color3(uc.r * 0.7, uc.g * 0.7, uc.b * 0.7);
       armMat.specularColor = Color3.Black();
       arm.material = armMat;
       arm.parent = pivot;
@@ -226,7 +234,7 @@ export class SimVisualization {
       }, this.scene);
       hand.position.set(side * DEF_HAND_DX, SHOULDER_Y + DEF_HAND_DY, 0);
       const handMat = new StandardMaterial(`${parent.name}_handMat${side}`, this.scene);
-      handMat.diffuseColor = color;
+      handMat.diffuseColor = uc;
       handMat.specularColor = Color3.Black();
       hand.material = handMat;
       hand.parent = pivot;
@@ -252,26 +260,30 @@ export class SimVisualization {
   }
 
   createMeshes(): void {
-    // Launcher (green octagonal prism)
-    const launcherColor = new Color3(0.27, 0.8, 0.27);
-    const launcherEnt = this.createOctEntity("simLauncher", VISUAL_SIZE, launcherColor);
-    this.launcherMesh = launcherEnt.root;
-    this.createEntityArms(launcherEnt.root, launcherEnt.pivot, launcherColor);
+    // チームカラー: 上半身で攻守を識別
+    const offenseTeamColor = new Color3(0.2, 0.4, 0.9);   // 青（攻めチーム）
+    const defenseTeamColor = new Color3(0.9, 0.25, 0.25);  // 赤（守りチーム）
 
-    // Targets (colored octagonal prisms)
+    // Launcher (green base / blue upper)
+    const launcherColor = new Color3(0.27, 0.8, 0.27);
+    const launcherEnt = this.createOctEntity("simLauncher", VISUAL_SIZE, launcherColor, offenseTeamColor);
+    this.launcherMesh = launcherEnt.root;
+    this.createEntityArms(launcherEnt.root, launcherEnt.pivot, launcherColor, offenseTeamColor);
+
+    // Targets (individual base colors / blue upper)
     for (let i = 0; i < TARGET_COLORS_3D.length; i++) {
       const c = TARGET_COLORS_3D[i];
       const color = new Color3(c.r, c.g, c.b);
-      const ent = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color);
-      this.createEntityArms(ent.root, ent.pivot, color);
+      const ent = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color, offenseTeamColor);
+      this.createEntityArms(ent.root, ent.pivot, color, offenseTeamColor);
       this.targetMeshes.push(ent.root);
     }
 
-    // Obstacles (purple octagonal prisms)
+    // Obstacles (purple base / red upper)
     const obColor = new Color3(0.6, 0.4, 0.8);
     for (let i = 0; i < OBSTACLE_COUNT; i++) {
-      const ent = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor);
-      this.createEntityArms(ent.root, ent.pivot, obColor);
+      const ent = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor, defenseTeamColor);
+      this.createEntityArms(ent.root, ent.pivot, obColor, defenseTeamColor);
       this.obstacleMeshes.push(ent.root);
     }
 

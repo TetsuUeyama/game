@@ -9,7 +9,7 @@ import {
 import {
   FOV_FULL_LEN,
   FOV_WINDOW_LEN,
-} from "../Config/FieldConfig";
+} from "../Config/FOVConfig";
 
 import type { SimVisState } from "./SimVisualization";
 import { dirSpeedMult } from "../Movement/MovementCore";

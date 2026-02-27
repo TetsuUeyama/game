@@ -9,20 +9,21 @@ import type { SimState } from "../Types/TrackingSimTypes";
 import { createIdleAction, startAction } from "../Action/ActionCore";
 import { MOVE_TIMING } from "../Action/MoveAction";
 import { OBSTACLE_REACT_TIMING } from "../Action/ObstacleReactAction";
-import { computeObstacleReactions } from "../Action/PassAction";
+import { computeObstacleReactions } from "../Decision/PassEvaluation";
 import { dist2d, restoreRandom } from "../Movement/MovementCore";
 import {
   TARGET_RANDOM_SPEED,
   SOLVER_CFG_3D,
 } from "../Config/EntityConfig";
-import { OB_CONFIGS, OBSTACLE_COUNT } from "../Config/ObstacleDefenseConfig";
-import { ENTITY_HEIGHT, SHOT_ARC_HEIGHT } from "../Config/FieldConfig";
+import { OB_CONFIGS, OBSTACLE_COUNT } from "../Decision/ObstacleRoleAssignment";
+import { ENTITY_HEIGHT } from "../Config/FieldConfig";
+import { SHOT_ARC_HEIGHT } from "../Config/ShootConfig";
 import {
   SPAWN_PAINT_X_HALF,
   SPAWN_PAINT_Z_MIN,
   SPAWN_PAINT_Z_MAX,
   SPAWN_BASELINE_Z,
-} from "../Config/RoleConfig";
+} from "../Config/FieldConfig";
 import type { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 /** Ball launch/target Y height (upper portion of entity boxes) */

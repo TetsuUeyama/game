@@ -6,8 +6,8 @@ import {
   OPEN_THRESHOLD,
   SCREENER_OFFSET,
   DUNKER_SEAL_DIST,
-  type SimZone,
-} from "../Config/RoleConfig";
+} from "../Decision/OffenseRoleAssignment";
+import type { SimZone } from "../Config/FieldConfig";
 import { TARGET_RANDOM_SPEED, TARGET_INTERCEPT_SPEED } from "../Config/EntityConfig";
 import type { SimMover, LauncherState, SlasherState, ScreenerState, DunkerState } from "../Types/TrackingSimTypes";
 import { dist2d, moveWithFacing } from "../Movement/MovementCore";

@@ -10,7 +10,7 @@
 import type { SimState } from "../Types/TrackingSimTypes";
 import type { ThreatEntry, ThreatAssessmentResult } from "../Types/ActionScorerTypes";
 import { dist2d } from "../Movement/MovementCore";
-import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/FieldConfig";
+import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
 
 function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;

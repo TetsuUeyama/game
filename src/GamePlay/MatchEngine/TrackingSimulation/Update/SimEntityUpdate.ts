@@ -1,20 +1,21 @@
 /**
- * SimEntityUpdate - ターゲット/障害物の移動とスキャン更新（重複除去の核心）
- * ball-active / ball-not-active で重複していたロジックを統一する。
+ * SimEntityUpdate - ターゲット/障害物の移動とスキャン更新
+ * ディフェンス関連は ObstacleDefenseAI.ts に委譲。
  */
 
 import { Vector3 } from "@babylonjs/core";
 
-import type { SimState, SimMover, SimBall, PushObstructionInfo } from "../Types/TrackingSimTypes";
+import type { SimState, SimMover, SimBall } from "../Types/TrackingSimTypes";
 import {
-  setChaserVelocity,
-  moveKeepFacing,
-  moveWithFacing,
-  turnToward,
   turnNeckToward,
   turnTorsoToward,
 } from "../Movement/MovementCore";
-import { TURN_RATE, NECK_TURN_RATE, TORSO_TURN_RATE, ONBALL_MARK_DISTANCE, ONBALL_MARK_HOVER, PUSH_ACTIVATION_DIST, PUSH_SPEED_MULT, PUSH_HAND_REACH, PUSH_DENY_OFFSET, PUSH_DENY_HOVER, DEFENSE_ENGAGE_Z } from "../Config/FieldConfig";
+import {
+  NECK_TURN_RATE, TORSO_TURN_RATE,
+} from "../Config/BodyDynamicsConfig";
+import {
+  PUSH_SPEED_MULT, PUSH_HAND_REACH,
+} from "../Config/DefenseConfig";
 import {
   moveSecondHandler,
   moveSlasher,
@@ -24,52 +25,10 @@ import {
 } from "../Movement/RoleMovement";
 import { updateScan } from "../Decision/ScanSystem";
 import { canEntityMove, applyMoveAction } from "./SimActionManager";
-import { OB_CONFIGS } from "../Config/ObstacleDefenseConfig";
-import { INIT_OBSTACLES } from "../Config/EntityConfig";
+import { OB_CONFIGS } from "../Decision/ObstacleRoleAssignment";
 
-/**
- * MAN_MARKER がターゲットに近接している場合のプッシュ妨害情報を計算する。
- * 条件: スキャン中でない、リアクション中でない、マーク対象がオンボールでない、
- *       距離が PUSH_ACTIVATION_DIST 以内。
- */
-export function computePushObstructions(state: SimState): void {
-  const result: PushObstructionInfo[] = [];
-  const { launcher, targets, obstacles } = state;
-
-  for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-    const cfg = OB_CONFIGS[oi];
-    // スキャン中でない
-    if (state.obMems[oi].searching) continue;
-    // リアクション中でない
-    if (state.obReacting[oi]) continue;
-
-    const markEntityIdx = cfg.markTargetEntityIdx;
-    // マーク対象がオンボールでない（オンボール時はオンボールディフェンスで処理）
-    if (markEntityIdx === state.onBallEntityIdx) continue;
-
-    const ob = obstacles[oi];
-    const markTarget = markEntityIdx === 0 ? launcher : targets[markEntityIdx - 1];
-    const dx = markTarget.x - ob.x;
-    const dz = markTarget.z - ob.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-
-    if (dist > PUSH_ACTIVATION_DIST) continue;
-
-    // 腕の左右判定: ターゲットが facing 方向に対してどちら側か（外積で判定）
-    const cross = Math.cos(ob.facing) * dz - Math.sin(ob.facing) * dx;
-    const pushArm: 'left' | 'right' = cross >= 0 ? 'left' : 'right';
-
-    result.push({
-      obstacleIdx: oi,
-      targetEntityIdx: markEntityIdx,
-      pushArm,
-      armTargetX: markTarget.x,
-      armTargetZ: markTarget.z,
-    });
-  }
-
-  state.pushObstructions = result;
-}
+// Re-export from ObstacleDefenseAI for backwards compatibility
+export { computePushObstructions, updateObstacleMovements } from "./ObstacleDefenseAI";
 
 /**
  * ターゲットのロール別移動を実行（重複除去）
@@ -142,102 +101,6 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
   }
 }
 
-/**
- * 全5障害物の移動を統一処理（全MAN_MARKER）。
- * obReacting[i] が true ならインターセプト移動、false ならマーク対象追跡。
- * マーク対象がオンボールの場合はパスコース遮断スタンスに自動切替。
- */
-export function updateObstacleMovements(state: SimState, dt: number, passerMover: SimMover): void {
-  const { launcher, targets, obstacles } = state;
-  const selReceiverIdx = state.selectedReceiverEntityIdx;
-  const selTarget = selReceiverIdx === 0 ? launcher : targets[selReceiverIdx - 1];
-
-  for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-    const cfg = OB_CONFIGS[oi];
-    const ob = obstacles[oi];
-
-    if (state.obReacting[oi]) {
-      moveWithFacing(ob, cfg.interceptSpeed, dt);
-      continue;
-    }
-
-    const markEntityIdx = cfg.markTargetEntityIdx;
-    const markTarget = markEntityIdx === 0 ? launcher : targets[markEntityIdx - 1];
-
-    if (markEntityIdx === state.onBallEntityIdx) {
-      // オンボール切替時: searching をクリア（スキャンより優先）
-      state.obMems[oi].searching = false;
-      // --- オンボールディフェンス: パスコース遮断スタンス ---
-      const ldx = selTarget.x - markTarget.x;
-      const ldz = selTarget.z - markTarget.z;
-      const lDist = Math.sqrt(ldx * ldx + ldz * ldz);
-      let markX: number, markZ: number;
-      if (lDist > 0.01) {
-        markX = markTarget.x + (ldx / lDist) * ONBALL_MARK_DISTANCE;
-        markZ = markTarget.z + (ldz / lDist) * ONBALL_MARK_DISTANCE;
-      } else {
-        markX = markTarget.x + Math.cos(markTarget.facing) * ONBALL_MARK_DISTANCE;
-        markZ = markTarget.z + Math.sin(markTarget.facing) * ONBALL_MARK_DISTANCE;
-      }
-      setChaserVelocity(ob, markX, markZ, cfg.idleSpeed, ONBALL_MARK_HOVER, dt);
-      moveKeepFacing(ob, cfg.idleSpeed, dt);
-      // facing をマーク対象方向に向ける
-      const angle = Math.atan2(markTarget.z - ob.z, markTarget.x - ob.x);
-      ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
-      ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
-      ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
-    } else if (markTarget.z < DEFENSE_ENGAGE_Z) {
-      // --- マーク対象が3Pエリア外: 初期位置で待機 ---
-      const waitPos = INIT_OBSTACLES[oi];
-      setChaserVelocity(ob, waitPos.x, waitPos.z, cfg.idleSpeed, cfg.hoverRadius, dt);
-      moveKeepFacing(ob, cfg.idleSpeed, dt);
-      // マーク対象の方向を見て待機
-      const angle = Math.atan2(markTarget.z - ob.z, markTarget.x - ob.x);
-      ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
-      ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
-      ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
-    } else {
-      // --- オフボール: マーク対象追跡（searching 中も最終確認位置へ移動） ---
-      const mem = state.obMems[oi];
-      // searching 中は最終確認位置、通常時はマーク対象の実位置を追う
-      const chaseX = mem.searching ? mem.lastSeenTargetX : markTarget.x;
-      const chaseZ = mem.searching ? mem.lastSeenTargetZ : markTarget.z;
-      const tdx = chaseX - ob.x;
-      const tdz = chaseZ - ob.z;
-      const tDist = Math.sqrt(tdx * tdx + tdz * tdz);
-
-      if (!mem.searching && tDist < PUSH_ACTIVATION_DIST) {
-        // ディナイモード: パッサーとマーク対象の間に入りつつプッシュ
-        const pdx = passerMover.x - markTarget.x;
-        const pdz = passerMover.z - markTarget.z;
-        const pDist = Math.sqrt(pdx * pdx + pdz * pdz);
-        let denyX: number, denyZ: number;
-        if (pDist > 0.01) {
-          denyX = markTarget.x + (pdx / pDist) * PUSH_DENY_OFFSET;
-          denyZ = markTarget.z + (pdz / pDist) * PUSH_DENY_OFFSET;
-        } else {
-          denyX = markTarget.x;
-          denyZ = markTarget.z;
-        }
-        setChaserVelocity(ob, denyX, denyZ, cfg.idleSpeed, PUSH_DENY_HOVER, dt);
-        moveKeepFacing(ob, cfg.idleSpeed, dt);
-        // facing をマーク対象方向に向ける
-        const angle = Math.atan2(markTarget.z - ob.z, markTarget.x - ob.x);
-        ob.facing = turnToward(ob.facing, angle, TURN_RATE * dt);
-        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angle, TORSO_TURN_RATE * dt);
-        ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angle, NECK_TURN_RATE * dt);
-      } else {
-        // 通常追跡 or サーチ中の最終確認位置への移動
-        setChaserVelocity(ob, chaseX, chaseZ, cfg.idleSpeed, cfg.hoverRadius, dt);
-        moveKeepFacing(ob, cfg.idleSpeed, dt);
-      }
-    }
-  }
-}
-
-/**
- * 5障害物のスキャン状態を更新
- */
 /**
  * オフェンス側（launcher + targets）の torsoFacing + neckFacing を更新。
  * 下半身 → 上半身 → 首 の3段階回転階層。

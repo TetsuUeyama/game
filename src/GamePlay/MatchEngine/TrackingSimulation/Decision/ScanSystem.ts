@@ -1,10 +1,12 @@
 import {
   NECK_TURN_RATE,
   TORSO_TURN_RATE,
+} from "../Config/BodyDynamicsConfig";
+import {
   FOV_FOCUS_SPEED,
   SEARCH_SWEEP_SPEED,
   SEARCH_SWEEP_MAX,
-} from "../Config/FieldConfig";
+} from "../Config/FOVConfig";
 import type { SimMover, SimBall, SimScanMemory, ScanResult } from "../Types/TrackingSimTypes";
 import { dist2d, normAngleDiff, turnNeckToward, turnTorsoToward } from "../Movement/MovementCore";
 import { isPointInFOV, isPointInSearchFOV } from "./TrajectoryAnalysis";

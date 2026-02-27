@@ -14,7 +14,7 @@ import {
   MIN_SHOOT_Z,
   MAX_SHOOT_CHARGE,
   SHOOT_CHARGE_DEAD_ZONE,
-} from "../Config/FieldConfig";
+} from "../Config/ShootConfig";
 import { dist2d } from "../Movement/MovementCore";
 
 /**
