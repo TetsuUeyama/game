@@ -63,11 +63,18 @@ import {
 } from "./Movement/RoleMovement";
 
 import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
-import { PASS_TIMING } from "./Action/PassAction";
+import { computePassTiming } from "./Action/PassAction";
 import { evaluatePreFire, attemptFire } from "./Decision/PassEvaluation";
 import { checkObstacleDeflection } from "./Update/BallCollision";
 import { CATCH_TIMING } from "./Action/CatchAction";
 import { computeShotTarget, computeShootTiming } from "./Action/ShootAction";
+import { GOAL_RIM_X, GOAL_RIM_Z } from "./Config/ShootConfig";
+import {
+  computeDribbleHand,
+  computePassAlignCharge,
+  computeShootAlignCharge,
+  isAlignedForFire,
+} from "./Decision/ActionDirectionCheck";
 
 import { tickAndTransitionActions, canEntityMove, applyMoveAction } from "./Update/SimActionManager";
 import { deactivateBall, executePendingFire, executePendingShot, resetAfterResult, resetOffenseToBackcourt, OB_INT_SPEEDS } from "./Update/SimBallManager";
@@ -446,7 +453,29 @@ export class TrackingSimulation3D {
     // === Tick action states ===
     // passer は tick 時点の on-ball entity（catch hold 変更前）
     const passer = getOffenseMover(s, s.onBallEntityIdx);
-    const { shouldFireBall, shouldShootBall } = tickAndTransitionActions(s, dt);
+    let { shouldFireBall, shouldShootBall } = tickAndTransitionActions(s, dt);
+
+    // パス発射時アラインメント検証
+    if (shouldFireBall) {
+      const dribbleHand = computeDribbleHand(passer, s.obstacles);
+      if (!s.pendingFire || !isAlignedForFire(passer, s.pendingFire.interceptX, s.pendingFire.interceptZ, 'pass', dribbleHand)) {
+        s.actionStates[s.onBallEntityIdx] = forceRecovery(s.actionStates[s.onBallEntityIdx], 0.2);
+        s.pendingFire = null;
+        s.cooldown = 0.5;
+        shouldFireBall = false;
+      }
+    }
+
+    // シュート発射時アラインメント検証
+    if (shouldShootBall) {
+      if (!isAlignedForFire(passer, GOAL_RIM_X, GOAL_RIM_Z, 'shoot', 'right')) {
+        s.actionStates[s.onBallEntityIdx] = forceRecovery(s.actionStates[s.onBallEntityIdx], 0.2);
+        s.pendingShot = null;
+        s.cooldown = 0.5;
+        shouldShootBall = false;
+      }
+    }
+
     if (shouldFireBall) {
       executePendingFire(s, this.ball, passer);
     }
@@ -621,9 +650,10 @@ export class TrackingSimulation3D {
             s.preFire = scorerResult.preFire;
 
             if (scorerResult.bestAction === 'shoot') {
+              const shootAlignCharge = computeShootAlignCharge(currentPasser, GOAL_RIM_X, GOAL_RIM_Z);
               s.pendingShot = computeShotTarget();
               s.pendingCooldown = 2.0;
-              s.actionStates[s.onBallEntityIdx] = startAction('shoot', computeShootTiming(currentPasser));
+              s.actionStates[s.onBallEntityIdx] = startAction('shoot', computeShootTiming(currentPasser, shootAlignCharge));
               s.moveDistAccum[s.onBallEntityIdx] = 0;
             } else if (scorerResult.bestAction === 'pass') {
               const anyInTransit = s.offenseInTransit.some(t => t);
@@ -631,9 +661,12 @@ export class TrackingSimulation3D {
                 const fireResult = attemptFire(ctx, evalResult.selectedTargetIdx, SOLVER_CFG_3D);
                 if (fireResult.fired && fireResult.solution) {
                   fireResult.solution.targetIdx = receiverEntityIndices[fireResult.solution.targetIdx];
+                  const receiverMover = getOffenseMover(s, fireResult.solution.targetIdx);
+                  const dribbleHand = computeDribbleHand(currentPasser, s.obstacles);
+                  const passAlignCharge = computePassAlignCharge(currentPasser, receiverMover.x, receiverMover.z, dribbleHand);
                   s.pendingFire = fireResult.solution;
                   s.pendingCooldown = fireResult.newCooldown;
-                  s.actionStates[s.onBallEntityIdx] = startAction('pass', PASS_TIMING);
+                  s.actionStates[s.onBallEntityIdx] = startAction('pass', computePassTiming(passAlignCharge));
                   s.moveDistAccum[s.onBallEntityIdx] = 0;
                 } else {
                   s.cooldown = fireResult.newCooldown;
