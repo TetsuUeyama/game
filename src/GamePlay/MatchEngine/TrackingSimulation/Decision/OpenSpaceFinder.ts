@@ -8,6 +8,7 @@ import type { SimZone } from "../Config/FieldConfig";
 import type { SimMover } from "../Types/TrackingSimTypes";
 import { dist2d, normAngleDiff, moveWithFacing } from "../Movement/MovementCore";
 import { isPhysicallyClose, fovHalfAtDist } from "./TrajectoryAnalysis";
+import { scoreFieldPosition } from "./FieldPositionScorer";
 
 /** Find open space on field */
 export function findOpenSpace(
@@ -112,6 +113,11 @@ export function findOpenSpaceInZone(
         score += 1.5;
       }
     }
+
+    // Field position value (goal proximity + center bonus + isolation)
+    const allPlayers = [...obstacles, launcher, ...otherTargets];
+    const fp = scoreFieldPosition(px, pz, allPlayers);
+    score += fp.total * 5.0;
 
     // Proximity to home position
     const homeDist = dist2d(px, pz, homeX, homeZ);

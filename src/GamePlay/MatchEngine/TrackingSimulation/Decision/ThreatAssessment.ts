@@ -9,8 +9,8 @@
 
 import type { SimState } from "../Types/TrackingSimTypes";
 import type { ThreatEntry, ThreatAssessmentResult } from "../Types/ActionScorerTypes";
-import { dist2d } from "../Movement/MovementCore";
 import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
+import { scoreFieldPosition } from "./FieldPositionScorer";
 
 function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
@@ -22,7 +22,7 @@ function clamp(v: number, min: number, max: number): number {
  * - positionScore (0-1): ゴールまでの距離 + ペイント内ボーナス
  * - opennessScore (0-1): 最寄りDFまでの距離 / 5.0
  * - facingScore (0-1): ゴール方向を向いているか (cos 正規化)
- * - threat = position * 0.5 + openness * 0.35 + facing * 0.15
+ * - threat = position * 0.40 + openness * 0.30 + facing * 0.30
  */
 export function computeThreatAssessment(state: SimState): ThreatAssessmentResult {
   const allOffense = [state.launcher, ...state.targets];
@@ -31,19 +31,12 @@ export function computeThreatAssessment(state: SimState): ThreatAssessmentResult
   for (let i = 0; i < allOffense.length; i++) {
     const mover = allOffense[i];
 
-    // positionScore: ゴールまでの距離（近いほど高い）+ ペイント内ボーナス
-    const goalDist = dist2d(mover.x, mover.z, GOAL_RIM_X, GOAL_RIM_Z);
-    const distScore = clamp(1 - goalDist / 15, 0, 1);
-    const inPaint = Math.abs(mover.x) <= 2.5 && mover.z >= 10 && mover.z <= 14;
-    const positionScore = clamp(distScore + (inPaint ? 0.2 : 0), 0, 1);
-
-    // opennessScore: 最寄りDFまでの距離
-    let minDefDist = Infinity;
-    for (const ob of state.obstacles) {
-      const d = dist2d(mover.x, mover.z, ob.x, ob.z);
-      if (d < minDefDist) minDefDist = d;
-    }
-    const opennessScore = clamp(minDefDist / 5.0, 0, 1);
+    // positionScore + opennessScore: FieldPositionScorer で統一評価
+    const others = state.obstacles.map(ob => ({ x: ob.x, z: ob.z }));
+    const fp = scoreFieldPosition(mover.x, mover.z, others);
+    // goalProximity + centerBonus → positionScore, isolation → opennessScore
+    const positionScore = clamp(fp.goalProximity * 0.7 + fp.centerBonus * 0.3, 0, 1);
+    const opennessScore = fp.isolation;
 
     // facingScore: ゴール方向を向いているか (cos 正規化)
     const toGoalX = GOAL_RIM_X - mover.x;
@@ -53,7 +46,7 @@ export function computeThreatAssessment(state: SimState): ThreatAssessmentResult
                     + Math.sin(mover.facing) * (toGoalZ / toGoalDist);
     const facingScore = clamp((facingCos + 1) / 2, 0, 1);
 
-    const threat = positionScore * 0.5 + opennessScore * 0.35 + facingScore * 0.15;
+    const threat = positionScore * 0.40 + opennessScore * 0.30 + facingScore * 0.30;
 
     entries.push({
       entityIdx: i,

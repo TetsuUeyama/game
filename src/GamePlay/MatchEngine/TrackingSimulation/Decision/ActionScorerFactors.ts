@@ -9,6 +9,7 @@ import type { ScoreFactor, ActionScorerContext } from "../Types/ActionScorerType
 import { canShoot } from "../Action/ShootAction";
 import { dist2d } from "../Movement/MovementCore";
 import { GOAL_RIM_X, GOAL_RIM_Z, MAX_SHOOT_RANGE } from "../Config/ShootConfig";
+import { scoreFieldPosition } from "./FieldPositionScorer";
 
 function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
@@ -21,6 +22,20 @@ function nearestDefenderDist(ctx: ActionScorerContext): number {
     if (d < minDist) minDist = d;
   }
   return minDist;
+}
+
+/**
+ * DFのゴール方向への向き度合い。
+ * 1 = ゴール正面を向いている（高い警戒 = OF にとってリスク大）
+ * 0 = ゴールと反対を向いている（低い警戒 = OF にとってチャンス）
+ */
+function goalFacingAwareness(ob: { x: number; z: number; facing: number }): number {
+  const toGoalX = GOAL_RIM_X - ob.x;
+  const toGoalZ = GOAL_RIM_Z - ob.z;
+  const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ) || 1;
+  const cos = Math.cos(ob.facing) * (toGoalX / toGoalDist)
+            + Math.sin(ob.facing) * (toGoalZ / toGoalDist);
+  return clamp((cos + 1) / 2, 0, 1);
 }
 
 // =========================================================================
@@ -52,6 +67,27 @@ export const shootDefenderProximity: ScoreFactor = {
   evaluate(ctx: ActionScorerContext): number {
     if (!canShoot(ctx.mover)) return 0;
     return clamp(nearestDefenderDist(ctx) / 3.0, 0, 1);
+  },
+};
+
+/** 最寄りDFがゴールから逆を向いているほどシュートしやすい */
+export const shootDefenderAwareness: ScoreFactor = {
+  id: 'shoot:defenderAwareness',
+  action: 'shoot',
+  weight: 2.5,
+  evaluate(ctx: ActionScorerContext): number {
+    if (!canShoot(ctx.mover)) return 0;
+    let minDist = Infinity;
+    let nearestAwareness = 1;
+    for (const ob of ctx.obstacles) {
+      const d = dist2d(ctx.mover.x, ctx.mover.z, ob.x, ob.z);
+      if (d < minDist) {
+        minDist = d;
+        nearestAwareness = goalFacingAwareness(ob);
+      }
+    }
+    // DF がゴールから逆向き → awareness 低 → スコア高（シュートチャンス）
+    return 1 - nearestAwareness;
   },
 };
 
@@ -109,7 +145,7 @@ export const passDistance: ScoreFactor = {
   },
 };
 
-/** レシーバーがゴールに近いほどパスの価値が上がる */
+/** レシーバーのフィールド位置価値（ゴール近接 + センター + 孤立度） */
 export const passReceiverPosition: ScoreFactor = {
   id: 'pass:receiverPosition',
   action: 'pass',
@@ -119,8 +155,8 @@ export const passReceiverPosition: ScoreFactor = {
     const receiverEntityIdx = ctx.receiverEntityIndices[ctx.bestPassTargetIdx];
     const receiver = ctx.allOffense[receiverEntityIdx];
     if (!receiver) return 0;
-    const goalDist = dist2d(receiver.x, receiver.z, GOAL_RIM_X, GOAL_RIM_Z);
-    return clamp(1 - goalDist / MAX_SHOOT_RANGE, 0, 1);
+    const others = ctx.obstacles.map(o => ({ x: o.x, z: o.z }));
+    return scoreFieldPosition(receiver.x, receiver.z, others).total;
   },
 };
 
@@ -144,6 +180,31 @@ export const passPositionAdvantage: ScoreFactor = {
     // positive = receiver is closer to goal than passer
     const advantage = (passerGoalDist - receiverGoalDist) / MAX_SHOOT_RANGE;
     return clamp(0.5 + advantage, 0, 1);
+  },
+};
+
+/** レシーバー付近のDFがゴールから逆を向いているほどパスが通りやすい */
+export const passDefenderAwareness: ScoreFactor = {
+  id: 'pass:defenderAwareness',
+  action: 'pass',
+  weight: 2.0,
+  evaluate(ctx: ActionScorerContext): number {
+    if (ctx.receiverEntityIndices.length === 0) return 0;
+    const receiverEntityIdx = ctx.receiverEntityIndices[ctx.bestPassTargetIdx];
+    const receiver = ctx.allOffense[receiverEntityIdx];
+    if (!receiver) return 0;
+    // レシーバー最寄りDFの awareness
+    let minDist = Infinity;
+    let nearestAwareness = 1;
+    for (const ob of ctx.obstacles) {
+      const d = dist2d(receiver.x, receiver.z, ob.x, ob.z);
+      if (d < minDist) {
+        minDist = d;
+        nearestAwareness = goalFacingAwareness(ob);
+      }
+    }
+    // DF がゴールから逆向き → awareness 低 → パス成功しやすい
+    return 1 - nearestAwareness;
   },
 };
 
@@ -209,6 +270,26 @@ export const holdDriveOpportunity: ScoreFactor = {
   },
 };
 
+/** 最寄りDFがゴールから逆を向いているほどドリブル/ホールドしやすい */
+export const holdDefenderAwareness: ScoreFactor = {
+  id: 'hold:defenderAwareness',
+  action: 'hold',
+  weight: 2.0,
+  evaluate(ctx: ActionScorerContext): number {
+    let minDist = Infinity;
+    let nearestAwareness = 1;
+    for (const ob of ctx.obstacles) {
+      const d = dist2d(ctx.mover.x, ctx.mover.z, ob.x, ob.z);
+      if (d < minDist) {
+        minDist = d;
+        nearestAwareness = goalFacingAwareness(ob);
+      }
+    }
+    // DF がゴールから逆向き → awareness 低 → ドリブル突破しやすい
+    return 1 - nearestAwareness;
+  },
+};
+
 /** 将来枠 */
 export const holdSituational: ScoreFactor = {
   id: 'hold:situational',
@@ -226,14 +307,17 @@ export const holdSituational: ScoreFactor = {
 export const DEFAULT_FACTORS: ScoreFactor[] = [
   shootZone,
   shootDefenderProximity,
+  shootDefenderAwareness,
   shootSituational,
   passLaneOpen,
   passReceiverIntent,
   passDistance,
   passReceiverPosition,
   passPositionAdvantage,
+  passDefenderAwareness,
   passSituational,
   holdSafety,
   holdDriveOpportunity,
+  holdDefenderAwareness,
   holdSituational,
 ];
