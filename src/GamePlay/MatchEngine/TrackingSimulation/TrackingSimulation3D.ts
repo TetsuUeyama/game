@@ -61,13 +61,16 @@ import {
   moveLauncherSmart,
   moveTransitToHome,
 } from "./Movement/RoleMovement";
+import { tickJumpPhysics, startJump } from "./Movement/JumpPhysics";
+import { shouldAttemptBlock, BLOCK_TIMING } from "./Action/BlockAction";
+import { BLOCK_JUMP_VY } from "./Config/JumpConfig";
 
 import { createIdleAction, startAction, forceRecovery } from "./Action/ActionCore";
 import { computePassTiming } from "./Action/PassAction";
 import { evaluatePreFire, attemptFire } from "./Decision/PassEvaluation";
 import { checkObstacleDeflection } from "./Update/BallCollision";
 import { CATCH_TIMING } from "./Action/CatchAction";
-import { computeShotTarget, computeShootTiming } from "./Action/ShootAction";
+import { computeShotTarget, computeShootTiming, classifyShotType, getJumpVelocity } from "./Action/ShootAction";
 import { GOAL_RIM_X, GOAL_RIM_Z } from "./Config/ShootConfig";
 import {
   computeDribbleHand,
@@ -274,18 +277,18 @@ export class TrackingSimulation3D {
 
     // Launcher
     // rotation.y = π/2 - facing で local+Z を game facing (cos,sin) に一致させる
-    this.vis.launcherMesh.position.set(s.launcher.x, yh, s.launcher.z);
+    this.vis.launcherMesh.position.set(s.launcher.x, yh + s.launcher.y, s.launcher.z);
     this.vis.launcherMesh.rotation.y = Math.PI / 2 - s.launcher.facing;
 
     // Targets
     for (let i = 0; i < s.targets.length; i++) {
-      this.vis.targetMeshes[i].position.set(s.targets[i].x, yh, s.targets[i].z);
+      this.vis.targetMeshes[i].position.set(s.targets[i].x, yh + s.targets[i].y, s.targets[i].z);
       this.vis.targetMeshes[i].rotation.y = Math.PI / 2 - s.targets[i].facing;
     }
 
     // Obstacles
     for (let i = 0; i < s.obstacles.length; i++) {
-      this.vis.obstacleMeshes[i].position.set(s.obstacles[i].x, yh, s.obstacles[i].z);
+      this.vis.obstacleMeshes[i].position.set(s.obstacles[i].x, yh + s.obstacles[i].y, s.obstacles[i].z);
       this.vis.obstacleMeshes[i].rotation.y = Math.PI / 2 - s.obstacles[i].facing;
     }
 
@@ -453,7 +456,31 @@ export class TrackingSimulation3D {
     // === Tick action states ===
     // passer は tick 時点の on-ball entity（catch hold 変更前）
     const passer = getOffenseMover(s, s.onBallEntityIdx);
-    let { shouldFireBall, shouldShootBall } = tickAndTransitionActions(s, dt);
+    const transitionResult = tickAndTransitionActions(s, dt);
+    let { shouldFireBall, shouldShootBall } = transitionResult;
+    const { shooterStartedStartup } = transitionResult;
+
+    // シュート charge→startup 遷移 → シューターのジャンプ開始 + ブロック意思決定
+    if (shooterStartedStartup) {
+      const shooterMover = getOffenseMover(s, s.onBallEntityIdx);
+      const shotType = classifyShotType(shooterMover);
+      startJump(shooterMover, getJumpVelocity(shotType));
+
+      // ブロック意思決定: on-ball DF を特定
+      const onBallDefOi = OB_CONFIGS.findIndex(c => c.markTargetEntityIdx === s.onBallEntityIdx);
+      if (onBallDefOi >= 0) {
+        const defEntityIdx = 1 + s.targets.length + onBallDefOi;
+        const defender = s.obstacles[onBallDefOi];
+        const defAction = s.actionStates[defEntityIdx];
+        // idle or move-active のDFのみブロック可能
+        if (defAction.phase === 'idle' || (defAction.type === 'move' && defAction.phase === 'active')) {
+          if (shouldAttemptBlock(defender, shooterMover)) {
+            s.actionStates[defEntityIdx] = startAction('block', BLOCK_TIMING);
+            startJump(defender, BLOCK_JUMP_VY);
+          }
+        }
+      }
+    }
 
     // パス発射時アラインメント検証
     if (shouldFireBall) {
@@ -461,6 +488,7 @@ export class TrackingSimulation3D {
       if (!s.pendingFire || !isAlignedForFire(passer, s.pendingFire.interceptX, s.pendingFire.interceptZ, 'pass', dribbleHand)) {
         s.actionStates[s.onBallEntityIdx] = forceRecovery(s.actionStates[s.onBallEntityIdx], 0.2);
         s.pendingFire = null;
+        s.pendingCooldown = 0.5;
         s.cooldown = 0.5;
         shouldFireBall = false;
       }
@@ -471,6 +499,7 @@ export class TrackingSimulation3D {
       if (!isAlignedForFire(passer, GOAL_RIM_X, GOAL_RIM_Z, 'shoot', 'right')) {
         s.actionStates[s.onBallEntityIdx] = forceRecovery(s.actionStates[s.onBallEntityIdx], 0.2);
         s.pendingShot = null;
+        s.pendingCooldown = 0.5;
         s.cooldown = 0.5;
         shouldShootBall = false;
       }
@@ -781,9 +810,20 @@ export class TrackingSimulation3D {
           this.ballTrailPositions.shift();
         }
 
-        const sfResult = updateShotFlight(s, ballPos, this.ball.isInFlight(), dt);
+        // allHands を計算してブロック判定に渡す
+        const allMoversSF = [s.launcher, ...s.targets, ...s.obstacles];
+        const allHandsSF = this.vis.getHandWorldPositions(allMoversSF);
+        const sfResult = updateShotFlight(s, ballPos, this.ball.isInFlight(), dt, allHandsSF);
 
-        if (sfResult.completed) {
+        if (sfResult.blocked && sfResult.blockDirection) {
+          // ショットブロック成功 → ルーズボール遷移
+          this.ball.startFlight();
+          this.ball.applyImpulse(sfResult.blockDirection.scale(DEFLECT_IMPULSE));
+          s.looseBall = true;
+          s.interceptPt = null;
+          for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+          for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+        } else if (sfResult.completed) {
           deactivateBall(s, this.ball, this.ballTrailPositions);
           if (sfResult.scored) {
             s.score.goal++;
@@ -815,6 +855,12 @@ export class TrackingSimulation3D {
       // === Offense neck facing ===
       const offenseBallPos = s.ballActive ? this.ball.getPosition() : null;
       updateOffenseTorsoNeckFacing(s, s.ballActive, offenseBallPos, dt);
+    }
+
+    // === Jump physics tick (all entities) ===
+    const allMoversForJump = [s.launcher, ...s.targets, ...s.obstacles];
+    for (const mover of allMoversForJump) {
+      tickJumpPhysics(mover, dt);
     }
 
     // === Separate overlapping entities (always) ===

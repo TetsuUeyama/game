@@ -101,8 +101,8 @@ export function orientToward(
 export function makeMover(x: number, z: number, speed: number): SimMover {
   const a = randAngle();
   return {
-    x, z,
-    vx: Math.cos(a) * speed, vz: Math.sin(a) * speed,
+    x, z, y: 0,
+    vx: Math.cos(a) * speed, vz: Math.sin(a) * speed, vy: 0,
     speed, facing: a, torsoFacing: a, neckFacing: a, nextTurn: randTurn(),
   };
 }

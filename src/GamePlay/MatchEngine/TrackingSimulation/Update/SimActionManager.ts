@@ -11,9 +11,10 @@ import {
 } from "../Action/ActionCore";
 import { MOVE_TIMING, computeMoveRecovery } from "../Action/MoveAction";
 
-/** エンティティが移動可能かチェック（idle or move-active） */
+/** エンティティが移動可能かチェック（idle or move-active、block中は移動不可） */
 export function canEntityMove(actionStates: ActionState[], entityIdx: number): boolean {
   const s = actionStates[entityIdx];
+  if (s.type === 'block') return false;
   return s.phase === 'idle' || (s.type === 'move' && s.phase === 'active');
 }
 
@@ -51,6 +52,8 @@ export function applyMoveAction(state: SimState, entityIdx: number, entity: { vx
 export interface ActionTransitionResult {
   shouldFireBall: boolean;
   shouldShootBall: boolean;
+  /** シュート charge→startup 遷移が発生（ジャンプ開始タイミング） */
+  shooterStartedStartup: boolean;
 }
 
 /**
@@ -79,6 +82,13 @@ export function tickAndTransitionActions(state: SimState, dt: number): ActionTra
   const onBall = state.onBallEntityIdx;
   let shouldFireBall = false;
   let shouldShootBall = false;
+  let shooterStartedStartup = false;
+
+  // Shooter shoot: charge → startup → ジャンプ開始タイミング
+  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'charge'
+      && state.actionStates[onBall].phase === 'startup') {
+    shooterStartedStartup = true;
+  }
 
   // Passer pass: startup → active → fire ball
   if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'startup'
@@ -104,5 +114,21 @@ export function tickAndTransitionActions(state: SimState, dt: number): ActionTra
     state.cooldown = state.pendingCooldown;
   }
 
-  return { shouldFireBall, shouldShootBall };
+  // Block: active中に着地 → forceRecovery
+  for (let i = 0; i < state.actionStates.length; i++) {
+    const as = state.actionStates[i];
+    if (as.type === 'block' && as.phase === 'active') {
+      const moverIdx = i;
+      // SimState の全 movers にアクセスするため、entityIdx からmoverを取得
+      const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
+      if (moverIdx < allMovers.length) {
+        const mover = allMovers[moverIdx];
+        if (mover.y <= 0 && mover.vy <= 0) {
+          state.actionStates[i] = forceRecovery(as);
+        }
+      }
+    }
+  }
+
+  return { shouldFireBall, shouldShootBall, shooterStartedStartup };
 }

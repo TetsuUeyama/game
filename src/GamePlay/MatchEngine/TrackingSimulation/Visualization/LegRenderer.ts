@@ -30,6 +30,9 @@ const STEP_RETURN_SPEED = 8.0;
 const DRIBBLE_STEP_FREQUENCY = 14.0;
 const DRIBBLE_SWING_ANGLE = 12 * Math.PI / 180;
 
+/** 空中時の脚前屈角度（15度前方） */
+const AIRBORNE_LEG_ANGLE = 15 * Math.PI / 180;
+
 const HIP_BOX_WIDTH = LEG_SIDE_OFFSET * 2 + LEG_DIAMETER;
 const HIP_BOX_HEIGHT = ENTITY_HEIGHT * 0.08;
 const HIP_BOX_DEPTH = LEG_DIAMETER * 0.9;
@@ -156,6 +159,7 @@ export class LegRenderer {
 
   /**
    * 全エンティティの脚を歩行アニメーションで更新。
+   * 空中時は歩行サイクル停止、脚を軽く前屈。
    */
   syncLegs(allMovers: SimMover[], dt: number, onBallEntityIdx: number, ballActive: boolean): void {
     for (let idx = 0; idx < this.entityLegSets.length; idx++) {
@@ -165,6 +169,17 @@ export class LegRenderer {
       if (idx >= allMovers.length) continue;
 
       const mover = allMovers[idx];
+
+      // 空中時: 歩行サイクル停止、脚を軽く前屈
+      if (mover.y > 0.05) {
+        const airSwing = AIRBORNE_LEG_ANGLE;
+        legSet.leftHipJoint.rotation.x = airSwing;
+        legSet.rightHipJoint.rotation.x = airSwing;
+        stepState.prevX = mover.x;
+        stepState.prevZ = mover.z;
+        stepState.prevFacing = mover.facing;
+        continue;
+      }
 
       const dx = mover.x - stepState.prevX;
       const dz = mover.z - stepState.prevZ;

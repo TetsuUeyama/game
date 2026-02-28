@@ -281,6 +281,7 @@ export class SimVisualization {
       state.pushObstructions,
       state.dt,
       state.dribbleBounceH,
+      state.actionStates,
     );
   }
 

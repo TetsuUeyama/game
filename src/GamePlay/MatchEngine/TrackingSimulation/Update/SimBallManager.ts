@@ -17,7 +17,8 @@ import {
 } from "../Config/EntityConfig";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "../Decision/ObstacleRoleAssignment";
 import { ENTITY_HEIGHT } from "../Config/FieldConfig";
-import { SHOT_ARC_HEIGHT } from "../Config/ShootConfig";
+import { classifyShotType, getArcHeight, getReleaseYOffset } from "../Action/ShootAction";
+import type { SimMover } from "../Types/TrackingSimTypes";
 import {
   SPAWN_PAINT_X_HALF,
   SPAWN_PAINT_Z_MIN,
@@ -47,8 +48,9 @@ export function deactivateBall(state: SimState, ball: Ball, ballTrailPositions: 
 export function fireBallArc(
   state: SimState, ball: Ball,
   startX: number, startZ: number, targetX: number, targetZ: number,
+  yOffset: number = 0,
 ): boolean {
-  const startPos = new Vector3(startX, BALL_LAUNCH_Y, startZ);
+  const startPos = new Vector3(startX, BALL_LAUNCH_Y + yOffset, startZ);
   const targetPos = new Vector3(targetX, BALL_LAUNCH_Y, targetZ);
   const distance = dist2d(startX, startZ, targetX, targetZ);
   const arcHeight = Math.max(0.3, distance * 0.10);
@@ -63,12 +65,13 @@ export function fireBallArc(
 }
 
 /** startup完了後にボールを実際に発射 */
-export function executePendingFire(state: SimState, ball: Ball, passerMover: { x: number; z: number }): void {
+export function executePendingFire(state: SimState, ball: Ball, passerMover: SimMover): void {
   if (!state.pendingFire) return;
   const sol = state.pendingFire;
   state.pendingFire = null;
 
-  const success = fireBallArc(state, ball, passerMover.x, passerMover.z, sol.interceptX, sol.interceptZ);
+  // パスのstart位置にジャンプ高さを反映（将来のジャンプパス対応）
+  const success = fireBallArc(state, ball, passerMover.x, passerMover.z, sol.interceptX, sol.interceptZ, passerMover.y);
   if (!success) {
     // 発射失敗 → アイドルに戻す
     state.actionStates[state.onBallEntityIdx] = createIdleAction();
@@ -148,21 +151,25 @@ export function resetOffenseToBackcourt(state: SimState): void {
   }
 }
 
-/** シュート発射: 頭上リリースからゴールへの放物線 */
+/** シュート発射: シュート種別に応じたリリース高さ・アークで放物線 */
 export function executePendingShot(
   state: SimState,
   ball: Ball,
-  shooterMover: { x: number; z: number },
+  shooterMover: SimMover,
 ): void {
   if (!state.pendingShot) return;
   const target = state.pendingShot;
   state.pendingShot = null;
 
-  const startPos = new Vector3(shooterMover.x, ENTITY_HEIGHT + 0.3, shooterMover.z);
+  const shotType = classifyShotType(shooterMover);
+  const releaseY = getReleaseYOffset(shotType) + shooterMover.y;
+  const arcHeight = getArcHeight(shotType);
+
+  const startPos = new Vector3(shooterMover.x, releaseY, shooterMover.z);
   const targetPos = new Vector3(target.x, target.y, target.z);
 
   ball.mesh.setEnabled(true);
-  const success = ball.shootWithArcHeight(targetPos, SHOT_ARC_HEIGHT, startPos);
+  const success = ball.shootWithArcHeight(targetPos, arcHeight, startPos);
   if (success) {
     state.ballActive = true;
     state.ballAge = 0;

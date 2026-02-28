@@ -20,6 +20,8 @@ import {
 import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
 import { OB_CONFIGS } from "../Decision/ObstacleRoleAssignment";
 import { INIT_OBSTACLES } from "../Config/EntityConfig";
+import { isAirborne } from "../Movement/JumpPhysics";
+import { JUMP_HORIZONTAL_MULT } from "../Config/JumpConfig";
 
 /**
  * MAN_MARKER がターゲットに近接している場合のプッシュ妨害情報を計算する。
@@ -195,6 +197,18 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
   for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
     const cfg = OB_CONFIGS[oi];
     const ob = obstacles[oi];
+
+    // 空中の障害物 → 水平速度を大幅制限、ブロック中はシューター方向を向く
+    if (isAirborne(ob)) {
+      const obEntityIdx = 1 + targets.length + oi;
+      const blockAction = state.actionStates[obEntityIdx];
+      if (blockAction?.type === 'block') {
+        const onBallMover = allOffense[state.onBallEntityIdx];
+        orientToward(ob, onBallMover.x, onBallMover.z, dt);
+      }
+      moveWithFacing(ob, cfg.idleSpeed * JUMP_HORIZONTAL_MULT, dt);
+      continue;
+    }
 
     // リアクション中 → インターセプト移動（従来通り）
     if (state.obReacting[oi]) {
