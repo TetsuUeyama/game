@@ -520,9 +520,9 @@ export class TrackingSimulation3D {
         s.onBallEntityIdx = catcherIdx;
         this.catchHoldInfo = null;
 
-        // intent チェック → 有効なら cooldown = 0 で即行動
+        // intent チェック → 有効なら cooldown = 0 で即行動、無効でも 0.3s で判断開始
         const intent = this.intentManager.consumeIntent(s, catcherIdx);
-        s.cooldown = intent ? 0 : 1.5;
+        s.cooldown = intent ? 0 : 0.3;
       }
     }
 

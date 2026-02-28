@@ -20,7 +20,7 @@ import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig"
 // ゴール設定
 export const GOAL_CONFIG = {
   // リム（リング）設定
-  rimHeight: 3.05, // リムの高さ（m）
+  rimHeight: 2.00, // リムの高さ
   rimDiameter: 0.45, // リムの内径（m）- 実際のサイズに近づける
   rimThickness: 0.02, // リムの太さ（m）
   rimColor: '#FF6600', // リムの色（オレンジ）

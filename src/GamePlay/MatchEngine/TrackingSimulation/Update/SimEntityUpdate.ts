@@ -159,6 +159,9 @@ export function updateOffenseTorsoNeckFacing(
       const angle = Math.atan2(ballPosition.z - mover.z, ballPosition.x - mover.x);
       mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+    } else if (ei === state.onBallEntityIdx && action.type === 'idle') {
+      // オンボールでアイドル時: ゴール方向に全身回転（トリプルスレット姿勢）
+      orientToward(mover, GOAL_RIM_X, GOAL_RIM_Z, dt);
     } else if (state.offenseInTransit[ei] && ei !== state.onBallEntityIdx) {
       // トランジット中のオフボール: オンボール選手の方向を見る
       const onBallMover = ei === 0 ? launcher : (state.onBallEntityIdx === 0 ? launcher : targets[state.onBallEntityIdx - 1]);

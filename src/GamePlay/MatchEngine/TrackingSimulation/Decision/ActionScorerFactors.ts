@@ -15,10 +15,44 @@ function clamp(v: number, min: number, max: number): number {
   return v < min ? min : v > max ? max : v;
 }
 
+/** 全DFの中で単純に最も近い距離（hold用） */
 function nearestDefenderDist(ctx: ActionScorerContext): number {
   let minDist = Infinity;
   for (const ob of ctx.obstacles) {
     const d = dist2d(ctx.mover.x, ctx.mover.z, ob.x, ob.z);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+/** シュートコース幅: この範囲内のDFのみ脅威と見なす */
+const SHOT_THREAT_LANE_WIDTH = 2.0;
+
+/**
+ * シューター→ゴール経路上にいる脅威DFまでの最短距離を返す。
+ * 「経路上」= シューターとゴールの間に射影があり、レーン幅内にいるDF。
+ * 経路上にDFがいなければ Infinity を返す（= ドフリー）。
+ */
+function nearestThreatDefenderDist(ctx: ActionScorerContext): number {
+  const toGoalX = GOAL_RIM_X - ctx.mover.x;
+  const toGoalZ = GOAL_RIM_Z - ctx.mover.z;
+  const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
+  if (toGoalDist < 0.01) return Infinity;
+  const dirX = toGoalX / toGoalDist;
+  const dirZ = toGoalZ / toGoalDist;
+
+  let minDist = Infinity;
+  for (const ob of ctx.obstacles) {
+    const dx = ob.x - ctx.mover.x;
+    const dz = ob.z - ctx.mover.z;
+    // DF がシューターとゴールの間にいるか（射影が正かつゴール距離以内）
+    const proj = dx * dirX + dz * dirZ;
+    if (proj <= 0 || proj > toGoalDist) continue;
+    // シュートラインからの垂直距離
+    const perpDist = Math.abs(-dirZ * dx + dirX * dz);
+    if (perpDist > SHOT_THREAT_LANE_WIDTH) continue;
+    // 脅威DF → ユークリッド距離を記録
+    const d = Math.sqrt(dx * dx + dz * dz);
     if (d < minDist) minDist = d;
   }
   return minDist;
@@ -59,34 +93,72 @@ export const shootZone: ScoreFactor = {
   },
 };
 
-/** DF が遠いほどシュートしやすい（シュートレンジ外なら 0） */
+/** ドライブ不要とみなすゴール近接距離 (m) — レイアップ圏内 */
+const DRIVE_UNNECESSARY_DIST = 2.0;
+
+/**
+ * シュートコース上の脅威DFが遠いほどシュートしやすい。
+ *
+ * 脅威DFあり: DFが遠いほど高スコア（従来通り）
+ * 脅威DFなし（完全フリー）: ゴールに近いほど高スコア。
+ *   レイアップ圏内(≤2m)なら 1.0、遠ければ低スコア → ドライブを促す。
+ */
 export const shootDefenderProximity: ScoreFactor = {
   id: 'shoot:defenderProximity',
   action: 'shoot',
   weight: 3.0,
   evaluate(ctx: ActionScorerContext): number {
     if (!canShoot(ctx.mover)) return 0;
-    return clamp(nearestDefenderDist(ctx) / 3.0, 0, 1);
+    const threatDist = nearestThreatDefenderDist(ctx);
+    if (threatDist !== Infinity) {
+      // 脅威DFあり → DFが遠いほど高スコア
+      return clamp(threatDist / 3.0, 0, 1);
+    }
+    // 完全フリー → ゴール距離に応じたスコア（近い = 高い）
+    const goalDist = dist2d(ctx.mover.x, ctx.mover.z, GOAL_RIM_X, GOAL_RIM_Z);
+    if (goalDist <= DRIVE_UNNECESSARY_DIST) return 1.0;
+    // 2m以遠は二次関数で急落（6m→0.11, 4m→0.25）
+    const ratio = DRIVE_UNNECESSARY_DIST / goalDist;
+    return ratio * ratio;
   },
 };
 
-/** 最寄りDFがゴールから逆を向いているほどシュートしやすい */
+/**
+ * シュートコース上の最寄り脅威DFがゴールから逆を向いているほどシュートしやすい。
+ * 脅威DFなし → 0（警戒すべき相手がいないので評価対象外）。
+ */
 export const shootDefenderAwareness: ScoreFactor = {
   id: 'shoot:defenderAwareness',
   action: 'shoot',
   weight: 2.5,
   evaluate(ctx: ActionScorerContext): number {
     if (!canShoot(ctx.mover)) return 0;
+
+    const toGoalX = GOAL_RIM_X - ctx.mover.x;
+    const toGoalZ = GOAL_RIM_Z - ctx.mover.z;
+    const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
+    if (toGoalDist < 0.01) return 1;
+    const dirX = toGoalX / toGoalDist;
+    const dirZ = toGoalZ / toGoalDist;
+
     let minDist = Infinity;
-    let nearestAwareness = 1;
+    let nearestAwareness = -1; // -1 = コース上にDFなし
     for (const ob of ctx.obstacles) {
-      const d = dist2d(ctx.mover.x, ctx.mover.z, ob.x, ob.z);
+      const dx = ob.x - ctx.mover.x;
+      const dz = ob.z - ctx.mover.z;
+      const proj = dx * dirX + dz * dirZ;
+      if (proj <= 0 || proj > toGoalDist) continue;
+      const perpDist = Math.abs(-dirZ * dx + dirX * dz);
+      if (perpDist > SHOT_THREAT_LANE_WIDTH) continue;
+      const d = Math.sqrt(dx * dx + dz * dz);
       if (d < minDist) {
         minDist = d;
         nearestAwareness = goalFacingAwareness(ob);
       }
     }
-    // DF がゴールから逆向き → awareness 低 → スコア高（シュートチャンス）
+    // 脅威DFなし → 0（評価対象外、ドライブすべき）
+    if (nearestAwareness < 0) return 0;
+    // 脅威DFあり → ゴールから逆向きならシュートチャンス
     return 1 - nearestAwareness;
   },
 };
