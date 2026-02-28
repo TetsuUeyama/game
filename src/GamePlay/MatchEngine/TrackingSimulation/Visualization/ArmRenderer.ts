@@ -49,13 +49,28 @@ const BALL_REACT_RADIUS = 2.0;
 /** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
 const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
 
-/** ドリブル姿勢の腕方向ベクトル（水平やや下: 約15度下向き前方） */
-const DRIBBLE_ARM_ANGLE = (15 * Math.PI) / 180;
+/** ドリブル姿勢の腕方向ベクトル（50度下向き前方: 腰〜太もも付近） */
+const DRIBBLE_ARM_ANGLE = (50 * Math.PI) / 180;
 const DRIBBLE_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_ARM_ANGLE), Math.cos(DRIBBLE_ARM_ANGLE)).normalize();
+/** ドリブル時の腕リーチ（腕の60%まで縮め、肘を曲げる） */
+const DRIBBLE_ARM_REACH = 0.6;
+
+/** ドリブル保護姿勢: DF近接時は体寄りにボールを保持（65度下向き） */
+const DRIBBLE_PROTECT_ARM_ANGLE = (65 * Math.PI) / 180;
+const DRIBBLE_PROTECT_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_PROTECT_ARM_ANGLE), Math.cos(DRIBBLE_PROTECT_ARM_ANGLE)).normalize();
+/** 保護姿勢時の腕リーチ（腕の50%: さらに体に近づける） */
+const DRIBBLE_PROTECT_ARM_REACH = 0.5;
+
+/** DF近接判定の半径（メートル） */
+const DRIBBLE_DEFENDER_RADIUS = 2.0;
 
 /** デフォルト肘ヒント: 外側+やや下 */
 const DEF_LEFT_ELBOW_HINT = new Vector3(-1, -0.3, 0).normalize();
 const DEF_RIGHT_ELBOW_HINT = new Vector3(1, -0.3, 0).normalize();
+
+/** ドリブル保護姿勢用肘ヒント: 内寄り */
+const DRIBBLE_PROTECT_LEFT_ELBOW_HINT = new Vector3(-0.3, -1, 0).normalize();
+const DRIBBLE_PROTECT_RIGHT_ELBOW_HINT = new Vector3(0.3, -1, 0).normalize();
 
 // =========================================================================
 // Interfaces
@@ -67,6 +82,10 @@ export interface ArmLerpState {
   rightDir: Vector3;
   leftElbowHint: Vector3;
   rightElbowHint: Vector3;
+  /** 左腕リーチ倍率（0–1, 1=フル伸展） */
+  leftReach: number;
+  /** 右腕リーチ倍率（0–1, 1=フル伸展） */
+  rightReach: number;
 }
 
 interface EntityArmSet {
@@ -84,6 +103,11 @@ export class ArmRenderer {
   private scene: Scene;
   private entityArmSets: EntityArmSet[] = [];
   private armLerpStates: ArmLerpState[] = [];
+  private _dribbleHand: 'left' | 'right' = 'right';
+
+  get dribbleHand(): 'left' | 'right' {
+    return this._dribbleHand;
+  }
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -189,11 +213,13 @@ export class ArmRenderer {
       rightDir: DEF_ARM_DIR.clone(),
       leftElbowHint: DEF_LEFT_ELBOW_HINT.clone(),
       rightElbowHint: DEF_RIGHT_ELBOW_HINT.clone(),
+      leftReach: 1.0,
+      rightReach: 1.0,
     };
     this.armLerpStates.push(lerpState);
 
-    this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint);
-    this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint);
+    this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint, lerpState.leftReach);
+    this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint, lerpState.rightReach);
   }
 
   /**
@@ -232,6 +258,8 @@ export class ArmRenderer {
 
       let targetLeftDir = DEF_ARM_DIR;
       let targetRightDir = DEF_ARM_DIR;
+      let targetLeftReach = 1.0;
+      let targetRightReach = 1.0;
 
       if (idx === ballMarkerEntityIdx && ballMarkerLeftArmTarget && ballMarkerRightArmTarget) {
         parent.computeWorldMatrix(true);
@@ -328,8 +356,40 @@ export class ArmRenderer {
       if (idx === onBallEntityIdx && !ballActive) {
         const mover = allMovers[idx];
         const vel = Math.sqrt(mover.vx * mover.vx + mover.vz * mover.vz);
+
+        // 最も近いDFを検索してドリブルハンドを決定
+        let closestDefDist = Infinity;
+        let defenderSide: 'left' | 'right' | null = null;
+        const obStart = 1 + targets.length;
+        for (let oi = 0; oi < allMovers.length - obStart; oi++) {
+          const def = allMovers[obStart + oi];
+          const ddx = def.x - mover.x;
+          const ddz = def.z - mover.z;
+          const defDist = Math.sqrt(ddx * ddx + ddz * ddz);
+          if (defDist < DRIBBLE_DEFENDER_RADIUS && defDist < closestDefDist) {
+            closestDefDist = defDist;
+            // torsoFacing に対してDFが右側か左側かを外積で判定
+            const faceCos = Math.cos(mover.torsoFacing);
+            const faceSin = Math.sin(mover.torsoFacing);
+            const cross = faceCos * ddz - faceSin * ddx;
+            defenderSide = cross >= 0 ? 'right' : 'left';
+          }
+        }
+
+        // DFが右側 → 左手ドリブル、DFが左側 → 右手ドリブル、遠い → 右手
+        const isProtecting = defenderSide !== null;
+        this._dribbleHand = defenderSide === 'right' ? 'left' : 'right';
+
         if (vel > 0.01) {
-          targetRightDir = DRIBBLE_ARM_DIR;
+          const dribbleDir = isProtecting ? DRIBBLE_PROTECT_ARM_DIR : DRIBBLE_ARM_DIR;
+          const dribbleReach = isProtecting ? DRIBBLE_PROTECT_ARM_REACH : DRIBBLE_ARM_REACH;
+          if (this._dribbleHand === 'right') {
+            targetRightDir = dribbleDir;
+            targetRightReach = dribbleReach;
+          } else {
+            targetLeftDir = dribbleDir;
+            targetLeftReach = dribbleReach;
+          }
         }
       }
 
@@ -342,7 +402,11 @@ export class ArmRenderer {
       }
 
       if (idx === onBallEntityIdx && !ballActive) {
-        targetRightHint = new Vector3(0.5, -1, 0).normalize();
+        if (this._dribbleHand === 'right') {
+          targetRightHint = DRIBBLE_PROTECT_RIGHT_ELBOW_HINT;
+        } else {
+          targetLeftHint = DRIBBLE_PROTECT_LEFT_ELBOW_HINT;
+        }
       }
 
       Vector3.LerpToRef(lerpState.leftDir, targetLeftDir, alpha, lerpState.leftDir);
@@ -355,8 +419,11 @@ export class ArmRenderer {
       Vector3.LerpToRef(lerpState.rightElbowHint, targetRightHint, alpha, lerpState.rightElbowHint);
       lerpState.rightElbowHint.normalize();
 
-      this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint);
-      this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint);
+      lerpState.leftReach += (targetLeftReach - lerpState.leftReach) * alpha;
+      lerpState.rightReach += (targetRightReach - lerpState.rightReach) * alpha;
+
+      this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint, lerpState.leftReach);
+      this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint, lerpState.rightReach);
     }
   }
 
@@ -380,10 +447,11 @@ export class ArmRenderer {
       const cosT = Math.cos(theta);
       const sinT = Math.sin(theta);
 
-      const computeHand = (side: -1 | 1, dir: Vector3): Vector3 => {
-        const lx = side * ARM_BODY_RADIUS + dir.x * TOTAL_ARM_LENGTH;
-        const ly = SHOULDER_Y + dir.y * TOTAL_ARM_LENGTH;
-        const lz = dir.z * TOTAL_ARM_LENGTH;
+      const computeHand = (side: -1 | 1, dir: Vector3, reach: number): Vector3 => {
+        const effectiveLen = TOTAL_ARM_LENGTH * reach;
+        const lx = side * ARM_BODY_RADIUS + dir.x * effectiveLen;
+        const ly = SHOULDER_Y + dir.y * effectiveLen;
+        const lz = dir.z * effectiveLen;
 
         return new Vector3(
           mover.x + lx * cosT + lz * sinT,
@@ -393,8 +461,8 @@ export class ArmRenderer {
       };
 
       result.push({
-        left: computeHand(-1, lerpState.leftDir),
-        right: computeHand(1, lerpState.rightDir),
+        left: computeHand(-1, lerpState.leftDir, lerpState.leftReach),
+        right: computeHand(1, lerpState.rightDir, lerpState.rightReach),
       });
     }
 
@@ -582,16 +650,17 @@ export class ArmRenderer {
     return elbowPos.add(forearmDir.scale(FOREARM_LENGTH));
   }
 
-  /** 方向ベクトル+肘ヒントから上腕・肘球・前腕・手球の4メッシュを配置 */
+  /** 方向ベクトル+肘ヒント+リーチ倍率から上腕・肘球・前腕・手球の4メッシュを配置 */
   private applyArmWithElbow(
     upperArm: Mesh, elbowMesh: Mesh, forearm: Mesh, hand: Mesh,
-    side: -1 | 1, dir: Vector3, hint: Vector3,
+    side: -1 | 1, dir: Vector3, hint: Vector3, reach: number = 1.0,
   ): void {
     const shoulder = new Vector3(side * ARM_BODY_RADIUS, SHOULDER_Y, 0);
+    const effectiveLen = TOTAL_ARM_LENGTH * reach;
     const handPos = new Vector3(
-      shoulder.x + dir.x * TOTAL_ARM_LENGTH,
-      shoulder.y + dir.y * TOTAL_ARM_LENGTH,
-      dir.z * TOTAL_ARM_LENGTH,
+      shoulder.x + dir.x * effectiveLen,
+      shoulder.y + dir.y * effectiveLen,
+      dir.z * effectiveLen,
     );
 
     const elbowPos = this.clampUpperArmBackward(

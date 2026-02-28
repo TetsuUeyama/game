@@ -243,7 +243,7 @@ export class SimVisualization {
     this.syncNeckRotation(state);
 
     const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
-    this.legRenderer.syncLegs(allMovers, state.dt);
+    this.legRenderer.syncLegs(allMovers, state.dt, state.onBallEntityIdx, state.ballActive);
     this.armRenderer.syncArms(
       allMovers,
       this.upperBodyPivots,
@@ -266,6 +266,13 @@ export class SimVisualization {
    */
   getHandWorldPositions(allMovers: SimMover[]): { left: Vector3; right: Vector3 }[] {
     return this.armRenderer.getHandWorldPositions(allMovers);
+  }
+
+  /**
+   * 現在のドリブルハンド（左/右）を返す。
+   */
+  getDribbleHand(): 'left' | 'right' {
+    return this.armRenderer.dribbleHand;
   }
 
   /**
