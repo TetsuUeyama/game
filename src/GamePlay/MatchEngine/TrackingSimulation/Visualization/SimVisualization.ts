@@ -60,19 +60,24 @@ export interface SimVisState {
 // --- Arm constants (shared by all entities) ---
 export const ARM_BODY_RADIUS = VISUAL_SIZE / 2;
 export const ARM_LENGTH = VISUAL_SIZE * 1.1;
-const ARM_DIAMETER = VISUAL_SIZE * 0.12;
-const HAND_DIAMETER = VISUAL_SIZE * 0.22;
+const ARM_DIAMETER = VISUAL_SIZE * 0.24;
+const HAND_DIAMETER = VISUAL_SIZE * 0.26;
+const UPPER_ARM_LENGTH = ARM_LENGTH * 0.5;
+const FOREARM_LENGTH = ARM_LENGTH * 0.5;
+const ELBOW_DIAMETER = VISUAL_SIZE * 0.18;
+/** 腕前面ストライプの幅（腕直径に対する比率） */
+const ARM_STRIPE_WIDTH_RATIO = 0.25;
+/** 肌色 */
+const SKIN_COLOR = new Color3(0.96, 0.80, 0.64);
+const MIN_BEND_ANGLE = 5 * Math.PI / 180;
+/** 前腕の最大曲げ角度: 伸展(0°)から内側に90°まで */
+const MAX_FOREARM_BEND_ANGLE = 90 * Math.PI / 180;
+/** 上腕の後方可動域制限: 真上(+Y)から後方(-Z)へ最大10° */
+const UPPER_ARM_MAX_BACK_ANGLE = 10 * Math.PI / 180;
 export const SHOULDER_Y = ENTITY_HEIGHT * 0.35;
 const DEFAULT_ARM_ANGLE = (60 * Math.PI) / 180;
 /** ボールがこの距離以内なら両手をボール方向へ向ける */
 const BALL_REACT_RADIUS = 2.0;
-
-// Default arm pose offsets (precomputed)
-const DEF_ARM_CENTER_DX = ARM_BODY_RADIUS + (ARM_LENGTH / 2) * Math.cos(DEFAULT_ARM_ANGLE);
-const DEF_ARM_CENTER_DY = -(ARM_LENGTH / 2) * Math.sin(DEFAULT_ARM_ANGLE);
-const DEF_HAND_DX = ARM_BODY_RADIUS + ARM_LENGTH * Math.cos(DEFAULT_ARM_ANGLE);
-const DEF_HAND_DY = -ARM_LENGTH * Math.sin(DEFAULT_ARM_ANGLE);
-const DEF_ARM_ROT_Z = (Math.PI / 2) - DEFAULT_ARM_ANGLE;
 
 /** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
 const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
@@ -85,13 +90,19 @@ const DRIBBLE_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_ARM_ANGLE), Math.cos(DR
 export interface ArmLerpState {
   leftDir: Vector3;   // 現在の左腕方向
   rightDir: Vector3;  // 現在の右腕方向
+  leftElbowHint: Vector3;   // 左肘の曲がり方向（ローカル座標）
+  rightElbowHint: Vector3;  // 右肘の曲がり方向（ローカル座標）
 }
+
+/** デフォルト肘ヒント: 外側+やや下 */
+const DEF_LEFT_ELBOW_HINT = new Vector3(-1, -0.3, 0).normalize();
+const DEF_RIGHT_ELBOW_HINT = new Vector3(1, -0.3, 0).normalize();
 
 interface EntityArmSet {
   parent: Mesh;
   pivot: TransformNode;
-  leftArm: Mesh; leftHand: Mesh;
-  rightArm: Mesh; rightHand: Mesh;
+  leftUpperArm: Mesh; leftElbow: Mesh; leftForearm: Mesh; leftHand: Mesh;
+  rightUpperArm: Mesh; rightElbow: Mesh; rightForearm: Mesh; rightHand: Mesh;
 }
 
 export class SimVisualization {
@@ -211,28 +222,79 @@ export class SimVisualization {
    */
   private createEntityArms(parent: Mesh, pivot: TransformNode, color: Color3, upperColor?: Color3): void {
     const uc = upperColor ?? color;
-    const createArmMesh = (side: -1 | 1): { arm: Mesh; hand: Mesh } => {
-      // 腕（薄い円柱）— 上半身ピボットの子
-      const arm = MeshBuilder.CreateCylinder(`${parent.name}_arm${side}`, {
-        height: ARM_LENGTH,
+    const createArmMeshes = (side: -1 | 1): { upperArm: Mesh; elbow: Mesh; forearm: Mesh; hand: Mesh } => {
+      const armColor = new Color3(uc.r * 0.7, uc.g * 0.7, uc.b * 0.7);
+
+      // 前面ストライプ共通マテリアル（肌色）
+      const stripeMat = new StandardMaterial(`${parent.name}_stripeMat${side}`, this.scene);
+      stripeMat.diffuseColor = SKIN_COLOR;
+      stripeMat.specularColor = Color3.Black();
+
+      // 上腕（薄い円柱）— 上半身ピボットの子
+      const upperArm = MeshBuilder.CreateCylinder(`${parent.name}_upperArm${side}`, {
+        height: UPPER_ARM_LENGTH,
         diameter: ARM_DIAMETER,
         tessellation: 6,
       }, this.scene);
-      arm.rotation.z = side * DEF_ARM_ROT_Z;
-      arm.position.set(side * DEF_ARM_CENTER_DX, SHOULDER_Y + DEF_ARM_CENTER_DY, 0);
-      const armMat = new StandardMaterial(`${parent.name}_armMat${side}`, this.scene);
-      armMat.diffuseColor = new Color3(uc.r * 0.7, uc.g * 0.7, uc.b * 0.7);
-      armMat.specularColor = Color3.Black();
-      arm.material = armMat;
-      arm.parent = pivot;
-      arm.isPickable = false;
+      const upperArmMat = new StandardMaterial(`${parent.name}_upperArmMat${side}`, this.scene);
+      upperArmMat.diffuseColor = armColor;
+      upperArmMat.specularColor = Color3.Black();
+      upperArm.material = upperArmMat;
+      upperArm.parent = pivot;
+      upperArm.isPickable = false;
+
+      // 上腕の前面ストライプ（シリンダーの子: ローカルZ+面に配置）
+      const upperStripe = MeshBuilder.CreateBox(`${parent.name}_upperStripe${side}`, {
+        width: ARM_DIAMETER * ARM_STRIPE_WIDTH_RATIO,
+        height: UPPER_ARM_LENGTH * 0.9,
+        depth: 0.001,
+      }, this.scene);
+      upperStripe.position.z = -(ARM_DIAMETER / 2 + 0.0005);
+      upperStripe.material = stripeMat;
+      upperStripe.parent = upperArm;
+      upperStripe.isPickable = false;
+
+      // 肘球 — 上半身ピボットの子
+      const elbow = MeshBuilder.CreateSphere(`${parent.name}_elbow${side}`, {
+        diameter: ELBOW_DIAMETER,
+        segments: 8,
+      }, this.scene);
+      const elbowMat = new StandardMaterial(`${parent.name}_elbowMat${side}`, this.scene);
+      elbowMat.diffuseColor = armColor;
+      elbowMat.specularColor = Color3.Black();
+      elbow.material = elbowMat;
+      elbow.parent = pivot;
+      elbow.isPickable = false;
+
+      // 前腕（薄い円柱）— 上半身ピボットの子
+      const forearm = MeshBuilder.CreateCylinder(`${parent.name}_forearm${side}`, {
+        height: FOREARM_LENGTH,
+        diameter: ARM_DIAMETER,
+        tessellation: 6,
+      }, this.scene);
+      const forearmMat = new StandardMaterial(`${parent.name}_forearmMat${side}`, this.scene);
+      forearmMat.diffuseColor = armColor;
+      forearmMat.specularColor = Color3.Black();
+      forearm.material = forearmMat;
+      forearm.parent = pivot;
+      forearm.isPickable = false;
+
+      // 前腕の前面ストライプ（シリンダーの子: ローカルZ+面に配置）
+      const foreStripe = MeshBuilder.CreateBox(`${parent.name}_foreStripe${side}`, {
+        width: ARM_DIAMETER * ARM_STRIPE_WIDTH_RATIO,
+        height: FOREARM_LENGTH * 0.9,
+        depth: 0.001,
+      }, this.scene);
+      foreStripe.position.z = -(ARM_DIAMETER / 2 + 0.0005);
+      foreStripe.material = stripeMat;
+      foreStripe.parent = forearm;
+      foreStripe.isPickable = false;
 
       // 拳（小さな球）— 上半身ピボットの子
       const hand = MeshBuilder.CreateSphere(`${parent.name}_hand${side}`, {
         diameter: HAND_DIAMETER,
         segments: 8,
       }, this.scene);
-      hand.position.set(side * DEF_HAND_DX, SHOULDER_Y + DEF_HAND_DY, 0);
       const handMat = new StandardMaterial(`${parent.name}_handMat${side}`, this.scene);
       handMat.diffuseColor = uc;
       handMat.specularColor = Color3.Black();
@@ -240,23 +302,31 @@ export class SimVisualization {
       hand.parent = pivot;
       hand.isPickable = false;
 
-      return { arm, hand };
+      return { upperArm, elbow, forearm, hand };
     };
 
-    const left = createArmMesh(-1);
-    const right = createArmMesh(1);
+    const left = createArmMeshes(-1);
+    const right = createArmMeshes(1);
 
-    this.entityArmSets.push({
+    const armSet: EntityArmSet = {
       parent,
       pivot,
-      leftArm: left.arm, leftHand: left.hand,
-      rightArm: right.arm, rightHand: right.hand,
-    });
+      leftUpperArm: left.upperArm, leftElbow: left.elbow, leftForearm: left.forearm, leftHand: left.hand,
+      rightUpperArm: right.upperArm, rightElbow: right.elbow, rightForearm: right.forearm, rightHand: right.hand,
+    };
+    this.entityArmSets.push(armSet);
 
-    this.armLerpStates.push({
+    const lerpState: ArmLerpState = {
       leftDir: DEF_ARM_DIR.clone(),
       rightDir: DEF_ARM_DIR.clone(),
-    });
+      leftElbowHint: DEF_LEFT_ELBOW_HINT.clone(),
+      rightElbowHint: DEF_RIGHT_ELBOW_HINT.clone(),
+    };
+    this.armLerpStates.push(lerpState);
+
+    // 初期ポーズを適用
+    this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint);
+    this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint);
   }
 
   createMeshes(): void {
@@ -315,7 +385,10 @@ export class SimVisualization {
     }
     this.facingIndicators = [];
     for (const set of this.entityArmSets) {
-      for (const m of [set.leftArm, set.leftHand, set.rightArm, set.rightHand]) {
+      for (const m of [
+        set.leftUpperArm, set.leftElbow, set.leftForearm, set.leftHand,
+        set.rightUpperArm, set.rightElbow, set.rightForearm, set.rightHand,
+      ]) {
         m.material?.dispose();
         m.dispose();
       }
@@ -587,15 +660,36 @@ export class SimVisualization {
         }
       }
 
-      // 指数減衰Lerpで補間
+      // --- 肘ヒント方向の決定 ---
+      let targetLeftHint = DEF_LEFT_ELBOW_HINT;
+      let targetRightHint = DEF_RIGHT_ELBOW_HINT;
+
+      // DF守備スタンス: 肘を外側+後方に
+      if (idx === state.ballMarkerEntityIdx && state.ballMarkerLeftArmTarget) {
+        targetLeftHint = new Vector3(-1, -0.2, -0.5).normalize();
+        targetRightHint = new Vector3(1, -0.2, -0.5).normalize();
+      }
+
+      // ドリブル時: 右肘を下方に
+      if (idx === state.onBallEntityIdx && !state.ballActive) {
+        targetRightHint = new Vector3(0.5, -1, 0).normalize();
+      }
+
+      // 指数減衰Lerpで補間（方向ベクトル）
       Vector3.LerpToRef(lerpState.leftDir, targetLeftDir, alpha, lerpState.leftDir);
       lerpState.leftDir.normalize();
       Vector3.LerpToRef(lerpState.rightDir, targetRightDir, alpha, lerpState.rightDir);
       lerpState.rightDir.normalize();
 
-      // 補間後の方向ベクトルから腕の位置・回転を適用
-      this.applyArmFromDir(armSet.leftArm, armSet.leftHand, -1, lerpState.leftDir);
-      this.applyArmFromDir(armSet.rightArm, armSet.rightHand, 1, lerpState.rightDir);
+      // 指数減衰Lerpで補間（肘ヒント）
+      Vector3.LerpToRef(lerpState.leftElbowHint, targetLeftHint, alpha, lerpState.leftElbowHint);
+      lerpState.leftElbowHint.normalize();
+      Vector3.LerpToRef(lerpState.rightElbowHint, targetRightHint, alpha, lerpState.rightElbowHint);
+      lerpState.rightElbowHint.normalize();
+
+      // 補間後の方向ベクトル+肘ヒントから腕の位置・回転を適用
+      this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint);
+      this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint);
     }
   }
 
@@ -610,35 +704,234 @@ export class SimVisualization {
     return new Vector3(dx / len, dy / len, dz / len);
   }
 
-  /** 方向ベクトルから腕のposition/rotationを設定 */
-  private applyArmFromDir(arm: Mesh, hand: Mesh, side: -1 | 1, dir: Vector3): void {
-    const shoulderX = side * ARM_BODY_RADIUS;
+  /**
+   * 2ボーンIKソルバー: 肩と手の位置から肘の位置を余弦定理で逆算する。
+   * @param shoulder 肩位置（ローカル座標）
+   * @param handTarget 手ターゲット位置（ローカル座標）
+   * @param L1 上腕長
+   * @param L2 前腕長
+   * @param hint 肘の曲がり方向ヒント（正規化済み）
+   * @returns 肘位置（ローカル座標）
+   */
+  private solve2BoneIK(
+    shoulder: Vector3,
+    handTarget: Vector3,
+    L1: number,
+    L2: number,
+    hint: Vector3,
+  ): Vector3 {
+    const shoulderToHand = handTarget.subtract(shoulder);
+    let dist = shoulderToHand.length();
 
-    // 腕の中心位置と拳の位置
-    arm.position.set(
-      shoulderX + dir.x * ARM_LENGTH / 2,
-      SHOULDER_Y + dir.y * ARM_LENGTH / 2,
-      dir.z * ARM_LENGTH / 2,
-    );
-    hand.position.set(
-      shoulderX + dir.x * ARM_LENGTH,
-      SHOULDER_Y + dir.y * ARM_LENGTH,
-      dir.z * ARM_LENGTH,
+    // 距離がゼロに近い場合: 肩位置 + ヒント方向に上腕長だけ伸ばす
+    if (dist < 0.001) {
+      return shoulder.add(hint.scale(L1));
+    }
+
+    // 到達距離制限: 最小曲げ角度を保証
+    // 最小曲げ角度での最大距離: 余弦定理 c² = a² + b² - 2ab·cos(π - minBend)
+    const maxDist = Math.sqrt(L1 * L1 + L2 * L2 - 2 * L1 * L2 * Math.cos(Math.PI - MIN_BEND_ANGLE));
+    if (dist > maxDist) {
+      dist = maxDist;
+    }
+    // 到達不可能（短すぎる）: 最低でも |L1 - L2| を確保
+    const minDist = Math.abs(L1 - L2) + 0.001;
+    if (dist < minDist) {
+      dist = minDist;
+    }
+
+    // 余弦定理: cos(θ_shoulder) = (L1² + dist² - L2²) / (2·L1·dist)
+    const cosAngle = (L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist);
+    const clampedCos = Math.max(-1, Math.min(1, cosAngle));
+    const angle = Math.acos(clampedCos);
+
+    // 肩→手の正規化方向
+    const dirToHand = shoulderToHand.normalize();
+
+    // ヒントベクトルを肩→手軸に垂直な成分に射影
+    const hintDotDir = Vector3.Dot(hint, dirToHand);
+    const hintPerp = hint.subtract(dirToHand.scale(hintDotDir));
+    const hintPerpLen = hintPerp.length();
+
+    let elbowDir: Vector3;
+    if (hintPerpLen < 0.001) {
+      // ヒントが肩→手と平行 → フォールバック: 任意の垂直ベクトルを生成
+      const fallback = Math.abs(dirToHand.y) < 0.9
+        ? Vector3.Up()
+        : Vector3.Right();
+      elbowDir = Vector3.Cross(dirToHand, fallback).normalize();
+    } else {
+      elbowDir = hintPerp.normalize();
+    }
+
+    // 肘位置 = 肩 + (肩→手方向 × cos(θ) + 垂直方向 × sin(θ)) × L1
+    const elbow = shoulder.add(
+      dirToHand.scale(L1 * Math.cos(angle)).add(
+        elbowDir.scale(L1 * Math.sin(angle)),
+      ),
     );
 
-    // 円柱をデフォルト軸(Y)からdir方向へ回転
+    return elbow;
+  }
+
+  /**
+   * シリンダーメッシュを始点→終点方向に配置する。
+   * position は始点と終点の中点、rotation は Y軸→方向ベクトルへの回転。
+   */
+  private alignCylinder(mesh: Mesh, from: Vector3, to: Vector3): void {
+    const mid = from.add(to).scale(0.5);
+    mesh.position.copyFrom(mid);
+
+    const dir = to.subtract(from).normalize();
     const yAxis = Vector3.Up();
     const dot = Vector3.Dot(yAxis, dir);
 
     if (Math.abs(dot) > 0.9999) {
-      arm.rotationQuaternion = dot > 0
+      mesh.rotationQuaternion = dot > 0
         ? Quaternion.Identity()
         : Quaternion.RotationAxis(Vector3.Right(), Math.PI);
     } else {
       const cross = Vector3.Cross(yAxis, dir);
       const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-      arm.rotationQuaternion = Quaternion.RotationAxis(cross.normalize(), angle);
+      mesh.rotationQuaternion = Quaternion.RotationAxis(cross.normalize(), angle);
     }
+  }
+
+  /**
+   * 上腕の後方可動域制限。
+   * 上腕が上方(+Y)かつ後方(-Z)を向いている場合、
+   * 真上から後方への角度が UPPER_ARM_MAX_BACK_ANGLE を超えないようクランプする。
+   */
+  private clampUpperArmBackward(shoulder: Vector3, elbowPos: Vector3): Vector3 {
+    const dir = elbowPos.subtract(shoulder);
+    const len = dir.length();
+    if (len < 0.001) return elbowPos;
+
+    // 下向き or 前方 → 制限不要
+    if (dir.y <= 0 || dir.z >= 0) return elbowPos;
+
+    // YZ平面での後方角度（+Yから-Z方向への角度）
+    const backAngle = Math.atan2(-dir.z, dir.y);
+    if (backAngle <= UPPER_ARM_MAX_BACK_ANGLE) return elbowPos;
+
+    // YZ平面でクランプ（X成分とYZ面の大きさは保持）
+    const yzLen = Math.sqrt(dir.y * dir.y + dir.z * dir.z);
+    const newY = yzLen * Math.cos(UPPER_ARM_MAX_BACK_ANGLE);
+    const newZ = -yzLen * Math.sin(UPPER_ARM_MAX_BACK_ANGLE);
+
+    return shoulder.add(new Vector3(dir.x, newY, newZ));
+  }
+
+  /**
+   * 前腕の方向制限（前面基準）。
+   * ヒントベクトルから「前面」方向を算出し、
+   * 前腕が前面方向に 0°〜MAX_FOREARM_BEND_ANGLE の範囲でのみ曲がるよう制限する。
+   * 過伸展（後方への曲がり）は許可しない。
+   *
+   * @param elbowPos 肘位置
+   * @param handTarget 手ターゲット位置
+   * @param upperDir 上腕方向（肩→肘、正規化済み）
+   * @param hint 肘ヒントベクトル
+   * @returns 制限適用後の手位置（前腕長を維持）
+   */
+  private clampForearmDirection(
+    elbowPos: Vector3,
+    handTarget: Vector3,
+    upperDir: Vector3,
+    hint: Vector3,
+  ): Vector3 {
+    const forearmVec = handTarget.subtract(elbowPos);
+    if (forearmVec.length() < 0.001) {
+      return elbowPos.add(upperDir.scale(FOREARM_LENGTH));
+    }
+    const forearmDir = forearmVec.normalize();
+
+    // 上腕延長方向に対する前腕の角度
+    const dotWithUpper = Vector3.Dot(forearmDir, upperDir);
+    const bendAngle = Math.acos(Math.max(-1, Math.min(1, dotWithUpper)));
+
+    // 「前面」方向を計算: ヒントの上腕垂直成分の反対方向
+    // ヒント → 肘が突き出す方向、前面 → その反対（内側）
+    const hintDotUpper = Vector3.Dot(hint, upperDir);
+    const hintPerp = hint.subtract(upperDir.scale(hintDotUpper));
+    const hintPerpLen = hintPerp.length();
+
+    if (hintPerpLen < 0.001) {
+      // ヒントが上腕と平行 → 角度のみ制限
+      if (bendAngle > MAX_FOREARM_BEND_ANGLE) {
+        const perpComp = forearmDir.subtract(upperDir.scale(dotWithUpper));
+        const perpLen = perpComp.length();
+        if (perpLen < 0.001) return elbowPos.add(upperDir.scale(FOREARM_LENGTH));
+        const clamped = upperDir.scale(Math.cos(MAX_FOREARM_BEND_ANGLE))
+          .add(perpComp.normalize().scale(Math.sin(MAX_FOREARM_BEND_ANGLE)));
+        return elbowPos.add(clamped.normalize().scale(FOREARM_LENGTH));
+      }
+      return elbowPos.add(forearmDir.scale(FOREARM_LENGTH));
+    }
+
+    const frontDir = hintPerp.normalize().scale(-1); // 前面 = ヒント反対
+
+    // 過伸展チェック: 前腕が後方（ヒント側）に曲がっている
+    const forearmFront = Vector3.Dot(forearmDir, frontDir);
+    if (forearmFront < 0 && bendAngle > MIN_BEND_ANGLE) {
+      // 最小曲げで前面方向に矯正
+      const clamped = upperDir.scale(Math.cos(MIN_BEND_ANGLE))
+        .add(frontDir.scale(Math.sin(MIN_BEND_ANGLE)));
+      return elbowPos.add(clamped.normalize().scale(FOREARM_LENGTH));
+    }
+
+    // 最大曲げ角度チェック
+    if (bendAngle > MAX_FOREARM_BEND_ANGLE) {
+      // 曲げ方向を維持しつつ角度をクランプ
+      const perpComp = forearmDir.subtract(upperDir.scale(dotWithUpper));
+      const perpLen = perpComp.length();
+      const bendDir = perpLen > 0.001 ? perpComp.normalize() : frontDir;
+      const clamped = upperDir.scale(Math.cos(MAX_FOREARM_BEND_ANGLE))
+        .add(bendDir.scale(Math.sin(MAX_FOREARM_BEND_ANGLE)));
+      return elbowPos.add(clamped.normalize().scale(FOREARM_LENGTH));
+    }
+
+    // 制限内: 前腕長を維持
+    return elbowPos.add(forearmDir.scale(FOREARM_LENGTH));
+  }
+
+  /** 方向ベクトル+肘ヒントから上腕・肘球・前腕・手球の4メッシュを配置 */
+  private applyArmWithElbow(
+    upperArm: Mesh, elbowMesh: Mesh, forearm: Mesh, hand: Mesh,
+    side: -1 | 1, dir: Vector3, hint: Vector3,
+  ): void {
+    const shoulder = new Vector3(side * ARM_BODY_RADIUS, SHOULDER_Y, 0);
+    const handPos = new Vector3(
+      shoulder.x + dir.x * ARM_LENGTH,
+      shoulder.y + dir.y * ARM_LENGTH,
+      dir.z * ARM_LENGTH,
+    );
+
+    // IKで肘位置を計算 → 上腕の後方可動域制限を適用
+    const elbowPos = this.clampUpperArmBackward(
+      shoulder,
+      this.solve2BoneIK(shoulder, handPos, UPPER_ARM_LENGTH, FOREARM_LENGTH, hint),
+    );
+
+    // 上腕方向
+    const upperDir = elbowPos.subtract(shoulder);
+    const upperLen = upperDir.length();
+    const upperDirN = upperLen > 0.001 ? upperDir.scale(1 / upperLen) : Vector3.Up();
+
+    // 前腕の方向制限: 前面方向に0°〜90°のみ許可、過伸展を防止
+    const visualHandPos = this.clampForearmDirection(elbowPos, handPos, upperDirN, hint);
+
+    // 上腕: 肩 → 肘
+    this.alignCylinder(upperArm, shoulder, elbowPos);
+
+    // 肘球
+    elbowMesh.position.copyFrom(elbowPos);
+
+    // 前腕: 肘 → 手
+    this.alignCylinder(forearm, elbowPos, visualHandPos);
+
+    // 手球
+    hand.position.copyFrom(visualHandPos);
   }
 
   // =========================================================================
