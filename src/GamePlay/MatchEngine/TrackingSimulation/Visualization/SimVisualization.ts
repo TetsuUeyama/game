@@ -6,6 +6,7 @@ import {
   Vector3,
   Mesh,
   TransformNode,
+  VertexBuffer,
 } from "@babylonjs/core";
 
 import { loadVoxHeadMesh } from "./VoxHeadMesh";
@@ -25,12 +26,15 @@ import {
 
 /** 全エンティティの描画サイズを障害物サイズに統一 */
 const VISUAL_SIZE = OBSTACLE_SIZE;
+
+/** 上半身八角形の斜め頂点を内側に寄せる割合 (0=正八角形, 1=菱形) */
+const DIAGONAL_SHRINK = 0.15;
 import { TARGET_COLORS_3D, INIT_TARGETS } from "../Config/EntityConfig";
 import { OBSTACLE_COUNT } from "../Decision/ObstacleRoleAssignment";
 import type { SimMover } from "../Types/TrackingSimTypes";
 
 // Re-export for backward compatibility
-export { ARM_BODY_RADIUS, ARM_LENGTH, SHOULDER_Y } from "./ArmRenderer";
+export { ARM_BODY_RADIUS, ARM_LENGTH, SHOULDER_Y, HAND_DIAMETER } from "./ArmRenderer";
 export type { ArmLerpState } from "./ArmRenderer";
 
 export interface OverlayVisibility {
@@ -57,6 +61,7 @@ export interface SimVisState {
   pushObstructions: import("../Types/TrackingSimTypes").PushObstructionInfo[];
   onBallEntityIdx: number;
   dt: number;
+  dribbleBounceH: number;
 }
 
 export class SimVisualization {
@@ -124,6 +129,23 @@ export class SimVisualization {
       height: halfH, diameter: radius * 2, tessellation: 8,
     }, this.scene);
     upper.position.y = halfH / 2;
+
+    // 斜め頂点(45°,135°,225°,315°)だけ内側に寄せる
+    const positions = upper.getVerticesData(VertexBuffer.PositionKind);
+    if (positions) {
+      for (let vi = 0; vi < positions.length; vi += 3) {
+        const vx = positions[vi];
+        const vz = positions[vi + 2];
+        if (vx * vx + vz * vz < 0.0001) continue; // cap center skip
+        const angle = Math.atan2(vz, vx);
+        const diag = Math.abs(Math.sin(2 * angle)); // 0=正面/横, 1=斜め
+        const s = 1 - diag * DIAGONAL_SHRINK;
+        positions[vi] = vx * s;
+        positions[vi + 2] = vz * s;
+      }
+      upper.setVerticesData(VertexBuffer.PositionKind, positions);
+    }
+
     const upperMat = new StandardMaterial(`${name}_upperMat`, this.scene);
     upperMat.diffuseColor = uc;
     upperMat.specularColor = Color3.Black();
@@ -258,6 +280,7 @@ export class SimVisualization {
       state.targets,
       state.pushObstructions,
       state.dt,
+      state.dribbleBounceH,
     );
   }
 

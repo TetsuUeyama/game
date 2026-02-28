@@ -76,7 +76,12 @@ import { updateLooseBall } from "./Update/LooseBallHandler";
 import { updatePassFlight } from "./Update/PassFlightHandler";
 import { updateShotFlight } from "./Update/ShotFlightHandler";
 
-import { SimVisualization, type OverlayVisibility } from "./Visualization/SimVisualization";
+import { SimVisualization, HAND_DIAMETER, type OverlayVisibility } from "./Visualization/SimVisualization";
+
+/** ドリブルバウンスの周波数（移動距離あたりの位相進行: 1ステップに1バウンド） */
+const DRIBBLE_BOUNCE_FREQ = 7.0;
+/** バウンス停止時の位相戻り速度 */
+const DRIBBLE_BOUNCE_RETURN_SPEED = 8.0;
 import { SimPlayerStateManager } from "./State/SimPlayerStateManager";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "./Decision/ObstacleRoleAssignment";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
@@ -122,6 +127,12 @@ export class TrackingSimulation3D {
 
   /** キャッチ保持中の情報（ボールを手に表示し続ける） */
   private catchHoldInfo: { entityIdx: number } | null = null;
+
+  /** ドリブルバウンス状態 */
+  private dribbleBouncePhase = 0;
+  private dribblePrevX = 0;
+  private dribblePrevZ = 0;
+  private dribblePrevEntityIdx = -1;
 
   private state!: SimState;
   private prevTime = 0;
@@ -197,6 +208,9 @@ export class TrackingSimulation3D {
     const lx = INIT_LAUNCHER.x;
     const lz = INIT_LAUNCHER.z;
 
+    this.dribbleBouncePhase = 0;
+    this.dribblePrevEntityIdx = -1;
+
     this.state = {
       launcher: makeMover(0, SPAWN_BASELINE_Z, LAUNCHER_SPEED),
       targets: INIT_TARGETS.map(() => makeMover(
@@ -268,10 +282,105 @@ export class TrackingSimulation3D {
       this.vis.obstacleMeshes[i].rotation.y = Math.PI / 2 - s.obstacles[i].facing;
     }
 
-    // ボール表示: キャッチ保持中 or オンボール保持中 or 飛行中
-    let ballHeldPosition: Vector3 | null = null;
+    // --- Phase 1: ballMarker 計算 ---
     const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+
+    let ballMarkerLeftArmTarget: Vector3 | null = null;
+    let ballMarkerRightArmTarget: Vector3 | null = null;
+    let ballMarkerEntityIdx: number | null = null;
+    const obstacleEntityStart = 1 + s.targets.length;
+    for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
+      const cfg = OB_CONFIGS[oi];
+      if (cfg.markTargetEntityIdx !== s.onBallEntityIdx) continue;
+      if (s.obMems[oi].searching) continue;
+      ballMarkerEntityIdx = obstacleEntityStart + oi;
+      const ob = s.obstacles[oi];
+      const onBallMover = getOffenseMover(s, s.onBallEntityIdx);
+      const selReceiver = getOffenseMover(s, s.selectedReceiverEntityIdx);
+
+      const ballArm = new Vector3(onBallMover.x, ENTITY_HEIGHT * 1.3, onBallMover.z);
+      const denyArm = new Vector3(selReceiver.x, ENTITY_HEIGHT * 0.9, selReceiver.z);
+
+      const tdx = selReceiver.x - ob.x;
+      const tdz = selReceiver.z - ob.z;
+      const cross = Math.cos(ob.facing) * tdz - Math.sin(ob.facing) * tdx;
+
+      if (cross >= 0) {
+        ballMarkerLeftArmTarget = denyArm;
+        ballMarkerRightArmTarget = ballArm;
+      } else {
+        ballMarkerLeftArmTarget = ballArm;
+        ballMarkerRightArmTarget = denyArm;
+      }
+      break;
+    }
+
+    // --- Phase 1.5: ドリブルバウンス位相を計算（syncAll の腕ポンプに渡すため） ---
+    let dribbleBounceH = 0;
+    if (!s.ballActive && !this.catchHoldInfo) {
+      const mover = allMovers[s.onBallEntityIdx];
+
+      if (s.onBallEntityIdx !== this.dribblePrevEntityIdx) {
+        this.dribblePrevX = mover.x;
+        this.dribblePrevZ = mover.z;
+        this.dribbleBouncePhase = 0;
+        this.dribblePrevEntityIdx = s.onBallEntityIdx;
+      }
+
+      const moveDx = mover.x - this.dribblePrevX;
+      const moveDz = mover.z - this.dribblePrevZ;
+      const moveDist = Math.sqrt(moveDx * moveDx + moveDz * moveDz);
+      const vel = Math.sqrt(mover.vx * mover.vx + mover.vz * mover.vz);
+
+      if (vel > 0.01) {
+        this.dribbleBouncePhase += moveDist * DRIBBLE_BOUNCE_FREQ;
+      } else {
+        const nearestNPi = Math.round(this.dribbleBouncePhase / Math.PI) * Math.PI;
+        const phaseDiff = nearestNPi - this.dribbleBouncePhase;
+        this.dribbleBouncePhase += phaseDiff * (1 - Math.exp(-DRIBBLE_BOUNCE_RETURN_SPEED * this.lastDt));
+      }
+
+      this.dribblePrevX = mover.x;
+      this.dribblePrevZ = mover.z;
+
+      dribbleBounceH = Math.abs(Math.cos(this.dribbleBouncePhase));
+    }
+
+    // --- Phase 2: syncAll で腕・脚・torso を更新 ---
+    // 暫定 ballHeldPosition: 前フレームのボール位置を使用（他エンティティの腕追跡用）
+    const tentativeBallHeld = (!s.ballActive || this.catchHoldInfo)
+      ? this.ball.mesh.position.clone()
+      : null;
+
+    try {
+      this.vis.syncAll({
+        launcher: s.launcher,
+        targets: s.targets,
+        obstacles: s.obstacles,
+        obMems: s.obMems,
+        obFocusDists: s.obFocusDists,
+        preFire: s.preFire,
+        ballActive: s.ballActive,
+        interceptPt: s.interceptPt,
+        ballTrailPositions: this.ballTrailPositions,
+        actionStates: s.actionStates,
+        ballPosition: s.ballActive ? this.ball.getPosition() : null,
+        ballHeldPosition: tentativeBallHeld,
+        ballMarkerLeftArmTarget,
+        ballMarkerRightArmTarget,
+        ballMarkerEntityIdx,
+        pushObstructions: s.pushObstructions,
+        onBallEntityIdx: s.onBallEntityIdx,
+        dt: this.lastDt,
+        dribbleBounceH,
+      });
+    } catch (e) {
+      console.error('[TrackingSimulation3D] visualization error:', e);
+    }
+
+    // --- Phase 3: 更新後の手の位置でボールを配置 ---
     const allHands = this.vis.getHandWorldPositions(allMovers);
+    let ballHeldPosition: Vector3 | null = null;
 
     if (this.catchHoldInfo) {
       // キャッチ保持中: ボールをキャッチャーの両手中間位置に追従させる
@@ -300,94 +409,31 @@ export class TrackingSimulation3D {
         this.ball.mesh.position.copyFrom(ballHeldPosition);
       }
     } else if (!s.ballActive) {
-      // オンボールプレイヤーのドリブルハンドにボールを表示
+      // オンボールプレイヤーのドリブルハンドにボールを表示（バウンス付き）
+      // 手のひらは bounceH に同期してポンプ動作済み（ArmRenderer 内で reach 変動）
       const hands = allHands[s.onBallEntityIdx];
       if (hands) {
         const dribbleHand = this.vis.getDribbleHand();
         const handPos = dribbleHand === 'left' ? hands.left : hands.right;
-        const mover = allMovers[s.onBallEntityIdx];
-        const dx = handPos.x - mover.x;
-        const dy = handPos.y - yh;
-        const dz = handPos.z - mover.z;
-        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
         const ballR = BALL_DIAMETER / 2;
+        const handR = HAND_DIAMETER / 2;
 
-        if (len > 0.01) {
-          ballHeldPosition = new Vector3(
-            handPos.x + (dx / len) * ballR,
-            handPos.y + (dy / len) * ballR,
-            handPos.z + (dz / len) * ballR,
-          );
-        } else {
-          ballHeldPosition = new Vector3(handPos.x, handPos.y, handPos.z);
-        }
+        // バウンス上端: ボール中心が手のひら最下点の高さ（手のひらはポンプで上昇済み）
+        const topBallY = handPos.y - handR;
+        // バウンス下端: 地面に接するボール中心位置
+        const groundBallY = ballR;
+
+        // dribbleBounceH: 1=手のひら直下, 0=地面（Phase 1.5 で計算済み）
+        const ballY = groundBallY + dribbleBounceH * (topBallY - groundBallY);
+
+        // X/Z は手の真下（手のXZ座標をそのまま使用）
+        ballHeldPosition = new Vector3(handPos.x, ballY, handPos.z);
         this.ball.mesh.position.copyFrom(ballHeldPosition);
       }
     }
 
     // Ball visibility: 飛行中、キャッチ保持中、またはオンボール保持中は常に表示
     this.ball.mesh.setEnabled(s.ballActive || ballHeldPosition !== null);
-
-    // オンボールディフェンス パスレーン守備スタンス: 左右腕を別々のターゲットに向ける
-    // マーク対象がオンボールの障害物のみ適用
-    let ballMarkerLeftArmTarget: Vector3 | null = null;
-    let ballMarkerRightArmTarget: Vector3 | null = null;
-    let ballMarkerEntityIdx: number | null = null;
-    const obstacleEntityStart = 1 + s.targets.length;
-    for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-      const cfg = OB_CONFIGS[oi];
-      if (cfg.markTargetEntityIdx !== s.onBallEntityIdx) continue;
-      if (s.obMems[oi].searching) continue;
-      ballMarkerEntityIdx = obstacleEntityStart + oi;
-      const ob = s.obstacles[oi];
-      const onBallMover = getOffenseMover(s, s.onBallEntityIdx);
-      const selReceiver = getOffenseMover(s, s.selectedReceiverEntityIdx);
-
-      // ボール側: オンボール選手位置の頭上（ボールを遮る）
-      const ballArm = new Vector3(onBallMover.x, ENTITY_HEIGHT * 1.3, onBallMover.z);
-      // ディナイ側: 選択レシーバー方向、肩高さ（パスレーンを塞ぐ）
-      const denyArm = new Vector3(selReceiver.x, ENTITY_HEIGHT * 0.9, selReceiver.z);
-
-      // レシーバーが障害物の facing に対してどちら側かを外積で判定
-      const tdx = selReceiver.x - ob.x;
-      const tdz = selReceiver.z - ob.z;
-      const cross = Math.cos(ob.facing) * tdz - Math.sin(ob.facing) * tdx;
-
-      if (cross >= 0) {
-        ballMarkerLeftArmTarget = denyArm;
-        ballMarkerRightArmTarget = ballArm;
-      } else {
-        ballMarkerLeftArmTarget = ballArm;
-        ballMarkerRightArmTarget = denyArm;
-      }
-      break;  // オンボールマーカーは1体のみ
-    }
-
-    // Visualization (wrapped in try-catch to prevent silent failures)
-    try {
-      this.vis.syncAll({
-        launcher: s.launcher,
-        targets: s.targets,
-        obstacles: s.obstacles,
-        obMems: s.obMems,
-        obFocusDists: s.obFocusDists,
-        preFire: s.preFire,
-        ballActive: s.ballActive,
-        interceptPt: s.interceptPt,
-        ballTrailPositions: this.ballTrailPositions,
-        actionStates: s.actionStates,
-        ballPosition: s.ballActive ? this.ball.getPosition() : null,
-        ballHeldPosition,
-        ballMarkerLeftArmTarget,
-        ballMarkerRightArmTarget,
-        ballMarkerEntityIdx,
-        pushObstructions: s.pushObstructions,
-        onBallEntityIdx: s.onBallEntityIdx,
-        dt: this.lastDt,
-      });
-    } catch (e) {
-      console.error('[TrackingSimulation3D] visualization error:', e);
-    }
   }
 
   // =========================================================================

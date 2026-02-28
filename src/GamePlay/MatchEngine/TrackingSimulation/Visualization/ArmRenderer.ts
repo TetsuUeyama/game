@@ -12,6 +12,7 @@ import {
 import {
   ENTITY_HEIGHT,
   OBSTACLE_SIZE,
+  BALL_DIAMETER,
 } from "../Config/FieldConfig";
 import { ARM_LERP_SPEED, NECK_MAX_ANGLE } from "../Config/BodyDynamicsConfig";
 import type { SimMover, PushObstructionInfo } from "../Types/TrackingSimTypes";
@@ -26,7 +27,7 @@ const VISUAL_SIZE = OBSTACLE_SIZE;
 export const ARM_BODY_RADIUS = VISUAL_SIZE / 2;
 export const ARM_LENGTH = VISUAL_SIZE * 1.1;
 const ARM_DIAMETER = VISUAL_SIZE * 0.24;
-const HAND_DIAMETER = VISUAL_SIZE * 0.26;
+export const HAND_DIAMETER = VISUAL_SIZE * 0.26;
 const UPPER_ARM_LENGTH = ARM_LENGTH * 0.4;
 const FOREARM_LENGTH = ARM_LENGTH * 0.4;
 /** 実際の腕の総長（上腕＋前腕）: ボール保持位置・IK計算に使用 */
@@ -37,8 +38,8 @@ const ARM_STRIPE_WIDTH_RATIO = 0.25;
 /** 肌色 */
 const SKIN_COLOR = new Color3(0.96, 0.80, 0.64);
 const MIN_BEND_ANGLE = 5 * Math.PI / 180;
-/** 前腕の最大曲げ角度: 伸展(0°)から内側に90°まで */
-const MAX_FOREARM_BEND_ANGLE = 90 * Math.PI / 180;
+/** 前腕の最大曲げ角度: 伸展(0°)から内側に130°まで（ドリブル時の深い肘曲げに対応） */
+const MAX_FOREARM_BEND_ANGLE = 130 * Math.PI / 180;
 /** 上腕の後方可動域制限: 真上(+Y)から後方(-Z)へ最大10° */
 const UPPER_ARM_MAX_BACK_ANGLE = 10 * Math.PI / 180;
 export const SHOULDER_Y = ENTITY_HEIGHT * 0.35;
@@ -49,17 +50,17 @@ const BALL_REACT_RADIUS = 2.0;
 /** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
 const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
 
-/** ドリブル姿勢の腕方向ベクトル（50度下向き前方: 腰〜太もも付近） */
-const DRIBBLE_ARM_ANGLE = (50 * Math.PI) / 180;
+/** ドリブル姿勢の腕方向ベクトル（80度下向き: ほぼ真下に手を伸ばす） */
+const DRIBBLE_ARM_ANGLE = (80 * Math.PI) / 180;
 const DRIBBLE_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_ARM_ANGLE), Math.cos(DRIBBLE_ARM_ANGLE)).normalize();
-/** ドリブル時の腕リーチ（腕の60%まで縮め、肘を曲げる） */
-const DRIBBLE_ARM_REACH = 0.6;
+/** ドリブル時の腕リーチ（フル伸展: 手を地面近くへ） */
+const DRIBBLE_ARM_REACH = 1.0;
 
-/** ドリブル保護姿勢: DF近接時は体寄りにボールを保持（65度下向き） */
-const DRIBBLE_PROTECT_ARM_ANGLE = (65 * Math.PI) / 180;
+/** ドリブル保護姿勢: DF近接時は体寄りにボールを保持（85度下向き: ほぼ真下） */
+const DRIBBLE_PROTECT_ARM_ANGLE = (85 * Math.PI) / 180;
 const DRIBBLE_PROTECT_ARM_DIR = new Vector3(0, -Math.sin(DRIBBLE_PROTECT_ARM_ANGLE), Math.cos(DRIBBLE_PROTECT_ARM_ANGLE)).normalize();
-/** 保護姿勢時の腕リーチ（腕の50%: さらに体に近づける） */
-const DRIBBLE_PROTECT_ARM_REACH = 0.5;
+/** 保護姿勢時の腕リーチ（95%: わずかに肘を曲げ体寄りに） */
+const DRIBBLE_PROTECT_ARM_REACH = 0.95;
 
 /** DF近接判定の半径（メートル） */
 const DRIBBLE_DEFENDER_RADIUS = 2.0;
@@ -240,6 +241,7 @@ export class ArmRenderer {
     targets: SimMover[],
     pushObstructions: PushObstructionInfo[],
     dt: number,
+    dribbleBounceH: number,
   ): void {
     const ballPos = ballPosition;
     const alpha = 1 - Math.exp(-ARM_LERP_SPEED * dt);
@@ -284,7 +286,9 @@ export class ArmRenderer {
           rootRight.x * sinA + rootRight.z * cosA,
         ).normalize();
       } else {
-        const trackBallPos = (ballActive && ballPos) ? ballPos : ballHeldPosition;
+        // ドリブル中のオンボールエンティティはボール追跡をスキップ（非ドリブル手が地面を追わないように）
+        const isDribbling = idx === onBallEntityIdx && !ballActive;
+        const trackBallPos = isDribbling ? null : ((ballActive && ballPos) ? ballPos : ballHeldPosition);
         if (trackBallPos) {
           const dx = trackBallPos.x - ex;
           const dy = trackBallPos.y - refY;
@@ -369,10 +373,11 @@ export class ArmRenderer {
           if (defDist < DRIBBLE_DEFENDER_RADIUS && defDist < closestDefDist) {
             closestDefDist = defDist;
             // torsoFacing に対してDFが右側か左側かを外積で判定
+            // Babylon.js 左手系: cross > 0 → DFはキャラの左側、cross < 0 → 右側
             const faceCos = Math.cos(mover.torsoFacing);
             const faceSin = Math.sin(mover.torsoFacing);
             const cross = faceCos * ddz - faceSin * ddx;
-            defenderSide = cross >= 0 ? 'right' : 'left';
+            defenderSide = cross >= 0 ? 'left' : 'right';
           }
         }
 
@@ -383,12 +388,16 @@ export class ArmRenderer {
         if (vel > 0.01) {
           const dribbleDir = isProtecting ? DRIBBLE_PROTECT_ARM_DIR : DRIBBLE_ARM_DIR;
           const dribbleReach = isProtecting ? DRIBBLE_PROTECT_ARM_REACH : DRIBBLE_ARM_REACH;
+          // ドリブルポンプ: bounceH=1(ボール手元)で手を ballR 分上げ、bounceH=0(ボール地面)で下ろす
+          const ballR = BALL_DIAMETER / 2;
+          const reachPump = ballR / (Math.abs(dribbleDir.y) * TOTAL_ARM_LENGTH);
+          const pumpedReach = dribbleReach - dribbleBounceH * reachPump;
           if (this._dribbleHand === 'right') {
             targetRightDir = dribbleDir;
-            targetRightReach = dribbleReach;
+            targetRightReach = pumpedReach;
           } else {
             targetLeftDir = dribbleDir;
-            targetLeftReach = dribbleReach;
+            targetLeftReach = pumpedReach;
           }
         }
       }
@@ -429,40 +438,27 @@ export class ArmRenderer {
 
   /**
    * 全エンティティの左右手のワールド座標を返す。
+   * IK + 前腕クランプ後の実際のメッシュ位置を使用する。
    */
   getHandWorldPositions(allMovers: SimMover[]): { left: Vector3; right: Vector3 }[] {
     const result: { left: Vector3; right: Vector3 }[] = [];
 
     for (let idx = 0; idx < allMovers.length; idx++) {
-      const lerpState = this.armLerpStates[idx];
-      if (!lerpState) {
+      const armSet = this.entityArmSets[idx];
+      if (!armSet) {
         const m = allMovers[idx];
         const pos = new Vector3(m.x, ENTITY_HEIGHT / 2 + SHOULDER_Y, m.z);
         result.push({ left: pos.clone(), right: pos.clone() });
         continue;
       }
 
-      const mover = allMovers[idx];
-      const theta = Math.PI / 2 - mover.torsoFacing;
-      const cosT = Math.cos(theta);
-      const sinT = Math.sin(theta);
-
-      const computeHand = (side: -1 | 1, dir: Vector3, reach: number): Vector3 => {
-        const effectiveLen = TOTAL_ARM_LENGTH * reach;
-        const lx = side * ARM_BODY_RADIUS + dir.x * effectiveLen;
-        const ly = SHOULDER_Y + dir.y * effectiveLen;
-        const lz = dir.z * effectiveLen;
-
-        return new Vector3(
-          mover.x + lx * cosT + lz * sinT,
-          ENTITY_HEIGHT / 2 + ly,
-          mover.z - lx * sinT + lz * cosT,
-        );
-      };
+      // IK + clampForearmDirection 適用後の実際のメッシュワールド座標を取得
+      armSet.leftHand.computeWorldMatrix(true);
+      armSet.rightHand.computeWorldMatrix(true);
 
       result.push({
-        left: computeHand(-1, lerpState.leftDir, lerpState.leftReach),
-        right: computeHand(1, lerpState.rightDir, lerpState.rightReach),
+        left: armSet.leftHand.absolutePosition.clone(),
+        right: armSet.rightHand.absolutePosition.clone(),
       });
     }
 
