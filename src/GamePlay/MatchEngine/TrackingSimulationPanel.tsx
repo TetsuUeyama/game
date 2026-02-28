@@ -32,6 +32,7 @@ export function TrackingSimulationPanel() {
     global: true,
     entities: Array(10).fill(true),
   });
+  const [panelOpen, setPanelOpen] = useState(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -178,9 +179,22 @@ export function TrackingSimulationPanel() {
         style={{ touchAction: 'none' }}
       />
 
-      {/* Score panel */}
+      {/* Hamburger menu button */}
       {ready && (
-        <div className="absolute top-4 right-4 z-40 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700 p-4 w-64">
+        <button
+          onClick={() => setPanelOpen(prev => !prev)}
+          className="absolute top-4 right-4 z-50 w-10 h-10 flex flex-col items-center justify-center gap-1.5 bg-gray-800/90 hover:bg-gray-700 rounded-lg border border-gray-600 transition-colors"
+          title={panelOpen ? 'パネルを閉じる' : 'パネルを開く'}
+        >
+          <span className={`block w-5 h-0.5 bg-gray-200 transition-transform ${panelOpen ? 'rotate-45 translate-y-2' : ''}`} />
+          <span className={`block w-5 h-0.5 bg-gray-200 transition-opacity ${panelOpen ? 'opacity-0' : ''}`} />
+          <span className={`block w-5 h-0.5 bg-gray-200 transition-transform ${panelOpen ? '-rotate-45 -translate-y-2' : ''}`} />
+        </button>
+      )}
+
+      {/* Score panel */}
+      {ready && panelOpen && (
+        <div className="absolute top-16 right-4 z-40 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700 p-4 w-64">
           <h3 className="text-sm font-bold text-gray-300 mb-3">
             追跡シミュレーション
           </h3>
