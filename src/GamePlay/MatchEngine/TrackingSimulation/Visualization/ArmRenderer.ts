@@ -15,7 +15,7 @@ import {
   BALL_DIAMETER,
 } from "../Config/FieldConfig";
 import { ARM_LERP_SPEED, NECK_MAX_ANGLE } from "../Config/BodyDynamicsConfig";
-import type { SimMover, PushObstructionInfo } from "../Types/TrackingSimTypes";
+import type { SimMover, PushObstructionInfo, ActionState } from "../Types/TrackingSimTypes";
 import { normAngleDiff } from "../Movement/MovementCore";
 
 // =========================================================================
@@ -49,6 +49,10 @@ const BALL_REACT_RADIUS = 2.0;
 
 /** デフォルト腕方向ベクトル（ローカル座標: 60度下向き前方） */
 const DEF_ARM_DIR = new Vector3(0, -Math.sin(DEFAULT_ARM_ANGLE), Math.cos(DEFAULT_ARM_ANGLE)).normalize();
+
+/** ブロックポーズ: 両腕をほぼ真上に伸ばす（ローカル座標: 10度前方） */
+const BLOCK_ARM_ANGLE = (10 * Math.PI) / 180;
+const BLOCK_ARM_DIR = new Vector3(0, Math.cos(BLOCK_ARM_ANGLE), Math.sin(BLOCK_ARM_ANGLE)).normalize();
 
 /** ドリブル姿勢の腕方向ベクトル（80度下向き: ほぼ真下に手を伸ばす） */
 const DRIBBLE_ARM_ANGLE = (80 * Math.PI) / 180;
@@ -242,6 +246,7 @@ export class ArmRenderer {
     pushObstructions: PushObstructionInfo[],
     dt: number,
     dribbleBounceH: number,
+    actionStates?: ActionState[],
   ): void {
     const ballPos = ballPosition;
     const alpha = 1 - Math.exp(-ARM_LERP_SPEED * dt);
@@ -262,6 +267,27 @@ export class ArmRenderer {
       let targetRightDir = DEF_ARM_DIR;
       let targetLeftReach = 1.0;
       let targetRightReach = 1.0;
+
+      // ブロックポーズ: block startup/active 中は両腕を上方に伸ばす
+      const actionState = actionStates?.[idx];
+      if (actionState?.type === 'block' && (actionState.phase === 'startup' || actionState.phase === 'active')) {
+        targetLeftDir = BLOCK_ARM_DIR;
+        targetRightDir = BLOCK_ARM_DIR;
+        targetLeftReach = 1.0;
+        targetRightReach = 1.0;
+
+        // ブロックポーズ時は他の腕ロジックをスキップ
+        Vector3.LerpToRef(lerpState.leftDir, targetLeftDir, alpha, lerpState.leftDir);
+        lerpState.leftDir.normalize();
+        Vector3.LerpToRef(lerpState.rightDir, targetRightDir, alpha, lerpState.rightDir);
+        lerpState.rightDir.normalize();
+        lerpState.leftReach += (targetLeftReach - lerpState.leftReach) * alpha;
+        lerpState.rightReach += (targetRightReach - lerpState.rightReach) * alpha;
+
+        this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, DEF_LEFT_ELBOW_HINT, lerpState.leftReach);
+        this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, DEF_RIGHT_ELBOW_HINT, lerpState.rightReach);
+        continue;
+      }
 
       if (idx === ballMarkerEntityIdx && ballMarkerLeftArmTarget && ballMarkerRightArmTarget) {
         parent.computeWorldMatrix(true);

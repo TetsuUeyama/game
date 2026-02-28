@@ -2,7 +2,9 @@ import type { ActionScorerResult } from "./ActionScorerTypes";
 
 export interface SimMover {
   x: number; z: number;
+  y: number;              // 垂直位置（0 = 地面）
   vx: number; vz: number;
+  vy: number;             // 垂直速度（正 = 上昇）
   speed: number;
   facing: number;        // 下半身の向き
   torsoFacing: number;   // 上半身の向き
@@ -89,7 +91,7 @@ export interface ScanResult {
 export type ActionPhase = 'idle' | 'charge' | 'startup' | 'active' | 'recovery';
 
 /** アクションの種類 */
-export type ActionType = 'idle' | 'pass' | 'shoot' | 'move' | 'catch' | 'obstacle_react';
+export type ActionType = 'idle' | 'pass' | 'shoot' | 'move' | 'catch' | 'obstacle_react' | 'block';
 
 /**
  * アクションのタイミング定義（秒）
