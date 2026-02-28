@@ -36,11 +36,13 @@ export function canShoot(shooter: SimMover): boolean {
  * - 3Pライン (d ≈ 7.2m): charge ≈ 0.66s
  * - 最大距離 (d = 8.5m): charge = 0.8s
  */
-export function computeShootTiming(shooter: SimMover): ActionTiming {
+export function computeShootTiming(shooter: SimMover, alignCharge?: number): ActionTiming {
   const d = dist2d(shooter.x, shooter.z, GOAL_RIM_X, GOAL_RIM_Z);
-  const charge = d <= SHOOT_CHARGE_DEAD_ZONE
+  const distCharge = d <= SHOOT_CHARGE_DEAD_ZONE
     ? 0
     : (d - SHOOT_CHARGE_DEAD_ZONE) / (MAX_SHOOT_RANGE - SHOOT_CHARGE_DEAD_ZONE) * MAX_SHOOT_CHARGE;
+  // パワーチャージと回転チャージは同時進行 → 大きい方を採用
+  const charge = alignCharge !== undefined ? Math.max(distCharge, alignCharge) : distCharge;
   return {
     charge,
     startup: 0.3,    // シュートフォーム準備

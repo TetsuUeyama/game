@@ -9,7 +9,12 @@ import type { SimState, SimMover, SimBall } from "../Types/TrackingSimTypes";
 import {
   turnNeckToward,
   turnTorsoToward,
+  orientToward,
 } from "../Movement/MovementCore";
+import {
+  GOAL_RIM_X,
+  GOAL_RIM_Z,
+} from "../Config/ShootConfig";
 import {
   NECK_TURN_RATE, TORSO_TURN_RATE,
 } from "../Config/BodyDynamicsConfig";
@@ -119,13 +124,29 @@ export function updateOffenseTorsoNeckFacing(
   for (let ei = 0; ei < allOffense.length; ei++) {
     const mover = allOffense[ei];
     const action = state.actionStates[ei];
+    const isChargeOrStartup = action.phase === 'charge' || action.phase === 'startup';
+    const isActiveOrRecovery = action.phase === 'active' || action.phase === 'recovery';
 
-    if (action.type === 'pass') {
-      // パス中: 選択レシーバーの方向を見る
+    if (action.type === 'shoot' && isChargeOrStartup) {
+      // シュート charge/startup 中: ゴール方向に全身回転（facing + torso + neck）
+      orientToward(mover, GOAL_RIM_X, GOAL_RIM_Z, dt);
+    } else if (action.type === 'pass' && isChargeOrStartup) {
+      // パス charge/startup 中: レシーバー方向に全身回転
       const receiver = ei === 0
-        ? targets[state.selectedReceiverEntityIdx - 1]  // launcher がパッサー → targets から
+        ? targets[state.selectedReceiverEntityIdx - 1]
+        : (state.selectedReceiverEntityIdx === 0 ? launcher : targets[state.selectedReceiverEntityIdx - 1]);
+      orientToward(mover, receiver.x, receiver.z, dt);
+    } else if (action.type === 'pass' && isActiveOrRecovery) {
+      // パス active/recovery 中: torso+neck のみレシーバー方向
+      const receiver = ei === 0
+        ? targets[state.selectedReceiverEntityIdx - 1]
         : (state.selectedReceiverEntityIdx === 0 ? launcher : targets[state.selectedReceiverEntityIdx - 1]);
       const angle = Math.atan2(receiver.z - mover.z, receiver.x - mover.x);
+      mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
+      mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
+    } else if (action.type === 'shoot' && isActiveOrRecovery) {
+      // シュート active/recovery 中: torso+neck をゴール方向
+      const angle = Math.atan2(GOAL_RIM_Z - mover.z, GOAL_RIM_X - mover.x);
       mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
     } else if (action.type === 'catch' && ballPosition) {
