@@ -26,6 +26,10 @@ const STEP_SWING_ANGLE = 25 * Math.PI / 180;
 const STEP_FREQUENCY = 8.0;
 const STEP_RETURN_SPEED = 8.0;
 
+/** ドリブル時の高速小刻みステップ */
+const DRIBBLE_STEP_FREQUENCY = 14.0;
+const DRIBBLE_SWING_ANGLE = 12 * Math.PI / 180;
+
 const HIP_BOX_WIDTH = LEG_SIDE_OFFSET * 2 + LEG_DIAMETER;
 const HIP_BOX_HEIGHT = ENTITY_HEIGHT * 0.08;
 const HIP_BOX_DEPTH = LEG_DIAMETER * 0.9;
@@ -153,7 +157,7 @@ export class LegRenderer {
   /**
    * 全エンティティの脚を歩行アニメーションで更新。
    */
-  syncLegs(allMovers: SimMover[], dt: number): void {
+  syncLegs(allMovers: SimMover[], dt: number, onBallEntityIdx: number, ballActive: boolean): void {
     for (let idx = 0; idx < this.entityLegSets.length; idx++) {
       const legSet = this.entityLegSets[idx];
       const stepState = this.legStepStates[idx];
@@ -170,15 +174,20 @@ export class LegRenderer {
 
       const drive = dist + angleDelta * LEG_SIDE_OFFSET;
 
+      // オンボール＋移動中 → ドリブル用の高速小刻みステップ
+      const isDribbling = idx === onBallEntityIdx && !ballActive && drive > 0.0005;
+      const freq = isDribbling ? DRIBBLE_STEP_FREQUENCY : STEP_FREQUENCY;
+      const swingAngle = isDribbling ? DRIBBLE_SWING_ANGLE : STEP_SWING_ANGLE;
+
       if (drive > 0.0005) {
-        stepState.phase += drive * STEP_FREQUENCY;
+        stepState.phase += drive * freq;
       } else {
         const nearestNPi = Math.round(stepState.phase / Math.PI) * Math.PI;
         const diff = nearestNPi - stepState.phase;
         stepState.phase += diff * (1 - Math.exp(-STEP_RETURN_SPEED * dt));
       }
 
-      const swing = Math.sin(stepState.phase) * STEP_SWING_ANGLE;
+      const swing = Math.sin(stepState.phase) * swingAngle;
       legSet.leftHipJoint.rotation.x = swing;
       legSet.rightHipJoint.rotation.x = -swing;
 

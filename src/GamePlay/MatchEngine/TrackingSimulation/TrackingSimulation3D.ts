@@ -300,25 +300,26 @@ export class TrackingSimulation3D {
         this.ball.mesh.position.copyFrom(ballHeldPosition);
       }
     } else if (!s.ballActive) {
-      // オンボールプレイヤーの右手にボールを表示
+      // オンボールプレイヤーのドリブルハンドにボールを表示
       const hands = allHands[s.onBallEntityIdx];
       if (hands) {
-        const rh = hands.right;
+        const dribbleHand = this.vis.getDribbleHand();
+        const handPos = dribbleHand === 'left' ? hands.left : hands.right;
         const mover = allMovers[s.onBallEntityIdx];
-        const dx = rh.x - mover.x;
-        const dy = rh.y - yh;
-        const dz = rh.z - mover.z;
+        const dx = handPos.x - mover.x;
+        const dy = handPos.y - yh;
+        const dz = handPos.z - mover.z;
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
         const ballR = BALL_DIAMETER / 2;
 
         if (len > 0.01) {
           ballHeldPosition = new Vector3(
-            rh.x + (dx / len) * ballR,
-            rh.y + (dy / len) * ballR,
-            rh.z + (dz / len) * ballR,
+            handPos.x + (dx / len) * ballR,
+            handPos.y + (dy / len) * ballR,
+            handPos.z + (dz / len) * ballR,
           );
         } else {
-          ballHeldPosition = new Vector3(rh.x, rh.y, rh.z);
+          ballHeldPosition = new Vector3(handPos.x, handPos.y, handPos.z);
         }
         this.ball.mesh.position.copyFrom(ballHeldPosition);
       }
