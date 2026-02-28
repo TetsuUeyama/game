@@ -44,12 +44,14 @@ export function dist2d(ax: number, az: number, bx: number, bz: number): number {
 }
 
 /**
- * Speed multiplier based on facing vs move direction
- * front(0)=1.0, side(90)=0.7, back(180)=0.5
+ * Speed multiplier based on facing vs move direction (8方向対応)
+ * front(0°)=1.0, diag-fwd(45°)=0.85, side(90°)=0.7, diag-back(135°)=0.55, back(180°)=0.4
  */
 export function dirSpeedMult(facing: number, moveAngle: number): number {
   const cosA = Math.cos(normAngleDiff(facing, moveAngle));
-  return cosA >= 0 ? 0.7 + 0.3 * cosA : 0.7 + 0.2 * cosA;
+  // cosA: 1.0(前) → 0(横) → -1(後)
+  // 前半(cosA>=0): 1.0〜0.7, 後半(cosA<0): 0.7〜0.4
+  return cosA >= 0 ? 0.7 + 0.3 * cosA : 0.7 + 0.3 * cosA;
 }
 
 /** Turn facing toward target angle by at most maxDelta */
