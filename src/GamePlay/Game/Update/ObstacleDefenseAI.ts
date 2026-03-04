@@ -24,7 +24,7 @@ import {
 import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
 import { OB_CONFIGS } from "../Decision/ObstacleRoleAssignment";
 import { INIT_OBSTACLES } from "../Config/EntityConfig";
-import { isAirborne } from "../Movement/JumpPhysics";
+import { isAirborne } from "../Action/JumpPhysics";
 import { JUMP_HORIZONTAL_MULT } from "../Config/JumpConfig";
 
 /**

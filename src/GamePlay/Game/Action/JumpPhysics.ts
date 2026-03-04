@@ -4,7 +4,7 @@
 
 import type { SimMover } from "../Types/TrackingSimTypes";
 import { GRAVITY, JUMP_MOMENTUM_CARRY } from "../Config/JumpConfig";
-import { bounce } from "./MovementCore";
+import { bounce } from "../Movement/MovementCore";
 
 /** 重力適用、y更新、空中慣性移動、地面クランプ */
 export function tickJumpPhysics(mover: SimMover, dt: number): void {
