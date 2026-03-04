@@ -3,7 +3,7 @@
  * Firestoreからチーム構成と選手割り当てを読み込む
  */
 
-import { OffenseRole, DefenseRole, DefenseScheme } from "@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes";
+import { OffenseRole, DefenseRole, DefenseScheme } from "@/GamePlay/Data/Types/RoleTypes";
 import { fetchDefaultTeamConfig } from "@/SimulationPlay/Management/Services/UserDataService";
 
 export interface PlayerConfig {

@@ -14,7 +14,8 @@ import {
   Matrix,
   Bone,
 } from "@babylonjs/core";
-import type { Character } from "@/GamePlay/Object/Entities/Character";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Character = any;
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 import { ParabolaUtils } from "@/GamePlay/Object/Physics/Trajectory/ParabolaUtils";
 import { DeterministicTrajectory, type Vec3 } from "@/GamePlay/Object/Physics/Trajectory/DeterministicTrajectory";

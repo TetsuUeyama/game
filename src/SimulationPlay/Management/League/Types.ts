@@ -2,7 +2,7 @@
  * リーグ戦システムの型定義
  */
 
-import { OffenseRole, DefenseRole, DefenseScheme } from '@/GamePlay/GameSystem/StatusCheckSystem/PlayerStateTypes';
+import { OffenseRole, DefenseRole, DefenseScheme } from '@/GamePlay/Data/Types/RoleTypes';
 
 /** リーグ内の選手定義 */
 export interface LeaguePlayer {

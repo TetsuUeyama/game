@@ -1,5 +1,5 @@
 import { PlayerData, PlayerDataJSON, FaceConfigJSON } from "@/GamePlay/Data/Types/PlayerData";
-import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "@/GamePlay/GameSystem/CharacterModel/Types/FaceConfig";
+import { FaceConfig, DEFAULT_FACE_CONFIG, ColorRGB } from "@/GamePlay/Data/Types/FaceConfig";
 import { fetchAllPlayers } from "@/SimulationPlay/Management/Services/PlayerService";
 
 /**
