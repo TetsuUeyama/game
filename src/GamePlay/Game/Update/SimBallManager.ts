@@ -8,7 +8,7 @@ import { Vector3 } from "@babylonjs/core";
 import type { SimState } from "../Types/TrackingSimTypes";
 import { createIdleAction, startAction } from "../Action/ActionCore";
 import { MOVE_TIMING } from "../Action/MoveAction";
-import { OBSTACLE_REACT_TIMING } from "../Action/ObstacleReactAction";
+import { OBSTACLE_REACT_TIMING } from "../Config/ObstacleReactAction";
 import { computeObstacleReactions } from "../Decision/PassEvaluation";
 import { dist2d, restoreRandom } from "../Movement/MovementCore";
 import {

@@ -63,7 +63,7 @@ import {
   isDriveLaneClear,
   moveTransitToHome,
 } from "./Movement/RoleMovement";
-import { tickJumpPhysics, startJump } from "./Movement/JumpPhysics";
+import { tickJumpPhysics, startJump } from "./Action/JumpPhysics";
 import { shouldAttemptBlock, BLOCK_TIMING } from "./Action/BlockAction";
 import { BLOCK_JUMP_VY } from "./Config/JumpConfig";
 
