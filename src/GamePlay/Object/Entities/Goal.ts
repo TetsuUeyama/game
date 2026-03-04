@@ -15,7 +15,7 @@ import {
 } from "@babylonjs/core";
 import { Net } from "@/GamePlay/Object/Entities/Net";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
-import { FIELD_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+import { FIELD_CONFIG } from "@/GamePlay/Object/Entities/FieldConfig";
 
 // ゴール設定
 export const GOAL_CONFIG = {

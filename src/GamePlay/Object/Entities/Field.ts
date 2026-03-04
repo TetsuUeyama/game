@@ -11,7 +11,7 @@ import {
   VertexData,
 } from "@babylonjs/core";
 import { Goal, GOAL_CONFIG } from "@/GamePlay/Object/Entities/Goal";
-import { FIELD_CONFIG, GRID_CONFIG, OUTER_GRID_CONFIG } from "@/GamePlay/GameSystem/FieldSystem/FieldGridConfig";
+import { FIELD_CONFIG, GRID_CONFIG, OUTER_GRID_CONFIG } from "@/GamePlay/Object/Entities/FieldConfig";
 import { Net } from "@/GamePlay/Object/Entities/Net";
 import { PhysicsConstants } from "@/GamePlay/Object/Physics/PhysicsConfig";
 

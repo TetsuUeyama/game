@@ -1,4 +1,4 @@
-import { TrackingSimulationPanel } from '@/GamePlay/MatchEngine/TrackingSimulationPanel';
+import { TrackingSimulationPanel } from '@/GamePlay/Game/TrackingSimulationPanel';
 
 /**
  * 追跡シミュレーションページ

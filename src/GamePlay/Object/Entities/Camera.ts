@@ -4,7 +4,8 @@
  */
 
 import { ArcRotateCamera, FreeCamera, Scene, Vector3 } from "@babylonjs/core";
-import { Character } from "@/GamePlay/Object/Entities/Character";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Character = any;
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
 
 // ========== 型定義 ==========

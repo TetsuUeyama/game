@@ -12,8 +12,6 @@ import type {
 } from '@/SimulationPlay/Management/League/Types';
 import { LEAGUE_TEAMS } from '@/SimulationPlay/Management/League/LeagueTeams';
 import { generateRoundRobinSchedule } from '@/SimulationPlay/Management/League/RoundRobinScheduler';
-import type { GameTeamConfig } from '@/GamePlay/Data/TeamConfigLoader';
-
 const STORAGE_KEY_LEAGUE = 'basketball_league_state';
 const STORAGE_KEY_MATCH_CONFIG = 'basketball_match_config';
 const STORAGE_KEY_MATCH_RESULT = 'basketball_match_result';
@@ -217,58 +215,6 @@ export class LeagueManager {
     return {
       result: won ? 'win' : 'loss',
       score: `${myScore}-${oppScore}`,
-    };
-  }
-
-  // ---- チーム設定生成 ----
-
-  /** LeagueTeam → GameTeamConfig に変換（既存の teamConfig5on5.json と同じ形式） */
-  static buildTeamConfig(homeTeam: LeagueTeam, awayTeam: LeagueTeam): GameTeamConfig {
-    // 5on5のデフォルト初期位置
-    const homePositions = [
-      { x: 0, z: -5 },   // PG
-      { x: -5, z: -3 },  // SG
-      { x: 5, z: -3 },   // SF
-      { x: -3, z: 5 },   // PF
-      { x: 0, z: 10 },   // C
-    ];
-    const awayPositions = [
-      { x: 0, z: 5 },    // PG
-      { x: -5, z: 3 },   // SG
-      { x: 5, z: 3 },    // SF
-      { x: 3, z: -5 },   // PF
-      { x: 0, z: -10 },  // C
-    ];
-
-    return {
-      allyTeam: {
-        formation: '5on5',
-        defenseScheme: homeTeam.defenseScheme,
-        players: homeTeam.players.map((p, i) => ({
-          playerId: p.playerId,
-          position: p.position,
-          x: homePositions[i].x,
-          z: homePositions[i].z,
-          hasAI: true,
-          offenseRole: p.offenseRole,
-          defenseRole: p.defenseRole,
-          shotPriority: p.shotPriority,
-        })),
-      },
-      enemyTeam: {
-        formation: '5on5',
-        defenseScheme: awayTeam.defenseScheme,
-        players: awayTeam.players.map((p, i) => ({
-          playerId: p.playerId,
-          position: p.position,
-          x: awayPositions[i].x,
-          z: awayPositions[i].z,
-          hasAI: true,
-          offenseRole: p.offenseRole,
-          defenseRole: p.defenseRole,
-          shotPriority: p.shotPriority,
-        })),
-      },
     };
   }
 
