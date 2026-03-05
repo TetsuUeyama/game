@@ -7,15 +7,13 @@
 
 import type { ActionTiming, SimMover } from "../Types/TrackingSimTypes";
 import {
-  GOAL_RIM_X,
-  GOAL_RIM_Y,
-  GOAL_RIM_Z,
   MAX_SHOOT_RANGE,
   MIN_SHOOT_Z,
   MAX_SHOOT_CHARGE,
   SHOOT_CHARGE_DEAD_ZONE,
   SHOT_ARC_HEIGHT,
 } from "../Config/ShootConfig";
+import { GOAL_RIM_Y } from "../Config/GoalConfig";
 import {
   DUNK_MAX_DIST,
   LAYUP_MAX_DIST,
@@ -35,20 +33,41 @@ import { dist2d } from "../Movement/MovementCore";
 /** シュート種別 */
 export type ShotType = 'dunk' | 'layup' | 'jumpshot';
 
+/** 動的ゴール座標（state.attackGoalX/Z をセッション開始時に設定） */
+let _goalX = 0;
+let _goalZ = 13.4;
+let _zSign: 1 | -1 = 1;
+
+/** 現在の攻撃ゴール座標を設定（possession切替時に呼ばれる） */
+export function setShootGoal(goalX: number, goalZ: number, zSign: 1 | -1): void {
+  _goalX = goalX;
+  _goalZ = goalZ;
+  _zSign = zSign;
+}
+
+/** 現在の攻撃ゴールX座標を取得 */
+export function getGoalX(): number { return _goalX; }
+/** 現在の攻撃ゴールZ座標を取得 */
+export function getGoalZ(): number { return _goalZ; }
+
 /**
  * シュート可能条件チェック（距離ベース）
  * - ゴールから MAX_SHOOT_RANGE (8.5m) 以内
- * - Z座標が MIN_SHOOT_Z (2.0) 以上（バックコート防止）
+ * - バックコート防止: zSign=+1 → z >= MIN_SHOOT_Z, zSign=-1 → z <= -MIN_SHOOT_Z
  */
 export function canShoot(shooter: SimMover): boolean {
-  if (shooter.z < MIN_SHOOT_Z) return false;
-  const d = dist2d(shooter.x, shooter.z, GOAL_RIM_X, GOAL_RIM_Z);
+  if (_zSign === 1) {
+    if (shooter.z < MIN_SHOOT_Z) return false;
+  } else {
+    if (shooter.z > -MIN_SHOOT_Z) return false;
+  }
+  const d = dist2d(shooter.x, shooter.z, _goalX, _goalZ);
   return d <= MAX_SHOOT_RANGE;
 }
 
 /** 距離からシュート種別を判定 */
 export function classifyShotType(shooter: SimMover): ShotType {
-  const d = dist2d(shooter.x, shooter.z, GOAL_RIM_X, GOAL_RIM_Z);
+  const d = dist2d(shooter.x, shooter.z, _goalX, _goalZ);
   if (d <= DUNK_MAX_DIST) return 'dunk';
   if (d <= LAYUP_MAX_DIST) return 'layup';
   return 'jumpshot';
@@ -63,7 +82,7 @@ export function classifyShotType(shooter: SimMover): ShotType {
  */
 export function computeShootTiming(shooter: SimMover, alignCharge?: number): ActionTiming {
   const shotType = classifyShotType(shooter);
-  const d = dist2d(shooter.x, shooter.z, GOAL_RIM_X, GOAL_RIM_Z);
+  const d = dist2d(shooter.x, shooter.z, _goalX, _goalZ);
 
   let charge: number;
   if (shotType === 'jumpshot') {
@@ -123,8 +142,8 @@ export function computeShotTarget(): { x: number; y: number; z: number } {
   const offsetX = (Math.random() * 2 - 1) * 0.15;
   const offsetZ = (Math.random() * 2 - 1) * 0.15;
   return {
-    x: GOAL_RIM_X + offsetX,
+    x: _goalX + offsetX,
     y: GOAL_RIM_Y,
-    z: GOAL_RIM_Z + offsetZ,
+    z: _goalZ + offsetZ,
   };
 }

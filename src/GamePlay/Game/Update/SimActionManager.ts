@@ -65,49 +65,48 @@ export function tickAndTransitionActions(state: SimState, dt: number): ActionTra
   }
 
   // Move active → recovery: 速度に応じたリカバリー時間を設定
-  const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < state.actionStates.length; i++) {
     if (prevStates[i].type === 'move' && prevStates[i].phase === 'active'
         && state.actionStates[i].phase === 'recovery') {
-      const mover = allMovers[i];
+      const mover = state.allPlayers[i];
       state.actionStates[i] = forceRecovery(
         state.actionStates[i], computeMoveRecovery(mover.lastSpeed),
       );
     }
   }
 
-  const onBall = state.onBallEntityIdx;
+  const onBallAbs = state.offenseBase + state.onBallEntityIdx;
   let shouldFireBall = false;
   let shouldShootBall = false;
   let shooterStartedStartup = false;
 
   // Shooter shoot: charge → startup → ジャンプ開始タイミング
-  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'charge'
-      && state.actionStates[onBall].phase === 'startup') {
+  if (prevStates[onBallAbs].type === 'shoot' && prevStates[onBallAbs].phase === 'charge'
+      && state.actionStates[onBallAbs].phase === 'startup') {
     shooterStartedStartup = true;
   }
 
   // Passer pass: startup → active → fire ball
-  if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'startup'
-      && state.actionStates[onBall].phase === 'active') {
+  if (prevStates[onBallAbs].type === 'pass' && prevStates[onBallAbs].phase === 'startup'
+      && state.actionStates[onBallAbs].phase === 'active') {
     shouldFireBall = true;
   }
 
   // Shooter shoot: startup → active → shoot ball
-  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'startup'
-      && state.actionStates[onBall].phase === 'active') {
+  if (prevStates[onBallAbs].type === 'shoot' && prevStates[onBallAbs].phase === 'startup'
+      && state.actionStates[onBallAbs].phase === 'active') {
     shouldShootBall = true;
   }
 
   // Passer pass: recovery → idle → set cooldown
-  if (prevStates[onBall].type === 'pass' && prevStates[onBall].phase === 'recovery'
-      && state.actionStates[onBall].phase === 'idle') {
+  if (prevStates[onBallAbs].type === 'pass' && prevStates[onBallAbs].phase === 'recovery'
+      && state.actionStates[onBallAbs].phase === 'idle') {
     state.cooldown = state.pendingCooldown;
   }
 
   // Shooter shoot: recovery → idle → set cooldown
-  if (prevStates[onBall].type === 'shoot' && prevStates[onBall].phase === 'recovery'
-      && state.actionStates[onBall].phase === 'idle') {
+  if (prevStates[onBallAbs].type === 'shoot' && prevStates[onBallAbs].phase === 'recovery'
+      && state.actionStates[onBallAbs].phase === 'idle') {
     state.cooldown = state.pendingCooldown;
   }
 

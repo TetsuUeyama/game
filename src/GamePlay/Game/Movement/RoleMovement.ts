@@ -1,5 +1,6 @@
 import {
   ROLE_ASSIGNMENTS,
+  getMirroredRole,
   LAUNCHER_EVAL_SAMPLES,
   SLASHER_VCUT_AMPLITUDE,
   SLASHER_VCUT_PERIOD,
@@ -12,7 +13,8 @@ import type { SimZone } from "../Config/FieldConfig";
 import { TARGET_RANDOM_SPEED, TARGET_INTERCEPT_SPEED } from "../Config/EntityConfig";
 import type { SimMover, LauncherState, SlasherState, ScreenerState, DunkerState } from "../Types/TrackingSimTypes";
 import { dist2d, moveWithFacing } from "../Movement/MovementCore";
-import { GOAL_RIM_X, GOAL_RIM_Z, MAX_SHOOT_RANGE } from "../Config/ShootConfig";
+import { MAX_SHOOT_RANGE } from "../Config/ShootConfig";
+import { getGoalX, getGoalZ } from "../Action/ShootAction";
 import { isPhysicallyClose, isTrajectoryInFOV } from "../Decision/TrajectoryAnalysis";
 import { findOpenSpaceInZone } from "../Decision/OpenSpaceFinder";
 
@@ -20,10 +22,11 @@ import { findOpenSpaceInZone } from "../Decision/OpenSpaceFinder";
  * Transit mode: move toward home position at jogging speed.
  * Returns true when player has entered their zone (transit complete).
  */
-export function moveTransitToHome(m: SimMover, entityIdx: number, dt: number): boolean {
-  const role = entityIdx === 0
+export function moveTransitToHome(m: SimMover, entityIdx: number, dt: number, zSign: 1 | -1 = 1): boolean {
+  const baseRole = entityIdx === 0
     ? ROLE_ASSIGNMENTS.launcher
     : ROLE_ASSIGNMENTS.targets[entityIdx - 1];
+  const role = getMirroredRole(baseRole, zSign);
   moveTowardDest(m, { x: role.homeX, z: role.homeZ }, TARGET_INTERCEPT_SPEED, dt);
   const z = role.zone;
   return m.x >= z.xMin && m.x <= z.xMax && m.z >= z.zMin && m.z <= z.zMax;
@@ -66,8 +69,8 @@ const DRIVE_MIN_DIST = 2.0;
  * - 幅 2m (±1m) のドライブレーンにDFがいない
  */
 export function isDriveLaneClear(mover: SimMover, obstacles: SimMover[]): boolean {
-  const dx = GOAL_RIM_X - mover.x;
-  const dz = GOAL_RIM_Z - mover.z;
+  const dx = getGoalX() - mover.x;
+  const dz = getGoalZ() - mover.z;
   const distToGoal = Math.sqrt(dx * dx + dz * dz);
 
   // レイアップ圏内 or シュートレンジ外 → ドライブ不要
@@ -97,7 +100,7 @@ export function isDriveLaneClear(mover: SimMover, obstacles: SimMover[]): boolea
  * ON_BALL_SPEED_MULT / blockOnBallByDefenders は呼び出し元で適用済み。
  */
 export function moveOnBallDrive(mover: SimMover, dt: number): void {
-  moveTowardDest(mover, { x: GOAL_RIM_X, z: GOAL_RIM_Z }, mover.speed, dt);
+  moveTowardDest(mover, { x: getGoalX(), z: getGoalZ() }, mover.speed, dt);
 }
 
 /**
@@ -166,8 +169,9 @@ export function moveSecondHandler(
   launcher: SimMover,
   obstacles: SimMover[],
   otherTargets: SimMover[],
+  zSign: 1 | -1 = 1,
 ): { dest: { x: number; z: number }; reevalTimer: number } {
-  const role = ROLE_ASSIGNMENTS.targets[0];
+  const role = getMirroredRole(ROLE_ASSIGNMENTS.targets[0], zSign);
   reevalTimer -= dt;
 
   // Pressure check: re-evaluate immediately if obstacle too close
@@ -200,8 +204,9 @@ export function moveSlasher(
   launcher: SimMover,
   obstacles: SimMover[],
   otherTargets: SimMover[],
+  zSign: 1 | -1 = 1,
 ): void {
-  const role = ROLE_ASSIGNMENTS.targets[1];
+  const role = getMirroredRole(ROLE_ASSIGNMENTS.targets[1], zSign);
   state.vcutPhase += (dt / SLASHER_VCUT_PERIOD) * Math.PI * 2;
   if (state.vcutPhase > Math.PI * 2) state.vcutPhase -= Math.PI * 2;
 
@@ -209,10 +214,10 @@ export function moveSlasher(
 
   const sinVal = Math.sin(state.vcutPhase);
   if (sinVal > 0.5) {
-    // Cut phase: move toward basket (+Z direction)
+    // Cut phase: move toward basket (zSign direction)
     state.vcutActive = true;
     const cutX = role.homeX;
-    const cutZ = role.homeZ + SLASHER_VCUT_AMPLITUDE;
+    const cutZ = role.homeZ + SLASHER_VCUT_AMPLITUDE * zSign;
     state.dest = { x: cutX, z: cutZ };
   } else {
     // Reset phase: return to open space in zone
@@ -225,17 +230,14 @@ export function moveSlasher(
 
   const speed = TARGET_RANDOM_SPEED * role.speedMult * (state.vcutActive ? 1.3 : 1.0);
   moveTowardDest(tgt, state.dest!, speed, dt);
-  // During V-cut, allow movement beyond zone toward basket (+Z)
+  // During V-cut, allow movement beyond zone toward basket
   if (!state.vcutActive) {
     clampToZone(tgt, role.zone);
   } else {
     // Extended zone during cut (expand toward basket)
-    const extZone: SimZone = {
-      xMin: role.zone.xMin,
-      xMax: role.zone.xMax,
-      zMin: role.zone.zMin,
-      zMax: role.zone.zMax + SLASHER_VCUT_AMPLITUDE + 0.5,
-    };
+    const extZone: SimZone = zSign === 1
+      ? { xMin: role.zone.xMin, xMax: role.zone.xMax, zMin: role.zone.zMin, zMax: role.zone.zMax + SLASHER_VCUT_AMPLITUDE + 0.5 }
+      : { xMin: role.zone.xMin, xMax: role.zone.xMax, zMin: role.zone.zMin - SLASHER_VCUT_AMPLITUDE - 0.5, zMax: role.zone.zMax };
     clampToZone(tgt, extZone);
   }
 }
@@ -250,14 +252,15 @@ export function moveScreener(
   launcher: SimMover,
   obstacles: SimMover[],
   otherTargets: SimMover[],
+  zSign: 1 | -1 = 1,
 ): void {
-  const role = ROLE_ASSIGNMENTS.targets[2];
+  const role = getMirroredRole(ROLE_ASSIGNMENTS.targets[2], zSign);
   state.reevalTimer -= dt;
 
   if (!state.screenSet) {
-    // Phase 1: move to screen position (between launcher and basket +Z)
+    // Phase 1: move to screen position (between launcher and basket)
     const screenX = launcher.x;
-    const screenZ = launcher.z + SCREENER_OFFSET;
+    const screenZ = launcher.z + SCREENER_OFFSET * zSign;
     state.dest = { x: screenX, z: screenZ };
 
     const distToScreen = dist2d(tgt.x, tgt.z, screenX, screenZ);
@@ -295,8 +298,9 @@ export function moveDunker(
   launcher: SimMover,
   obstacles: SimMover[],
   otherTargets: SimMover[],
+  zSign: 1 | -1 = 1,
 ): void {
-  const role = ROLE_ASSIGNMENTS.targets[3];
+  const role = getMirroredRole(ROLE_ASSIGNMENTS.targets[3], zSign);
   state.reevalTimer -= dt;
 
   // Find nearest obstacle near zone
@@ -311,14 +315,13 @@ export function moveDunker(
   }
 
   if (nearestOb && nearestDist < OPEN_THRESHOLD * 2) {
-    // Seal: position between defender and basket (+Z direction)
+    // Seal: position between defender and basket (zSign direction)
     state.sealing = true;
     const dx = nearestOb.x - tgt.x;
     const dz = nearestOb.z - tgt.z;
     const d = Math.sqrt(dx * dx + dz * dz) || 1;
-    // Position at SEAL_DIST toward +Z (basket) from the defender
     const sealX = nearestOb.x + (dx / d) * DUNKER_SEAL_DIST * 0.3;
-    const sealZ = nearestOb.z + DUNKER_SEAL_DIST;
+    const sealZ = nearestOb.z + DUNKER_SEAL_DIST * zSign;
     state.dest = { x: sealX, z: sealZ };
   } else {
     state.sealing = false;
@@ -331,4 +334,3 @@ export function moveDunker(
   moveTowardDest(tgt, state.dest!, TARGET_RANDOM_SPEED * role.speedMult, dt);
   clampToZone(tgt, role.zone);
 }
-

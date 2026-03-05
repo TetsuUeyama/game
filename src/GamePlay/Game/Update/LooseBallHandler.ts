@@ -25,7 +25,7 @@ import {
   LOOSE_BALL_GIVE_UP_MARGIN,
 } from "../Config/BallTimingConfig";
 import { DEFENSE_GOAL_OFFSET } from "../Config/DefenseConfig";
-import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
+// state.attackGoalX/Z は state.attackGoalX/Z 経由で動的取得
 import {
   TARGET_RANDOM_SPEED,
   TARGET_INTERCEPT_SPEED,
@@ -109,8 +109,8 @@ export function updateLooseBall(
       const oi = ei - offenseCount;
       const cfg = OB_CONFIGS[oi];
       const markTarget = allOffense[cfg.markTargetEntityIdx];
-      const toGoalX = GOAL_RIM_X - markTarget.x;
-      const toGoalZ = GOAL_RIM_Z - markTarget.z;
+      const toGoalX = state.attackGoalX - markTarget.x;
+      const toGoalZ = state.attackGoalZ - markTarget.z;
       const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
       let defX: number, defZ: number;
       if (toGoalDist > 0.5) {

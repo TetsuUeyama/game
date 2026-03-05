@@ -12,12 +12,7 @@ import {
   SIM_MARGIN,
 } from "../Config/FieldConfig";
 import { BALL_TIMEOUT } from "../Config/BallTimingConfig";
-import {
-  GOAL_RIM_X,
-  GOAL_RIM_Y,
-  GOAL_RIM_Z,
-  GOAL_RIM_RADIUS,
-} from "../Config/ShootConfig";
+import { GOAL_RIM_Y, GOAL_RIM_RADIUS } from "../Config/GoalConfig";
 import { updateTargetRoleMovements } from "./SimEntityUpdate";
 import { checkObstacleDeflection } from "./BallCollision";
 
@@ -45,14 +40,14 @@ export function updateShotFlight(
 
   // ブロック判定: DF手によるショットブロック
   if (allHands) {
-    const obStart = 1 + state.targets.length;
-    const obstacleHands = allHands.slice(obStart, obStart + state.obstacles.length);
+    const obVisStart = 1 + state.targets.length;  // allMovers配列内のobstacle開始位置
+    const obstacleHands = allHands.slice(obVisStart, obVisStart + state.obstacles.length);
 
     // block アクション中のDFの手のみチェック
     const blockingHands: { left: Vector3; right: Vector3 }[] = [];
     const blockingCooldowns: number[] = [];
     for (let oi = 0; oi < state.obstacles.length; oi++) {
-      const obEntityIdx = obStart + oi;
+      const obEntityIdx = state.defenseBase + oi;
       const action = state.actionStates[obEntityIdx];
       if (action?.type === 'block' && (action.phase === 'startup' || action.phase === 'active')) {
         blockingHands.push(obstacleHands[oi]);
@@ -80,7 +75,7 @@ export function updateShotFlight(
   const curBallY = ballPos.y;
   const crossedDown = state.prevBallY > GOAL_RIM_Y && curBallY <= GOAL_RIM_Y;
   const xzDist = Math.sqrt(
-    (ballPos.x - GOAL_RIM_X) ** 2 + (ballPos.z - GOAL_RIM_Z) ** 2,
+    (ballPos.x - state.attackGoalX) ** 2 + (ballPos.z - state.attackGoalZ) ** 2,
   );
 
   state.prevBallY = curBallY;

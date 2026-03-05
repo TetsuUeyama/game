@@ -30,6 +30,24 @@ export const ROLE_ASSIGNMENTS: {
   ],
 };
 
+/**
+ * ロールアサインメントをミラーリングする（zSign=-1 でZ座標反転）。
+ * homeZ と zone の Z 座標を反転する。X座標はそのまま。
+ */
+export function getMirroredRole(role: SimRoleAssignment, zSign: 1 | -1): SimRoleAssignment {
+  if (zSign === 1) return role;
+  return {
+    ...role,
+    homeZ: -role.homeZ,
+    zone: {
+      xMin: role.zone.xMin,
+      xMax: role.zone.xMax,
+      zMin: -role.zone.zMax,
+      zMax: -role.zone.zMin,
+    },
+  };
+}
+
 // --- Role-specific constants ---
 export const LAUNCHER_EVAL_SAMPLES = 12;
 export const SLASHER_VCUT_AMPLITUDE = 1.5;

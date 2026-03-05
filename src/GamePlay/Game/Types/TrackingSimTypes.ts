@@ -192,9 +192,23 @@ export interface PushObstructionInfo {
 
 /** TrackingSimulation3D の全ランタイム状態を集約 */
 export interface SimState {
+  // --- Possession & team structure ---
+  allPlayers: SimMover[];           // [10] 永続エンティティ (0-4=チームA, 5-9=チームB)
+  possession: 0 | 1;               // 0=チームA攻撃, 1=チームB攻撃
+  offenseBase: number;              // 0 or 5 — オフェンス側エンティティの開始インデックス
+  defenseBase: number;              // 5 or 0 — ディフェンス側エンティティの開始インデックス
+  attackGoalX: number;              // 攻撃ゴールX（常に0）
+  attackGoalZ: number;              // 攻撃ゴールZ（+13.4 or -13.4）
+  defendGoalZ: number;              // 守備ゴールZ（ファストブレイク時のリトリート先）
+  zSign: 1 | -1;                   // ゾーン座標ミラーリング（チームAオフェンス=+1, チームBオフェンス=-1）
+  teamScores: [number, number];     // [チームAゴール数, チームBゴール数]
+
+  // --- Offense / Defense aliases (possession切替時に再代入) ---
   launcher: SimMover;
   targets: SimMover[];
   obstacles: SimMover[];
+
+  // --- Ball state ---
   ballActive: boolean;
   ballAge: number;
   score: TrackingSimScore;

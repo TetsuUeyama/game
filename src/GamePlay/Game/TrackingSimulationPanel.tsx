@@ -27,6 +27,8 @@ export function TrackingSimulationPanel() {
   const engineRef = useRef<Engine | null>(null);
   const simRef = useRef<TrackingSimulation3D | null>(null);
   const [score, setScore] = useState({ hit: 0, block: 0, miss: 0, steal: 0, goal: 0, shotMiss: 0 });
+  const [teamScores, setTeamScores] = useState<[number, number]>([0, 0]);
+  const [possession, setPossession] = useState<0 | 1>(0);
   const [ready, setReady] = useState(false);
   const [overlayVis, setOverlayVis] = useState<{ global: boolean; entities: boolean[]; actionGauge: boolean }>({
     global: false,
@@ -108,6 +110,8 @@ export function TrackingSimulationPanel() {
         // --- Score polling ---
         interval = setInterval(() => {
           setScore(sim.getScore());
+          setTeamScores(sim.getTeamScores());
+          setPossession(sim.getPossession());
         }, 200);
 
         setReady(true);
@@ -137,6 +141,8 @@ export function TrackingSimulationPanel() {
     if (simRef.current) {
       simRef.current.reset();
       setScore({ hit: 0, block: 0, miss: 0, steal: 0, goal: 0, shotMiss: 0 });
+      setTeamScores([0, 0]);
+      setPossession(0);
     }
   };
 
@@ -204,9 +210,28 @@ export function TrackingSimulationPanel() {
       {/* Score panel */}
       {ready && panelOpen && (
         <div className="absolute top-16 right-4 z-40 bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-xl border border-gray-700 p-4 w-64">
-          <h3 className="text-sm font-bold text-gray-300 mb-3">
+          <h3 className="text-sm font-bold text-gray-300 mb-2">
             追跡シミュレーション
           </h3>
+
+          {/* Team scoreboard */}
+          <div className="flex items-center justify-between bg-gray-900/80 rounded-lg p-2 mb-3">
+            <div className="text-center flex-1">
+              <div className={`text-xs font-bold ${possession === 0 ? 'text-yellow-300' : 'text-blue-300'}`}>
+                {possession === 0 ? '攻撃' : '守備'}
+              </div>
+              <div className="text-blue-400 font-bold text-xs">TEAM A</div>
+              <div className="text-white font-mono text-2xl font-bold">{teamScores[0]}</div>
+            </div>
+            <div className="text-gray-500 text-lg font-bold px-2">-</div>
+            <div className="text-center flex-1">
+              <div className={`text-xs font-bold ${possession === 1 ? 'text-yellow-300' : 'text-red-300'}`}>
+                {possession === 1 ? '攻撃' : '守備'}
+              </div>
+              <div className="text-red-400 font-bold text-xs">TEAM B</div>
+              <div className="text-white font-mono text-2xl font-bold">{teamScores[1]}</div>
+            </div>
+          </div>
 
           <div className="space-y-2 mb-4">
             <div className="flex justify-between items-center">
@@ -279,15 +304,15 @@ export function TrackingSimulationPanel() {
             </label>
 
             <div className="mb-1">
-              <span className="text-xs text-gray-400">オフェンス:</span>
+              <span className="text-xs text-blue-400 font-bold">Team A:</span>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                {['PG', 'SG', 'SF', 'C', 'PF'].map((name, i) => (
+                {['A1', 'A2', 'A3', 'A4', 'A5'].map((name, i) => (
                   <label key={i} className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={overlayVis.entities[i]}
                       onChange={() => handleEntityToggle(i)}
-                      className="accent-green-400 w-3 h-3"
+                      className="accent-blue-400 w-3 h-3"
                     />
                     <span className="text-xs text-gray-300">{name}</span>
                   </label>
@@ -296,15 +321,15 @@ export function TrackingSimulationPanel() {
             </div>
 
             <div>
-              <span className="text-xs text-gray-400">ディフェンス:</span>
+              <span className="text-xs text-red-400 font-bold">Team B:</span>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                {['OB A', 'OB B', 'OB C', 'OB D', 'OB E'].map((name, i) => (
+                {['B1', 'B2', 'B3', 'B4', 'B5'].map((name, i) => (
                   <label key={i + 5} className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={overlayVis.entities[i + 5]}
                       onChange={() => handleEntityToggle(i + 5)}
-                      className="accent-purple-400 w-3 h-3"
+                      className="accent-red-400 w-3 h-3"
                     />
                     <span className="text-xs text-gray-300">{name}</span>
                   </label>

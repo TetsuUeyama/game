@@ -9,7 +9,7 @@
 
 import type { SimState } from "../Types/TrackingSimTypes";
 import type { ThreatEntry, ThreatAssessmentResult } from "../Types/ActionScorerTypes";
-import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
+import { getGoalX, getGoalZ } from "../Action/ShootAction";
 import { scoreFieldPosition } from "./FieldPositionScorer";
 
 function clamp(v: number, min: number, max: number): number {
@@ -39,8 +39,8 @@ export function computeThreatAssessment(state: SimState): ThreatAssessmentResult
     const opennessScore = fp.isolation;
 
     // facingScore: ゴール方向を向いているか (cos 正規化)
-    const toGoalX = GOAL_RIM_X - mover.x;
-    const toGoalZ = GOAL_RIM_Z - mover.z;
+    const toGoalX = getGoalX() - mover.x;
+    const toGoalZ = getGoalZ() - mover.z;
     const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ) || 1;
     const facingCos = Math.cos(mover.facing) * (toGoalX / toGoalDist)
                     + Math.sin(mover.facing) * (toGoalZ / toGoalDist);

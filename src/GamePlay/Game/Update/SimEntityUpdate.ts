@@ -11,10 +11,7 @@ import {
   turnTorsoToward,
   orientToward,
 } from "../Movement/MovementCore";
-import {
-  GOAL_RIM_X,
-  GOAL_RIM_Z,
-} from "../Config/ShootConfig";
+// state.attackGoalX/Z は state.attackGoalX/Z 経由で動的取得
 import {
   NECK_TURN_RATE, TORSO_TURN_RATE,
 } from "../Config/BodyDynamicsConfig";
@@ -46,17 +43,18 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
 
   for (let ti = 0; ti < targets.length; ti++) {
     if (ti === skipIdx) continue;
-    const entityIdx = 1 + ti;
-    if (!canEntityMove(state.actionStates, entityIdx)) {
-      applyMoveAction(state, entityIdx, targets[ti], dt);
+    const offRelIdx = 1 + ti;      // オフェンス相対 (0=launcher, 1-4=targets)
+    const absIdx = state.offenseBase + offRelIdx;  // actionStates 用の絶対インデックス
+    if (!canEntityMove(state.actionStates, absIdx)) {
+      applyMoveAction(state, absIdx, targets[ti], dt);
       continue;
     }
 
     // Transit mode: move toward home position, skip role movement
-    if (state.offenseInTransit[entityIdx]) {
-      const arrived = moveTransitToHome(targets[ti], entityIdx, dt);
-      if (arrived) state.offenseInTransit[entityIdx] = false;
-      applyMoveAction(state, entityIdx, targets[ti], dt);
+    if (state.offenseInTransit[offRelIdx]) {
+      const arrived = moveTransitToHome(targets[ti], offRelIdx, dt, state.zSign);
+      if (arrived) state.offenseInTransit[offRelIdx] = false;
+      applyMoveAction(state, absIdx, targets[ti], dt);
       continue;
     }
 
@@ -69,25 +67,25 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
       case 0: {
         const res = moveSecondHandler(
           targets[0], state.targetDests[0], state.targetReevalTimers[0],
-          dt, launcher, obstacles, others,
+          dt, launcher, obstacles, others, state.zSign,
         );
         state.targetDests[0] = res.dest;
         state.targetReevalTimers[0] = res.reevalTimer;
         break;
       }
       case 1:
-        moveSlasher(targets[1], state.slasherState, dt, launcher, obstacles, others);
+        moveSlasher(targets[1], state.slasherState, dt, launcher, obstacles, others, state.zSign);
         break;
       case 2:
-        moveScreener(targets[2], state.screenerState, dt, launcher, obstacles, others);
+        moveScreener(targets[2], state.screenerState, dt, launcher, obstacles, others, state.zSign);
         break;
       case 3:
-        moveDunker(targets[3], state.dunkerState, dt, launcher, obstacles, others);
+        moveDunker(targets[3], state.dunkerState, dt, launcher, obstacles, others, state.zSign);
         break;
     }
 
     // プッシュ妨害による速度減衰を適用
-    const pushInfo = state.pushObstructions.find(p => p.targetEntityIdx === entityIdx);
+    const pushInfo = state.pushObstructions.find(p => p.targetEntityIdx === offRelIdx);
     if (pushInfo) {
       const ob = obstacles[pushInfo.obstacleIdx];
       const dx = targets[ti].x - ob.x;
@@ -102,7 +100,7 @@ export function updateTargetRoleMovements(state: SimState, dt: number, skipIdx: 
       }
     }
 
-    applyMoveAction(state, entityIdx, targets[ti], dt);
+    applyMoveAction(state, absIdx, targets[ti], dt);
   }
 }
 
@@ -123,13 +121,13 @@ export function updateOffenseTorsoNeckFacing(
   // --- 全オフェンスエンティティ ---
   for (let ei = 0; ei < allOffense.length; ei++) {
     const mover = allOffense[ei];
-    const action = state.actionStates[ei];
+    const action = state.actionStates[state.offenseBase + ei];
     const isChargeOrStartup = action.phase === 'charge' || action.phase === 'startup';
     const isActiveOrRecovery = action.phase === 'active' || action.phase === 'recovery';
 
     if (action.type === 'shoot' && isChargeOrStartup) {
       // シュート charge/startup 中: ゴール方向に全身回転（facing + torso + neck）
-      orientToward(mover, GOAL_RIM_X, GOAL_RIM_Z, dt);
+      orientToward(mover, state.attackGoalX, state.attackGoalZ, dt);
     } else if (action.type === 'pass' && isChargeOrStartup) {
       // パス charge/startup 中: レシーバー方向に全身回転
       const receiver = ei === 0
@@ -146,7 +144,7 @@ export function updateOffenseTorsoNeckFacing(
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
     } else if (action.type === 'shoot' && isActiveOrRecovery) {
       // シュート active/recovery 中: torso+neck をゴール方向
-      const angle = Math.atan2(GOAL_RIM_Z - mover.z, GOAL_RIM_X - mover.x);
+      const angle = Math.atan2(state.attackGoalZ - mover.z, state.attackGoalX - mover.x);
       mover.torsoFacing = turnTorsoToward(mover.facing, mover.torsoFacing, angle, torsoDelta);
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
     } else if (action.type === 'catch' && ballPosition) {
@@ -161,7 +159,7 @@ export function updateOffenseTorsoNeckFacing(
       mover.neckFacing = turnNeckToward(mover.torsoFacing, mover.neckFacing, angle, neckDelta);
     } else if (ei === state.onBallEntityIdx && action.type === 'idle') {
       // オンボールでアイドル時: ゴール方向に全身回転（トリプルスレット姿勢）
-      orientToward(mover, GOAL_RIM_X, GOAL_RIM_Z, dt);
+      orientToward(mover, state.attackGoalX, state.attackGoalZ, dt);
     } else if (state.offenseInTransit[ei] && ei !== state.onBallEntityIdx) {
       // トランジット中のオフボール: オンボール選手の方向を見る
       const onBallMover = ei === 0 ? launcher : (state.onBallEntityIdx === 0 ? launcher : targets[state.onBallEntityIdx - 1]);
