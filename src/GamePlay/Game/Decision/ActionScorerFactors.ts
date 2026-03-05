@@ -6,9 +6,9 @@
  */
 
 import type { ScoreFactor, ActionScorerContext } from "../Types/ActionScorerTypes";
-import { canShoot } from "../Action/ShootAction";
+import { canShoot, getGoalX, getGoalZ } from "../Action/ShootAction";
 import { dist2d } from "../Movement/MovementCore";
-import { GOAL_RIM_X, GOAL_RIM_Z, MAX_SHOOT_RANGE } from "../Config/ShootConfig";
+import { MAX_SHOOT_RANGE } from "../Config/ShootConfig";
 import { scoreFieldPosition } from "./FieldPositionScorer";
 
 function clamp(v: number, min: number, max: number): number {
@@ -34,8 +34,8 @@ const SHOT_THREAT_LANE_WIDTH = 2.0;
  * 経路上にDFがいなければ Infinity を返す（= ドフリー）。
  */
 function nearestThreatDefenderDist(ctx: ActionScorerContext): number {
-  const toGoalX = GOAL_RIM_X - ctx.mover.x;
-  const toGoalZ = GOAL_RIM_Z - ctx.mover.z;
+  const toGoalX = getGoalX() - ctx.mover.x;
+  const toGoalZ = getGoalZ() - ctx.mover.z;
   const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
   if (toGoalDist < 0.01) return Infinity;
   const dirX = toGoalX / toGoalDist;
@@ -64,8 +64,8 @@ function nearestThreatDefenderDist(ctx: ActionScorerContext): number {
  * 0 = ゴールと反対を向いている（低い警戒 = OF にとってチャンス）
  */
 function goalFacingAwareness(ob: { x: number; z: number; facing: number }): number {
-  const toGoalX = GOAL_RIM_X - ob.x;
-  const toGoalZ = GOAL_RIM_Z - ob.z;
+  const toGoalX = getGoalX() - ob.x;
+  const toGoalZ = getGoalZ() - ob.z;
   const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ) || 1;
   const cos = Math.cos(ob.facing) * (toGoalX / toGoalDist)
             + Math.sin(ob.facing) * (toGoalZ / toGoalDist);
@@ -88,7 +88,7 @@ export const shootZone: ScoreFactor = {
   weight: 10.0,
   evaluate(ctx: ActionScorerContext): number {
     if (!canShoot(ctx.mover)) return 0;
-    const d = dist2d(ctx.mover.x, ctx.mover.z, GOAL_RIM_X, GOAL_RIM_Z);
+    const d = dist2d(ctx.mover.x, ctx.mover.z, getGoalX(), getGoalZ());
     return clamp(1.0 - d * 0.1, 0.15, 1.0);
   },
 };
@@ -115,7 +115,7 @@ export const shootDefenderProximity: ScoreFactor = {
       return clamp(threatDist / 3.0, 0, 1);
     }
     // 完全フリー → ゴール距離に応じたスコア（近い = 高い）
-    const goalDist = dist2d(ctx.mover.x, ctx.mover.z, GOAL_RIM_X, GOAL_RIM_Z);
+    const goalDist = dist2d(ctx.mover.x, ctx.mover.z, getGoalX(), getGoalZ());
     if (goalDist <= DRIVE_UNNECESSARY_DIST) return 1.0;
     // 2m以遠は二次関数で急落（6m→0.11, 4m→0.25）
     const ratio = DRIVE_UNNECESSARY_DIST / goalDist;
@@ -134,8 +134,8 @@ export const shootDefenderAwareness: ScoreFactor = {
   evaluate(ctx: ActionScorerContext): number {
     if (!canShoot(ctx.mover)) return 0;
 
-    const toGoalX = GOAL_RIM_X - ctx.mover.x;
-    const toGoalZ = GOAL_RIM_Z - ctx.mover.z;
+    const toGoalX = getGoalX() - ctx.mover.x;
+    const toGoalZ = getGoalZ() - ctx.mover.z;
     const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
     if (toGoalDist < 0.01) return 1;
     const dirX = toGoalX / toGoalDist;
@@ -247,8 +247,8 @@ export const passPositionAdvantage: ScoreFactor = {
     const receiverEntityIdx = ctx.receiverEntityIndices[ctx.bestPassTargetIdx];
     const receiver = ctx.allOffense[receiverEntityIdx];
     if (!receiver) return 0;
-    const passerGoalDist = dist2d(ctx.mover.x, ctx.mover.z, GOAL_RIM_X, GOAL_RIM_Z);
-    const receiverGoalDist = dist2d(receiver.x, receiver.z, GOAL_RIM_X, GOAL_RIM_Z);
+    const passerGoalDist = dist2d(ctx.mover.x, ctx.mover.z, getGoalX(), getGoalZ());
+    const receiverGoalDist = dist2d(receiver.x, receiver.z, getGoalX(), getGoalZ());
     // positive = receiver is closer to goal than passer
     const advantage = (passerGoalDist - receiverGoalDist) / MAX_SHOOT_RANGE;
     return clamp(0.5 + advantage, 0, 1);
@@ -316,8 +316,8 @@ export const holdDriveOpportunity: ScoreFactor = {
   action: 'hold',
   weight: 4.0,
   evaluate(ctx: ActionScorerContext): number {
-    const toGoalX = GOAL_RIM_X - ctx.mover.x;
-    const toGoalZ = GOAL_RIM_Z - ctx.mover.z;
+    const toGoalX = getGoalX() - ctx.mover.x;
+    const toGoalZ = getGoalZ() - ctx.mover.z;
     const toGoalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
     if (toGoalDist < 2.0) return 0; // ゴール付近 → シュートすべき
 

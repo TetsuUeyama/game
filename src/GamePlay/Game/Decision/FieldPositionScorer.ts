@@ -10,7 +10,7 @@
  */
 
 import { SIM_FIELD_X_HALF } from "../Config/FieldConfig";
-import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
+import { getGoalX, getGoalZ } from "../Action/ShootAction";
 
 export interface FieldPositionScore {
   goalProximity: number;  // 0-1
@@ -57,8 +57,8 @@ export function scoreFieldPosition(
   weights: FieldScoreWeights = DEFAULT_FIELD_WEIGHTS,
 ): FieldPositionScore {
   // 1. goalProximity: ゴールまでの距離 → 近いほど 1
-  const dx = x - GOAL_RIM_X;
-  const dz = z - GOAL_RIM_Z;
+  const dx = x - getGoalX();
+  const dz = z - getGoalZ();
   const distToGoal = Math.sqrt(dx * dx + dz * dz);
   const goalProximity = clamp01(1 - distToGoal / MAX_COURT_DIST);
 

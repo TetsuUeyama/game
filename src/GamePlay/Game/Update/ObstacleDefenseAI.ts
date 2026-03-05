@@ -21,7 +21,7 @@ import {
   DEFENSE_ENGAGE_Z, DEFENSE_GOAL_OFFSET, FREE_PLAYER_DIST, SPRINT_TRIGGER_DIST,
   BEATEN_GOAL_DIST_MARGIN,
 } from "../Config/DefenseConfig";
-import { GOAL_RIM_X, GOAL_RIM_Z } from "../Config/ShootConfig";
+// state.attackGoalX/Z は state.attackGoalX/Z 経由で動的取得
 import { OB_CONFIGS } from "../Decision/ObstacleRoleAssignment";
 import { INIT_OBSTACLES } from "../Config/EntityConfig";
 import { isAirborne } from "../Action/JumpPhysics";
@@ -95,14 +95,14 @@ export function computeHelpAssignments(
 
   if (onBallDefOi >= 0 && !state.obReacting[onBallDefOi]) {
     const onBallDef = obstacles[onBallDefOi];
-    const offGoalDist = dist2d(onBallMover.x, onBallMover.z, GOAL_RIM_X, GOAL_RIM_Z);
-    const defGoalDist = dist2d(onBallDef.x, onBallDef.z, GOAL_RIM_X, GOAL_RIM_Z);
+    const offGoalDist = dist2d(onBallMover.x, onBallMover.z, state.attackGoalX, state.attackGoalZ);
+    const defGoalDist = dist2d(onBallDef.x, onBallDef.z, state.attackGoalX, state.attackGoalZ);
 
     if (defGoalDist > offGoalDist + BEATEN_GOAL_DIST_MARGIN) {
       // 抜かれた！→ ゴールライン上の防御位置に最も近いDFをヘルプに回す
       const gd = offGoalDist || 1;
-      const helpPosX = onBallMover.x + ((GOAL_RIM_X - onBallMover.x) / gd) * DEFENSE_GOAL_OFFSET;
-      const helpPosZ = onBallMover.z + ((GOAL_RIM_Z - onBallMover.z) / gd) * DEFENSE_GOAL_OFFSET;
+      const helpPosX = onBallMover.x + ((state.attackGoalX - onBallMover.x) / gd) * DEFENSE_GOAL_OFFSET;
+      const helpPosZ = onBallMover.z + ((state.attackGoalZ - onBallMover.z) / gd) * DEFENSE_GOAL_OFFSET;
 
       let bestOi = -1;
       let bestDist = Infinity;
@@ -129,7 +129,8 @@ export function computeHelpAssignments(
   for (let ei = 0; ei < allOffense.length; ei++) {
     if (ei === state.onBallEntityIdx) continue;
     const off = allOffense[ei];
-    if (off.z < DEFENSE_ENGAGE_Z) continue;
+    // zSign=1: z >= ENGAGE_Z (offense attacks +Z), zSign=-1: z <= -ENGAGE_Z (offense attacks -Z)
+    if (state.zSign === 1 ? off.z < DEFENSE_ENGAGE_Z : off.z > -DEFENSE_ENGAGE_Z) continue;
 
     let minDefDist = Infinity;
     for (let oi = 0; oi < obstacles.length; oi++) {
@@ -202,7 +203,7 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
 
     // 空中の障害物 → 慣性がある場合はtickJumpPhysicsが水平移動を処理、なければフォールバック
     if (isAirborne(ob)) {
-      const obEntityIdx = 1 + targets.length + oi;
+      const obEntityIdx = state.defenseBase + oi;
       const blockAction = state.actionStates[obEntityIdx];
       if (blockAction?.type === 'block') {
         const onBallMover = allOffense[state.onBallEntityIdx];
@@ -250,8 +251,8 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
       }
 
       // 相手→ゴール方向を算出
-      const toGoalX = GOAL_RIM_X - markTarget.x;
-      const toGoalZ = GOAL_RIM_Z - markTarget.z;
+      const toGoalX = state.attackGoalX - markTarget.x;
+      const toGoalZ = state.attackGoalZ - markTarget.z;
       const goalDist = Math.sqrt(toGoalX * toGoalX + toGoalZ * toGoalZ);
 
       // ゴール距離に基づく 0-1 補間 (0=close, 1=far)
@@ -294,9 +295,11 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
     const effectiveTarget = isHelping ? allOffense[helpEntityIdx] : markTarget;
 
     // --- マーク対象がエンゲージライン外: 初期位置で待機 ---
-    if (effectiveTarget.z < DEFENSE_ENGAGE_Z) {
+    if (state.zSign === 1 ? effectiveTarget.z < DEFENSE_ENGAGE_Z : effectiveTarget.z > -DEFENSE_ENGAGE_Z) {
       const waitPos = INIT_OBSTACLES[oi];
-      setChaserVelocity(ob, waitPos.x, waitPos.z, cfg.idleSpeed, cfg.hoverRadius, dt);
+      const waitX = waitPos.x;
+      const waitZ = waitPos.z * state.zSign;
+      setChaserVelocity(ob, waitX, waitZ, cfg.idleSpeed, cfg.hoverRadius, dt);
       moveKeepFacing(ob, cfg.idleSpeed, dt);
       orientToward(ob, effectiveTarget.x, effectiveTarget.z, dt);
       continue;

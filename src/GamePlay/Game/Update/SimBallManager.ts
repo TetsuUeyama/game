@@ -70,7 +70,7 @@ export function executePendingFire(state: SimState, ball: Ball, passerMover: Sim
   const success = fireBallArc(state, ball, passerMover.x, passerMover.z, sol.interceptX, sol.interceptZ, passerMover.y);
   if (!success) {
     // 発射失敗 → アイドルに戻す
-    state.actionStates[state.onBallEntityIdx] = createIdleAction();
+    state.actionStates[state.offenseBase + state.onBallEntityIdx] = createIdleAction();
     state.cooldown = 0.3;
     return;
   }
@@ -83,7 +83,7 @@ export function executePendingFire(state: SimState, ball: Ball, passerMover: Sim
   const receiverMover = sol.targetIdx === 0 ? state.launcher : state.targets[sol.targetIdx - 1];
   receiverMover.vx = sol.targetVelocity.vx;
   receiverMover.vz = sol.targetVelocity.vz;
-  state.actionStates[sol.targetIdx] = { type: 'move', phase: 'active', elapsed: 0, timing: MOVE_TIMING };
+  state.actionStates[state.offenseBase + sol.targetIdx] = { type: 'move', phase: 'active', elapsed: 0, timing: MOVE_TIMING };
   state.moveDistAccum[sol.targetIdx] = 0;
 
   // 障害物リアクション
@@ -104,7 +104,7 @@ export function executePendingFire(state: SimState, ball: Ball, passerMover: Sim
       state.obstacles[r.obstacleIdx].vx = r.vx;
       state.obstacles[r.obstacleIdx].vz = r.vz;
       // 障害物アクション: active（インターセプト）
-      state.actionStates[6 + r.obstacleIdx] = startAction('obstacle_react', OBSTACLE_REACT_TIMING);
+      state.actionStates[state.defenseBase + r.obstacleIdx] = startAction('obstacle_react', OBSTACLE_REACT_TIMING);
     }
   }
   state.obReacting = reactingObs;

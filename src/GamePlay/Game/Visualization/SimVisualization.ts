@@ -183,31 +183,30 @@ export class SimVisualization {
   }
 
   createMeshes(): void {
-    const offenseTeamColor = new Color3(0.2, 0.4, 0.9);
-    const defenseTeamColor = new Color3(0.9, 0.25, 0.25);
+    // チーム固定カラー（攻守に関係なく常に同じ色）
+    const teamAColor = new Color3(0.2, 0.4, 0.9);      // 青
+    const teamABaseColor = new Color3(0.15, 0.3, 0.7);  // 青（やや暗め）
+    const teamBColor = new Color3(0.9, 0.25, 0.25);     // 赤
+    const teamBBaseColor = new Color3(0.7, 0.2, 0.2);   // 赤（やや暗め）
 
-    // Launcher (green base / blue upper)
-    const launcherColor = new Color3(0.27, 0.8, 0.27);
-    const launcherEnt = this.createOctEntity("simLauncher", VISUAL_SIZE, launcherColor, offenseTeamColor);
+    // Team A [0]: launcher
+    const launcherEnt = this.createOctEntity("simLauncher", VISUAL_SIZE, teamABaseColor, teamAColor);
     this.launcherMesh = launcherEnt.root;
-    this.armRenderer.createArms(launcherEnt.root, launcherEnt.pivot, launcherColor, offenseTeamColor);
+    this.armRenderer.createArms(launcherEnt.root, launcherEnt.pivot, teamABaseColor, teamAColor);
     this.legRenderer.storeLegSet(launcherEnt);
 
-    // Targets (individual base colors / blue upper)
+    // Team A [1-4]: targets
     for (let i = 0; i < TARGET_COLORS_3D.length; i++) {
-      const c = TARGET_COLORS_3D[i];
-      const color = new Color3(c.r, c.g, c.b);
-      const ent = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, color, offenseTeamColor);
-      this.armRenderer.createArms(ent.root, ent.pivot, color, offenseTeamColor);
+      const ent = this.createOctEntity(`simTarget${i}`, VISUAL_SIZE, teamABaseColor, teamAColor);
+      this.armRenderer.createArms(ent.root, ent.pivot, teamABaseColor, teamAColor);
       this.targetMeshes.push(ent.root);
       this.legRenderer.storeLegSet(ent);
     }
 
-    // Obstacles (purple base / red upper)
-    const obColor = new Color3(0.6, 0.4, 0.8);
+    // Team B [5-9]: obstacles
     for (let i = 0; i < OBSTACLE_COUNT; i++) {
-      const ent = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, obColor, defenseTeamColor);
-      this.armRenderer.createArms(ent.root, ent.pivot, obColor, defenseTeamColor);
+      const ent = this.createOctEntity(`simOb${i}`, VISUAL_SIZE, teamBBaseColor, teamBColor);
+      this.armRenderer.createArms(ent.root, ent.pivot, teamBBaseColor, teamBColor);
       this.obstacleMeshes.push(ent.root);
       this.legRenderer.storeLegSet(ent);
     }
