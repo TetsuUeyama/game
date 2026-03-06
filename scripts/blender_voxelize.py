@@ -32,21 +32,43 @@ print(f"  Resolution: {RESOLUTION}")
 bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
 os.makedirs(OUT_DIR, exist_ok=True)
 
+# No Blender pose adjustment — leg spread is done in deform_point() instead
+
 # ========================================================================
-# Classify meshes into layers: body vs hair
-# Face features (eyes, nose, mouth) are part of body mesh UV texture
+# Disable MASK modifiers on Body mesh to expose full skin (legs, forearms)
 # ========================================================================
-def classify_mesh(name):
-    if 'hair' in name.lower():
-        return 'hair'
-    return 'body'
+for obj in bpy.context.scene.objects:
+    if obj.type == 'MESH':
+        disabled = []
+        for mod in obj.modifiers:
+            if mod.type == 'MASK' and mod.show_viewport:
+                mod.show_viewport = False
+                disabled.append(mod.name)
+        if disabled:
+            print(f"  Disabled MASK modifiers on '{obj.name}': {disabled}")
+
+# ========================================================================
+# Classify meshes: each visible mesh is a separate part for toggling
+# ========================================================================
+def part_key(name):
+    """Generate a short file-safe key from mesh name."""
+    n = name.replace('CyberpunkElf ', '').replace('CyberpunkElf_', '')
+    n = n.replace('Default - ', '').strip()
+    n = n.replace(' ', '_').lower()
+    # Remove trailing " - Default" etc
+    n = n.replace('_-_default', '').replace('-_default', '')
+    return n
 
 mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
-classified = {'body': [], 'hair': []}
+part_objects = {}  # part_key -> [obj, ...]
 for obj in mesh_objects:
-    cat = classify_mesh(obj.name)
-    classified[cat].append(obj)
-    print(f"  [{cat:6s}] {obj.name} ({len(obj.data.vertices)} verts)")
+    key = part_key(obj.name)
+    if key not in part_objects:
+        part_objects[key] = []
+    part_objects[key].append(obj)
+    print(f"  [{key:20s}] {obj.name} ({len(obj.data.vertices)} verts)")
+
+print(f"\n  Parts: {list(part_objects.keys())}")
 
 # ========================================================================
 # Texture cache + sampling
@@ -215,11 +237,17 @@ def deform_point(co):
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
     else:
+        # Leg region: compress Z + spread legs outward (ハの字 / Terry stance)
         leg_t = t / 0.50
         z = min_co.z + leg_t * 0.70 * 0.50 * model_h
         s = 1.1
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
+        # Spread legs outward: push X away from center based on height
+        # More spread at feet (leg_t=0), less at hip (leg_t=1)
+        sign = 1.0 if x > center.x else -1.0
+        spread = 0.06 * (1.0 - leg_t)  # max ~6cm at feet, 0 at hip
+        x += sign * spread
     return Vector((x, y, z))
 
 def inv_deform(co):
@@ -237,6 +265,11 @@ def inv_deform(co):
     else:
         r = (z - min_co.z) / (0.70 * 0.50 * model_h) if model_h > 0 else 0
         r = max(0, min(1, r))
+        # Reverse leg spread first
+        leg_t = r  # r corresponds to leg_t in forward deform
+        sign = 1.0 if x > center.x else -1.0
+        spread = 0.06 * (1.0 - leg_t)
+        x -= sign * spread
         z = min_co.z + r * 0.50 * model_h
         x = center.x + (x - center.x) / 1.1
         y = center.y + (y - center.y) / 1.1
@@ -250,9 +283,9 @@ print("\n  Building BVH trees (triangulated)...")
 class MeshData:
     __slots__ = ['bvh', 'bm', 'uv_layer', 'face_mat', 'face_tex', 'obj_name']
 
-all_mesh_data = {}  # category -> [MeshData]
-for cat in ['body', 'hair']:
-    all_mesh_data[cat] = []
+all_mesh_data = {}  # part_key -> [MeshData]
+for key in part_objects:
+    all_mesh_data[key] = []
 
 for obj in mesh_objects:
     md = MeshData()
@@ -264,7 +297,6 @@ for obj in mesh_objects:
 
     bm = bmesh.new()
     bm.from_mesh(me)
-    # Triangulate for correct barycentric coords
     bmesh.ops.triangulate(bm, faces=bm.faces[:])
     bm.faces.ensure_lookup_table()
 
@@ -282,8 +314,8 @@ for obj in mesh_objects:
         md.face_mat[face.index] = mat_name
         md.face_tex[face.index] = mat_info.get(mat_name, {}).get('image')
 
-    cat = classify_mesh(obj.name)
-    all_mesh_data[cat].append(md)
+    key = part_key(obj.name)
+    all_mesh_data[key].append(md)
     eo.to_mesh_clear()
 
 # ========================================================================
@@ -344,9 +376,9 @@ gz = min(256, int(math.ceil(def_size.z / voxel_size)) + 2)
 print(f"  Grid: {gx}x{gy}x{gz}, voxel={voxel_size:.4f}")
 
 # ========================================================================
-# Voxelize with layered priority: body → detail overlay → hair separate
+# Voxelize each part separately
 # ========================================================================
-print("\n  Voxelizing (layered)...")
+print("\n  Voxelizing (per-part)...")
 
 def voxelize_layer(mesh_list, threshold_mult=1.2):
     """Voxelize a list of MeshData, return dict {(vx,vy,vz): (r,g,b)}."""
@@ -374,18 +406,106 @@ def voxelize_layer(mesh_list, threshold_mult=1.2):
                     result[(vx, vy, vz)] = best_color
     return result
 
-# Layer 1: body (suit, body, accessories - not hair, not detail)
-print("  --- Body layer ---")
-body_voxels = voxelize_layer(all_mesh_data['body'], 1.2)
-print(f"  Body: {len(body_voxels)} voxels")
+part_voxels = {}  # part_key -> voxel_dict
+for key, mesh_list in all_mesh_data.items():
+    if not mesh_list:
+        continue
+    print(f"  --- {key} ---")
+    part_voxels[key] = voxelize_layer(mesh_list, 1.2)
+    print(f"  {key}: {len(part_voxels[key])} voxels")
 
-# Face features (eyes, nose, mouth) are part of body mesh UV — no separate detail layer needed
-merged_body = body_voxels
+# Fill body skin under clothing: only for garments that actually cover skin
+# Accessories (hat, hologram, armband, hip_plate, necktie, garter_straps) sit ON TOP of body/clothing
+# and should NOT generate skin fill underneath
+# Only parts where MASK modifiers hid body geometry (tight-fitting garments on skin)
+# Jacket excluded: collar extends beyond body surface, creating false bulge
+SKIN_COVER_PARTS = {'gloves', 'leggings', 'bra', 'panties'}
+if 'body' in part_voxels:
+    body_meshes = all_mesh_data['body']
+    clothing_positions = set()
+    for key, voxels in part_voxels.items():
+        if key in SKIN_COVER_PARTS:
+            clothing_positions.update(voxels.keys())
+    added = 0
+    thr = voxel_size * 5.0
+    for pos in clothing_positions:
+        if pos in part_voxels['body']:
+            continue
+        vx, vy, vz = pos
+        dp = Vector((
+            def_min.x + (vx + 0.5) * voxel_size,
+            def_min.y + (vy + 0.5) * voxel_size,
+            def_min.z + (vz + 0.5) * voxel_size,
+        ))
+        op = inv_deform(dp)
+        best_dist = thr
+        best_color = None
+        for md in body_meshes:
+            loc, norm, fi, dist = md.bvh.find_nearest(op)
+            if loc is not None and dist < best_dist:
+                best_dist = dist
+                best_color = get_color_at(md, fi, loc)
+        if best_color:
+            part_voxels['body'][pos] = best_color
+            added += 1
+    print(f"  Body skin fill: added {added} voxels under clothing (total body: {len(part_voxels['body'])})")
 
-# Layer 3: hair (separate output)
-print("  --- Hair layer ---")
-hair_voxels = voxelize_layer(all_mesh_data['hair'], 1.2)
-print(f"  Hair: {len(hair_voxels)} voxels")
+# ========================================================================
+# Color-correct body voxels under clothing to match exposed skin
+# The body texture often has darker/shadow colors in areas designed to be hidden
+# ========================================================================
+if 'body' in part_voxels:
+    clothing_positions = set()
+    for key, voxels in part_voxels.items():
+        if key in SKIN_COVER_PARTS:
+            clothing_positions.update(voxels.keys())
+
+    # Collect exposed body skin colors per Z layer for reference
+    exposed_avg_per_z = {}
+    for (vx, vy, vz), col in part_voxels['body'].items():
+        if (vx, vy, vz) not in clothing_positions:
+            if vz not in exposed_avg_per_z:
+                exposed_avg_per_z[vz] = [0, 0, 0, 0]
+            exposed_avg_per_z[vz][0] += col[0]
+            exposed_avg_per_z[vz][1] += col[1]
+            exposed_avg_per_z[vz][2] += col[2]
+            exposed_avg_per_z[vz][3] += 1
+
+    for z in exposed_avg_per_z:
+        n = exposed_avg_per_z[z][3]
+        if n > 0:
+            exposed_avg_per_z[z] = (
+                exposed_avg_per_z[z][0] // n,
+                exposed_avg_per_z[z][1] // n,
+                exposed_avg_per_z[z][2] // n,
+            )
+        else:
+            exposed_avg_per_z[z] = None
+
+    # For body voxels under clothing, blend toward exposed skin color
+    corrected = 0
+    for pos in clothing_positions:
+        if pos not in part_voxels['body']:
+            continue
+        vx, vy, vz = pos
+        orig = part_voxels['body'][pos]
+        # Find nearest Z layer with exposed skin
+        ref = exposed_avg_per_z.get(vz)
+        if ref is None:
+            for dz in range(1, 10):
+                ref = exposed_avg_per_z.get(vz + dz) or exposed_avg_per_z.get(vz - dz)
+                if ref:
+                    break
+        if ref is None:
+            continue
+        # Blend: 70% toward exposed skin avg, keep 30% original for natural variation
+        blend = 0.7
+        nr = int(orig[0] * (1 - blend) + ref[0] * blend)
+        ng = int(orig[1] * (1 - blend) + ref[1] * blend)
+        nb = int(orig[2] * (1 - blend) + ref[2] * blend)
+        part_voxels['body'][pos] = (nr, ng, nb)
+        corrected += 1
+    print(f"  Body color correction: {corrected} voxels blended toward exposed skin tone")
 
 # ========================================================================
 # Write .vox
@@ -435,20 +555,38 @@ def write_vox(fp, sx, sy, sz, voxels, pal):
                 f.write(struct.pack('BBBB', 0, 0, 0, 0))
     print(f"  -> {fp}: {sx}x{sy}x{sz}, {len(voxels)} voxels, {len(pal)} colors")
 
-# Body output
-vlist, pal = build_palette_and_voxels(merged_body)
-write_vox(os.path.join(OUT_DIR, "cyberpunk_elf_body.vox"), gx, gy, gz, vlist, pal)
+# Output each part as separate .vox file
+import json
+part_manifest = []  # [{key, file, voxels, default_on}]
 
-# Hair output
-if hair_voxels:
-    vlist_h, pal_h = build_palette_and_voxels(hair_voxels)
-    write_vox(os.path.join(OUT_DIR, "cyberpunk_elf_hair.vox"), gx, gy, gz, vlist_h, pal_h)
+# Parts that are ON by default (base body + clothing)
+DEFAULT_ON = {'body', 'hair', 'leggings', 'jacket', 'gloves', 'hat', 'panties', 'bra'}
 
-# Combined (for preview)
-all_merged = dict(merged_body)
-all_merged.update(hair_voxels)
+for key, voxels in part_voxels.items():
+    if not voxels:
+        continue
+    filename = f"cyberpunk_elf_{key}.vox"
+    vlist, pal = build_palette_and_voxels(voxels)
+    write_vox(os.path.join(OUT_DIR, filename), gx, gy, gz, vlist, pal)
+    part_manifest.append({
+        'key': key,
+        'file': f'/box2/{filename}',
+        'voxels': len(voxels),
+        'default_on': key in DEFAULT_ON,
+    })
+
+# Combined (all parts merged) for fallback
+all_merged = {}
+for voxels in part_voxels.values():
+    all_merged.update(voxels)
 vlist_c, pal_c = build_palette_and_voxels(all_merged)
 write_vox(os.path.join(OUT_DIR, "cyberpunk_elf.vox"), gx, gy, gz, vlist_c, pal_c)
+
+# Write manifest JSON for the viewer
+manifest_path = os.path.join(OUT_DIR, "cyberpunk_elf_parts.json")
+with open(manifest_path, 'w') as f:
+    json.dump(part_manifest, f, indent=2)
+print(f"  -> {manifest_path}: {len(part_manifest)} parts")
 
 # Cleanup
 for cat in all_mesh_data:

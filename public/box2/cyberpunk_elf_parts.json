@@ -1,0 +1,92 @@
+[
+  {
+    "key": "body",
+    "file": "/box2/cyberpunk_elf_body.vox",
+    "voxels": 17544,
+    "default_on": true
+  },
+  {
+    "key": "hair",
+    "file": "/box2/cyberpunk_elf_hair.vox",
+    "voxels": 13359,
+    "default_on": true
+  },
+  {
+    "key": "bra",
+    "file": "/box2/cyberpunk_elf_bra.vox",
+    "voxels": 469,
+    "default_on": true
+  },
+  {
+    "key": "hat",
+    "file": "/box2/cyberpunk_elf_hat.vox",
+    "voxels": 743,
+    "default_on": true
+  },
+  {
+    "key": "jacket",
+    "file": "/box2/cyberpunk_elf_jacket.vox",
+    "voxels": 3930,
+    "default_on": true
+  },
+  {
+    "key": "gloves",
+    "file": "/box2/cyberpunk_elf_gloves.vox",
+    "voxels": 1443,
+    "default_on": true
+  },
+  {
+    "key": "hologram_projector",
+    "file": "/box2/cyberpunk_elf_hologram_projector.vox",
+    "voxels": 49,
+    "default_on": false
+  },
+  {
+    "key": "armband",
+    "file": "/box2/cyberpunk_elf_armband.vox",
+    "voxels": 331,
+    "default_on": false
+  },
+  {
+    "key": "hip_plate",
+    "file": "/box2/cyberpunk_elf_hip_plate.vox",
+    "voxels": 618,
+    "default_on": false
+  },
+  {
+    "key": "necktie",
+    "file": "/box2/cyberpunk_elf_necktie.vox",
+    "voxels": 131,
+    "default_on": false
+  },
+  {
+    "key": "hologram_b",
+    "file": "/box2/cyberpunk_elf_hologram_b.vox",
+    "voxels": 202,
+    "default_on": false
+  },
+  {
+    "key": "hologram_a",
+    "file": "/box2/cyberpunk_elf_hologram_a.vox",
+    "voxels": 337,
+    "default_on": false
+  },
+  {
+    "key": "garter_straps",
+    "file": "/box2/cyberpunk_elf_garter_straps.vox",
+    "voxels": 506,
+    "default_on": false
+  },
+  {
+    "key": "leggings",
+    "file": "/box2/cyberpunk_elf_leggings.vox",
+    "voxels": 5514,
+    "default_on": true
+  },
+  {
+    "key": "panties",
+    "file": "/box2/cyberpunk_elf_panties.vox",
+    "voxels": 761,
+    "default_on": true
+  }
+]
