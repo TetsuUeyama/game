@@ -2,13 +2,13 @@
   {
     "key": "body",
     "file": "/box2/cyberpunk_elf_body.vox",
-    "voxels": 17544,
+    "voxels": 16592,
     "default_on": true
   },
   {
     "key": "hair",
     "file": "/box2/cyberpunk_elf_hair.vox",
-    "voxels": 13359,
+    "voxels": 12343,
     "default_on": true
   },
   {
@@ -74,19 +74,19 @@
   {
     "key": "garter_straps",
     "file": "/box2/cyberpunk_elf_garter_straps.vox",
-    "voxels": 506,
+    "voxels": 323,
     "default_on": false
   },
   {
     "key": "leggings",
     "file": "/box2/cyberpunk_elf_leggings.vox",
-    "voxels": 5514,
+    "voxels": 5573,
     "default_on": true
   },
   {
     "key": "panties",
     "file": "/box2/cyberpunk_elf_panties.vox",
-    "voxels": 761,
+    "voxels": 649,
     "default_on": true
   }
 ]
