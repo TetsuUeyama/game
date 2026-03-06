@@ -238,8 +238,12 @@ def deform_point(co):
         y = center.y + (y - center.y) * s
     else:
         # Leg region: compress Z + spread legs outward (ハの字 / Terry stance)
+        # Use smooth quadratic compression: f(leg_t) = 0.70*leg_t + 0.30*leg_t^2
+        # This ensures f(0)=0, f(1)=1.0 (continuous with torso at boundary)
+        # while still compressing the lower legs (feet get 70% compression)
         leg_t = t / 0.50
-        z = min_co.z + leg_t * 0.70 * 0.50 * model_h
+        f = 0.70 * leg_t + 0.30 * leg_t * leg_t
+        z = min_co.z + f * 0.50 * model_h
         s = 1.1
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
@@ -263,10 +267,16 @@ def inv_deform(co):
         x = center.x + (x - center.x) / 1.1
         y = center.y + (y - center.y) / 1.1
     else:
-        r = (z - min_co.z) / (0.70 * 0.50 * model_h) if model_h > 0 else 0
+        # Inverse of f(leg_t) = 0.70*leg_t + 0.30*leg_t^2
+        # Solve 0.30*r^2 + 0.70*r - u = 0 where u = (z - min_co.z) / (0.50 * model_h)
+        import math as _math
+        u = (z - min_co.z) / (0.50 * model_h) if model_h > 0 else 0
+        u = max(0, min(1, u))
+        disc = 0.49 + 1.20 * u
+        r = (-0.70 + _math.sqrt(disc)) / 0.60 if disc >= 0 else 0
         r = max(0, min(1, r))
-        # Reverse leg spread first
-        leg_t = r  # r corresponds to leg_t in forward deform
+        # Reverse leg spread
+        leg_t = r
         sign = 1.0 if x > center.x else -1.0
         spread = 0.06 * (1.0 - leg_t)
         x -= sign * spread
