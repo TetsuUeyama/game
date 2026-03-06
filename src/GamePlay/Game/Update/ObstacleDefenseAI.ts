@@ -18,7 +18,7 @@ import {
   ONBALL_RECOVERY_DIST, ONBALL_PASS_CONTEST_DIST,
   OFFBALL_DENY_OFFSET,
   PUSH_ACTIVATION_DIST, PUSH_DENY_OFFSET, PUSH_DENY_HOVER,
-  DEFENSE_ENGAGE_Z, DEFENSE_GOAL_OFFSET, FREE_PLAYER_DIST, SPRINT_TRIGGER_DIST,
+  DEFENSE_ENGAGE_Z, DEFENSE_GOAL_OFFSET, SPRINT_TRIGGER_DIST,
   BEATEN_GOAL_DIST_MARGIN,
 } from "../Config/DefenseConfig";
 // state.attackGoalX/Z は state.attackGoalX/Z 経由で動的取得
@@ -85,10 +85,10 @@ export function computeHelpAssignments(
 ): Map<number, number> {
   const { obstacles } = state;
   const result = new Map<number, number>();
-  const assigned = new Set<number>();
 
   // =================================================================
-  // Priority 1: オンボールDFが抜かれた → ヘルプDF がオンボールOFの進路を塞ぐ
+  // ヘルプ発動条件: オンボールDFが抜かれた場合のみ
+  // オフボールDFは基本的に自分のマークを離れない（マークフリー防止が最優先）
   // =================================================================
   const onBallMover = allOffense[state.onBallEntityIdx];
   const onBallDefOi = OB_CONFIGS.findIndex(c => c.markTargetEntityIdx === state.onBallEntityIdx);
@@ -99,7 +99,7 @@ export function computeHelpAssignments(
     const defGoalDist = dist2d(onBallDef.x, onBallDef.z, state.attackGoalX, state.attackGoalZ);
 
     if (defGoalDist > offGoalDist + BEATEN_GOAL_DIST_MARGIN) {
-      // 抜かれた！→ ゴールライン上の防御位置に最も近いDFをヘルプに回す
+      // オンボールDFが抜かれた → ゴールに最も近いオフボールDFだけヘルプに回す
       const gd = offGoalDist || 1;
       const helpPosX = onBallMover.x + ((state.attackGoalX - onBallMover.x) / gd) * DEFENSE_GOAL_OFFSET;
       const helpPosZ = onBallMover.z + ((state.attackGoalZ - onBallMover.z) / gd) * DEFENSE_GOAL_OFFSET;
@@ -107,7 +107,7 @@ export function computeHelpAssignments(
       let bestOi = -1;
       let bestDist = Infinity;
       for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-        if (oi === onBallDefOi) continue; // 抜かれた本人は除外
+        if (oi === onBallDefOi) continue;
         if (state.obReacting[oi]) continue;
         const d = dist2d(obstacles[oi].x, obstacles[oi].z, helpPosX, helpPosZ);
         if (d < bestDist) {
@@ -117,64 +117,7 @@ export function computeHelpAssignments(
       }
       if (bestOi >= 0) {
         result.set(bestOi, state.onBallEntityIdx);
-        assigned.add(bestOi);
       }
-    }
-  }
-
-  // =================================================================
-  // Priority 2: フリーのオフボール選手を検出 → ヘルプ割り当て
-  // =================================================================
-  const freeIndices: number[] = [];
-  for (let ei = 0; ei < allOffense.length; ei++) {
-    if (ei === state.onBallEntityIdx) continue;
-    const off = allOffense[ei];
-    // zSign=1: z >= ENGAGE_Z (offense attacks +Z), zSign=-1: z <= -ENGAGE_Z (offense attacks -Z)
-    if (state.zSign === 1 ? off.z < DEFENSE_ENGAGE_Z : off.z > -DEFENSE_ENGAGE_Z) continue;
-
-    let minDefDist = Infinity;
-    for (let oi = 0; oi < obstacles.length; oi++) {
-      if (state.obReacting[oi]) continue;
-      const d = dist2d(off.x, off.z, obstacles[oi].x, obstacles[oi].z);
-      if (d < minDefDist) minDefDist = d;
-    }
-    if (minDefDist > FREE_PLAYER_DIST) {
-      freeIndices.push(ei);
-    }
-  }
-
-  for (const freeEi of freeIndices) {
-    const freeMover = allOffense[freeEi];
-
-    // 2a) 指定マーカーが利用可能か
-    const designatedOi = OB_CONFIGS.findIndex(c => c.markTargetEntityIdx === freeEi);
-    if (
-      designatedOi >= 0
-      && !state.obReacting[designatedOi]
-      && OB_CONFIGS[designatedOi].markTargetEntityIdx !== state.onBallEntityIdx
-      && !assigned.has(designatedOi)
-    ) {
-      result.set(designatedOi, freeEi);
-      assigned.add(designatedOi);
-      continue;
-    }
-
-    // 2b) 最寄りの利用可能DFをヘルプに割り当て
-    let bestOi = -1;
-    let bestDist = Infinity;
-    for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
-      if (assigned.has(oi)) continue;
-      if (state.obReacting[oi]) continue;
-      if (OB_CONFIGS[oi].markTargetEntityIdx === state.onBallEntityIdx) continue;
-      const d = dist2d(obstacles[oi].x, obstacles[oi].z, freeMover.x, freeMover.z);
-      if (d < bestDist) {
-        bestDist = d;
-        bestOi = oi;
-      }
-    }
-    if (bestOi >= 0) {
-      result.set(bestOi, freeEi);
-      assigned.add(bestOi);
     }
   }
 
@@ -231,6 +174,21 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
     // パス飛行中: レシーバーが近ければ追跡、遠ければポジション維持（手の deflection で対応）。
     if (markEntityIdx === state.onBallEntityIdx) {
       state.obMems[oi].searching = false;
+
+      // エンゲージライン外: ボール保持者がバックコートにいる場合は初期位置で待機
+      // （デッドボール後のトランジション中など）
+      if (state.zSign === 1 ? markTarget.z < DEFENSE_ENGAGE_Z : markTarget.z > -DEFENSE_ENGAGE_Z) {
+        const waitPos = INIT_OBSTACLES[oi];
+        // ボール保持者が自分よりゴールに近い → スプリントで戻る
+        const obGD = dist2d(ob.x, ob.z, state.attackGoalX, state.attackGoalZ);
+        const tgtGD = dist2d(markTarget.x, markTarget.z, state.attackGoalX, state.attackGoalZ);
+        const beatenOnBall = obGD > tgtGD + BEATEN_GOAL_DIST_MARGIN;
+        const waitSpd = beatenOnBall ? cfg.interceptSpeed : cfg.idleSpeed;
+        setChaserVelocity(ob, waitPos.x, waitPos.z * state.zSign, waitSpd, cfg.hoverRadius, dt);
+        moveKeepFacing(ob, waitSpd, dt);
+        orientToward(ob, markTarget.x, markTarget.z, dt);
+        continue;
+      }
 
       // パス飛行中: レシーバーが近くにいればそちらを追跡する
       if (state.ballActive && state.interceptPt) {
@@ -299,8 +257,13 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
       const waitPos = INIT_OBSTACLES[oi];
       const waitX = waitPos.x;
       const waitZ = waitPos.z * state.zSign;
-      setChaserVelocity(ob, waitX, waitZ, cfg.idleSpeed, cfg.hoverRadius, dt);
-      moveKeepFacing(ob, cfg.idleSpeed, dt);
+      // マーク対象が自分よりゴールに近い → スプリントで戻る
+      const obGoalDist = dist2d(ob.x, ob.z, state.attackGoalX, state.attackGoalZ);
+      const tgtGoalDist = dist2d(effectiveTarget.x, effectiveTarget.z, state.attackGoalX, state.attackGoalZ);
+      const beaten = obGoalDist > tgtGoalDist + BEATEN_GOAL_DIST_MARGIN;
+      const waitSpeed = beaten ? cfg.interceptSpeed : cfg.idleSpeed;
+      setChaserVelocity(ob, waitX, waitZ, waitSpeed, cfg.hoverRadius, dt);
+      moveKeepFacing(ob, waitSpeed, dt);
       orientToward(ob, effectiveTarget.x, effectiveTarget.z, dt);
       continue;
     }
@@ -309,8 +272,16 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
     // マーク対象とパッサー（オンボールOF）の間に入り、パスコースを遮断する。
     const mem = state.obMems[oi];
     // ヘルプ時は実位置を直接追う、通常時はメモリ参照
-    const chaseX = isHelping ? effectiveTarget.x : (mem.searching ? mem.lastSeenTargetX : effectiveTarget.x);
-    const chaseZ = isHelping ? effectiveTarget.z : (mem.searching ? mem.lastSeenTargetZ : effectiveTarget.z);
+    // Safety: サーチ中のメモリが逆サイド（ゴール反対側）を指している場合は実位置を使う
+    let useMemory = mem.searching && !isHelping;
+    if (useMemory) {
+      const memOnCorrectSide = state.zSign === 1
+        ? mem.lastSeenTargetZ >= 0
+        : mem.lastSeenTargetZ <= 0;
+      if (!memOnCorrectSide) useMemory = false;
+    }
+    const chaseX = isHelping ? effectiveTarget.x : (useMemory ? mem.lastSeenTargetX : effectiveTarget.x);
+    const chaseZ = isHelping ? effectiveTarget.z : (useMemory ? mem.lastSeenTargetZ : effectiveTarget.z);
 
     // パッサー方向: マーク対象からパッサーへのベクトル
     const pdx = passerMover.x - chaseX;
@@ -326,9 +297,12 @@ export function updateObstacleMovements(state: SimState, dt: number, passerMover
       defZ = chaseZ;
     }
 
-    // 速度選択: ヘルプ中 or DF位置から遠い → スプリント
+    // 速度選択: ヘルプ中 or DF位置から遠い or マーク対象に抜かれている → スプリント
     const distToDefPos = dist2d(ob.x, ob.z, defX, defZ);
-    const useSprint = isHelping || distToDefPos > SPRINT_TRIGGER_DIST;
+    const obGoalDist = dist2d(ob.x, ob.z, state.attackGoalX, state.attackGoalZ);
+    const tgtGoalDist = dist2d(chaseX, chaseZ, state.attackGoalX, state.attackGoalZ);
+    const beatenByMark = obGoalDist > tgtGoalDist + BEATEN_GOAL_DIST_MARGIN;
+    const useSprint = isHelping || distToDefPos > SPRINT_TRIGGER_DIST || beatenByMark;
     const speed = useSprint ? cfg.interceptSpeed : cfg.idleSpeed;
 
     // 密着ディナイモード: マーク対象に近接 + サーチ中でない + ヘルプでない

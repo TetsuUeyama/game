@@ -61,13 +61,17 @@ export function detectBallResult(
     }
   }
 
-  // Miss check: landed, out of bounds, or timeout
-  const ballLanded = !ballInFlight;
+  // OOB / timeout → miss (攻守交替)
   const margin = SIM_MARGIN * 2;
   const out = ballPosX < -SIM_FIELD_X_HALF - margin || ballPosX > SIM_FIELD_X_HALF + margin
     || ballPosZ < -SIM_FIELD_Z_HALF - margin || ballPosZ > SIM_FIELD_Z_HALF + margin;
-  if (ballLanded || out || ballAge > BALL_TIMEOUT) {
+  if (out || ballAge > BALL_TIMEOUT) {
     return { result: 'miss', cooldownTime: 1.0 };
+  }
+
+  // Ball landed (ground contact) → ルーズボールへ移行（即時攻守交替ではない）
+  if (!ballInFlight) {
+    return { result: 'landed', cooldownTime: 0 };
   }
 
   return none;

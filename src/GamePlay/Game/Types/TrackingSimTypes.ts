@@ -13,6 +13,9 @@ export interface SimMover {
   torsoFacing: number;   // 上半身の向き
   neckFacing: number;    // 首の向き（基準が上半身）
   nextTurn: number;
+  height: number;        // 身長 (cm) 150〜225
+  weight: number;        // 体重 (kg)
+  scale: number;         // height / BASE_HEIGHT_CM — 描画・衝突スケール
 }
 
 export interface SimBall {
@@ -166,7 +169,7 @@ export interface FireAttemptResult {
 }
 
 /** ボール結果判定 */
-export type BallResultType = 'block' | 'hit' | 'miss' | 'none';
+export type BallResultType = 'block' | 'hit' | 'miss' | 'landed' | 'none';
 
 export interface BallResultDetection {
   result: BallResultType;
@@ -240,4 +243,5 @@ export interface SimState {
   pendingShot: { x: number; y: number; z: number } | null;  // シュートターゲット座標
   prevBallY: number;  // 前フレームのボールY座標（ゴール通過判定用）
   lastScorerResult: ActionScorerResult | null;  // 直近の ActionScorer 評価結果
+  goalScoredTimer: number;  // ゴール成功後のリセット待機タイマー（0=待機なし）
 }

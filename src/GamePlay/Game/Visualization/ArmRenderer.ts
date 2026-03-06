@@ -232,7 +232,7 @@ export class ArmRenderer {
    * ボールが視野内(neckFacing ±90°)かつ2m以内なら両手をボール方向へ向ける。
    */
   syncArms(
-    allMovers: SimMover[],
+    allPlayers: SimMover[],
     upperBodyPivots: TransformNode[],
     torsoVisualAngles: number[],
     ballPosition: Vector3 | null,
@@ -241,8 +241,8 @@ export class ArmRenderer {
     ballMarkerEntityIdx: number | null,
     ballMarkerLeftArmTarget: Vector3 | null,
     ballMarkerRightArmTarget: Vector3 | null,
-    onBallEntityIdx: number,
-    targets: SimMover[],
+    onBallAbsIdx: number,
+    defenseBase: number,
     pushObstructions: PushObstructionInfo[],
     dt: number,
     dribbleBounceH: number,
@@ -255,7 +255,9 @@ export class ArmRenderer {
       const armSet = this.entityArmSets[idx];
       const lerpState = this.armLerpStates[idx];
       if (!lerpState) continue;
+      if (idx >= allPlayers.length) continue;
 
+      const entityScale = allPlayers[idx].scale;
       const parent = armSet.parent;
       const ex = parent.position.x;
       const ey = parent.position.y;
@@ -284,8 +286,8 @@ export class ArmRenderer {
         lerpState.leftReach += (targetLeftReach - lerpState.leftReach) * alpha;
         lerpState.rightReach += (targetRightReach - lerpState.rightReach) * alpha;
 
-        this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, DEF_LEFT_ELBOW_HINT, lerpState.leftReach);
-        this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, DEF_RIGHT_ELBOW_HINT, lerpState.rightReach);
+        this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, DEF_LEFT_ELBOW_HINT, lerpState.leftReach, entityScale);
+        this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, DEF_RIGHT_ELBOW_HINT, lerpState.rightReach, entityScale);
         continue;
       }
 
@@ -297,7 +299,7 @@ export class ArmRenderer {
         const sinA = Math.sin(pivotAngle);
 
         const localLeft = Vector3.TransformCoordinates(ballMarkerLeftArmTarget, invMatrix);
-        const rootLeft = this.computeArmDir(-1, localLeft);
+        const rootLeft = this.computeArmDir(-1, localLeft, entityScale);
         targetLeftDir = new Vector3(
           rootLeft.x * cosA - rootLeft.z * sinA,
           rootLeft.y,
@@ -305,7 +307,7 @@ export class ArmRenderer {
         ).normalize();
 
         const localRight = Vector3.TransformCoordinates(ballMarkerRightArmTarget, invMatrix);
-        const rootRight = this.computeArmDir(1, localRight);
+        const rootRight = this.computeArmDir(1, localRight, entityScale);
         targetRightDir = new Vector3(
           rootRight.x * cosA - rootRight.z * sinA,
           rootRight.y,
@@ -313,7 +315,7 @@ export class ArmRenderer {
         ).normalize();
       } else {
         // ドリブル中のオンボールエンティティはボール追跡をスキップ（非ドリブル手が地面を追わないように）
-        const isDribbling = idx === onBallEntityIdx && !ballActive;
+        const isDribbling = idx === onBallAbsIdx && !ballActive;
         const trackBallPos = isDribbling ? null : ((ballActive && ballPos) ? ballPos : ballHeldPosition);
         if (trackBallPos) {
           const dx = trackBallPos.x - ex;
@@ -322,7 +324,7 @@ export class ArmRenderer {
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
           if (dist < BALL_REACT_RADIUS && dist > 0.01) {
-            const mover = allMovers[idx];
+            const mover = allPlayers[idx];
             const angleToBall = Math.atan2(trackBallPos.z - ez, trackBallPos.x - ex);
             const angleDiff = normAngleDiff(mover.neckFacing, angleToBall);
 
@@ -332,8 +334,8 @@ export class ArmRenderer {
                 trackBallPos, parent.getWorldMatrix().clone().invert(),
               );
 
-              const rootLeftDir = this.computeArmDir(-1, localBall);
-              const rootRightDir = this.computeArmDir(1, localBall);
+              const rootLeftDir = this.computeArmDir(-1, localBall, entityScale);
+              const rootRightDir = this.computeArmDir(1, localBall, entityScale);
 
               const pivotAngle = torsoVisualAngles[idx] || 0;
               const cosA = Math.cos(pivotAngle);
@@ -354,8 +356,7 @@ export class ArmRenderer {
           }
         }
 
-        const obEntityStart = 1 + targets.length;
-        const pushInfo = (idx >= obEntityStart) ? pushObstructions.find(p => p.obstacleIdx === idx - obEntityStart) : undefined;
+        const pushInfo = (idx >= defenseBase && idx < defenseBase + 5) ? pushObstructions.find(p => p.obstacleIdx === idx - defenseBase) : undefined;
         if (pushInfo) {
           const pushTarget = new Vector3(pushInfo.armTargetX, ENTITY_HEIGHT * 0.9, pushInfo.armTargetZ);
           parent.computeWorldMatrix(true);
@@ -366,14 +367,14 @@ export class ArmRenderer {
 
           const localPush = Vector3.TransformCoordinates(pushTarget, invMatrix);
           if (pushInfo.pushArm === 'left') {
-            const rootDir = this.computeArmDir(-1, localPush);
+            const rootDir = this.computeArmDir(-1, localPush, entityScale);
             targetLeftDir = new Vector3(
               rootDir.x * cosA - rootDir.z * sinA,
               rootDir.y,
               rootDir.x * sinA + rootDir.z * cosA,
             ).normalize();
           } else {
-            const rootDir = this.computeArmDir(1, localPush);
+            const rootDir = this.computeArmDir(1, localPush, entityScale);
             targetRightDir = new Vector3(
               rootDir.x * cosA - rootDir.z * sinA,
               rootDir.y,
@@ -383,16 +384,15 @@ export class ArmRenderer {
         }
       }
 
-      if (idx === onBallEntityIdx && !ballActive) {
-        const mover = allMovers[idx];
+      if (idx === onBallAbsIdx && !ballActive) {
+        const mover = allPlayers[idx];
         const vel = Math.sqrt(mover.vx * mover.vx + mover.vz * mover.vz);
 
         // 最も近いDFを検索してドリブルハンドを決定
         let closestDefDist = Infinity;
         let defenderSide: 'left' | 'right' | null = null;
-        const obStart = 1 + targets.length;
-        for (let oi = 0; oi < allMovers.length - obStart; oi++) {
-          const def = allMovers[obStart + oi];
+        for (let oi = 0; oi < 5; oi++) {
+          const def = allPlayers[defenseBase + oi];
           const ddx = def.x - mover.x;
           const ddz = def.z - mover.z;
           const defDist = Math.sqrt(ddx * ddx + ddz * ddz);
@@ -436,7 +436,7 @@ export class ArmRenderer {
         targetRightHint = new Vector3(1, -0.2, -0.5).normalize();
       }
 
-      if (idx === onBallEntityIdx && !ballActive) {
+      if (idx === onBallAbsIdx && !ballActive) {
         if (this._dribbleHand === 'right') {
           targetRightHint = DRIBBLE_PROTECT_RIGHT_ELBOW_HINT;
         } else {
@@ -457,8 +457,8 @@ export class ArmRenderer {
       lerpState.leftReach += (targetLeftReach - lerpState.leftReach) * alpha;
       lerpState.rightReach += (targetRightReach - lerpState.rightReach) * alpha;
 
-      this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint, lerpState.leftReach);
-      this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint, lerpState.rightReach);
+      this.applyArmWithElbow(armSet.leftUpperArm, armSet.leftElbow, armSet.leftForearm, armSet.leftHand, -1, lerpState.leftDir, lerpState.leftElbowHint, lerpState.leftReach, entityScale);
+      this.applyArmWithElbow(armSet.rightUpperArm, armSet.rightElbow, armSet.rightForearm, armSet.rightHand, 1, lerpState.rightDir, lerpState.rightElbowHint, lerpState.rightReach, entityScale);
     }
   }
 
@@ -466,14 +466,14 @@ export class ArmRenderer {
    * 全エンティティの左右手のワールド座標を返す。
    * IK + 前腕クランプ後の実際のメッシュ位置を使用する。
    */
-  getHandWorldPositions(allMovers: SimMover[]): { left: Vector3; right: Vector3 }[] {
+  getHandWorldPositions(allPlayers: SimMover[]): { left: Vector3; right: Vector3 }[] {
     const result: { left: Vector3; right: Vector3 }[] = [];
 
-    for (let idx = 0; idx < allMovers.length; idx++) {
+    for (let idx = 0; idx < allPlayers.length; idx++) {
       const armSet = this.entityArmSets[idx];
       if (!armSet) {
-        const m = allMovers[idx];
-        const pos = new Vector3(m.x, ENTITY_HEIGHT / 2 + SHOULDER_Y, m.z);
+        const m = allPlayers[idx];
+        const pos = new Vector3(m.x, (ENTITY_HEIGHT / 2 + SHOULDER_Y) * m.scale, m.z);
         result.push({ left: pos.clone(), right: pos.clone() });
         continue;
       }
@@ -489,6 +489,33 @@ export class ArmRenderer {
     }
 
     return result;
+  }
+
+  /**
+   * 身長スケールの逆補正を腕メッシュに適用。
+   * 腕シリンダー(上腕・前腕): (1/s, 1, 1/s) → 直径そのまま、長さスケール
+   * 球体(肘・手): setAll(1/s) → 元サイズ維持
+   */
+  applyHeightScales(scales: number[]): void {
+    for (let i = 0; i < this.entityArmSets.length; i++) {
+      if (i >= scales.length) break;
+      const s = scales[i];
+      if (Math.abs(s - 1) < 0.001) continue;
+      const inv = 1 / s;
+      const armSet = this.entityArmSets[i];
+
+      // 上腕・前腕シリンダー: 直径そのまま、長さスケール
+      armSet.leftUpperArm.scaling.set(inv, 1, inv);
+      armSet.rightUpperArm.scaling.set(inv, 1, inv);
+      armSet.leftForearm.scaling.set(inv, 1, inv);
+      armSet.rightForearm.scaling.set(inv, 1, inv);
+
+      // 肘・手の球体: 元サイズ維持
+      armSet.leftElbow.scaling.setAll(inv);
+      armSet.rightElbow.scaling.setAll(inv);
+      armSet.leftHand.scaling.setAll(inv);
+      armSet.rightHand.scaling.setAll(inv);
+    }
   }
 
   dispose(): void {
@@ -510,8 +537,8 @@ export class ArmRenderer {
   // =========================================================================
 
   /** 肩位置からターゲットへの正規化方向ベクトルを計算（ローカル座標系） */
-  private computeArmDir(side: -1 | 1, localTarget: Vector3): Vector3 {
-    const shoulderX = side * ARM_BODY_RADIUS;
+  private computeArmDir(side: -1 | 1, localTarget: Vector3, scale: number = 1.0): Vector3 {
+    const shoulderX = side * ARM_BODY_RADIUS / scale;
     const dx = localTarget.x - shoulderX;
     const dy = localTarget.y - SHOULDER_Y;
     const dz = localTarget.z;
@@ -676,8 +703,11 @@ export class ArmRenderer {
   private applyArmWithElbow(
     upperArm: Mesh, elbowMesh: Mesh, forearm: Mesh, hand: Mesh,
     side: -1 | 1, dir: Vector3, hint: Vector3, reach: number = 1.0,
+    scale: number = 1.0,
   ): void {
-    const shoulder = new Vector3(side * ARM_BODY_RADIUS, SHOULDER_Y, 0);
+    // 胴体は逆スケール(1/s,1,1/s)で太さが元に戻っているため、
+    // 肩のX位置もスケール分補正して胴体端に合わせる
+    const shoulder = new Vector3(side * ARM_BODY_RADIUS / scale, SHOULDER_Y, 0);
     const effectiveLen = TOTAL_ARM_LENGTH * reach;
     const handPos = new Vector3(
       shoulder.x + dir.x * effectiveLen,

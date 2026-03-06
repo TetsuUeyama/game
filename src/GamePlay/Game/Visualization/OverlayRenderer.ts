@@ -106,7 +106,8 @@ export class OverlayRenderer {
 
       let trajInFov = false;
       if (state.preFire) {
-        trajInFov = isTrajectoryInFOV(ob, state.launcher.x, state.launcher.z,
+        const passer = state.allPlayers[state.onBallAbsIdx];
+        trajInFov = isTrajectoryInFOV(ob, passer.x, passer.z,
           state.preFire.estIPx, state.preFire.estIPz);
       }
 
@@ -199,7 +200,8 @@ export class OverlayRenderer {
     if (state.preFire) {
       const pf = state.preFire;
       const VIS_Y = 0.18;
-      const from = new Vector3(state.launcher.x, VIS_Y, state.launcher.z);
+      const passerMover = state.allPlayers[state.onBallAbsIdx];
+      const from = new Vector3(passerMover.x, VIS_Y, passerMover.z);
       const to = new Vector3(pf.estIPx, VIS_Y, pf.estIPz);
       if (pf.blocked) {
         this.trajectoryLine = this.createLine("simTraj", [from, to], 1.0, 0.3, 0.3, 1.0);

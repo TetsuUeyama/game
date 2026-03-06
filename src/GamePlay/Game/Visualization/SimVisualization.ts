@@ -44,8 +44,9 @@ export interface OverlayVisibility {
 }
 
 export interface SimVisState {
-  launcher: SimMover;
-  targets: SimMover[];
+  allPlayers: SimMover[];         // 10要素: 固定順 (0-4=TeamA, 5-9=TeamB)
+  offenseBase: number;            // オフェンス側の allPlayers 開始インデックス (0 or 5)
+  defenseBase: number;            // ディフェンス側の allPlayers 開始インデックス (5 or 0)
   obstacles: SimMover[];
   obMems: import("../Types/TrackingSimTypes").SimScanMemory[];
   obFocusDists: number[];
@@ -60,7 +61,7 @@ export interface SimVisState {
   ballMarkerRightArmTarget: Vector3 | null;
   ballMarkerEntityIdx: number | null;
   pushObstructions: import("../Types/TrackingSimTypes").PushObstructionInfo[];
-  onBallEntityIdx: number;
+  onBallAbsIdx: number;           // ボール保持者の allPlayers 絶対インデックス
   dt: number;
   dribbleBounceH: number;
 }
@@ -83,6 +84,8 @@ export class SimVisualization {
   obstacleMeshes: Mesh[] = [];
   private facingIndicators: Mesh[] = [];
   private upperBodyPivots: TransformNode[] = [];
+  private upperBodyCylinders: Mesh[] = [];
+  private pendingHeadScales: number[] = [];
   private torsoVisualAngles: number[] = [];
   private neckVisualAngles: number[] = [];
 
@@ -122,7 +125,7 @@ export class SimVisualization {
   private createOctEntity(
     name: string, size: number, color: Color3, upperColor?: Color3,
   ): {
-    root: Mesh; pivot: TransformNode;
+    root: Mesh; pivot: TransformNode; upper: Mesh;
     hipBox: Mesh; leftHipJoint: TransformNode; rightHipJoint: TransformNode;
     leftLeg: Mesh; rightLeg: Mesh; leftFoot: Mesh; rightFoot: Mesh;
   } {
@@ -172,9 +175,10 @@ export class SimVisualization {
     upper.parent = pivot;
 
     this.upperBodyPivots.push(pivot);
+    this.upperBodyCylinders.push(upper);
 
     return {
-      root, pivot,
+      root, pivot, upper,
       hipBox: legs.hipBox,
       leftHipJoint: legs.leftHipJoint, rightHipJoint: legs.rightHipJoint,
       leftLeg: legs.leftLeg, rightLeg: legs.rightLeg,
@@ -226,6 +230,37 @@ export class SimVisualization {
     this.gaugeRenderer.create(totalEntities);
   }
 
+  /**
+   * 身長スケールに基づいてサブメッシュの逆スケールを適用。
+   * ルートは setAll(scale) で均一拡大されるが、太さは元サイズに保つ。
+   * シリンダー類: (1/s, 1, 1/s) → 直径そのまま、長さスケール
+   * 球体/頭: setAll(1/s) → 元サイズ維持
+   */
+  applyHeightScales(scales: number[]): void {
+    // 頭メッシュは非同期ロードのため保存しておく
+    this.pendingHeadScales = [...scales];
+
+    for (let i = 0; i < scales.length; i++) {
+      const s = scales[i];
+      if (Math.abs(s - 1) < 0.001) continue;
+      const inv = 1 / s;
+
+      // 上半身シリンダー: 直径そのまま、高さスケール
+      if (i < this.upperBodyCylinders.length) {
+        this.upperBodyCylinders[i].scaling.set(inv, 1, inv);
+      }
+
+      // 頭: 元サイズ維持（既にロード済みの場合）
+      if (i < this.facingIndicators.length) {
+        this.facingIndicators[i].scaling.setAll(inv);
+      }
+    }
+
+    // 脚・腕の逆スケール
+    this.legRenderer.applyHeightScales(scales);
+    this.armRenderer.applyHeightScales(scales);
+  }
+
   disposeMeshes(): void {
     this.launcherMesh?.dispose();
     this.targetMeshes.forEach(m => m.dispose());
@@ -244,6 +279,8 @@ export class SimVisualization {
       pivot.dispose();
     }
     this.upperBodyPivots = [];
+    this.upperBodyCylinders = [];
+    this.pendingHeadScales = [];
     this.torsoVisualAngles = [];
     this.neckVisualAngles = [];
     this.gaugeRenderer.dispose();
@@ -274,10 +311,10 @@ export class SimVisualization {
     this.syncTorsoRotation(state);
     this.syncNeckRotation(state);
 
-    const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
-    this.legRenderer.syncLegs(allMovers, state.dt, state.onBallEntityIdx, state.ballActive);
+    // allPlayers は固定順 (0-9) でメッシュ作成順と一致
+    this.legRenderer.syncLegs(state.allPlayers, state.dt, state.onBallAbsIdx, state.ballActive);
     this.armRenderer.syncArms(
-      allMovers,
+      state.allPlayers,
       this.upperBodyPivots,
       this.torsoVisualAngles,
       state.ballPosition,
@@ -286,8 +323,8 @@ export class SimVisualization {
       state.ballMarkerEntityIdx,
       state.ballMarkerLeftArmTarget,
       state.ballMarkerRightArmTarget,
-      state.onBallEntityIdx,
-      state.targets,
+      state.onBallAbsIdx,
+      state.defenseBase,
       state.pushObstructions,
       state.dt,
       state.dribbleBounceH,
@@ -298,8 +335,8 @@ export class SimVisualization {
   /**
    * 全エンティティの左右手のワールド座標を返す。
    */
-  getHandWorldPositions(allMovers: SimMover[]): { left: Vector3; right: Vector3 }[] {
-    return this.armRenderer.getHandWorldPositions(allMovers);
+  getHandWorldPositions(allPlayers: SimMover[]): { left: Vector3; right: Vector3 }[] {
+    return this.armRenderer.getHandWorldPositions(allPlayers);
   }
 
   /**
@@ -314,13 +351,12 @@ export class SimVisualization {
    */
   private syncTorsoRotation(state: SimVisState): void {
     const alpha = 1 - Math.exp(-TORSO_VISUAL_LERP_SPEED * state.dt);
-    const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
 
-    for (let i = 0; i < allMovers.length; i++) {
+    for (let i = 0; i < state.allPlayers.length; i++) {
       if (i >= this.upperBodyPivots.length) continue;
       if (i >= this.torsoVisualAngles.length) continue;
       const pivot = this.upperBodyPivots[i];
-      const mover = allMovers[i];
+      const mover = state.allPlayers[i];
       const target = mover.facing - mover.torsoFacing;
       this.torsoVisualAngles[i] += (target - this.torsoVisualAngles[i]) * alpha;
       pivot.rotation.y = this.torsoVisualAngles[i];
@@ -332,13 +368,12 @@ export class SimVisualization {
    */
   private syncNeckRotation(state: SimVisState): void {
     const alpha = 1 - Math.exp(-NECK_VISUAL_LERP_SPEED * state.dt);
-    const allMovers = [state.launcher, ...state.targets, ...state.obstacles];
 
-    for (let i = 0; i < allMovers.length; i++) {
+    for (let i = 0; i < state.allPlayers.length; i++) {
       if (i >= this.facingIndicators.length) continue;
       if (i >= this.neckVisualAngles.length) continue;
       const head = this.facingIndicators[i];
-      const mover = allMovers[i];
+      const mover = state.allPlayers[i];
       const target = mover.torsoFacing - mover.neckFacing;
       this.neckVisualAngles[i] += (target - this.neckVisualAngles[i]) * alpha;
       head.rotation.y = this.neckVisualAngles[i];
@@ -369,6 +404,13 @@ export class SimVisualization {
         clone.parent = this.upperBodyPivots[i];
         clone.position.y = ENTITY_HEIGHT / 2;
         clone.setEnabled(true);
+        // 身長スケールの逆補正（頭サイズ維持）
+        if (i < this.pendingHeadScales.length) {
+          const s = this.pendingHeadScales[i];
+          if (Math.abs(s - 1) > 0.001) {
+            clone.scaling.setAll(1 / s);
+          }
+        }
         this.facingIndicators.push(clone);
       }
 

@@ -2,6 +2,7 @@ import {
   SIM_FIELD_X_HALF,
   SIM_FIELD_Z_HALF,
   SIM_MARGIN,
+  BASE_HEIGHT_CM,
 } from "../Config/FieldConfig";
 import {
   TURN_RATE,
@@ -98,13 +99,18 @@ export function orientToward(
 // Mover creation / helpers
 // ============================================================================
 
-export function makeMover(x: number, z: number, speed: number): SimMover {
+export function makeMover(
+  x: number, z: number, speed: number,
+  height: number = 150, weight: number = 75,
+): SimMover {
   const a = randAngle();
+  const scale = height / BASE_HEIGHT_CM;
   return {
     x, z, y: 0,
     vx: Math.cos(a) * speed, vz: Math.sin(a) * speed, vy: 0,
     speed, lastSpeed: 0, momentumVx: 0, momentumVz: 0,
     facing: a, torsoFacing: a, neckFacing: a, nextTurn: randTurn(),
+    height, weight, scale,
   };
 }
 
@@ -231,9 +237,9 @@ export function blockOnBallByDefenders(
   mover.z = prevZ + mz;
 }
 
-/** Separate overlapping entities by pushing them apart */
+/** Separate overlapping entities by pushing them apart (weight-based distribution) */
 export function separateEntities(
-  all: { mover: SimMover; radius: number }[],
+  all: { mover: SimMover; radius: number; weight: number }[],
 ): void {
   for (let i = 0; i < all.length; i++) {
     for (let j = i + 1; j < all.length; j++) {
@@ -244,13 +250,17 @@ export function separateEntities(
       const minDist = a.radius + b.radius;
       if (distSq >= minDist * minDist || distSq < 0.0001) continue;
       const dist = Math.sqrt(distSq);
-      const overlap = (minDist - dist) / 2;
+      const overlap = minDist - dist;
       const nx = dx / dist;
       const nz = dz / dist;
-      a.mover.x -= nx * overlap;
-      a.mover.z -= nz * overlap;
-      b.mover.x += nx * overlap;
-      b.mover.z += nz * overlap;
+      // 体重の逆比で分配（重い方が動きにくい）
+      const totalWeight = a.weight + b.weight;
+      const aRatio = b.weight / totalWeight;
+      const bRatio = a.weight / totalWeight;
+      a.mover.x -= nx * overlap * aRatio;
+      a.mover.z -= nz * overlap * aRatio;
+      b.mover.x += nx * overlap * bRatio;
+      b.mover.z += nz * overlap * bRatio;
     }
   }
   // bounce で場外に出た分を補正

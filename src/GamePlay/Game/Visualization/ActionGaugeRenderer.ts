@@ -87,11 +87,7 @@ export class ActionGaugeRenderer {
   }
 
   sync(state: SimVisState, entityVisible?: boolean[]): void {
-    const entities: { x: number; z: number }[] = [
-      state.launcher,
-      ...state.targets,
-      ...state.obstacles,
-    ];
+    const entities: { x: number; z: number }[] = state.allPlayers;
 
     for (let i = 0; i < this.gauges.length && i < state.actionStates.length; i++) {
       const g = this.gauges[i];

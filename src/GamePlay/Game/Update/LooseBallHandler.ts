@@ -98,9 +98,9 @@ export function updateLooseBall(
     } else if (isOffense) {
       // オフェンス: 追跡を諦める
       if (offenseLikelyRecovers) {
-        // 自チーム回収見込み → オフェンスのホームポジションへ移動
+        // 自チーム回収見込み → オフェンスのホームポジションへ移動（zSign対応）
         const home = ei === 0 ? INIT_LAUNCHER : INIT_TARGETS[ei - 1];
-        setChaserVelocity(mover, home.x, home.z, TARGET_RANDOM_SPEED, 0.5, dt);
+        setChaserVelocity(mover, home.x, home.z * state.zSign, TARGET_RANDOM_SPEED, 0.5, dt);
         moveWithFacing(mover, TARGET_RANDOM_SPEED, dt);
       }
       // 相手チーム回収見込み → 待機（回収後バックコートにリセットされるため）

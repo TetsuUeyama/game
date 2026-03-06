@@ -8,6 +8,7 @@ export const SIM_MARGIN = 30 * S;      // 0.45 m
 
 // --- Entity size ---
 export const ENTITY_HEIGHT = 1.0;      // m
+export const BASE_HEIGHT_CM = 150;     // scale=1.0 に対応する身長 (cm)
 export const LAUNCHER_SIZE = 0.6;      // m (box width/depth)
 export const TARGET_SIZE = 0.5;        // m
 export const OBSTACLE_SIZE = 0.44;     // m
