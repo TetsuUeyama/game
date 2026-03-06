@@ -90,14 +90,16 @@ function buildVoxMesh(model: VoxModel, scene: Scene, name: string): Mesh {
   return mesh;
 }
 
+const CACHE_BUST = `?v=${Date.now()}`;
+
 async function loadVoxMesh(scene: Scene, url: string, name: string): Promise<Mesh> {
-  const resp = await fetch(url);
+  const resp = await fetch(url + CACHE_BUST);
   if (!resp.ok) throw new Error(`Failed: ${url}`);
   return buildVoxMesh(parseVox(await resp.arrayBuffer()), scene, name);
 }
 
 // ========================================================================
-// Part categories
+// Builder part categories
 // ========================================================================
 
 const CATEGORIES = {
@@ -123,9 +125,6 @@ function catUrl(cat: CatKey, name: string): string {
 
 // Body assembly
 interface PartDef { file: string; label: string; offset: [number, number, number]; }
-// Assembly offsets calculated from part heights (SCALE=0.010):
-// shoe=0.12, shin=0.26, thigh=0.28, hip=0.16, torso=0.40
-// Ground=0 → shoe:0 → shin:0.12 → thigh:0.38 → hip:0.66 → torso:0.82 → top:1.22
 const BODY_PARTS: PartDef[] = [
   { file: 'torso.vox',     label: 'Torso',      offset: [0, 0.82, 0] },
   { file: 'hip.vox',       label: 'Hip',         offset: [0, 0.66, 0] },
@@ -148,23 +147,28 @@ const MIRROR_PARTS: PartDef[] = [
 const HEAD_Y = 1.15;
 
 // ========================================================================
+// Import part manifest type
+// ========================================================================
+interface ImportPart {
+  key: string;
+  file: string;
+  voxels: number;
+  default_on: boolean;
+}
+
+// ========================================================================
 // Component
 // ========================================================================
-
-// Imported voxel models (body + hair separate)
-const IMPORT_MODELS = [
-  { name: 'CyberpunkElf', body: '/box2/cyberpunk_elf_body.vox', hair: '/box2/cyberpunk_elf_hair.vox' },
-];
 
 export default function VoxViewer2Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const matRef = useRef<StandardMaterial | null>(null);
   const bodyMeshesRef = useRef<Mesh[]>([]);
-  const importBodyRef = useRef<Mesh | null>(null);
-  const importHairRef = useRef<Mesh | null>(null);
+  const importPartsRef = useRef<Record<string, Mesh>>({});
   const [mode, setMode] = useState<'builder' | 'import'>('import');
-  const [showHair, setShowHair] = useState(true);
+  const [importParts, setImportParts] = useState<ImportPart[]>([]);
+  const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
 
   const headMeshes = useRef<Record<string, Mesh | null>>({
     base: null, eyes: null, brows: null, nose: null, mouth: null, hair: null,
@@ -195,6 +199,15 @@ export default function VoxViewer2Page() {
     loadLayer(cat, catUrl(cat, value));
   }, [loadLayer]);
 
+  const togglePart = useCallback((key: string) => {
+    setPartVisibility(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      const mesh = importPartsRef.current[key];
+      if (mesh) mesh.setEnabled(next[key]);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -210,7 +223,6 @@ export default function VoxViewer2Page() {
     camera.upperRadiusLimit = 10;
     camera.wheelPrecision = 100;
 
-    // Lighting
     const hemi = new HemisphericLight('hemi', new Vector3(0.3, 1, 0.5), scene);
     hemi.intensity = 0.9;
     hemi.groundColor = new Color3(0.25, 0.25, 0.3);
@@ -218,7 +230,6 @@ export default function VoxViewer2Page() {
     const dir = new DirectionalLight('dir', new Vector3(-0.5, -1, -0.8), scene);
     dir.intensity = 0.4;
 
-    // Ground
     const ground = MeshBuilder.CreateGround('ground', { width: 8, height: 8, subdivisions: 40 }, scene);
     const gm = new StandardMaterial('gm', scene);
     gm.diffuseColor = new Color3(0.15, 0.15, 0.2);
@@ -226,14 +237,13 @@ export default function VoxViewer2Page() {
     gm.wireframe = true;
     ground.material = gm;
 
-    // Vox material (vertex color based)
     const voxMat = new StandardMaterial('voxMat', scene);
     voxMat.emissiveColor = Color3.White();
     voxMat.disableLighting = true;
     voxMat.backFaceCulling = false;
     matRef.current = voxMat;
 
-    // Load body parts
+    // Load builder body parts
     const loadBody = async () => {
       const meshes: Mesh[] = [];
       for (const p of BODY_PARTS) {
@@ -251,7 +261,7 @@ export default function VoxViewer2Page() {
       bodyMeshesRef.current = meshes;
     };
 
-    // Load head layers
+    // Load builder head layers
     const loadHead = async () => {
       try {
         const base = await loadVoxMesh(scene, '/box2/head_base.vox', 'head_base');
@@ -263,18 +273,26 @@ export default function VoxViewer2Page() {
       }
     };
 
-    // Load import model (body + hair separate)
+    // Load import model parts from manifest
     const loadImport = async () => {
       try {
-        const body = await loadVoxMesh(scene, IMPORT_MODELS[0].body, 'import_body');
-        body.material = voxMat;
-        importBodyRef.current = body;
-      } catch (e) { console.error(e); }
-      try {
-        const hair = await loadVoxMesh(scene, IMPORT_MODELS[0].hair, 'import_hair');
-        hair.material = voxMat;
-        importHairRef.current = hair;
-      } catch (e) { console.error(e); }
+        const resp = await fetch('/box2/cyberpunk_elf_parts.json' + CACHE_BUST);
+        if (!resp.ok) return;
+        const parts: ImportPart[] = await resp.json();
+        setImportParts(parts);
+
+        const vis: Record<string, boolean> = {};
+        for (const part of parts) {
+          vis[part.key] = part.default_on;
+          try {
+            const m = await loadVoxMesh(scene, part.file, `import_${part.key}`);
+            m.material = voxMat;
+            m.setEnabled(part.default_on);
+            importPartsRef.current[part.key] = m;
+          } catch (e) { console.error(`Failed: ${part.file}`, e); }
+        }
+        setPartVisibility(vis);
+      } catch (e) { console.error('Failed to load parts manifest', e); }
     };
 
     loadBody();
@@ -300,9 +318,16 @@ export default function VoxViewer2Page() {
     const showBuilder = mode === 'builder';
     for (const m of bodyMeshesRef.current) m.setEnabled(showBuilder);
     for (const m of Object.values(headMeshes.current)) if (m) m.setEnabled(showBuilder);
-    if (importBodyRef.current) importBodyRef.current.setEnabled(!showBuilder);
-    if (importHairRef.current) importHairRef.current.setEnabled(!showBuilder && showHair);
-  }, [mode, showHair]);
+    for (const [key, mesh] of Object.entries(importPartsRef.current)) {
+      mesh.setEnabled(!showBuilder && (partVisibility[key] ?? false));
+    }
+  }, [mode, partVisibility]);
+
+  // Pretty label from part key
+  const partLabel = (key: string) => {
+    return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      .replace('- Default', '').replace('  ', ' ').trim();
+  };
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#12121f', display: 'flex' }}>
@@ -328,29 +353,28 @@ export default function VoxViewer2Page() {
 
         {mode === 'import' ? (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 16, color: '#fff' }}>Voxelized Models</h2>
-            {IMPORT_MODELS.map(m => (
-              <div key={m.name} style={{
-                padding: '8px 10px', background: 'rgba(60,60,180,0.2)',
-                border: '1px solid rgba(100,100,255,0.3)', borderRadius: 6, marginBottom: 8,
-              }}>
-                <div style={{ color: '#aaf', fontWeight: 'bold', fontSize: 13 }}>{m.name}</div>
-                <div style={{ opacity: 0.5, fontSize: 10, marginTop: 2 }}>body + hair</div>
-              </div>
-            ))}
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 'bold', marginBottom: 6, color: '#8af', fontSize: 13 }}>Parts</div>
-              <button onClick={() => setShowHair(v => !v)} style={{
-                padding: '5px 12px', fontSize: 12,
-                border: showHair ? '2px solid #68f' : '1px solid #555', borderRadius: 4,
-                background: showHair ? 'rgba(60,60,180,0.35)' : 'rgba(30,30,50,0.6)',
-                color: showHair ? '#fff' : '#888', cursor: 'pointer',
-              }}>
-                Hair {showHair ? 'ON' : 'OFF'}
-              </button>
+            <h2 style={{ margin: '0 0 8px', fontSize: 16, color: '#fff' }}>CyberpunkElf</h2>
+            <div style={{ fontWeight: 'bold', marginBottom: 6, color: '#8af', fontSize: 13 }}>
+              Parts ({importParts.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {importParts.map(part => (
+                <button key={part.key} onClick={() => togglePart(part.key)} style={{
+                  padding: '4px 10px', fontSize: 11, textAlign: 'left',
+                  border: partVisibility[part.key] ? '2px solid #68f' : '1px solid #444',
+                  borderRadius: 4,
+                  background: partVisibility[part.key] ? 'rgba(60,60,180,0.35)' : 'rgba(30,30,50,0.6)',
+                  color: partVisibility[part.key] ? '#fff' : '#666',
+                  cursor: 'pointer',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span>{partLabel(part.key)}</span>
+                  <span style={{ fontSize: 9, opacity: 0.5 }}>{part.voxels.toLocaleString()}</span>
+                </button>
+              ))}
             </div>
             <p style={{ opacity: 0.4, fontSize: 10, marginTop: 12, lineHeight: 1.5 }}>
-              3D model voxelized with chibi deformation via Blender
+              Click parts to toggle on/off
             </p>
           </>
         ) : (
