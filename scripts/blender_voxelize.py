@@ -518,6 +518,107 @@ if 'body' in part_voxels:
     print(f"  Body color correction: {corrected} voxels blended toward exposed skin tone")
 
 # ========================================================================
+# Face post-processing: symmetry, mascara thinning, lip enhancement
+# ========================================================================
+if 'body' in part_voxels:
+    bv = part_voxels['body']
+    # Determine head region in voxel space (t > 0.85 in original = chibi head)
+    # Head threshold: deformed Z for t=0.85
+    head_z_orig = min_co.z + 0.85 * model_h
+    head_z_vox = int((head_z_orig - def_min.z) / voxel_size)
+    # Face front: low Y values (Y < face_y_max)
+    head_voxels = {(x,y,z): c for (x,y,z), c in bv.items() if z >= head_z_vox}
+    if head_voxels:
+        hxs = [x for x,y,z in head_voxels]
+        face_cx = (min(hxs) + max(hxs)) / 2.0
+        cx_int = int(round(face_cx))
+        print(f"  Face post-process: head_z>={head_z_vox}, center_x={face_cx:.1f}")
+
+        # 1) Symmetry: mirror voxels around center X
+        sym_added = 0
+        sym_keys = list(head_voxels.keys())
+        for (x, y, z) in sym_keys:
+            mirror_x = 2 * cx_int - x
+            if (mirror_x, y, z) not in bv and mirror_x >= 0 and mirror_x < gx:
+                bv[(mirror_x, y, z)] = bv[(x, y, z)]
+                sym_added += 1
+        print(f"    Symmetry: added {sym_added} mirrored voxels")
+
+        # 2) Mascara thinning: keep only 1-voxel-wide eyeliner
+        #    For each Y row in eye area, find skin center, keep only the
+        #    first dark voxel on each side of the eye opening
+        def is_dark(c):
+            return (c[0] + c[1] + c[2]) / 3.0 < 50
+        # Get skin color reference from forehead (Z = eye_z + 2)
+        eye_z_top = head_z_vox + 10  # Z=90 in current grid
+        eye_z_bot = head_z_vox + 9   # Z=89
+        forehead_z = head_z_vox + 11  # Z=91
+        mascara_thinned = 0
+        for z_target in [eye_z_top, eye_z_bot, eye_z_top - 1, eye_z_bot - 1,
+                         eye_z_top + 1]:
+            for y_target in range(0, 6):
+                # Collect voxels in this row
+                row = {}
+                for (x, y, z), c in bv.items():
+                    if y == y_target and z == z_target and min(hxs) <= x <= max(hxs):
+                        row[x] = c
+                if not row:
+                    continue
+                xs_sorted = sorted(row.keys())
+                # Find skin reference from forehead at same Y
+                skin_ref = None
+                for (x, y, z), c in bv.items():
+                    if y == y_target and z == forehead_z and not is_dark(c):
+                        skin_ref = c
+                        break
+                if skin_ref is None:
+                    continue
+                # Scan from left: find first skin, then keep max 1 dark before it
+                # Scan from center outward to left and right
+                # Find the skin region center
+                skin_xs = [x for x in xs_sorted if x in row and not is_dark(row[x])]
+                dark_xs = [x for x in xs_sorted if x in row and is_dark(row[x])]
+                if not skin_xs or not dark_xs:
+                    continue
+                skin_min = min(skin_xs)
+                skin_max = max(skin_xs)
+                # Left side: dark voxels left of skin_min
+                # Keep only the one closest to skin (skin_min - 1)
+                for x in dark_xs:
+                    if x < skin_min - 1:  # more than 1 away from skin edge
+                        bv[(x, y_target, z_target)] = skin_ref
+                        mascara_thinned += 1
+                    elif x > skin_max + 1:  # more than 1 away from right skin edge
+                        bv[(x, y_target, z_target)] = skin_ref
+                        mascara_thinned += 1
+        print(f"    Mascara thinning: replaced {mascara_thinned} voxels (kept 1px outline)")
+
+        # 3) Lip coloring: subtle pink at mouth position
+        #    Mouth: Z=87-88 (head_z_vox+7 to +8), Y=1-3, X within ±3 of center
+        #    Only modify skin-colored voxels (not dark or white)
+        mouth_z_min = head_z_vox + 7
+        mouth_z_max = head_z_vox + 8
+        lip_count = 0
+        for (x, y, z) in list(bv.keys()):
+            if z < mouth_z_min or z > mouth_z_max:
+                continue
+            if y < 1 or y > 3:
+                continue
+            if abs(x - cx_int) > 3:
+                continue
+            col = bv[(x, y, z)]
+            br = (col[0] + col[1] + col[2]) / 3.0
+            if br < 50 or br > 200:  # skip dark (mascara) and white (teeth)
+                continue
+            # Subtle pink shift: boost red slightly, reduce green
+            nr = min(255, int(col[0] * 1.08))
+            ng = max(0, int(col[1] * 0.85))
+            nb = max(0, int(col[2] * 0.88))
+            bv[(x, y, z)] = (nr, ng, nb)
+            lip_count += 1
+        print(f"    Lip pink: adjusted {lip_count} voxels")
+
+# ========================================================================
 # Write .vox
 # ========================================================================
 def build_palette_and_voxels(voxel_dict):
