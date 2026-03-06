@@ -89,9 +89,11 @@ export function updateScan(
       focusDist += Math.sign(ld - focusDist) * delta;
     } else {
       const angleToLast = Math.atan2(lastZ - ob.z, lastX - ob.x);
+      // サーチ中は体の回転を速くして広範囲をカバー
+      const searchTorsoRate = TORSO_TURN_RATE * 1.5;
 
       if (mem.searchSweep === 0 && Math.abs(normAngleDiff(ob.neckFacing, angleToLast)) >= 0.1) {
-        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angleToLast, TORSO_TURN_RATE * dt);
+        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, angleToLast, searchTorsoRate * dt);
         ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, angleToLast, NECK_TURN_RATE * dt);
       } else {
         mem.searchSweep += mem.searchDir * SEARCH_SWEEP_SPEED * dt;
@@ -100,7 +102,8 @@ export function updateScan(
           mem.searchSweep = Math.sign(mem.searchSweep) * SEARCH_SWEEP_MAX;
         }
         const sweepAngle = angleToLast + mem.searchSweep;
-        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, sweepAngle, TORSO_TURN_RATE * dt);
+        // 体もスイープ方向に追従（首だけでなく体も回す）
+        ob.torsoFacing = turnTorsoToward(ob.facing, ob.torsoFacing, sweepAngle, searchTorsoRate * dt);
         ob.neckFacing = turnNeckToward(ob.torsoFacing, ob.neckFacing, sweepAngle, NECK_TURN_RATE * dt);
       }
 
@@ -108,13 +111,7 @@ export function updateScan(
       const delta = Math.min(FOV_FOCUS_SPEED * dt, Math.abs(ld - focusDist));
       focusDist += Math.sign(ld - focusDist) * delta;
 
-      timer -= dt;
-      if (timer <= 0) {
-        atLauncher = !atLauncher;
-        mem.searching = false;
-        mem.searchSweep = 0;
-        timer = 0.6 + Math.random() * 0.4;
-      }
+      // サーチ中はタイマーを消費しない（見つかるまで探索を継続する）
     }
   }
 

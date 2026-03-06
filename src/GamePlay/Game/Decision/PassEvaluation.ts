@@ -32,6 +32,27 @@ import {
   TARGET_STOP_DIST,
 } from "../Config/FieldConfig";
 
+// --- Pass arc trajectory constants ---
+// These must match fireBallArc / DeterministicTrajectory parameters
+const PASS_GRAVITY = 9.81;
+const PASS_DAMPING = 0.05;
+const PASS_MIN_ARC = 0.3;
+const PASS_ARC_RATIO = 0.10;  // arcHeight = distance * PASS_ARC_RATIO
+
+/**
+ * Compute the effective horizontal ball speed for the arc trajectory.
+ * fireBallArc uses DeterministicTrajectory with arcHeight = max(0.3, D*0.10).
+ * Flight time: T = sqrt(8*arcHeight/g). Ball must cover distance D in time T.
+ * This function returns the horizontal speed the ball actually flies at.
+ */
+export function computeArcBallSpeed(distance: number): number {
+  const arcHeight = Math.max(PASS_MIN_ARC, distance * PASS_ARC_RATIO);
+  const T = Math.sqrt((8 * arcHeight) / PASS_GRAVITY);
+  if (T < 0.001) return BALL_SPEED; // fallback
+  const factor = (1 - Math.exp(-PASS_DAMPING * T)) / PASS_DAMPING;
+  return distance / factor;
+}
+
 // =========================================================================
 // evaluatePreFire
 // =========================================================================
@@ -50,7 +71,8 @@ export function evaluatePreFire(
   for (let ti = 0; ti < targets.length; ti++) {
     const tgt = targets[ti];
     const estDist = dist2d(launcher.x, launcher.z, tgt.x, tgt.z);
-    const estFT = Math.max(0.3, estDist / BALL_SPEED);
+    const estArcHeight = Math.max(PASS_MIN_ARC, estDist * PASS_ARC_RATIO);
+    const estFT = Math.max(0.3, Math.sqrt((8 * estArcHeight) / PASS_GRAVITY));
     const estIPx = tgt.x + tgt.vx * estFT;
     const estIPz = tgt.z + tgt.vz * estFT;
 
@@ -112,10 +134,13 @@ export function attemptFire(
 
   for (const ti of order) {
     const tgt = targets[ti];
+    // Use arc-trajectory-based ball speed so solver's flight time matches actual trajectory
+    const passDist = dist2d(launcher.x, launcher.z, tgt.x, tgt.z);
+    const effBallSpeed = computeArcBallSpeed(passDist);
     const sol = solveLaunch(
       launcher.x, launcher.z,
       tgt.x, tgt.z, tgt.vx, tgt.vz,
-      BALL_SPEED, solverCfg,
+      effBallSpeed, solverCfg,
     );
 
     const ipInField = sol?.valid

@@ -67,8 +67,9 @@ export function updatePassFlight(
 
   // Selected receiver: move toward intercept point
   const selReceiverIdx = state.selectedReceiverEntityIdx;
+  const selReceiverAbsIdx = state.offenseBase + selReceiverIdx;
   const selTgt = getOffenseMover(state, selReceiverIdx);
-  if (canEntityMove(state.actionStates, selReceiverIdx)) {
+  if (canEntityMove(state.actionStates, selReceiverAbsIdx)) {
     if (state.interceptPt) {
       const ipDx = state.interceptPt.x - selTgt.x;
       const ipDz = state.interceptPt.z - selTgt.z;
@@ -80,7 +81,7 @@ export function updatePassFlight(
       }
     }
   }
-  applyMoveAction(state, selReceiverIdx, selTgt, dt);
+  applyMoveAction(state, selReceiverAbsIdx, selTgt, dt);
 
   // Other targets continue role-based movement during ball flight
   const skipTargetIdx = selReceiverIdx > 0 ? selReceiverIdx - 1 : -1;
@@ -130,6 +131,22 @@ export function updatePassFlight(
     ballInFlight, state.ballAge,
     receiverHands,
   );
+  if (detection.result === 'landed') {
+    // ボール着地 → ルーズボールに移行（即時攻守交替ではない）
+    state.ballAge = 0;  // grace period 用にリセット
+    state.interceptPt = null;
+    for (let i = 0; i < state.actionStates.length; i++) state.actionStates[i] = createIdleAction();
+    for (let i = 0; i < state.moveDistAccum.length; i++) state.moveDistAccum[i] = 0;
+
+    return {
+      completed: false,
+      result: 'none',
+      deflectedToLoose: true,
+      deflectImpulse: null,
+      hitReceiverEntityIdx: -1,
+    };
+  }
+
   if (detection.result !== 'none') {
     let hitEntityIdx = -1;
     if (detection.result === 'hit') {

@@ -161,14 +161,14 @@ export class LegRenderer {
    * 全エンティティの脚を歩行アニメーションで更新。
    * 空中時は歩行サイクル停止、脚を軽く前屈。
    */
-  syncLegs(allMovers: SimMover[], dt: number, onBallEntityIdx: number, ballActive: boolean): void {
+  syncLegs(allPlayers: SimMover[], dt: number, onBallAbsIdx: number, ballActive: boolean): void {
     for (let idx = 0; idx < this.entityLegSets.length; idx++) {
       const legSet = this.entityLegSets[idx];
       const stepState = this.legStepStates[idx];
       if (!legSet || !stepState) continue;
-      if (idx >= allMovers.length) continue;
+      if (idx >= allPlayers.length) continue;
 
-      const mover = allMovers[idx];
+      const mover = allPlayers[idx];
 
       // 空中時: 歩行サイクル停止、脚を軽く前屈
       if (mover.y > 0.05) {
@@ -190,7 +190,7 @@ export class LegRenderer {
       const drive = dist + angleDelta * LEG_SIDE_OFFSET;
 
       // オンボール＋移動中 → ドリブル用の高速小刻みステップ
-      const isDribbling = idx === onBallEntityIdx && !ballActive && drive > 0.0005;
+      const isDribbling = idx === onBallAbsIdx && !ballActive && drive > 0.0005;
       const freq = isDribbling ? DRIBBLE_STEP_FREQUENCY : STEP_FREQUENCY;
       const swingAngle = isDribbling ? DRIBBLE_SWING_ANGLE : STEP_SWING_ANGLE;
 
@@ -209,6 +209,33 @@ export class LegRenderer {
       stepState.prevX = mover.x;
       stepState.prevZ = mover.z;
       stepState.prevFacing = mover.facing;
+    }
+  }
+
+  /**
+   * 身長スケールの逆補正を脚メッシュに適用。
+   * 脚シリンダー: (1/s, 1, 1/s) → 直径そのまま、長さスケール
+   * hipBox: (1/s, 1, 1/s) → 幅/奥行きそのまま、高さスケール
+   * 足: (1, 1/s, 1) → 親シリンダーの逆スケール補正で元サイズ維持
+   */
+  applyHeightScales(scales: number[]): void {
+    for (let i = 0; i < this.entityLegSets.length; i++) {
+      if (i >= scales.length) break;
+      const s = scales[i];
+      if (Math.abs(s - 1) < 0.001) continue;
+      const inv = 1 / s;
+      const legSet = this.entityLegSets[i];
+
+      // hipBox: 幅/奥行きそのまま
+      legSet.hipBox.scaling.set(inv, 1, inv);
+
+      // 脚シリンダー: 直径そのまま、長さスケール
+      legSet.leftLeg.scaling.set(inv, 1, inv);
+      legSet.rightLeg.scaling.set(inv, 1, inv);
+
+      // 足: 親(legCylinder)の(1/s,1,1/s)を補正 → (1, 1/s, 1)で元サイズ
+      legSet.leftFoot.scaling.set(1, inv, 1);
+      legSet.rightFoot.scaling.set(1, inv, 1);
     }
   }
 

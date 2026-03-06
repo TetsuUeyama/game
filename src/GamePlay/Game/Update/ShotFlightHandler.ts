@@ -23,6 +23,8 @@ export interface ShotFlightResult {
   blocked: boolean;
   /** ブロック時の弾き方向 */
   blockDirection: Vector3 | null;
+  /** シュートミス（着地/バウンド）→ ルーズボール遷移 */
+  missToLoose: boolean;
 }
 
 /**
@@ -67,7 +69,7 @@ export function updateShotFlight(
       blockingHands, blockingCooldowns,
     );
     if (deflection.deflected) {
-      return { completed: true, scored: false, blocked: true, blockDirection: deflection.direction };
+      return { completed: true, scored: false, blocked: true, blockDirection: deflection.direction, missToLoose: false };
     }
   }
 
@@ -81,16 +83,21 @@ export function updateShotFlight(
   state.prevBallY = curBallY;
 
   if (crossedDown && xzDist < GOAL_RIM_RADIUS) {
-    return { completed: true, scored: true, blocked: false, blockDirection: null };
+    return { completed: true, scored: true, blocked: false, blockDirection: null, missToLoose: false };
   }
 
-  // ミス判定: 着地 / OOB / タイムアウト
+  // OOB / タイムアウト → 強制完了（デッドボール）
   const margin = SIM_MARGIN * 2;
   const isOOB = ballPos.x < -SIM_FIELD_X_HALF - margin || ballPos.x > SIM_FIELD_X_HALF + margin
     || ballPos.z < -SIM_FIELD_Z_HALF - margin || ballPos.z > SIM_FIELD_Z_HALF + margin;
-  if ((!ballInFlight && state.ballAge > 1.0) || isOOB || state.ballAge > BALL_TIMEOUT) {
-    return { completed: true, scored: false, blocked: false, blockDirection: null };
+  if (isOOB || state.ballAge > BALL_TIMEOUT) {
+    return { completed: true, scored: false, blocked: false, blockDirection: null, missToLoose: false };
   }
 
-  return { completed: false, scored: false, blocked: false, blockDirection: null };
+  // シュートミス（着地/バウンド）→ ルーズボール遷移（リバウンド争い）
+  if (!ballInFlight && state.ballAge > 1.0) {
+    return { completed: false, scored: false, blocked: false, blockDirection: null, missToLoose: true };
+  }
+
+  return { completed: false, scored: false, blocked: false, blockDirection: null, missToLoose: false };
 }

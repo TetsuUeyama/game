@@ -93,6 +93,27 @@ import { SimVisualization, HAND_DIAMETER, type OverlayVisibility } from "./Visua
 const DRIBBLE_BOUNCE_FREQ = 7.0;
 /** バウンス停止時の位相戻り速度 */
 const DRIBBLE_BOUNCE_RETURN_SPEED = 8.0;
+/** ポジション別身長レンジ (cm): PG, SG, SF, C, PF */
+const POSITION_HEIGHT_RANGES = [
+  { min: 175, max: 190 },  // PG (index 0)
+  { min: 185, max: 200 },  // SG (index 1)
+  { min: 190, max: 205 },  // SF (index 2)
+  { min: 200, max: 220 },  // C  (index 3)
+  { min: 195, max: 215 },  // PF (index 4)
+];
+
+/** 身長からBMI22基準で体重を概算 */
+function estimateWeight(heightCm: number): number {
+  const heightM = heightCm / 100;
+  return Math.round(22 * heightM * heightM);
+}
+
+/** ポジションインデックスからランダム身長を生成 */
+function randomHeightForPosition(posIdx: number): number {
+  const range = POSITION_HEIGHT_RANGES[posIdx];
+  return Math.round(range.min + Math.random() * (range.max - range.min));
+}
+
 import { SimPlayerStateManager } from "./State/SimPlayerStateManager";
 import { OB_CONFIGS, OBSTACLE_COUNT } from "./Decision/ObstacleRoleAssignment";
 import { Ball } from "@/GamePlay/Object/Entities/Ball";
@@ -161,6 +182,7 @@ export class TrackingSimulation3D {
   public start(): void {
     this.initState();
     this.vis.createMeshes();
+    this.applyHeightScales();
     this.prevTime = performance.now();
     this.observer = this.scene.onBeforeRenderObservable.add(() => {
       const now = performance.now();
@@ -221,6 +243,27 @@ export class TrackingSimulation3D {
     this.vis.disposeMeshes();
     this.initState();
     this.vis.createMeshes();
+    this.applyHeightScales();
+  }
+
+  /**
+   * allPlayers 順の手位置配列を allMovers=[launcher,...targets,...obstacles] 順にリマップ。
+   * ゲームロジックハンドラー（LooseBall, PassFlight, ShotFlight）が allMovers 順を期待するため。
+   */
+  private remapHandsToMoverOrder(
+    allPlayerHands: { left: Vector3; right: Vector3 }[],
+  ): { left: Vector3; right: Vector3 }[] {
+    const s = this.state;
+    const result: { left: Vector3; right: Vector3 }[] = [];
+    for (let i = 0; i < 5; i++) result.push(allPlayerHands[s.offenseBase + i]);
+    for (let i = 0; i < 5; i++) result.push(allPlayerHands[s.defenseBase + i]);
+    return result;
+  }
+
+  /** 全エンティティの身長スケールをメッシュに適用 */
+  private applyHeightScales(): void {
+    const scales = this.state.allPlayers.map(p => p.scale);
+    this.vis.applyHeightScales(scales);
   }
 
   // =========================================================================
@@ -236,22 +279,30 @@ export class TrackingSimulation3D {
 
     // 10 永続エンティティを作成 (0-4=チームA, 5-9=チームB)
     // ジャンプボール: センターコート付近に全員配置
+    // 両チームとも同じ速度設定で作成（チーム間の非対称性を排除）
+    // 初期速度は applyPossessionAliases 後に役割に基づいて設定
     const teamA: SimMover[] = [];
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2;
+      const h = randomHeightForPosition(i);
+      const w = estimateWeight(h);
       teamA.push(makeMover(
         Math.cos(angle) * 2.5,
         Math.sin(angle) * 2.0 - 1.0,
-        i === 0 ? LAUNCHER_SPEED : TARGET_RANDOM_SPEED,
+        TARGET_RANDOM_SPEED,
+        h, w,
       ));
     }
     const teamB: SimMover[] = [];
     for (let i = 0; i < 5; i++) {
       const angle = ((i + 0.5) / 5) * Math.PI * 2;
+      const h = randomHeightForPosition(i);
+      const w = estimateWeight(h);
       teamB.push(makeMover(
         Math.cos(angle) * 3.0,
         Math.sin(angle) * 2.0 + 1.0,
-        OB_CONFIGS[i].idleSpeed,
+        TARGET_RANDOM_SPEED,
+        h, w,
       ));
     }
     const allPlayers = [...teamA, ...teamB];
@@ -310,10 +361,14 @@ export class TrackingSimulation3D {
       pendingShot: null,
       prevBallY: 0,
       lastScorerResult: null,
+      goalScoredTimer: 0,
     };
 
     // possession に基づいて aliases を設定
     applyPossessionAliases(this.state);
+
+    // スキャンメモリを実際の offense 位置で初期化（zSign 対応）
+    this.resetDefenseScanState();
   }
 
   /**
@@ -334,25 +389,50 @@ export class TrackingSimulation3D {
     const spawnBaseZ = s.zSign * SPAWN_BASELINE_Z;
     const spawnPaintZMin = s.zSign * SPAWN_PAINT_Z_MIN;
     const spawnPaintZMax = s.zSign * SPAWN_PAINT_Z_MAX;
+    const offenseFacing = Math.atan2(s.zSign, 0); // ゴール方向を向く
     s.launcher.x = 0;
     s.launcher.z = spawnBaseZ;
     s.launcher.speed = LAUNCHER_SPEED;
+    s.launcher.facing = offenseFacing;
     for (let i = 0; i < s.targets.length; i++) {
       s.targets[i].x = (Math.random() * 2 - 1) * SPAWN_PAINT_X_HALF;
       s.targets[i].z = spawnPaintZMin + Math.random() * (spawnPaintZMax - spawnPaintZMin);
       s.targets[i].speed = TARGET_RANDOM_SPEED;
+      s.targets[i].facing = offenseFacing;
     }
 
-    // 新ディフェンスを守備位置にスポーン
+    // 新ディフェンスを守備位置にスポーン（facing をオフェンス方向に向ける）
+    const defenseFacing = Math.atan2(-s.zSign, 0); // 自陣ゴール方向（オフェンス側を見る）
     for (let oi = 0; oi < s.obstacles.length; oi++) {
       s.obstacles[oi].x = INIT_OBSTACLES[oi].x;
       s.obstacles[oi].z = INIT_OBSTACLES[oi].z * s.zSign;
       s.obstacles[oi].speed = OB_CONFIGS[oi].idleSpeed;
+      s.obstacles[oi].facing = defenseFacing;
+      s.obstacles[oi].neckFacing = defenseFacing;
     }
+
+    // DF スキャン状態をフレッシュに初期化（チーム間非対称性を排除）
+    this.resetDefenseScanState();
 
     s.onBallEntityIdx = 0;
     s.selectedReceiverEntityIdx = 1;
     resetAfterResult(s);
+  }
+
+  /** DF スキャン状態・弾きクールダウンを初期値にリセット */
+  private resetDefenseScanState(): void {
+    const s = this.state;
+    const lx = s.launcher.x;
+    const lz = s.launcher.z;
+    for (let oi = 0; oi < OBSTACLE_COUNT; oi++) {
+      s.obScanAtLauncher[oi] = OB_CONFIGS[oi].scanInitial.atLauncher;
+      s.obScanTimers[oi] = OB_CONFIGS[oi].scanInitial.timer;
+      s.obFocusDists[oi] = OB_CONFIGS[oi].scanInitial.focusDist;
+      const watchIdx = OB_CONFIGS[oi].scanWatchTargetIdx;
+      const watchTarget = s.targets[watchIdx];
+      s.obMems[oi] = makeScanMemory(lx, lz, watchTarget?.x ?? 0, watchTarget?.z ?? 0);
+      s.obstacleDeflectCooldowns[oi] = 0;
+    }
   }
 
   // =========================================================================
@@ -361,8 +441,6 @@ export class TrackingSimulation3D {
 
   private syncMeshes(): void {
     const s = this.state;
-    const yh = ENTITY_HEIGHT / 2;
-
     // allPlayers ベースで全10エンティティの位置同期
     // メッシュ: [0]=launcherMesh, [1-4]=targetMeshes, [5-9]=obstacleMeshes
     // → allPlayers[0-9] に対応（possessionに関わらず固定マッピング）
@@ -371,28 +449,30 @@ export class TrackingSimulation3D {
       const mesh = i === 0 ? this.vis.launcherMesh
         : i <= 4 ? this.vis.targetMeshes[i - 1]
         : this.vis.obstacleMeshes[i - 5];
+      const yh = (ENTITY_HEIGHT * p.scale) / 2;
       mesh.position.set(p.x, yh + p.y, p.z);
+      mesh.scaling.setAll(p.scale);
       mesh.rotation.y = Math.PI / 2 - p.facing;
     }
 
     // --- Phase 1: ballMarker 計算 ---
-    const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
+    // onBallAbsIdx: ボール保持者の allPlayers 絶対インデックス
+    const onBallAbsIdx = s.offenseBase + s.onBallEntityIdx;
 
     let ballMarkerLeftArmTarget: Vector3 | null = null;
     let ballMarkerRightArmTarget: Vector3 | null = null;
     let ballMarkerEntityIdx: number | null = null;
-    const obstacleEntityStart = 1 + s.targets.length;
     for (let oi = 0; oi < OB_CONFIGS.length; oi++) {
       const cfg = OB_CONFIGS[oi];
       if (cfg.markTargetEntityIdx !== s.onBallEntityIdx) continue;
       if (s.obMems[oi].searching) continue;
-      ballMarkerEntityIdx = obstacleEntityStart + oi;
+      ballMarkerEntityIdx = s.defenseBase + oi;
       const ob = s.obstacles[oi];
       const onBallMover = getOffenseMover(s, s.onBallEntityIdx);
       const selReceiver = getOffenseMover(s, s.selectedReceiverEntityIdx);
 
-      const ballArm = new Vector3(onBallMover.x, ENTITY_HEIGHT * 1.3, onBallMover.z);
-      const denyArm = new Vector3(selReceiver.x, ENTITY_HEIGHT * 0.9, selReceiver.z);
+      const ballArm = new Vector3(onBallMover.x, ENTITY_HEIGHT * 1.3 * onBallMover.scale, onBallMover.z);
+      const denyArm = new Vector3(selReceiver.x, ENTITY_HEIGHT * 0.9 * selReceiver.scale, selReceiver.z);
 
       const tdx = selReceiver.x - ob.x;
       const tdz = selReceiver.z - ob.z;
@@ -411,13 +491,13 @@ export class TrackingSimulation3D {
     // --- Phase 1.5: ドリブルバウンス位相を計算（syncAll の腕ポンプに渡すため） ---
     let dribbleBounceH = 0;
     if (!s.ballActive && !this.catchHoldInfo) {
-      const mover = allMovers[s.onBallEntityIdx];
+      const mover = s.allPlayers[onBallAbsIdx];
 
-      if (s.onBallEntityIdx !== this.dribblePrevEntityIdx) {
+      if (onBallAbsIdx !== this.dribblePrevEntityIdx) {
         this.dribblePrevX = mover.x;
         this.dribblePrevZ = mover.z;
         this.dribbleBouncePhase = 0;
-        this.dribblePrevEntityIdx = s.onBallEntityIdx;
+        this.dribblePrevEntityIdx = onBallAbsIdx;
       }
 
       const moveDx = mover.x - this.dribblePrevX;
@@ -447,8 +527,9 @@ export class TrackingSimulation3D {
 
     try {
       this.vis.syncAll({
-        launcher: s.launcher,
-        targets: s.targets,
+        allPlayers: s.allPlayers,
+        offenseBase: s.offenseBase,
+        defenseBase: s.defenseBase,
         obstacles: s.obstacles,
         obMems: s.obMems,
         obFocusDists: s.obFocusDists,
@@ -463,7 +544,7 @@ export class TrackingSimulation3D {
         ballMarkerRightArmTarget,
         ballMarkerEntityIdx,
         pushObstructions: s.pushObstructions,
-        onBallEntityIdx: s.onBallEntityIdx,
+        onBallAbsIdx,
         dt: this.lastDt,
         dribbleBounceH,
       });
@@ -472,20 +553,23 @@ export class TrackingSimulation3D {
     }
 
     // --- Phase 3: 更新後の手の位置でボールを配置 ---
-    const allHands = this.vis.getHandWorldPositions(allMovers);
+    // allPlayers 固定順で手の位置を取得（メッシュ作成順と一致）
+    const allHands = this.vis.getHandWorldPositions(s.allPlayers);
     let ballHeldPosition: Vector3 | null = null;
 
     if (this.catchHoldInfo) {
       // キャッチ保持中: ボールをキャッチャーの両手中間位置に追従させる
-      const hands = allHands[this.catchHoldInfo.entityIdx];
+      const catcherAbsIdx = s.offenseBase + this.catchHoldInfo.entityIdx;
+      const hands = allHands[catcherAbsIdx];
       if (hands) {
         const midX = (hands.left.x + hands.right.x) / 2;
         const midY = (hands.left.y + hands.right.y) / 2;
         const midZ = (hands.left.z + hands.right.z) / 2;
 
-        const mover = allMovers[this.catchHoldInfo.entityIdx];
+        const mover = s.allPlayers[catcherAbsIdx];
+        const catcherYh = (ENTITY_HEIGHT * mover.scale) / 2;
         const dx = midX - mover.x;
-        const dy = midY - yh;
+        const dy = midY - catcherYh;
         const dz = midZ - mover.z;
         const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
         const ballR = BALL_DIAMETER / 2;
@@ -504,7 +588,7 @@ export class TrackingSimulation3D {
     } else if (!s.ballActive) {
       // オンボールプレイヤーのドリブルハンドにボールを表示（バウンス付き）
       // 手のひらは bounceH に同期してポンプ動作済み（ArmRenderer 内で reach 変動）
-      const hands = allHands[s.onBallEntityIdx];
+      const hands = allHands[onBallAbsIdx];
       if (hands) {
         const dribbleHand = this.vis.getDribbleHand();
         const handPos = dribbleHand === 'left' ? hands.left : hands.right;
@@ -535,6 +619,23 @@ export class TrackingSimulation3D {
 
   private update(dt: number): void {
     const s = this.state;
+
+    // === ゴール成功後の遅延リセット ===
+    if (s.goalScoredTimer > 0) {
+      s.goalScoredTimer -= dt;
+      // ボールは Havok 物理に任せてネットを通過させる
+      this.ball.update(dt);
+      if (s.goalScoredTimer <= 0) {
+        s.goalScoredTimer = 0;
+        deactivateBall(s, this.ball, this.ballTrailPositions);
+        resetAfterResult(s);
+        switchPossession(s);
+        this.resetAfterPossessionSwitch();
+        this.intentManager.reset();
+        s.cooldown = 2.0;
+      }
+      return; // タイマー中は他の処理をスキップ
+    }
 
     // === Tick action states ===
     // passer は tick 時点の on-ball entity（catch hold 変更前）
@@ -615,10 +716,8 @@ export class TrackingSimulation3D {
 
     // === キャッチ保持中の弾き（スティール） ===
     if (this.catchHoldInfo) {
-      const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
-      const allHands = this.vis.getHandWorldPositions(allMovers);
-      const obStart = 1 + s.targets.length;
-      const obstacleHands = allHands.slice(obStart, obStart + s.obstacles.length);
+      const allHands = this.vis.getHandWorldPositions(s.allPlayers);
+      const obstacleHands = allHands.slice(s.defenseBase, s.defenseBase + s.obstacles.length);
       const heldPos = this.ball.mesh.position;
 
       const stealDeflection = checkObstacleDeflection(
@@ -690,10 +789,8 @@ export class TrackingSimulation3D {
       }
 
       const heldPos = this.ball.mesh.position;  // 前フレームの syncMeshes でオンボールプレイヤーの手位置にセット済み
-      const allMoversForFumble = [s.launcher, ...s.targets, ...s.obstacles];
-      const allHandsForFumble = this.vis.getHandWorldPositions(allMoversForFumble);
-      const obStartForFumble = 1 + s.targets.length;
-      const obstacleHandsForFumble = allHandsForFumble.slice(obStartForFumble, obStartForFumble + s.obstacles.length);
+      const allHandsForFumble = this.vis.getHandWorldPositions(s.allPlayers);
+      const obstacleHandsForFumble = allHandsForFumble.slice(s.defenseBase, s.defenseBase + s.obstacles.length);
 
       const fumbleDeflection = checkObstacleDeflection(
         heldPos.x, heldPos.y, heldPos.z,
@@ -827,17 +924,17 @@ export class TrackingSimulation3D {
         }
 
         // ルーズボール移動 + 回収判定
-        const allMoversLB = [s.launcher, ...s.targets, ...s.obstacles];
-        const allHandsLB = this.vis.getHandWorldPositions(allMoversLB);
+        const allHandsLB = this.remapHandsToMoverOrder(this.vis.getHandWorldPositions(s.allPlayers));
         const lbResult = updateLooseBall(s, ballPos, this.ball.isInFlight(), dt, allHandsLB);
 
         if (lbResult.recovered) {
           deactivateBall(s, this.ball, this.ballTrailPositions);
           s.looseBall = false;
           for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
-          resetAfterResult(s);
 
           if (lbResult.isOffenseRecovery) {
+            // オフェンスがルーズボール回収 → possession 維持
+            resetAfterResult(s);
             s.onBallEntityIdx = lbResult.recoveredEntityIdx;
             s.cooldown = 1.5;
             for (let i = 0; i < s.offenseInTransit.length; i++) s.offenseInTransit[i] = true;
@@ -850,6 +947,9 @@ export class TrackingSimulation3D {
             const defRelIdx = lbResult.recoveredEntityIdx - 5; // obstacles[defRelIdx]
             const absIdx = s.defenseBase + defRelIdx; // allPlayers上の絶対位置
             switchPossession(s);
+            // switchPossession 後、新 aliases で resetAfterResult を呼ぶ
+            resetAfterResult(s);
+            this.resetDefenseScanState();
             // switchPossession 後、新offenseBase は元のdefenseBase
             s.onBallEntityIdx = absIdx - s.offenseBase;
             s.cooldown = 0.5;
@@ -872,12 +972,11 @@ export class TrackingSimulation3D {
           this.ballTrailPositions.shift();
         }
 
-        const allMovers = [s.launcher, ...s.targets, ...s.obstacles];
-        const allHands = this.vis.getHandWorldPositions(allMovers);
-        const pfResult = updatePassFlight(s, ballPos, this.ball.isInFlight(), dt, allHands);
+        const allHandsPF = this.remapHandsToMoverOrder(this.vis.getHandWorldPositions(s.allPlayers));
+        const pfResult = updatePassFlight(s, ballPos, this.ball.isInFlight(), dt, allHandsPF);
 
         if (pfResult.deflectedToLoose) {
-          this.ball.applyImpulse(pfResult.deflectImpulse!);
+          if (pfResult.deflectImpulse) this.ball.applyImpulse(pfResult.deflectImpulse);
           s.looseBall = true;
         } else if (pfResult.completed) {
           deactivateBall(s, this.ball, this.ballTrailPositions);
@@ -895,7 +994,7 @@ export class TrackingSimulation3D {
             this.intentManager.reset();
           }
 
-          for (let i = 1; i < s.actionStates.length; i++) {
+          for (let i = 0; i < s.actionStates.length; i++) {
             if (s.actionStates[i].type === 'catch') continue;
             if (s.actionStates[i].phase !== 'idle') {
               s.actionStates[i] = forceRecovery(s.actionStates[i]);
@@ -924,8 +1023,7 @@ export class TrackingSimulation3D {
         }
 
         // allHands を計算してブロック判定に渡す
-        const allMoversSF = [s.launcher, ...s.targets, ...s.obstacles];
-        const allHandsSF = this.vis.getHandWorldPositions(allMoversSF);
+        const allHandsSF = this.remapHandsToMoverOrder(this.vis.getHandWorldPositions(s.allPlayers));
         const sfResult = updateShotFlight(s, ballPos, this.ball.isInFlight(), dt, allHandsSF);
 
         if (sfResult.blocked && sfResult.blockDirection) {
@@ -936,23 +1034,35 @@ export class TrackingSimulation3D {
           s.interceptPt = null;
           for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
           for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
-        } else if (sfResult.completed) {
-          deactivateBall(s, this.ball, this.ballTrailPositions);
-          if (sfResult.scored) {
-            s.score.goal++;
-            s.teamScores[s.possession]++;
-          } else {
-            s.score.shotMiss++;
-          }
+        } else if (sfResult.missToLoose) {
+          // シュートミス（着地） → ルーズボール遷移（リバウンド争い）
+          s.score.shotMiss++;
+          s.looseBall = true;
+          s.interceptPt = null;
+          s.ballAge = 0;  // grace period 用にリセット
           for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
           for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
           resetAfterResult(s);
-
-          // ゴール後: 攻守交替してデッドボールリセット
-          switchPossession(s);
-          this.resetAfterPossessionSwitch();
-          this.intentManager.reset();
-          s.cooldown = 2.0;
+        } else if (sfResult.completed) {
+          if (sfResult.scored) {
+            // ゴール成功 → ボールを残したまま遅延リセット開始
+            s.score.goal++;
+            s.teamScores[s.possession]++;
+            s.goalScoredTimer = 2.0;  // 2秒後にリセット
+            for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+            for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+          } else {
+            // OOB/タイムアウト → デッドボールリセット
+            deactivateBall(s, this.ball, this.ballTrailPositions);
+            s.score.shotMiss++;
+            for (let i = 0; i < s.actionStates.length; i++) s.actionStates[i] = createIdleAction();
+            for (let i = 0; i < s.moveDistAccum.length; i++) s.moveDistAccum[i] = 0;
+            resetAfterResult(s);
+            switchPossession(s);
+            this.resetAfterPossessionSwitch();
+            this.intentManager.reset();
+            s.cooldown = 2.0;
+          }
         }
       }
     } else {
@@ -980,8 +1090,12 @@ export class TrackingSimulation3D {
     }
 
     // === Separate overlapping entities (always) ===
-    // allPlayers[0-4] = チームA, [5-9] = チームB — サイズは統一
-    separateEntities(s.allPlayers.map(p => ({ mover: p, radius: TARGET_RADIUS })));
+    // allPlayers[0-4] = チームA, [5-9] = チームB — スケール・体重に応じた衝突
+    separateEntities(s.allPlayers.map(p => ({
+      mover: p,
+      radius: TARGET_RADIUS * p.scale,
+      weight: p.weight,
+    })));
 
     // === Player state snapshot (always) ===
     this.playerStateManager.update(s);
