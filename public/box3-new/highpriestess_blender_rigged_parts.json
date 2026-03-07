@@ -14,7 +14,7 @@
   {
     "key": "hair",
     "file": "/box3-new/highpriestess_blender_rigged_hair.vox",
-    "voxels": 5768,
+    "voxels": 8187,
     "default_on": true
   },
   {
@@ -68,7 +68,7 @@
   {
     "key": "leotard",
     "file": "/box3-new/highpriestess_blender_rigged_leotard.vox",
-    "voxels": 2404,
+    "voxels": 2136,
     "default_on": true
   },
   {
@@ -116,7 +116,7 @@
   {
     "key": "suit_top",
     "file": "/box3-new/highpriestess_blender_rigged_suit_top.vox",
-    "voxels": 3799,
+    "voxels": 2136,
     "default_on": true
   },
   {

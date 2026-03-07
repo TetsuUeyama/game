@@ -153,6 +153,7 @@ const BODY_PARTS: FacePartSlot[] = [
       { source: 'CE', file: '/box2/cyberpunk_elf_hair.vox', offset: [0, 0, 0] },
       { source: 'HP', file: '/box3-new/highpriestess_blender_rigged_hair.vox', offset: [0.179, -0.022, -0.100] },
       { source: 'QM', file: '/box4/queenmarika_rigged_mustardui_hair.vox', offset: [-0.002, -0.006, 0.007] },
+      { source: 'DE', file: '/box4/darkelfblader_arp_hair.vox', offset: [-0.159, 0.017, -0.096] },
     ],
   },
 ];
@@ -172,6 +173,11 @@ const CHARACTERS: Record<string, CharacterConfig> = {
     label: 'QueenMarika',
     manifest: '/box4/queenmarika_rigged_mustardui_parts.json',
     offset: [-0.002, -0.006, 0.007],
+  },
+  darkelf: {
+    label: 'DarkElfBlader',
+    manifest: '/box4/darkelfblader_arp_parts.json',
+    offset: [-0.159, 0.017, -0.096],
   },
 };
 
