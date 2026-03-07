@@ -1,0 +1,152 @@
+[
+  {
+    "key": "body",
+    "file": "/box3/highpriestess_blender_rigged_body.vox",
+    "voxels": 10460,
+    "default_on": true
+  },
+  {
+    "key": "eyelashes",
+    "file": "/box3/highpriestess_blender_rigged_eyelashes.vox",
+    "voxels": 48,
+    "default_on": true
+  },
+  {
+    "key": "hair",
+    "file": "/box3/highpriestess_blender_rigged_hair.vox",
+    "voxels": 1442,
+    "default_on": true
+  },
+  {
+    "key": "eyes_r",
+    "file": "/box3/highpriestess_blender_rigged_eyes_r.vox",
+    "voxels": 33,
+    "default_on": true
+  },
+  {
+    "key": "body_teeth_top",
+    "file": "/box3/highpriestess_blender_rigged_body_teeth_top.vox",
+    "voxels": 60,
+    "default_on": true
+  },
+  {
+    "key": "body_teeth_bottom",
+    "file": "/box3/highpriestess_blender_rigged_body_teeth_bottom.vox",
+    "voxels": 65,
+    "default_on": true
+  },
+  {
+    "key": "body_toungue",
+    "file": "/box3/highpriestess_blender_rigged_body_toungue.vox",
+    "voxels": 49,
+    "default_on": true
+  },
+  {
+    "key": "eyes_eyeshadow",
+    "file": "/box3/highpriestess_blender_rigged_eyes_eyeshadow.vox",
+    "voxels": 39,
+    "default_on": true
+  },
+  {
+    "key": "eyes_l",
+    "file": "/box3/highpriestess_blender_rigged_eyes_l.vox",
+    "voxels": 37,
+    "default_on": true
+  },
+  {
+    "key": "hangingcloth",
+    "file": "/box3/highpriestess_blender_rigged_hangingcloth.vox",
+    "voxels": 2571,
+    "default_on": true
+  },
+  {
+    "key": "hat",
+    "file": "/box3/highpriestess_blender_rigged_hat.vox",
+    "voxels": 1171,
+    "default_on": true
+  },
+  {
+    "key": "leotard",
+    "file": "/box3/highpriestess_blender_rigged_leotard.vox",
+    "voxels": 1711,
+    "default_on": true
+  },
+  {
+    "key": "neck_ruffle",
+    "file": "/box3/highpriestess_blender_rigged_neck_ruffle.vox",
+    "voxels": 232,
+    "default_on": true
+  },
+  {
+    "key": "neckerchief_gem",
+    "file": "/box3/highpriestess_blender_rigged_neckerchief_gem.vox",
+    "voxels": 27,
+    "default_on": true
+  },
+  {
+    "key": "pauldron",
+    "file": "/box3/highpriestess_blender_rigged_pauldron.vox",
+    "voxels": 1091,
+    "default_on": true
+  },
+  {
+    "key": "shoulder_clothing",
+    "file": "/box3/highpriestess_blender_rigged_shoulder_clothing.vox",
+    "voxels": 768,
+    "default_on": true
+  },
+  {
+    "key": "neckerchief",
+    "file": "/box3/highpriestess_blender_rigged_neckerchief.vox",
+    "voxels": 71,
+    "default_on": true
+  },
+  {
+    "key": "shoulderarmor",
+    "file": "/box3/highpriestess_blender_rigged_shoulderarmor.vox",
+    "voxels": 416,
+    "default_on": true
+  },
+  {
+    "key": "suit_boots",
+    "file": "/box3/highpriestess_blender_rigged_suit_boots.vox",
+    "voxels": 4333,
+    "default_on": true
+  },
+  {
+    "key": "suit_top",
+    "file": "/box3/highpriestess_blender_rigged_suit_top.vox",
+    "voxels": 2108,
+    "default_on": true
+  },
+  {
+    "key": "hat.001",
+    "file": "/box3/highpriestess_blender_rigged_hat.001.vox",
+    "voxels": 91,
+    "default_on": true
+  },
+  {
+    "key": "wings",
+    "file": "/box3/highpriestess_blender_rigged_wings.vox",
+    "voxels": 3431,
+    "default_on": false
+  },
+  {
+    "key": "suit_boots_decorations",
+    "file": "/box3/highpriestess_blender_rigged_suit_boots_decorations.vox",
+    "voxels": 204,
+    "default_on": true
+  },
+  {
+    "key": "pauldron.001",
+    "file": "/box3/highpriestess_blender_rigged_pauldron.001.vox",
+    "voxels": 157,
+    "default_on": true
+  },
+  {
+    "key": "staff",
+    "file": "/box3/highpriestess_blender_rigged_staff.vox",
+    "voxels": 2434,
+    "default_on": false
+  }
+]
