@@ -181,7 +181,7 @@ for (const v of firstPass) {
 
 // Per-Z Y correction: align CE body Y centroid to DE body Y centroid
 // Manual region offset
-const BODY_EXTRA_Y = -3;  // body/arms/legs: negative Y = backward
+const BODY_EXTRA_Y = 3;   // body/arms/legs: positive Y = backward
 const BODY_EXTRA_Z = -4;  // body/arms/legs: lower by 4
 const HEAD_EXTRA_Y = 5;   // head: positive Y = forward
 const HEAD_EXTRA_Z = -6;  // head: lower
