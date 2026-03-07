@@ -85,16 +85,12 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
 }
 
 function dilate(voxels, sx, sy, sz) {
-  const occupied = new Set();
-  const colorAt = {};
-  for (const v of voxels) {
-    const key = `${v.x},${v.y},${v.z}`;
-    occupied.add(key);
-    colorAt[key] = v.c;
-  }
+  // First pass: dilate 1 voxel in all 6 directions (XYZ)
+  let occupied = new Set();
+  for (const v of voxels) occupied.add(`${v.x},${v.y},${v.z}`);
 
-  const result = [...voxels];
-  const added = new Set();
+  let result = [...voxels];
+  let added = new Set();
 
   for (const v of voxels) {
     for (const [dx, dy, dz] of DIRS6) {
@@ -106,7 +102,25 @@ function dilate(voxels, sx, sy, sz) {
       result.push({ x: nx, y: ny, z: nz, c: v.c });
     }
   }
-  return result;
+
+  // Second pass: dilate 1 more voxel in Y direction only
+  occupied = new Set();
+  for (const v of result) occupied.add(`${v.x},${v.y},${v.z}`);
+  added = new Set();
+  const yDirs = [[0,-1,0],[0,1,0]];
+  const extra = [];
+
+  for (const v of result) {
+    for (const [dx, dy, dz] of yDirs) {
+      const nx = v.x + dx, ny = v.y + dy, nz = v.z + dz;
+      if (ny < 0 || ny >= sy) continue;
+      const nkey = `${nx},${ny},${nz}`;
+      if (occupied.has(nkey) || added.has(nkey)) continue;
+      added.add(nkey);
+      extra.push({ x: nx, y: ny, z: nz, c: v.c });
+    }
+  }
+  return result.concat(extra);
 }
 
 function shiftVoxels(voxels, dy, dz, sy, sz) {

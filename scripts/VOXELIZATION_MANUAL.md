@@ -422,13 +422,25 @@ CE Bodyとのグリッド位置差分を計算する:
 | `create_face_voxels.js` | 顔ボクセルアート作成（目・眉・口をCE体表面に配置） |
 | `remap_shared_body.js` | CE Body → 別キャラgrid位置合わせ |
 | `fix_leotard.js` | 衣装のBody干渉修正（テンプレート） |
+| `shift_parts_de.js` | パーツ位置シフト（オリジナルからシフト、累積しない） |
+| `dilate_parts_de.js` | 体を覆うパーツの膨張+シフト（透け防止） |
+| `shift_mask_de.js` | マスクの個別位置シフト |
+| `fix_suit_bra_de.js` | suit_braのBody突起干渉解消 |
+| `fix_hair_shape_de.js` | 髪の形状修正（crown拡大・前髪・細化・色調整・シフト） |
+| `fix_clothing_de.js` | 衣装のBody干渉修正（DE用） |
 | `generateVoxParts.js` | パーツ生成ユーティリティ |
 | `generateVoxHQ.js` | 高品質パーツ生成 |
 
 ### 作業フロー別スクリプト使用順
 ```
-新モデル追加:
-  blender_export_mesh.py → voxelize_from_mesh.js → fix_leotard.js → ビューア登録
+新モデル追加（全パイプライン）:
+  1. blender_voxelize.py（ボクセル化）
+  2. remap_shared_body_XX.js（Body リマップ）
+  3. dilate_parts_XX.js（衣装膨張+シフト）
+  4. shift_mask_XX.js等（個別パーツ位置調整）
+  5. fix_suit_bra_XX.js等（突起干渉解消）
+  6. fix_hair_shape_XX.js（髪の形状・色修正）
+  7. ビューアで確認 → 問題あれば該当Stepに戻る
 
 耳の追加:
   split_body_parts.js（耳のみ抽出） → subdivide（x2） → ビューア登録
@@ -441,6 +453,9 @@ CE Bodyとのグリッド位置差分を計算する:
 
 別キャラにBody共有:
   remap_shared_body.js
+
+Blender再ボクセル化後:
+  originals/ が上書きされるため、後処理パイプライン全体（Step 1〜6）を再実行
 ```
 
 **注意**: `blender_export_mesh.py` と `voxelize_from_mesh.js` は今後作成予定。
@@ -477,11 +492,252 @@ public/
 ## 重要ルール
 
 1. **Bodyは変更しない**: `cyberpunk_elf_body_base.vox` は全キャラ共通の基盤
-2. **めり込み禁止**: 衣装ボクセルはBodyボクセルと同じ位置に配置しない
+2. **着衣優先**: 衣装とBodyが重なる箇所は衣装を優先表示する（ビューアで `clothingMat.zOffset = -2` を使用）
 3. **1パーツずつ処理**: 作成→確認→修正→次のパーツ の順で進める
 4. **位置合わせはtranslation only**: Bodyのサイズは変えない（拡大縮小禁止）
 5. **顔パーツは浮かせる**: `FACE_FLOAT = [0, 0, 0.004]` でZファイティング防止
 6. **パレット色は保持**: 細分化は元の色をそのまま使う（再ボクセル化しない）
+
+---
+
+## パーツ後処理（ボクセル化後の必須手順）
+
+ボクセル化直後のパーツはBodyとの位置ずれや透け問題があるため、以下の後処理パイプラインを**必ず順番通り**実行する。
+
+### ビューア座標系（全後処理の前提知識）
+
+```
+voxel → viewer 変換:
+  viewer_x = (voxel.x - cx) * scale
+  viewer_y = voxel.z * scale      ← Z増加 = 上、Z減少 = 下
+  viewer_z = -(voxel.y - cy) * scale  ← Y増加 = 後ろ（奥）、Y減少 = 前（手前）
+
+スクリプト引数の意味:
+  dz: Z方向シフト (- = 下, + = 上)
+  dy: Y方向シフト (+ = 後ろ, - = 前)
+```
+
+### originals/ バックアップシステム
+
+後処理スクリプトは**常に `originals/` ディレクトリから元データを読み込む**。
+これにより何度実行しても変換が累積しない。
+
+```
+初回実行時:
+  originals/ に元ファイルがなければ、現在のファイルを自動バックアップ
+  → originals/ から読み込み → 処理 → 出力先（元の場所）に書き出し
+
+やり直し:
+  originals/ のファイルはそのまま → スクリプト再実行で上書き
+```
+
+**重要**: Blenderで再ボクセル化した場合、originals/ も上書きされるため、後処理パイプライン全体を再実行する必要がある。
+
+---
+
+### 後処理パイプライン（実行順序）
+
+```
+Step 1: Body リマップ（CE Body → キャラgrid）
+Step 2: 衣装パーツの膨張 + 位置シフト
+Step 3: マスク等の個別位置シフト
+Step 4: 突起干渉の解消（suit_bra等）
+Step 5: 髪の形状修正・色調整・位置シフト
+Step 6: ビューアで目視確認 → 問題あれば該当Stepに戻る
+```
+
+---
+
+### Step 1: Body リマップ
+
+CE Body を新キャラのグリッドに合わせてリマップする。
+
+```bash
+node scripts/remap_shared_body_de.js
+```
+
+パラメータ（remap_shared_body_de.js内）:
+- `BODY_EXTRA_Y` / `BODY_EXTRA_Z`: 体幹・腕・脚の位置オフセット
+- `HEAD_EXTRA_Y` / `HEAD_EXTRA_Z`: 頭部の位置オフセット
+- `NECK_Z` / `HEAD_Z`: 首→頭の遷移ゾーン
+
+---
+
+### Step 2: 衣装パーツの膨張 + 位置シフト
+
+#### なぜ膨張が必要か
+
+衣装パーツはBodyにジャストフィットする形で作成されるが、Bodyと重なる箇所でBodyが表示されてしまう（透け問題）。解決策:
+1. **着衣優先レンダリング**: `clothingMat.zOffset = -2` で衣装をBody手前に描画
+2. **パーツ膨張**: 角度によっては1ボクセルの隙間から透けるため、パーツ自体を膨張させる
+
+#### 膨張対象の分類
+
+| カテゴリ | 対象パーツ例 | 処理 |
+|---------|------------|------|
+| 体を覆うパーツ | suit, suit_bra, suit_plates, arms, legs, shoulders, shoulders_clavice | 膨張 + シフト |
+| 自由形状パーツ | belt_inner, belt_outer, belt_cape, belt_scabbards, cape | シフトのみ |
+
+#### 膨張パラメータ
+
+```
+体を覆うパーツ:
+  第1パス: 6方向（±X, ±Y, ±Z）に1ボクセル膨張
+  第2パス: Y方向のみさらに1ボクセル膨張
+  → 合計: XZ方向+1, Y方向+2
+```
+
+#### 実行コマンド
+
+```bash
+node scripts/dilate_parts_de.js <dz> [dy]
+# 例: node scripts/dilate_parts_de.js -5 -1
+```
+
+#### 位置シフト値の決め方
+
+1. まず `shift_parts_de.js` でシフトのみ適用し、ビューアで確認
+2. 位置が合ったら同じ値で `dilate_parts_de.js` を実行
+3. シフト値を1ずつ調整して微調整
+
+```bash
+# シフトのみで位置確認（膨張なし）
+node scripts/shift_parts_de.js <dz> [dy]
+
+# 位置確定後、膨張+シフト（本番）
+node scripts/dilate_parts_de.js <dz> [dy]
+```
+
+---
+
+### Step 3: マスク等の個別位置シフト
+
+マスクなど衣装とは異なる位置調整が必要なパーツは個別スクリプトで処理する。
+
+```bash
+node scripts/shift_mask_de.js
+# スクリプト内にシフト値をハードコード（DZ, DY）
+```
+
+---
+
+### Step 4: 突起干渉の解消
+
+suit_bra等でBodyの突起（胸部等）が衣装を貫通する場合、重なるボクセルをBodyの前面に押し出す。
+
+```bash
+node scripts/fix_suit_bra_de.js
+```
+
+```
+処理ロジック:
+1. Body全ボクセルのSetを構築
+2. 衣装ボクセルがBodyと同じ位置にある場合:
+   → Y方向に最大3ステップ前面（Y-1）に押し出し
+   → Bodyと重ならない最初の空き位置に配置
+3. 重複を排除して出力
+```
+
+---
+
+### Step 5: 髪の形状修正・色調整
+
+髪はボクセル化後に以下の修正が**ほぼ必ず必要**になる。
+
+#### 5-1. 髪のボクセル化パラメータ
+
+```python
+# blender_voxelize.py 内
+if 'hair' in key:
+    part_voxels[key] = voxelize_layer(mesh_list, threshold_mult=3.0, head_scale_override=1.0)
+```
+
+**重要: `head_scale_override=1.0`（髪を頭部のチビデフォルメに合わせて拡大しない）**
+
+理由:
+- 頭部は1.5〜1.8倍にチビ拡大されるが、髪は**リアル頭身のままのサイズ**で配置する
+- 髪を頭部と同じスケールで拡大すると太すぎる不自然な仕上がりになる
+- 代わりに後処理で頭頂部のみX方向に拡大し、頭部を覆うようにする
+
+#### 5-2. 髪の後処理（fix_hair_shape_de.js）
+
+```bash
+node scripts/fix_hair_shape_de.js
+```
+
+以下の処理を一括実行:
+
+| 処理 | 内容 | パラメータ |
+|------|------|----------|
+| 頭頂部X拡大 | 頭頂（z>=80）の髪をX方向に拡大しチビ頭部を覆う | CROWN_SCALE_X = 1.5 |
+| 遷移ゾーン | z=78-80で拡大率を1.0→1.5に線形補間 | CROWN_TRANSITION = 78 |
+| 前髪生成 | おでこ前面に前髪を追加（Y方向手前に延長） | BANGS_Y_EXTEND = 7 |
+| 垂れ髪の細化 | z<=65の垂れ髪から内部ボクセルを除去 | 4方向囲まれ+X幅5以上の内部を除去 |
+| 左右垂れ髪の細化 | z=66-77の顔横の髪を薄くする | 外側2ボクセルのみ保持 |
+| Y方向膨張 | 髪全体をY方向に±1ボクセル膨張 | 前後各1ボクセル |
+| 色調整 | パレットを暗くする（バリエーション維持） | factor = 0.65 |
+| Y+1シフト | 髪全体を後方にシフト | DY = 1 |
+
+#### 5-3. 髪の調整ポイント
+
+| 問題 | 対処 |
+|------|------|
+| 頭頂部が顔にめり込む | CROWN_SCALE_X を上げる（1.5 → 1.7等） |
+| 前髪が足りない | BANGS_Y_EXTEND を増やす |
+| 垂れ髪が太い | erosion条件を緩和（neighbors >= 3等） |
+| 全体的にY方向が薄い | Y膨張パスを追加 |
+| 色が明るすぎる/暗すぎる | factor を調整（0.5=暗い, 0.8=明るい） |
+| 前後位置がずれている | DY を調整 |
+
+---
+
+### 後処理パイプライン実行例（DarkElfBlader）
+
+```bash
+# Step 1: Body リマップ
+node scripts/remap_shared_body_de.js
+
+# Step 2: 衣装膨張+シフト
+node scripts/dilate_parts_de.js -5 -1
+
+# Step 3: マスク個別シフト
+node scripts/shift_mask_de.js
+
+# Step 4: suit_bra突起干渉解消
+node scripts/fix_suit_bra_de.js
+
+# Step 5: 髪の形状修正・色調整
+node scripts/fix_hair_shape_de.js
+
+# Step 6: ブラウザで確認（Ctrl+Shift+R）
+```
+
+### DarkElfBlader の確定パラメータ
+
+```
+衣装膨張+シフト: node scripts/dilate_parts_de.js -5 -1
+  - 体を覆うパーツ（7種）: 膨張(XZ+1, Y+2) + Z-5, Y-1
+  - ベルト・ケープ等（5種）: Z-5, Y-1 のみ
+マスク: Z-3, Y-1 シフト
+suit_bra: 突起干渉解消処理あり
+髪: head_scale=1.0, crown_scale=1.5x, bangs=7, color_factor=0.65, Y+1後方シフト, Y±1膨張
+ビューアoffset: [-0.159, 0.017, -0.096]
+```
+
+---
+
+### 新キャラ追加時のチェックリスト
+
+後処理で以下を必ず確認すること:
+
+- [ ] 衣装パーツがBodyにフィットしているか（位置シフト）
+- [ ] 角度を変えて透けがないか（膨張 + clothingMat.zOffset）
+- [ ] 突起部分（胸部等）で衣装が消えていないか（干渉解消）
+- [ ] 髪が頭頂部を覆っているか（crown拡大）
+- [ ] 前髪がおでこ前面にあるか（bangs生成）
+- [ ] 髪の垂れ部分が太すぎないか（erosion）
+- [ ] 髪の色がモデルの雰囲気に合っているか（パレット調整）
+- [ ] マスク等の個別パーツの位置が正しいか
 
 ---
 

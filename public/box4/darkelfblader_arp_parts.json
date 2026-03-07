@@ -2,13 +2,13 @@
   {
     "key": "body",
     "file": "/box4/darkelfblader_arp_body.vox",
-    "voxels": 14770,
+    "voxels": 16587,
     "default_on": true
   },
   {
     "key": "armor_-_arms",
     "file": "/box4/darkelfblader_arp_armor_-_arms.vox",
-    "voxels": 3989,
+    "voxels": 5069,
     "default_on": false
   },
   {
@@ -38,19 +38,19 @@
   {
     "key": "armor_-_shoulders_clavice",
     "file": "/box4/darkelfblader_arp_armor_-_shoulders_clavice.vox",
-    "voxels": 1578,
+    "voxels": 2006,
     "default_on": true
   },
   {
     "key": "armor_-_legs",
     "file": "/box4/darkelfblader_arp_armor_-_legs.vox",
-    "voxels": 11177,
+    "voxels": 13714,
     "default_on": false
   },
   {
     "key": "armor_-_shoulders",
     "file": "/box4/darkelfblader_arp_armor_-_shoulders.vox",
-    "voxels": 3247,
+    "voxels": 3888,
     "default_on": true
   },
   {
@@ -62,19 +62,19 @@
   {
     "key": "armor_-_suit",
     "file": "/box4/darkelfblader_arp_armor_-_suit.vox",
-    "voxels": 5927,
+    "voxels": 7839,
     "default_on": true
   },
   {
     "key": "armor_-_suit_bra",
     "file": "/box4/darkelfblader_arp_armor_-_suit_bra.vox",
-    "voxels": 1135,
+    "voxels": 1068,
     "default_on": true
   },
   {
     "key": "armor_-_suit_plates",
     "file": "/box4/darkelfblader_arp_armor_-_suit_plates.vox",
-    "voxels": 466,
+    "voxels": 706,
     "default_on": true
   },
   {
@@ -86,7 +86,7 @@
   {
     "key": "armor_-_mask",
     "file": "/box4/darkelfblader_arp_armor_-_mask.vox",
-    "voxels": 879,
+    "voxels": 810,
     "default_on": false
   },
   {
@@ -116,7 +116,7 @@
   {
     "key": "hair",
     "file": "/box4/darkelfblader_arp_hair.vox",
-    "voxels": 20964,
+    "voxels": 23068,
     "default_on": true
   }
 ]

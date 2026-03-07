@@ -489,10 +489,10 @@ for key, mesh_list in all_mesh_data.items():
         continue
     print(f"  --- {key} ---")
     if 'hair' in key:
-        # Hair: higher threshold to catch flowing hair, reduced head scale
-        # to preserve natural drape (bangs, side hair framing the face)
-        part_voxels[key] = voxelize_layer(mesh_list, threshold_mult=3.0, head_scale_override=1.2)
-        print(f"  {key}: {len(part_voxels[key])} voxels (hair mode: thr=3.0, head_scale=1.2)")
+        # Hair: higher threshold to catch flowing hair, no head enlargement (1.0)
+        # to match original realistic model proportions relative to chibi-enlarged face
+        part_voxels[key] = voxelize_layer(mesh_list, threshold_mult=3.0, head_scale_override=1.0)
+        print(f"  {key}: {len(part_voxels[key])} voxels (hair mode: thr=3.0, head_scale=1.0)")
     else:
         part_voxels[key] = voxelize_layer(mesh_list, 1.2)
         print(f"  {key}: {len(part_voxels[key])} voxels")

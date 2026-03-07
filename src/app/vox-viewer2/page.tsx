@@ -113,8 +113,15 @@ interface ImportPart {
 interface CharacterConfig {
   label: string;
   manifest: string;          // parts manifest (clothing/accessories)
-  offset: [number, number, number];  // viewer-space offset to align with CE body
+  offset: [number, number, number];  // viewer-space offset to align with base body
+  baseBody?: string;         // 'female' | 'male' — which base body to use (default: 'female')
 }
+
+// Base body definitions
+const BASE_BODIES: Record<string, { label: string; file: string }> = {
+  female: { label: 'Female (CE)', file: '/box2/cyberpunk_elf_body_base.vox' },
+  male: { label: 'Male (Vagrant)', file: '/box5/vagrant_rig_vagrant_body.vox' },
+};
 
 // Face part variant: one per character per face slot
 interface FacePartVariant {
@@ -145,6 +152,12 @@ const BODY_PARTS: FacePartSlot[] = [
     key: 'face', label: 'Face',
     variants: [
       { source: 'QM', file: '/box4/queenmarika_face.vox', scale: SCALE / 2, offset: FACE_FLOAT },
+    ],
+  },
+  {
+    key: 'mouth', label: 'Mouth',
+    variants: [
+      { source: 'CE', file: '/box2/cyberpunk_elf_body_mouth_x2.vox', scale: SCALE / 2, offset: FACE_FLOAT },
     ],
   },
   {
@@ -179,6 +192,12 @@ const CHARACTERS: Record<string, CharacterConfig> = {
     manifest: '/box4/darkelfblader_arp_parts.json',
     offset: [-0.159, 0.017, -0.096],
   },
+  vagrant: {
+    label: 'Vagrant',
+    manifest: '/box5/vagrant_rig_parts.json',
+    offset: [0, 0, 0],
+    baseBody: 'male',
+  },
 };
 
 // ========================================================================
@@ -201,6 +220,7 @@ function VoxViewer2Page() {
 
   // Base body mesh
   const baseMeshRef = useRef<Mesh | null>(null);
+  const [activeBaseBody, setActiveBaseBody] = useState<string>('female');
   // Face part meshes (one per slot, swapped on variant change)
   const faceMeshesRef = useRef<Record<string, Mesh>>({});
   // Face part selected variant index per slot (-1 = off, 0+ = variant index)
@@ -212,6 +232,7 @@ function VoxViewer2Page() {
   // Current character's clothing meshes
   const clothingMeshesRef = useRef<Record<string, Mesh>>({});
 
+  const [bodyVisible, setBodyVisible] = useState(true);
   const [selectedChar, setSelectedChar] = useState<string | null>(null);
   const [clothingParts, setClothingParts] = useState<ImportPart[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
@@ -225,6 +246,32 @@ function VoxViewer2Page() {
     setClothingParts([]);
     setPartVisibility({});
   }, []);
+
+  // Switch base body (female/male)
+  const switchBaseBody = useCallback(async (bodyKey: string) => {
+    const scene = sceneRef.current;
+    const mat = matRef.current;
+    if (!scene || !mat) return;
+
+    const bodyDef = BASE_BODIES[bodyKey];
+    if (!bodyDef) return;
+
+    // Dispose old base mesh
+    if (baseMeshRef.current) {
+      baseMeshRef.current.dispose();
+      baseMeshRef.current = null;
+    }
+
+    try {
+      const base = await loadVoxMesh(scene, bodyDef.file, 'body_base');
+      base.material = mat;
+      base.setEnabled(bodyVisible);
+      baseMeshRef.current = base;
+      setActiveBaseBody(bodyKey);
+    } catch (e) {
+      console.error('Failed to load base body:', e);
+    }
+  }, [bodyVisible]);
 
   // Load character's clothing (body stays unchanged)
   const loadCharacterClothing = useCallback(async (charKey: string) => {
@@ -267,7 +314,7 @@ function VoxViewer2Page() {
     }
   }, [disposeClothing]);
 
-  // Select character (body never changes, only clothing)
+  // Select character (auto-switch base body if needed)
   const selectCharacter = useCallback((charKey: string) => {
     if (selectedChar === charKey) {
       // Deselect → back to body only
@@ -275,9 +322,15 @@ function VoxViewer2Page() {
       disposeClothing();
     } else {
       setSelectedChar(charKey);
+      // Auto-switch base body based on character
+      const config = CHARACTERS[charKey];
+      const neededBody = config?.baseBody ?? 'female';
+      if (neededBody !== activeBaseBody) {
+        switchBaseBody(neededBody);
+      }
       loadCharacterClothing(charKey);
     }
-  }, [selectedChar, disposeClothing, loadCharacterClothing]);
+  }, [selectedChar, activeBaseBody, disposeClothing, loadCharacterClothing, switchBaseBody]);
 
   const togglePart = useCallback((key: string) => {
     setPartVisibility(prev => {
@@ -320,6 +373,15 @@ function VoxViewer2Page() {
     } catch (e) {
       console.error(`Failed to load face part ${slotKey}:`, e);
     }
+  }, []);
+
+  // Toggle body visibility
+  const toggleBody = useCallback(() => {
+    setBodyVisible(prev => {
+      const next = !prev;
+      if (baseMeshRef.current) baseMeshRef.current.setEnabled(next);
+      return next;
+    });
   }, []);
 
   // Toggle all clothing on/off
@@ -454,13 +516,28 @@ function VoxViewer2Page() {
           Body Parts
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 14 }}>
-          {/* Base body (always on) */}
-          <div style={{
-            padding: '4px 10px', fontSize: 11,
-            border: '2px solid #6a6', borderRadius: 4,
-            background: 'rgba(40,80,40,0.35)', color: '#cec', opacity: 0.7,
-          }}>
-            Body (fixed)
+          {/* Base body toggle + type switcher */}
+          <div style={{ display: 'flex', gap: 3 }}>
+            <button onClick={toggleBody} style={{
+              padding: '4px 10px', fontSize: 11, textAlign: 'left', flex: 1,
+              border: bodyVisible ? '2px solid #6a6' : '1px solid #444', borderRadius: 4,
+              background: bodyVisible ? 'rgba(40,80,40,0.35)' : 'rgba(30,30,50,0.6)',
+              color: bodyVisible ? '#cec' : '#666',
+              cursor: 'pointer',
+            }}>
+              Body {bodyVisible ? 'ON' : 'OFF'}
+            </button>
+            {Object.entries(BASE_BODIES).map(([k, v]) => (
+              <button key={k} onClick={() => switchBaseBody(k)} style={{
+                padding: '4px 6px', fontSize: 10, textAlign: 'center',
+                border: activeBaseBody === k ? '2px solid #6a6' : '1px solid #444', borderRadius: 3,
+                background: activeBaseBody === k ? 'rgba(40,80,40,0.4)' : 'rgba(30,30,50,0.6)',
+                color: activeBaseBody === k ? '#cec' : '#777',
+                cursor: 'pointer',
+              }}>
+                {v.label}
+              </button>
+            ))}
           </div>
           {/* Face part slots with variant buttons */}
           {BODY_PARTS.map(slot => (
