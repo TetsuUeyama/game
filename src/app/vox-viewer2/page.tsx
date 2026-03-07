@@ -197,6 +197,7 @@ function VoxViewer2Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const matRef = useRef<StandardMaterial | null>(null);
+  const clothingMatRef = useRef<StandardMaterial | null>(null);
 
   // Base body mesh
   const baseMeshRef = useRef<Mesh | null>(null);
@@ -228,7 +229,7 @@ function VoxViewer2Page() {
   // Load character's clothing (body stays unchanged)
   const loadCharacterClothing = useCallback(async (charKey: string) => {
     const scene = sceneRef.current;
-    const mat = matRef.current;
+    const mat = clothingMatRef.current;
     if (!scene || !mat) return;
 
     disposeClothing();
@@ -368,7 +369,14 @@ function VoxViewer2Page() {
     voxMat.emissiveColor = Color3.White();
     voxMat.disableLighting = true;
     voxMat.backFaceCulling = false;
+    // Clothing material: same look but renders in front of body at same depth
+    const clothingMat = new StandardMaterial('clothingMat', scene);
+    clothingMat.emissiveColor = Color3.White();
+    clothingMat.disableLighting = true;
+    clothingMat.backFaceCulling = false;
+    clothingMat.zOffset = -2;
     matRef.current = voxMat;
+    clothingMatRef.current = clothingMat;
 
     // Initial: load base body + default face parts (first variant each)
     (async () => {
