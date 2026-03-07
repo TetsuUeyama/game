@@ -134,7 +134,8 @@ node -e "const d=require('./<出力dir>/<model>_meshdata.json'); console.log(Obj
 | カテゴリ | 説明 | 例 |
 |---------|------|-----|
 | body | 共通Body使用のため不要 | Body mesh |
-| 顔パーツ | 細分化して取り替え可能に | eyes, ears, nose, mouth |
+| 耳 | モデルから抽出、細分化して切り替え可能 | ears |
+| 顔（目・眉・口） | モデルから読み込み不要、ボクセルアートで手動作成 | face |
 | 衣装（体表面沿い） | Bodyラインに沿って配置 | レオタード、ブーツ、手袋 |
 | 衣装（自由形状） | 独自の形状を持つ | マント、翼、スカート |
 | 装飾品 | Bodyの上に載せる | ネクタイ、肩パッド、ベルト |
@@ -338,45 +339,68 @@ CE Bodyとのグリッド位置差分を計算する:
 
 ---
 
-## 顔パーツの追加・変更
+## 顔パーツの方針
 
-### 新しい顔パーツを作成する場合
+### 基本ルール
 
-1. **抽出**: `split_body_parts.js` のロジックで顔領域からパーツを抽出
-   - 目: 非肌色ボクセル（色ベース抽出）
+- **顔（目・眉・鼻・口）はモデルから読み込まない**。手動でボクセルアートとして作成する
+- **耳のみモデルから読み込む**。耳はキャラごとに形状が異なるため、モデルから抽出して使用する
+- **ベースBodyの顔は「のっぺらぼう」**（目・鼻・口なし）。顔パーツは体表面に貼り付ける形で配置する
+
+### 耳の追加手順（モデルから読み込み）
+
+1. **抽出**: `split_body_parts.js` のロジックで耳領域を抽出
    - 耳: 頭部幅からの突出（形状ベース抽出）
-   - 鼻: 前面突出層（形状ベース抽出）
-   - 口: 非肌色ボクセル（色ベース抽出）
+   - CE基準の閾値: z=85〜93, x<33（左耳） or x>47（右耳）
 
-2. **ベースBody更新**: 抽出した位置を肌色で埋める（穴を防ぐ）
-   - `brightSkin` 色で埋め、周辺の暗い肌も明るくする
+2. **細分化**: 2x2x2に分割してx2ボクセルを作成
 
-3. **細分化**: `subdivide_face_parts.js` で2x2x2に分割
-   - 入力: `cyberpunk_elf_body_{part}.vox`（ローレゾ）
-   - 出力: `cyberpunk_elf_body_{part}_x2.vox`（細分化済み）
+3. **ビューア設定**: `BODY_PARTS` の `ears` スロットにバリアントを追加
+   - `scale: SCALE / 2`（細分化パーツ）
+   - `offset: FACE_FLOAT`
 
-4. **ビューア設定**: `BODY_PARTS_DEF` に登録
-   - `scale: SCALE / 2`（細分化パーツは半分のスケール）
-   - `offset: FACE_FLOAT`（Zファイティング防止の浮かせオフセット）
+### 顔パーツの作成手順（ボクセルアート）
 
-### 顔パーツ関連の閾値（CE Body基準）
+顔の目・眉・口はPNG参照写真をもとに `scripts/create_face_voxels.js` で手動デザインする。
 
-```
-耳:  z=85〜93, x<33（左耳） or x>47（右耳）
-目:  z=86〜92, y<=7, x=31〜49, 非肌色
-鼻:  z=84〜87, y<=4, x=37〜43, 前面2層
-口:  z=80〜84, y<=6, x=35〜45, 非肌色
-```
+#### 仕組み
 
-### 肌色判定（CE Body）
+1. CE体の前面サーフェスY座標を読み取る（各(x,z)の最小Y = 前面表面）
+2. 顔の中心X座標は体の顔領域（x=33〜47）の中点から算出
+3. パターン文字列で対称的にボクセルを配置（中心から外側への記法）
+4. 体表面の1ピクセル手前（surfaceY - 1）に1層のみ配置
 
-```javascript
-// 暖色系肌色
-function isSkinColor(c) {
-  const { r, g, b } = palette[c - 1];
-  return r >= 150 && g >= 110 && b >= 90 && (r - b) >= 15 && (r - g) <= 60;
-}
-```
+#### パターン記法
+
+- `drawSymRow(z_body, z_sub, pattern, charMap)`: 顔中心で左右対称にミラー
+  - i=0 は中心ペア（cx2 と cx2-1）に配置
+  - i=1以降は±方向に展開
+  - 例: `'LLc'` → c,L,L,L,L,c（6px）
+
+- `drawEyeRow(z_body, z_sub, eyeOffset, pattern, charMap)`: 左右の目それぞれの中心で内側ミラー
+  - i=0 は各目の中心ピクセル
+  - 例: `'PioWL'` → L,W,o,i,P,i,o,W,L（9px、瞳が中心）
+
+- 手動配置: `featureVoxels.push({ x2, z2, color })` で非対称・特殊配置
+
+#### 調整のポイント
+
+- 位置（z_body値）で上下移動
+- パターン文字数で幅調整
+- 色はPALETTESオブジェクトで管理
+- 角度付き配置は手動ループでz2にオフセットを加算
+
+#### 出力設定
+
+- グリッド: 170x68x204（CE x2グリッド、耳と同じ座標系）
+- ビューア: `scale: SCALE / 2`, `offset: FACE_FLOAT`
+
+### 新キャラの顔を追加する場合
+
+1. PNG参照写真を `public/image/face/` に配置
+2. `create_face_voxels.js` のPALETTESに新キャラの色を追加
+3. パターンを調整（目の形、口の大きさ等）
+4. `BODY_PARTS` の `face` スロットにバリアントを追加
 
 ---
 
@@ -393,8 +417,9 @@ function isSkinColor(c) {
 | ファイル | 用途 |
 |---------|------|
 | `voxelize_from_mesh.js` | 中間データ → パーツ個別ボクセル化 **（推奨）** |
-| `split_body_parts.js` | CE Body → base + 顔パーツ分離 |
-| `subdivide_face_parts.js` | 顔パーツの2x2x2細分化 |
+| `split_body_parts.js` | CE Body → base + 耳抽出 |
+| `subdivide_face_parts.js` | 耳パーツの2x2x2細分化 |
+| `create_face_voxels.js` | 顔ボクセルアート作成（目・眉・口をCE体表面に配置） |
 | `remap_shared_body.js` | CE Body → 別キャラgrid位置合わせ |
 | `fix_leotard.js` | 衣装のBody干渉修正（テンプレート） |
 | `generateVoxParts.js` | パーツ生成ユーティリティ |
@@ -405,8 +430,11 @@ function isSkinColor(c) {
 新モデル追加:
   blender_export_mesh.py → voxelize_from_mesh.js → fix_leotard.js → ビューア登録
 
-顔パーツ作成:
-  split_body_parts.js → subdivide_face_parts.js → ビューア登録
+耳の追加:
+  split_body_parts.js（耳のみ抽出） → subdivide（x2） → ビューア登録
+
+顔パーツ作成（目・眉・口）:
+  PNG参照写真を用意 → create_face_voxels.js でデザイン → ビューア登録
 
 衣装修正（めり込み修正）:
   fix_leotard.js（パラメータ変更して再実行）

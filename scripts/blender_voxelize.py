@@ -108,7 +108,18 @@ def cache_texture(image):
     if w == 0 or h == 0:
         return
     print(f"    Cache: {image.name} ({w}x{h})")
-    texture_cache[image.name] = (w, h, list(image.pixels))
+    # Store as compact bytes (RGB uint8) instead of Python float list to save memory
+    # A 4096x4096 RGBA float list uses ~1.8GB; bytes use ~50MB
+    raw = image.pixels[:]  # fast copy as flat float array
+    n = w * h
+    rgb = bytearray(n * 3)
+    for i in range(n):
+        si = i * 4
+        rgb[i * 3]     = max(0, min(255, int(raw[si]     * 255)))
+        rgb[i * 3 + 1] = max(0, min(255, int(raw[si + 1] * 255)))
+        rgb[i * 3 + 2] = max(0, min(255, int(raw[si + 2] * 255)))
+    texture_cache[image.name] = (w, h, bytes(rgb))
+    del raw
 
 def sample_texture(img_name, u, v):
     if img_name not in texture_cache:
@@ -116,9 +127,9 @@ def sample_texture(img_name, u, v):
     w, h, pix = texture_cache[img_name]
     px = int(u * w) % w
     py = int(v * h) % h
-    pi = (py * w + px) * 4
+    pi = (py * w + px) * 3
     if pi + 2 < len(pix):
-        return (int(pix[pi]*255), int(pix[pi+1]*255), int(pix[pi+2]*255))
+        return (pix[pi], pix[pi+1], pix[pi+2])
     return None
 
 # ========================================================================
@@ -285,12 +296,16 @@ def deform_point(co):
         x += sign * spread
     return Vector((x, y, z))
 
-def inv_deform(co):
+def inv_deform(co, head_scale_override=None):
+    """Inverse chibi deformation. head_scale_override: use reduced head scale for hair."""
     x, y, z = co.x, co.y, co.z
     t = max(0, min(1, (z - min_co.z) / model_h)) if model_h > 0 else 0.5
     if t > 0.85:
         ht = min(1, (t - 0.85) / 0.15)
-        s = 1.5 + ht * 0.3
+        if head_scale_override is not None:
+            s = head_scale_override
+        else:
+            s = 1.5 + ht * 0.3
         x = center.x + (x - center.x) / s
         y = center.y + (y - center.y) / s
         z = z - ht * model_h * 0.06
@@ -440,8 +455,10 @@ print(f"  Grid: {gx}x{gy}x{gz}, voxel={voxel_size:.4f}")
 # ========================================================================
 print("\n  Voxelizing (per-part)...")
 
-def voxelize_layer(mesh_list, threshold_mult=1.2):
-    """Voxelize a list of MeshData, return dict {(vx,vy,vz): (r,g,b)}."""
+def voxelize_layer(mesh_list, threshold_mult=1.2, head_scale_override=None):
+    """Voxelize a list of MeshData, return dict {(vx,vy,vz): (r,g,b)}.
+    head_scale_override: if set, use reduced head scale in inv_deform (for hair).
+    """
     result = {}
     thr = voxel_size * threshold_mult
     for vz in range(gz):
@@ -454,7 +471,7 @@ def voxelize_layer(mesh_list, threshold_mult=1.2):
                     def_min.y + (vy + 0.5) * voxel_size,
                     def_min.z + (vz + 0.5) * voxel_size,
                 ))
-                op = inv_deform(dp)
+                op = inv_deform(dp, head_scale_override=head_scale_override)
                 best_dist = thr
                 best_color = None
                 for md in mesh_list:
@@ -471,8 +488,14 @@ for key, mesh_list in all_mesh_data.items():
     if not mesh_list:
         continue
     print(f"  --- {key} ---")
-    part_voxels[key] = voxelize_layer(mesh_list, 1.2)
-    print(f"  {key}: {len(part_voxels[key])} voxels")
+    if 'hair' in key:
+        # Hair: higher threshold to catch flowing hair, reduced head scale
+        # to preserve natural drape (bangs, side hair framing the face)
+        part_voxels[key] = voxelize_layer(mesh_list, threshold_mult=3.0, head_scale_override=1.2)
+        print(f"  {key}: {len(part_voxels[key])} voxels (hair mode: thr=3.0, head_scale=1.2)")
+    else:
+        part_voxels[key] = voxelize_layer(mesh_list, 1.2)
+        print(f"  {key}: {len(part_voxels[key])} voxels")
 
 # Fill body skin under clothing: only for garments that actually cover skin
 # Accessories (hat, hologram, armband, hip_plate, necktie, garter_straps) sit ON TOP of body/clothing
