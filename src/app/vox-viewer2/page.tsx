@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import {
   Engine,
   Scene,
@@ -66,7 +65,7 @@ const FACE_VERTS = [
 const FACE_NORMALS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 const SCALE = 0.010;
 
-function buildVoxMesh(model: VoxModel, scene: Scene, name: string): Mesh {
+function buildVoxMesh(model: VoxModel, scene: Scene, name: string, scale: number = SCALE): Mesh {
   const occupied = new Set<string>();
   for (const v of model.voxels) occupied.add(`${v.x},${v.y},${v.z}`);
   const cx = model.sizeX / 2, cy = model.sizeY / 2;
@@ -78,7 +77,7 @@ function buildVoxMesh(model: VoxModel, scene: Scene, name: string): Mesh {
       if (occupied.has(`${voxel.x+dx},${voxel.y+dy},${voxel.z+dz}`)) continue;
       const bi = positions.length/3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
       for (let vi = 0; vi < 4; vi++) {
-        const rx = (voxel.x+fv[vi][0]-cx)*SCALE, ry = (voxel.y+fv[vi][1]-cy)*SCALE, rz = (voxel.z+fv[vi][2])*SCALE;
+        const rx = (voxel.x+fv[vi][0]-cx)*scale, ry = (voxel.y+fv[vi][1]-cy)*scale, rz = (voxel.z+fv[vi][2])*scale;
         positions.push(rx, rz, -ry); normals.push(fn[0], fn[2], -fn[1]); colors.push(col.r, col.g, col.b, 1);
       }
       indices.push(bi, bi+1, bi+2, bi, bi+2, bi+3);
@@ -93,63 +92,17 @@ function buildVoxMesh(model: VoxModel, scene: Scene, name: string): Mesh {
 
 const CACHE_BUST = `?v=${Date.now()}`;
 
-async function loadVoxMesh(scene: Scene, url: string, name: string): Promise<Mesh> {
+async function loadVoxMesh(scene: Scene, url: string, name: string, scale: number = SCALE): Promise<Mesh> {
   const resp = await fetch(url + CACHE_BUST);
   if (!resp.ok) throw new Error(`Failed: ${url}`);
-  return buildVoxMesh(parseVox(await resp.arrayBuffer()), scene, name);
+  const model = parseVox(await resp.arrayBuffer());
+  return buildVoxMesh(model, scene, name, scale);
 }
 
 // ========================================================================
-// Builder part categories
+// Character configurations
 // ========================================================================
 
-const CATEGORIES = {
-  eyes:  ['normal', 'narrow', 'wide', 'almond', 'determined', 'hooded'],
-  brows: ['thick', 'thin', 'angry', 'arched', 'flat', 'raised'],
-  nose:  ['average', 'wide', 'narrow', 'broad', 'button'],
-  mouth: ['neutral', 'grin', 'serious', 'smile', 'open', 'smirk'],
-  hair:  ['buzz', 'short', 'fade', 'flat_top', 'afro', 'mohawk', 'cornrow', 'dreads', 'headband', 'bald'],
-} as const;
-
-type CatKey = keyof typeof CATEGORIES;
-
-const CAT_LABELS: Record<CatKey, string> = {
-  eyes: 'Eyes', brows: 'Brows', nose: 'Nose', mouth: 'Mouth', hair: 'Hair',
-};
-
-function catUrl(cat: CatKey, name: string): string {
-  const prefix: Record<CatKey, string> = {
-    eyes: 'eyes/eyes', brows: 'brows/brows', nose: 'noses/nose', mouth: 'mouths/mouth', hair: 'hairs/hair',
-  };
-  return `/box2/${prefix[cat]}_${name}.vox`;
-}
-
-// Body assembly
-interface PartDef { file: string; label: string; offset: [number, number, number]; }
-const BODY_PARTS: PartDef[] = [
-  { file: 'torso.vox',     label: 'Torso',      offset: [0, 0.82, 0] },
-  { file: 'hip.vox',       label: 'Hip',         offset: [0, 0.66, 0] },
-  { file: 'upper_arm.vox', label: 'UpperArmL',   offset: [0.19, 0.90, 0] },
-  { file: 'forearm.vox',   label: 'ForearmL',    offset: [0.19, 0.72, 0] },
-  { file: 'hand.vox',      label: 'HandL',       offset: [0.19, 0.62, 0] },
-  { file: 'thigh.vox',     label: 'ThighL',      offset: [0.07, 0.38, 0] },
-  { file: 'shin.vox',      label: 'ShinL',       offset: [0.07, 0.12, 0] },
-  { file: 'shoe.vox',      label: 'ShoeL',       offset: [0.07, 0.0, 0.02] },
-];
-const MIRROR_PARTS: PartDef[] = [
-  { file: 'upper_arm.vox', label: 'UpperArmR',   offset: [-0.19, 0.90, 0] },
-  { file: 'forearm.vox',   label: 'ForearmR',    offset: [-0.19, 0.72, 0] },
-  { file: 'hand.vox',      label: 'HandR',       offset: [-0.19, 0.62, 0] },
-  { file: 'thigh.vox',     label: 'ThighR',      offset: [-0.07, 0.38, 0] },
-  { file: 'shin.vox',      label: 'ShinR',       offset: [-0.07, 0.12, 0] },
-  { file: 'shoe.vox',      label: 'ShoeR',       offset: [-0.07, 0.0, 0.02] },
-];
-
-const HEAD_Y = 1.15;
-
-// ========================================================================
-// Import part manifest type
-// ========================================================================
 interface ImportPart {
   key: string;
   file: string;
@@ -157,15 +110,74 @@ interface ImportPart {
   default_on: boolean;
 }
 
+interface CharacterConfig {
+  label: string;
+  manifest: string;          // parts manifest (clothing/accessories)
+  offset: [number, number, number];  // viewer-space offset to align with CE body
+}
+
+// Face part variant: one per character per face slot
+interface FacePartVariant {
+  source: string;   // character key (display label)
+  file: string;
+  scale?: number;
+  offset?: [number, number, number];
+}
+
+// Face part slots (ears, eyes, nose, mouth) with per-character variants
+interface FacePartSlot {
+  key: string;
+  label: string;
+  variants: FacePartVariant[];
+}
+
+// Face parts float slightly forward to avoid z-fighting with base body
+const FACE_FLOAT: [number, number, number] = [0, 0, 0.004];
+
+const BODY_PARTS: FacePartSlot[] = [
+  {
+    key: 'ears', label: 'Ears',
+    variants: [
+      { source: 'CE', file: '/box2/cyberpunk_elf_body_ears_x2.vox', scale: SCALE / 2, offset: FACE_FLOAT },
+    ],
+  },
+  {
+    key: 'face', label: 'Face',
+    variants: [
+      { source: 'QM', file: '/box4/queenmarika_face.vox', scale: SCALE / 2, offset: FACE_FLOAT },
+    ],
+  },
+  {
+    key: 'hair', label: 'Hair',
+    variants: [
+      { source: 'CE', file: '/box2/cyberpunk_elf_hair.vox', offset: [0, 0, 0] },
+      { source: 'HP', file: '/box3-new/highpriestess_blender_rigged_hair.vox', offset: [0.179, -0.022, -0.100] },
+      { source: 'QM', file: '/box4/queenmarika_rigged_mustardui_hair.vox', offset: [-0.002, -0.006, 0.007] },
+    ],
+  },
+];
+
+const CHARACTERS: Record<string, CharacterConfig> = {
+  cyberpunk: {
+    label: 'CyberpunkElf',
+    manifest: '/box2/cyberpunk_elf_parts.json',
+    offset: [0, 0, 0],  // same grid as body — no offset
+  },
+  priestess: {
+    label: 'HighPriestess',
+    manifest: '/box3-new/highpriestess_blender_rigged_parts.json',
+    offset: [0.179, -0.022, -0.100],  // computed from body centroid alignment
+  },
+  marika: {
+    label: 'QueenMarika',
+    manifest: '/box4/queenmarika_rigged_mustardui_parts.json',
+    offset: [-0.002, -0.006, 0.007],
+  },
+};
+
 // ========================================================================
 // Component
 // ========================================================================
-
-// Model manifest configurations
-const MODELS: Record<string, { manifest: string; label: string }> = {
-  cyberpunk: { manifest: '/box2/cyberpunk_elf_parts.json', label: 'CyberpunkElf' },
-  priestess: { manifest: '/box3-new/highpriestess_blender_rigged_parts.json', label: 'HighPriestess' },
-};
 
 export default function VoxViewer2Wrapper() {
   return (
@@ -176,57 +188,147 @@ export default function VoxViewer2Wrapper() {
 }
 
 function VoxViewer2Page() {
-  const searchParams = useSearchParams();
-  const modelKey = searchParams.get('model') || 'cyberpunk';
-  const modelConfig = MODELS[modelKey] || MODELS.cyberpunk;
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const matRef = useRef<StandardMaterial | null>(null);
-  const bodyMeshesRef = useRef<Mesh[]>([]);
-  const importPartsRef = useRef<Record<string, Mesh>>({});
-  const [mode, setMode] = useState<'builder' | 'import'>('import');
-  const [importParts, setImportParts] = useState<ImportPart[]>([]);
+
+  // Base body mesh
+  const baseMeshRef = useRef<Mesh | null>(null);
+  // Face part meshes (one per slot, swapped on variant change)
+  const faceMeshesRef = useRef<Record<string, Mesh>>({});
+  // Face part selected variant index per slot (-1 = off, 0+ = variant index)
+  const [faceSelection, setFaceSelection] = useState<Record<string, number>>(() => {
+    const sel: Record<string, number> = {};
+    for (const fp of BODY_PARTS) sel[fp.key] = fp.key === 'face' ? -1 : 0; // face defaults to OFF
+    return sel;
+  });
+  // Current character's clothing meshes
+  const clothingMeshesRef = useRef<Record<string, Mesh>>({});
+
+  const [selectedChar, setSelectedChar] = useState<string | null>(null);
+  const [clothingParts, setClothingParts] = useState<ImportPart[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
 
-  const headMeshes = useRef<Record<string, Mesh | null>>({
-    base: null, eyes: null, brows: null, nose: null, mouth: null, hair: null,
-  });
+  // Dispose all clothing meshes
+  const disposeClothing = useCallback(() => {
+    for (const mesh of Object.values(clothingMeshesRef.current)) {
+      mesh.dispose();
+    }
+    clothingMeshesRef.current = {};
+    setClothingParts([]);
+    setPartVisibility({});
+  }, []);
 
-  const [selections, setSelections] = useState<Record<CatKey, string>>({
-    eyes: 'normal', brows: 'thick', nose: 'average', mouth: 'neutral', hair: 'short',
-  });
-
-  const loadLayer = useCallback(async (cat: string, url: string) => {
+  // Load character's clothing (body stays unchanged)
+  const loadCharacterClothing = useCallback(async (charKey: string) => {
     const scene = sceneRef.current;
     const mat = matRef.current;
     if (!scene || !mat) return;
-    const old = headMeshes.current[cat];
-    if (old) { old.dispose(); headMeshes.current[cat] = null; }
-    try {
-      const mesh = await loadVoxMesh(scene, url, `head_${cat}`);
-      mesh.material = mat;
-      mesh.position.y = HEAD_Y;
-      headMeshes.current[cat] = mesh;
-    } catch (e) {
-      console.error(`Failed to load ${url}:`, e);
-    }
-  }, []);
 
-  const handleChange = useCallback((cat: CatKey, value: string) => {
-    setSelections(prev => ({ ...prev, [cat]: value }));
-    loadLayer(cat, catUrl(cat, value));
-  }, [loadLayer]);
+    disposeClothing();
+
+    const config = CHARACTERS[charKey];
+    if (!config) return;
+
+    try {
+      const resp = await fetch(config.manifest + CACHE_BUST);
+      if (!resp.ok) return;
+      const allParts: ImportPart[] = await resp.json();
+
+      // Filter out body and face parts — they are in the Body Parts section
+      const faceKeys = new Set(BODY_PARTS.map(fp => fp.key));
+      const clothing = allParts.filter(p => p.key !== 'body' && !faceKeys.has(p.key));
+      setClothingParts(clothing);
+
+      const [ox, oy, oz] = config.offset;
+      const vis: Record<string, boolean> = {};
+      for (const part of clothing) {
+        vis[part.key] = part.default_on;
+        try {
+          const m = await loadVoxMesh(scene, part.file, `clothing_${part.key}`);
+          m.material = mat;
+          m.position.set(ox, oy, oz);
+          m.setEnabled(part.default_on);
+          clothingMeshesRef.current[part.key] = m;
+        } catch (e) {
+          console.error(`Failed: ${part.file}`, e);
+        }
+      }
+      setPartVisibility(vis);
+    } catch (e) {
+      console.error('Failed to load parts manifest', e);
+    }
+  }, [disposeClothing]);
+
+  // Select character (body never changes, only clothing)
+  const selectCharacter = useCallback((charKey: string) => {
+    if (selectedChar === charKey) {
+      // Deselect → back to body only
+      setSelectedChar(null);
+      disposeClothing();
+    } else {
+      setSelectedChar(charKey);
+      loadCharacterClothing(charKey);
+    }
+  }, [selectedChar, disposeClothing, loadCharacterClothing]);
 
   const togglePart = useCallback((key: string) => {
     setPartVisibility(prev => {
       const next = { ...prev, [key]: !prev[key] };
-      const mesh = importPartsRef.current[key];
+      const mesh = clothingMeshesRef.current[key];
       if (mesh) mesh.setEnabled(next[key]);
       return next;
     });
   }, []);
 
+  // Switch face part variant (cycle: variant0 → variant1 → ... → OFF → variant0)
+  const switchFaceVariant = useCallback(async (slotKey: string, variantIdx: number) => {
+    const scene = sceneRef.current;
+    const mat = matRef.current;
+    if (!scene || !mat) return;
+
+    // Dispose current mesh for this slot
+    const oldMesh = faceMeshesRef.current[slotKey];
+    if (oldMesh) {
+      oldMesh.dispose();
+      delete faceMeshesRef.current[slotKey];
+    }
+
+    setFaceSelection(prev => ({ ...prev, [slotKey]: variantIdx }));
+
+    // -1 = OFF
+    if (variantIdx < 0) return;
+
+    const slot = BODY_PARTS.find(fp => fp.key === slotKey);
+    if (!slot || variantIdx >= slot.variants.length) return;
+
+    const variant = slot.variants[variantIdx];
+    try {
+      const mesh = await loadVoxMesh(scene, variant.file, `face_${slotKey}`, variant.scale ?? SCALE);
+      mesh.material = mat;
+      if (variant.offset) {
+        mesh.position.set(variant.offset[0], variant.offset[1], variant.offset[2]);
+      }
+      faceMeshesRef.current[slotKey] = mesh;
+    } catch (e) {
+      console.error(`Failed to load face part ${slotKey}:`, e);
+    }
+  }, []);
+
+  // Toggle all clothing on/off
+  const toggleAllClothing = useCallback((on: boolean) => {
+    setPartVisibility(prev => {
+      const next: Record<string, boolean> = {};
+      for (const key in prev) {
+        next[key] = on;
+        const mesh = clothingMeshesRef.current[key];
+        if (mesh) mesh.setEnabled(on);
+      }
+      return next;
+    });
+  }, []);
+
+  // Initialize scene
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -262,61 +364,28 @@ function VoxViewer2Page() {
     voxMat.backFaceCulling = false;
     matRef.current = voxMat;
 
-    // Load builder body parts
-    const loadBody = async () => {
-      const meshes: Mesh[] = [];
-      for (const p of BODY_PARTS) {
-        try {
-          const m = await loadVoxMesh(scene, `/box2/${p.file}`, `body_${p.label}`);
-          m.material = voxMat; m.position.set(...p.offset); meshes.push(m);
-        } catch (e) { console.error(e); }
-      }
-      for (const p of MIRROR_PARTS) {
-        try {
-          const m = await loadVoxMesh(scene, `/box2/${p.file}`, `body_${p.label}`);
-          m.material = voxMat; m.position.set(...p.offset); m.scaling.x = -1; meshes.push(m);
-        } catch (e) { console.error(e); }
-      }
-      bodyMeshesRef.current = meshes;
-    };
-
-    // Load builder head layers
-    const loadHead = async () => {
+    // Initial: load base body + default face parts (first variant each)
+    (async () => {
       try {
-        const base = await loadVoxMesh(scene, '/box2/head_base.vox', 'head_base');
-        base.material = voxMat; base.position.y = HEAD_Y;
-        headMeshes.current.base = base;
-      } catch (e) { console.error(e); }
-      for (const cat of Object.keys(CATEGORIES) as CatKey[]) {
-        await loadLayer(cat, catUrl(cat, selections[cat]));
+        const base = await loadVoxMesh(scene, '/box2/cyberpunk_elf_body_base.vox', 'body_base');
+        base.material = voxMat;
+        baseMeshRef.current = base;
+      } catch (e) {
+        console.error('Failed to load base body:', e);
       }
-    };
-
-    // Load import model parts from manifest
-    const loadImport = async () => {
-      try {
-        const resp = await fetch(modelConfig.manifest + CACHE_BUST);
-        if (!resp.ok) return;
-        const parts: ImportPart[] = await resp.json();
-        setImportParts(parts);
-
-        const vis: Record<string, boolean> = {};
-        for (const part of parts) {
-          vis[part.key] = part.default_on;
-          try {
-            const m = await loadVoxMesh(scene, part.file, `import_${part.key}`);
-            m.material = voxMat;
-            m.setEnabled(part.default_on);
-            importPartsRef.current[part.key] = m;
-          } catch (e) { console.error(`Failed: ${part.file}`, e); }
+      for (const slot of BODY_PARTS) {
+        if (slot.variants.length === 0) continue;
+        const v = slot.variants[0];
+        try {
+          const mesh = await loadVoxMesh(scene, v.file, `face_${slot.key}`, v.scale ?? SCALE);
+          mesh.material = voxMat;
+          if (v.offset) mesh.position.set(v.offset[0], v.offset[1], v.offset[2]);
+          faceMeshesRef.current[slot.key] = mesh;
+        } catch (e) {
+          console.error(`Failed to load face part ${slot.key}:`, e);
         }
-        setPartVisibility(vis);
-      } catch (e) { console.error('Failed to load parts manifest', e); }
-    };
-
-    loadBody();
-    loadHead();
-    loadImport();
+      }
+    })();
 
     engine.runRenderLoop(() => scene.render());
     const onResize = () => engine.resize();
@@ -330,69 +399,104 @@ function VoxViewer2Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const combos = Object.values(CATEGORIES).reduce((a, c) => a * c.length, 1);
-
-  // Toggle visibility based on mode
-  useEffect(() => {
-    const showBuilder = mode === 'builder';
-    for (const m of bodyMeshesRef.current) m.setEnabled(showBuilder);
-    for (const m of Object.values(headMeshes.current)) if (m) m.setEnabled(showBuilder);
-    for (const [key, mesh] of Object.entries(importPartsRef.current)) {
-      mesh.setEnabled(!showBuilder && (partVisibility[key] ?? false));
-    }
-  }, [mode, partVisibility]);
-
-  // Pretty label from part key
   const partLabel = (key: string) => {
     return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      .replace('- Default', '').replace('  ', ' ').trim();
+      .replace('.001', ' 2').replace('  ', ' ').trim();
   };
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#12121f', display: 'flex' }}>
       {/* Side panel */}
       <div style={{
-        width: 250, minWidth: 250, padding: '14px 16px', overflowY: 'auto',
+        width: 260, minWidth: 260, padding: '14px 16px', overflowY: 'auto',
         background: 'rgba(0,0,0,0.5)', color: '#ddd', fontFamily: 'monospace', fontSize: 12,
         borderRight: '1px solid rgba(255,255,255,0.08)',
       }}>
-        {/* Model selector */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
-          {Object.entries(MODELS).map(([k, v]) => (
-            <a key={k} href={`?model=${k}`} style={{
-              flex: 1, padding: '5px 0', fontSize: 11, fontWeight: 'bold', textAlign: 'center',
-              textDecoration: 'none',
-              border: modelKey === k ? '2px solid #f84' : '1px solid #444', borderRadius: 4,
-              background: modelKey === k ? 'rgba(180,60,40,0.3)' : 'rgba(30,30,50,0.5)',
-              color: modelKey === k ? '#fff' : '#888',
+        {/* Title */}
+        <h2 style={{ margin: '0 0 12px', fontSize: 16, color: '#fff' }}>
+          Dress-Up Viewer
+        </h2>
+
+        {/* Character selector */}
+        <div style={{ marginBottom: 6, color: '#8af', fontSize: 13, fontWeight: 'bold' }}>
+          Character
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+          {Object.entries(CHARACTERS).map(([k, v]) => (
+            <button key={k} onClick={() => selectCharacter(k)} style={{
+              flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 'bold', textAlign: 'center',
+              border: selectedChar === k ? '2px solid #f84' : '1px solid #444', borderRadius: 4,
+              background: selectedChar === k ? 'rgba(180,60,40,0.3)' : 'rgba(30,30,50,0.5)',
+              color: selectedChar === k ? '#fff' : '#888',
+              cursor: 'pointer',
             }}>
               {v.label}
-            </a>
-          ))}
-        </div>
-
-        {/* Mode toggle */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-          {(['import', 'builder'] as const).map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{
-              flex: 1, padding: '6px 0', fontSize: 12, fontWeight: 'bold',
-              border: mode === m ? '2px solid #68f' : '1px solid #444', borderRadius: 4,
-              background: mode === m ? 'rgba(60,60,180,0.4)' : 'rgba(30,30,50,0.5)',
-              color: mode === m ? '#fff' : '#888', cursor: 'pointer',
-            }}>
-              {m === 'import' ? 'Imported' : 'Builder'}
             </button>
           ))}
         </div>
 
-        {mode === 'import' ? (
+        {/* Body parts */}
+        <div style={{ marginBottom: 6, color: '#8c8', fontSize: 13, fontWeight: 'bold' }}>
+          Body Parts
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 14 }}>
+          {/* Base body (always on) */}
+          <div style={{
+            padding: '4px 10px', fontSize: 11,
+            border: '2px solid #6a6', borderRadius: 4,
+            background: 'rgba(40,80,40,0.35)', color: '#cec', opacity: 0.7,
+          }}>
+            Body (fixed)
+          </div>
+          {/* Face part slots with variant buttons */}
+          {BODY_PARTS.map(slot => (
+            <div key={slot.key} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ width: 42, fontSize: 10, color: '#999', flexShrink: 0 }}>{slot.label}</span>
+              {slot.variants.map((v, vi) => (
+                <button key={vi} onClick={() => switchFaceVariant(slot.key, vi)} style={{
+                  flex: 1, padding: '3px 0', fontSize: 10, textAlign: 'center',
+                  border: faceSelection[slot.key] === vi ? '2px solid #6a6' : '1px solid #444',
+                  borderRadius: 3,
+                  background: faceSelection[slot.key] === vi ? 'rgba(40,80,40,0.4)' : 'rgba(30,30,50,0.6)',
+                  color: faceSelection[slot.key] === vi ? '#cec' : '#777',
+                  cursor: 'pointer',
+                }}>
+                  {v.source}
+                </button>
+              ))}
+              <button onClick={() => switchFaceVariant(slot.key, -1)} style={{
+                padding: '3px 6px', fontSize: 10, textAlign: 'center',
+                border: faceSelection[slot.key] === -1 ? '2px solid #a66' : '1px solid #444',
+                borderRadius: 3,
+                background: faceSelection[slot.key] === -1 ? 'rgba(80,40,40,0.4)' : 'rgba(30,30,50,0.6)',
+                color: faceSelection[slot.key] === -1 ? '#ecc' : '#777',
+                cursor: 'pointer',
+              }}>
+                OFF
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Clothing parts */}
+        {selectedChar ? (
           <>
-            <h2 style={{ margin: '0 0 8px', fontSize: 16, color: '#fff' }}>CyberpunkElf</h2>
-            <div style={{ fontWeight: 'bold', marginBottom: 6, color: '#8af', fontSize: 13 }}>
-              Parts ({importParts.length})
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontWeight: 'bold', color: '#8af', fontSize: 13 }}>
+                {CHARACTERS[selectedChar]?.label} Parts ({clothingParts.length})
+              </span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11 }}>
+                <input
+                  type="checkbox"
+                  checked={Object.values(partVisibility).some(v => v)}
+                  onChange={(e) => toggleAllClothing(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ color: '#aaa' }}>All</span>
+              </label>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {importParts.map(part => (
+              {clothingParts.map(part => (
                 <button key={part.key} onClick={() => togglePart(part.key)} style={{
                   padding: '4px 10px', fontSize: 11, textAlign: 'left',
                   border: partVisibility[part.key] ? '2px solid #68f' : '1px solid #444',
@@ -408,38 +512,14 @@ function VoxViewer2Page() {
               ))}
             </div>
             <p style={{ opacity: 0.4, fontSize: 10, marginTop: 12, lineHeight: 1.5 }}>
-              Click parts to toggle on/off
+              Click parts to toggle on/off.
+              Click character again to undress.
             </p>
           </>
         ) : (
-          <>
-            <h2 style={{ margin: '0 0 6px', fontSize: 16, color: '#fff' }}>
-              Character Builder
-            </h2>
-            <p style={{ margin: '0 0 14px', opacity: 0.4, fontSize: 11 }}>
-              {combos.toLocaleString()} combinations
-            </p>
-            {(Object.keys(CATEGORIES) as CatKey[]).map(cat => (
-              <div key={cat} style={{ marginBottom: 14 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4, color: '#8af', fontSize: 13 }}>
-                  {CAT_LABELS[cat]}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {CATEGORIES[cat].map(name => (
-                    <button key={name} onClick={() => handleChange(cat, name)} style={{
-                      padding: '4px 8px', fontSize: 11,
-                      border: selections[cat] === name ? '2px solid #68f' : '1px solid #444',
-                      borderRadius: 4,
-                      background: selections[cat] === name ? 'rgba(60,60,180,0.35)' : 'rgba(30,30,50,0.6)',
-                      color: selections[cat] === name ? '#fff' : '#999', cursor: 'pointer',
-                    }}>
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </>
+          <div style={{ opacity: 0.5, fontSize: 11, lineHeight: 1.6, marginTop: 8 }}>
+            Select a character above to load clothing and accessories.
+          </div>
         )}
 
         <div style={{
