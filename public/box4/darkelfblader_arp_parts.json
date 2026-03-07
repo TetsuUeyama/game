@@ -2,7 +2,7 @@
   {
     "key": "body",
     "file": "/box4/darkelfblader_arp_body.vox",
-    "voxels": 16041,
+    "voxels": 14770,
     "default_on": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "key": "armor_-_legs",
     "file": "/box4/darkelfblader_arp_armor_-_legs.vox",
-    "voxels": 7877,
+    "voxels": 7290,
     "default_on": false
   },
   {
@@ -62,7 +62,7 @@
   {
     "key": "armor_-_suit",
     "file": "/box4/darkelfblader_arp_armor_-_suit.vox",
-    "voxels": 3671,
+    "voxels": 3431,
     "default_on": true
   },
   {
