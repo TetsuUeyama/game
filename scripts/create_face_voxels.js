@@ -69,7 +69,7 @@ const PALETTES = {
     iris_outer:  [180, 140, 55],
     iris_inner:  [140, 100, 35],
     pupil:       [30, 18, 15],
-    eyelid:      [110, 75, 70],
+    eyelid:      [185, 135, 118],
     eyelash:     [45, 28, 22],
     eyebrow:     [85, 55, 45],
     nose_shadow: [150, 115, 110],
@@ -180,15 +180,10 @@ const EYE_OFF = 5; // offset from center in x2 coords
 // Eye pattern: each char is center-outward (i=0=center of eye, mirrored to both sides)
 // Pattern 'PioWL' → L,W,o,i,P,i,o,W,L  (9px per eye, pupil at center)
 // z=88 (body) = z2=176
-drawEyeRow(85, 0, EYE_OFF, 'llll.',  eyeMap); // bottom lash: .,l,l,l,l,l,l,l,.
-drawEyeRow(85, 1, EYE_OFF, 'LLLLl',  eyeMap); // lower lid:   l,L,L,L,L,L,L,L,l
-drawEyeRow(86, 0, EYE_OFF, 'WWWLl',  eyeMap); // lower white:  l,L,W,W,W,W,W,L,l
-drawEyeRow(86, 1, EYE_OFF, 'ooWLl',  eyeMap); // iris lower:   l,L,W,o,o,o,W,L,l
-drawEyeRow(87, 0, EYE_OFF, 'PioWL',  eyeMap); // pupil row:    L,W,o,i,P,i,o,W,L
-drawEyeRow(87, 1, EYE_OFF, 'ooWLl',  eyeMap); // iris upper:   l,L,W,o,o,o,W,L,l
-drawEyeRow(88, 0, EYE_OFF, 'WWWLl',  eyeMap); // upper white:  l,L,W,W,W,W,W,L,l
-drawEyeRow(88, 1, EYE_OFF, 'LLLLl',  eyeMap); // upper lid:    l,L,L,L,L,L,L,L,l
-drawEyeRow(89, 0, EYE_OFF, 'llll.',  eyeMap); // top lash:     .,l,l,l,l,l,l,l,.
+drawEyeRow(85, 1, EYE_OFF, 'LLLL.',  eyeMap); // lower lid:   .,L,L,L,L,L,L,L,.
+drawEyeRow(86, 0, EYE_OFF, 'ooWL.',  eyeMap); // iris lower:   .,L,W,o,o,o,W,L,.
+drawEyeRow(86, 1, EYE_OFF, 'PioWL',  eyeMap); // pupil row:    L,W,o,i,P,i,o,W,L
+drawEyeRow(87, 0, EYE_OFF, 'ooWW.',  eyeMap); // iris upper:   .,W,W,o,o,o,W,W,.
 
 // ========================================================================
 // EYEBROWS — z≈93-94, offset ±4-8 from center
