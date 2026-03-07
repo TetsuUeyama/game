@@ -1,0 +1,80 @@
+[
+  {
+    "key": "hair",
+    "file": "/box4/queenmarika_rigged_mustardui_hair.vox",
+    "voxels": 10095,
+    "default_on": true
+  },
+  {
+    "key": "eyes",
+    "file": "/box4/queenmarika_rigged_mustardui_eyes.vox",
+    "voxels": 373,
+    "default_on": true
+  },
+  {
+    "key": "dress",
+    "file": "/box4/queenmarika_rigged_mustardui_dress.vox",
+    "voxels": 5937,
+    "default_on": true
+  },
+  {
+    "key": "heels",
+    "file": "/box4/queenmarika_rigged_mustardui_heels.vox",
+    "voxels": 1621,
+    "default_on": true
+  },
+  {
+    "key": "circlet",
+    "file": "/box4/queenmarika_rigged_mustardui_circlet.vox",
+    "voxels": 972,
+    "default_on": true
+  },
+  {
+    "key": "panties",
+    "file": "/box4/queenmarika_rigged_mustardui_panties.vox",
+    "voxels": 783,
+    "default_on": true
+  },
+  {
+    "key": "gold_bikini_bra",
+    "file": "/box4/queenmarika_rigged_mustardui_gold_bikini_bra.vox",
+    "voxels": 1065,
+    "default_on": false
+  },
+  {
+    "key": "gold_bikini_panties",
+    "file": "/box4/queenmarika_rigged_mustardui_gold_bikini_panties.vox",
+    "voxels": 710,
+    "default_on": false
+  },
+  {
+    "key": "belt",
+    "file": "/box4/queenmarika_rigged_mustardui_belt.vox",
+    "voxels": 535,
+    "default_on": true
+  },
+  {
+    "key": "necklace",
+    "file": "/box4/queenmarika_rigged_mustardui_necklace.vox",
+    "voxels": 469,
+    "default_on": true
+  },
+  {
+    "key": "thigh_strap",
+    "file": "/box4/queenmarika_rigged_mustardui_thigh_strap.vox",
+    "voxels": 359,
+    "default_on": true
+  },
+  {
+    "key": "armband",
+    "file": "/box4/queenmarika_rigged_mustardui_armband.vox",
+    "voxels": 293,
+    "default_on": true
+  },
+  {
+    "key": "bracelet",
+    "file": "/box4/queenmarika_rigged_mustardui_bracelet.vox",
+    "voxels": 198,
+    "default_on": true
+  }
+]

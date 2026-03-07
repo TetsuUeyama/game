@@ -1,0 +1,92 @@
+[
+  {
+    "key": "bra",
+    "file": "/box2-hires/cyberpunkelf_bra.vox",
+    "voxels": 1882,
+    "default_on": true
+  },
+  {
+    "key": "hip_plate",
+    "file": "/box2-hires/cyberpunkelf_hip_plate.vox",
+    "voxels": 2598,
+    "default_on": false
+  },
+  {
+    "key": "body",
+    "file": "/box2-hires/cyberpunkelf_body.vox",
+    "voxels": 78309,
+    "default_on": true
+  },
+  {
+    "key": "jacket",
+    "file": "/box2-hires/cyberpunkelf_jacket.vox",
+    "voxels": 21167,
+    "default_on": true
+  },
+  {
+    "key": "necktie",
+    "file": "/box2-hires/cyberpunkelf_necktie.vox",
+    "voxels": 431,
+    "default_on": true
+  },
+  {
+    "key": "hair",
+    "file": "/box2-hires/cyberpunkelf_hair.vox",
+    "voxels": 78461,
+    "default_on": true
+  },
+  {
+    "key": "gloves",
+    "file": "/box2-hires/cyberpunkelf_gloves.vox",
+    "voxels": 5977,
+    "default_on": true
+  },
+  {
+    "key": "hologram_b",
+    "file": "/box2-hires/cyberpunkelf_hologram_b.vox",
+    "voxels": 565,
+    "default_on": false
+  },
+  {
+    "key": "garter_straps",
+    "file": "/box2-hires/cyberpunkelf_garter_straps.vox",
+    "voxels": 822,
+    "default_on": false
+  },
+  {
+    "key": "leggings",
+    "file": "/box2-hires/cyberpunkelf_leggings.vox",
+    "voxels": 23993,
+    "default_on": true
+  },
+  {
+    "key": "panties",
+    "file": "/box2-hires/cyberpunkelf_panties.vox",
+    "voxels": 1855,
+    "default_on": true
+  },
+  {
+    "key": "armband",
+    "file": "/box2-hires/cyberpunkelf_armband.vox",
+    "voxels": 1290,
+    "default_on": false
+  },
+  {
+    "key": "hologram_a",
+    "file": "/box2-hires/cyberpunkelf_hologram_a.vox",
+    "voxels": 3007,
+    "default_on": false
+  },
+  {
+    "key": "hat",
+    "file": "/box2-hires/cyberpunkelf_hat.vox",
+    "voxels": 3251,
+    "default_on": true
+  },
+  {
+    "key": "hologram_projector",
+    "file": "/box2-hires/cyberpunkelf_hologram_projector.vox",
+    "voxels": 138,
+    "default_on": false
+  }
+]
