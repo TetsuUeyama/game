@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Engine,
   Scene,
@@ -160,7 +161,25 @@ interface ImportPart {
 // Component
 // ========================================================================
 
-export default function VoxViewer2Page() {
+// Model manifest configurations
+const MODELS: Record<string, { manifest: string; label: string }> = {
+  cyberpunk: { manifest: '/box2/cyberpunk_elf_parts.json', label: 'CyberpunkElf' },
+  priestess: { manifest: '/box3-new/highpriestess_blender_rigged_parts.json', label: 'HighPriestess' },
+};
+
+export default function VoxViewer2Wrapper() {
+  return (
+    <Suspense fallback={<div style={{ background: '#12121f', width: '100vw', height: '100vh' }} />}>
+      <VoxViewer2Page />
+    </Suspense>
+  );
+}
+
+function VoxViewer2Page() {
+  const searchParams = useSearchParams();
+  const modelKey = searchParams.get('model') || 'cyberpunk';
+  const modelConfig = MODELS[modelKey] || MODELS.cyberpunk;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const matRef = useRef<StandardMaterial | null>(null);
@@ -276,7 +295,7 @@ export default function VoxViewer2Page() {
     // Load import model parts from manifest
     const loadImport = async () => {
       try {
-        const resp = await fetch('/box2/cyberpunk_elf_parts.json' + CACHE_BUST);
+        const resp = await fetch(modelConfig.manifest + CACHE_BUST);
         if (!resp.ok) return;
         const parts: ImportPart[] = await resp.json();
         setImportParts(parts);
@@ -337,6 +356,21 @@ export default function VoxViewer2Page() {
         background: 'rgba(0,0,0,0.5)', color: '#ddd', fontFamily: 'monospace', fontSize: 12,
         borderRight: '1px solid rgba(255,255,255,0.08)',
       }}>
+        {/* Model selector */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+          {Object.entries(MODELS).map(([k, v]) => (
+            <a key={k} href={`?model=${k}`} style={{
+              flex: 1, padding: '5px 0', fontSize: 11, fontWeight: 'bold', textAlign: 'center',
+              textDecoration: 'none',
+              border: modelKey === k ? '2px solid #f84' : '1px solid #444', borderRadius: 4,
+              background: modelKey === k ? 'rgba(180,60,40,0.3)' : 'rgba(30,30,50,0.5)',
+              color: modelKey === k ? '#fff' : '#888',
+            }}>
+              {v.label}
+            </a>
+          ))}
+        </div>
+
         {/* Mode toggle */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
           {(['import', 'builder'] as const).map(m => (

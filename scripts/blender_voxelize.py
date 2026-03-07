@@ -29,7 +29,14 @@ print(f"  Input: {INPUT_PATH}")
 print(f"  Output dir: {OUT_DIR}")
 print(f"  Resolution: {RESOLUTION}")
 
-bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
+ext = os.path.splitext(INPUT_PATH)[1].lower()
+if ext == '.fbx':
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete()
+    bpy.ops.import_scene.fbx(filepath=INPUT_PATH)
+    print("  Imported FBX")
+else:
+    bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # No Blender pose adjustment — leg spread is done in deform_point() instead
@@ -50,16 +57,35 @@ for obj in bpy.context.scene.objects:
 # ========================================================================
 # Classify meshes: each visible mesh is a separate part for toggling
 # ========================================================================
+mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
+
+# Auto-detect common prefix from mesh names
+_names = [o.name for o in mesh_objects]
+_prefix = ""
+if len(_names) > 1:
+    _prefix = os.path.commonprefix(_names)
+    # Trim to last '_' or ' ' boundary
+    for sep in ['_', ' ']:
+        idx = _prefix.rfind(sep)
+        if idx > 0:
+            _prefix = _prefix[:idx + 1]
+            break
+    else:
+        _prefix = ""
+print(f"  Auto-detected prefix: '{_prefix}'")
+
 def part_key(name):
     """Generate a short file-safe key from mesh name."""
-    n = name.replace('CyberpunkElf ', '').replace('CyberpunkElf_', '')
+    n = name
+    if _prefix:
+        n = n[len(_prefix):] if n.startswith(_prefix) else n
+    n = n.replace('CyberpunkElf ', '').replace('CyberpunkElf_', '')
     n = n.replace('Default - ', '').strip()
     n = n.replace(' ', '_').lower()
-    # Remove trailing " - Default" etc
     n = n.replace('_-_default', '').replace('-_default', '')
+    # Collapse "clothes_" prefix for cleaner keys
+    n = n.replace('clothes_', '')
     return n
-
-mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
 part_objects = {}  # part_key -> [obj, ...]
 for obj in mesh_objects:
     key = part_key(obj.name)
@@ -200,11 +226,16 @@ for obj in mesh_objects:
         print(f"    Mat '{mat.name}' -> {tag}")
 
 # ========================================================================
-# Bounding box
+# Bounding box (BODY-ONLY for consistent deformation across models)
+# Using only body mesh ensures accessories don't affect deformation params
 # ========================================================================
+body_objects = [o for o in mesh_objects if part_key(o.name) == 'body']
+bbox_objects = body_objects if body_objects else mesh_objects
+print(f"  BBox source: {[o.name for o in bbox_objects]}")
+
 min_co = Vector((1e9, 1e9, 1e9))
 max_co = Vector((-1e9, -1e9, -1e9))
-for obj in mesh_objects:
+for obj in bbox_objects:
     dg = bpy.context.evaluated_depsgraph_get()
     eo = obj.evaluated_get(dg)
     me = eo.to_mesh()
@@ -364,6 +395,26 @@ def get_color_at(md, fi, hit):
 # ========================================================================
 # Deformed bounding box
 # ========================================================================
+# Step 1: Body-only deformed bbox → determines voxel_size (consistent across models)
+body_def_min = Vector((1e9, 1e9, 1e9))
+body_def_max = Vector((-1e9, -1e9, -1e9))
+for obj in bbox_objects:
+    dg = bpy.context.evaluated_depsgraph_get()
+    eo = obj.evaluated_get(dg)
+    me = eo.to_mesh()
+    me.transform(obj.matrix_world)
+    for v in me.vertices:
+        dc = deform_point(v.co)
+        for i in range(3):
+            body_def_min[i] = min(body_def_min[i], dc[i])
+            body_def_max[i] = max(body_def_max[i], dc[i])
+    eo.to_mesh_clear()
+
+body_def_size = body_def_max - body_def_min
+voxel_size = body_def_size.z / RESOLUTION
+print(f"  Body deformed height: {body_def_size.z:.4f}, voxel_size: {voxel_size:.6f}")
+
+# Step 2: All-meshes deformed bbox → determines grid extent (fits all parts)
 def_min = Vector((1e9, 1e9, 1e9))
 def_max = Vector((-1e9, -1e9, -1e9))
 for obj in mesh_objects:
@@ -379,7 +430,6 @@ for obj in mesh_objects:
     eo.to_mesh_clear()
 
 def_size = def_max - def_min
-voxel_size = max(def_size) / RESOLUTION
 gx = min(256, int(math.ceil(def_size.x / voxel_size)) + 2)
 gy = min(256, int(math.ceil(def_size.y / voxel_size)) + 2)
 gz = min(256, int(math.ceil(def_size.z / voxel_size)) + 2)
@@ -427,9 +477,21 @@ for key, mesh_list in all_mesh_data.items():
 # Fill body skin under clothing: only for garments that actually cover skin
 # Accessories (hat, hologram, armband, hip_plate, necktie, garter_straps) sit ON TOP of body/clothing
 # and should NOT generate skin fill underneath
-# Only parts where MASK modifiers hid body geometry (tight-fitting garments on skin)
-# Jacket excluded: collar extends beyond body surface, creating false bulge
-SKIN_COVER_PARTS = {'gloves', 'leggings', 'bra', 'panties'}
+# Tight-fitting garments that directly cover skin - auto-detect from part keys
+# Exclude parts with collars/stiff shapes that extend beyond body surface
+SKIN_EXCLUDE_KEYWORDS = {'jacket', 'hat', 'hologram', 'armband', 'hip_plate', 'necktie',
+                         'garter', 'wings', 'staff', 'pauldron', 'shoulder', 'ruffle',
+                         'gem', 'hanging', 'armor', 'decoration', 'neckerchief',
+                         'eyes', 'eyelash', 'eyeshadow', 'teeth', 'tongue', 'toungue'}
+SKIN_COVER_PARTS = set()
+for key in part_voxels:
+    if key == 'body' or key == 'hair':
+        continue
+    if any(kw in key for kw in SKIN_EXCLUDE_KEYWORDS):
+        continue
+    # Check if this part's mesh overlaps body significantly
+    SKIN_COVER_PARTS.add(key)
+print(f"  Skin cover parts: {SKIN_COVER_PARTS}")
 if 'body' in part_voxels:
     body_meshes = all_mesh_data['body']
     clothing_positions = set()
@@ -670,20 +732,46 @@ def write_vox(fp, sx, sy, sz, voxels, pal):
 import json
 part_manifest = []  # [{key, file, voxels, default_on}]
 
-# Parts that are ON by default (base body + clothing)
-DEFAULT_ON = {'body', 'hair', 'leggings', 'jacket', 'gloves', 'hat', 'panties', 'bra'}
+# Auto-detect model base name from input file
+_model_base = os.path.splitext(os.path.basename(INPUT_PATH))[0].lower()
+# Clean up common prefixes like "uploads_files_NNNNN_"
+import re
+_model_base = re.sub(r'^uploads_files_\d+_', '', _model_base)
+_model_base = _model_base.replace(' ', '_')
+# Derive output subdirectory name from OUT_DIR
+_out_subdir = os.path.basename(OUT_DIR.rstrip('/\\'))
+print(f"  Model base: '{_model_base}', output subdir: '{_out_subdir}'")
+
+# Parts that are ON by default: body, hair, eyes, teeth, tongue,
+# and any part with 'clothes' or 'suit' in original name
+# Small decorative parts (wings, staff, etc.) default to off
+DEFAULT_ON_KEYWORDS = {'body', 'hair', 'eyes', 'eyelash', 'teeth', 'tongue', 'eyeshadow'}
+CLOTHES_KEYWORDS = {'clothes', 'suit', 'leotard', 'boot', 'hat', 'jacket', 'gloves',
+                    'bra', 'panties', 'leggings', 'pauldron', 'shoulder', 'neck', 'ruffle'}
+def is_default_on(key, orig_names):
+    """Determine if a part should be on by default."""
+    k = key.lower()
+    if any(kw in k for kw in DEFAULT_ON_KEYWORDS):
+        return True
+    # Check original mesh names for clothing keywords
+    for n in orig_names:
+        nl = n.lower()
+        if any(kw in nl for kw in CLOTHES_KEYWORDS):
+            return True
+    return False
 
 for key, voxels in part_voxels.items():
     if not voxels:
         continue
-    filename = f"cyberpunk_elf_{key}.vox"
+    filename = f"{_model_base}_{key}.vox"
     vlist, pal = build_palette_and_voxels(voxels)
     write_vox(os.path.join(OUT_DIR, filename), gx, gy, gz, vlist, pal)
+    orig_names = [o.name for o in part_objects.get(key, [])]
     part_manifest.append({
         'key': key,
-        'file': f'/box2/{filename}',
+        'file': f'/{_out_subdir}/{filename}',
         'voxels': len(voxels),
-        'default_on': key in DEFAULT_ON,
+        'default_on': is_default_on(key, orig_names),
     })
 
 # Combined (all parts merged) for fallback
@@ -691,13 +779,29 @@ all_merged = {}
 for voxels in part_voxels.values():
     all_merged.update(voxels)
 vlist_c, pal_c = build_palette_and_voxels(all_merged)
-write_vox(os.path.join(OUT_DIR, "cyberpunk_elf.vox"), gx, gy, gz, vlist_c, pal_c)
+write_vox(os.path.join(OUT_DIR, f"{_model_base}.vox"), gx, gy, gz, vlist_c, pal_c)
 
 # Write manifest JSON for the viewer
-manifest_path = os.path.join(OUT_DIR, "cyberpunk_elf_parts.json")
+manifest_path = os.path.join(OUT_DIR, f"{_model_base}_parts.json")
 with open(manifest_path, 'w') as f:
     json.dump(part_manifest, f, indent=2)
 print(f"  -> {manifest_path}: {len(part_manifest)} parts")
+
+# Write grid info JSON for body sharing / cross-model alignment
+grid_info = {
+    'gx': gx, 'gy': gy, 'gz': gz,
+    'voxel_size': voxel_size,
+    'def_min': [def_min.x, def_min.y, def_min.z],
+    'def_max': [def_max.x, def_max.y, def_max.z],
+    'raw_min': [min_co.x, min_co.y, min_co.z],
+    'raw_max': [max_co.x, max_co.y, max_co.z],
+    'raw_center': [center.x, center.y, center.z],
+    'model_h': model_h,
+}
+grid_info_path = os.path.join(OUT_DIR, f"{_model_base}_grid.json")
+with open(grid_info_path, 'w') as f:
+    json.dump(grid_info, f, indent=2)
+print(f"  -> {grid_info_path}: grid info saved")
 
 # Cleanup
 for cat in all_mesh_data:
