@@ -71,13 +71,13 @@ const PALETTES = {
     pupil:       [30, 18, 15],
     eyelid:      [185, 135, 118],
     eyelash:     [45, 28, 22],
-    eyebrow:     [85, 55, 45],
+    eyebrow:     [150, 115, 100],
     nose_shadow: [150, 115, 110],
     nostril:     [125, 88, 82],
-    lip_upper:   [170, 90, 85],
-    lip_lower:   [150, 85, 78],
-    lip_dark:    [130, 70, 65],
-    lip_line:    [110, 65, 60],
+    lip_upper:   [200, 125, 118],
+    lip_lower:   [185, 115, 108],
+    lip_dark:    [170, 105, 98],
+    lip_line:    [165, 80, 75],
   }
 };
 const colors = PALETTES[NAME] || PALETTES.qm;
@@ -183,27 +183,51 @@ const EYE_OFF = 5; // offset from center in x2 coords
 drawEyeRow(85, 1, EYE_OFF, 'LLLL.',  eyeMap); // lower lid:   .,L,L,L,L,L,L,L,.
 drawEyeRow(86, 0, EYE_OFF, 'ooWL.',  eyeMap); // iris lower:   .,L,W,o,o,o,W,L,.
 drawEyeRow(86, 1, EYE_OFF, 'PioWL',  eyeMap); // pupil row:    L,W,o,i,P,i,o,W,L
-drawEyeRow(87, 0, EYE_OFF, 'ooWW.',  eyeMap); // iris upper:   .,W,W,o,o,o,W,W,.
+drawEyeRow(87, 0, EYE_OFF, 'ooW..',  eyeMap); // iris upper:   ..,.,W,o,o,o,W,.,.
+
+// Outer-only black accents (manually placed, no inner mirror)
+{
+  const cx2 = Math.round(bodyCenterX * MULT);
+  const rEye = cx2 + EYE_OFF;     // right eye center
+  const lEye = cx2 - 1 - EYE_OFF; // left eye center
+  const z2 = 87 * MULT;           // same row as iris upper
+  // Outer black at outermost edge of each eye
+  featureVoxels.push({ x2: rEye + 4, z2, color: 'pupil' });    // right eye outer
+  featureVoxels.push({ x2: lEye - 4, z2, color: 'pupil' });    // left eye outer
+  // Diagonally above-outside
+  featureVoxels.push({ x2: rEye + 5, z2: z2 + 1, color: 'pupil' }); // right eye upper-outer
+  featureVoxels.push({ x2: lEye - 5, z2: z2 + 1, color: 'pupil' }); // left eye upper-outer
+}
 
 // ========================================================================
 // EYEBROWS — z≈93-94, offset ±4-8 from center
 // ========================================================================
-const browMap = { 'B': 'eyebrow' };
-// Center-outward: 'BBBB.' = 7px solid brow, 'BBBBB' = 9px solid brow
-drawEyeRow(90, 0, EYE_OFF, 'BBBB.',  browMap); // 7px each brow
-drawEyeRow(90, 1, EYE_OFF, 'BBBBB',  browMap); // 9px each brow (thickest)
-drawEyeRow(91, 0, EYE_OFF, 'BBBB.',  browMap); // 7px each brow
+// Angled eyebrows: 1 row thick, rising ~10° from inner to outer
+{
+  const cx2 = Math.round(bodyCenterX * MULT);
+  const rEye = cx2 + EYE_OFF;
+  const lEye = cx2 - 1 - EYE_OFF;
+  const baseZ2 = 88 * MULT; // lowered position
+  const browHalf = 4; // half-width (9px total per brow)
+  const angleRise = 2; // total z2 rise from inner to outer (~10°)
+
+  for (let i = -browHalf; i <= browHalf; i++) {
+    const t = (i + browHalf) / (2 * browHalf); // 0=inner, 1=outer
+    let dz = Math.round(t * angleRise);
+    // Outermost pixel: drop 1px
+    if (i === browHalf) dz -= 1;
+    // Right brow: inner(-) to outer(+)
+    featureVoxels.push({ x2: rEye + i, z2: baseZ2 + dz, color: 'eyebrow' });
+    // Left brow: mirrored
+    featureVoxels.push({ x2: lEye - i, z2: baseZ2 + dz, color: 'eyebrow' });
+  }
+}
 
 // ========================================================================
 // NOSE — centered, z≈84-87
 // ========================================================================
 const noseMap = { 's': 'nose_shadow', 'N': 'nostril' };
-drawSymRow(84, 0, '.N',  noseMap);  // nostrils
-drawSymRow(84, 1, '.s',  noseMap);
-drawSymRow(85, 0, '.s',  noseMap);  // nose sides
-drawSymRow(85, 1, '.s',  noseMap);
-drawSymRow(86, 0, 's',   noseMap);  // nose bridge
-drawSymRow(86, 1, 's',   noseMap);
+// Nose removed
 
 // ========================================================================
 // MOUTH — centered, z≈81-83
@@ -214,12 +238,26 @@ const mouthMap = {
 };
 // Mouth: center-outward. drawSymRow i=0 maps to center PAIR (cx2 and cx2-1).
 // Pattern 'LLc' → c,L,L,L,L,c (6px), 'LLLLc' → c,L,L,L,L,L,L,L,L,c (10px)
-drawSymRow(81, 0, 'LLc',     mouthMap);  // bottom:    c,L,L,L,L,c  (6px)
-drawSymRow(81, 1, 'LLLc',    mouthMap);  // wider:     c,L,L,L,L,L,L,c  (8px)
-drawSymRow(82, 0, 'LLLLc',   mouthMap);  // widest:    c,L,L,L,L,L,L,L,L,c  (10px)
-drawSymRow(82, 1, 'lllll',   mouthMap);  // lip line:  l,l,l,l,l,l,l,l,l,l  (10px)
-drawSymRow(83, 0, 'UUUUD',   mouthMap);  // upper lip: D,U,U,U,U,U,U,U,U,D  (10px)
-drawSymRow(83, 1, 'UUU',     mouthMap);  // top peak:  U,U,U,U,U,U  (6px)
+drawSymRow(81, 1, 'Lc',      mouthMap);  // bottom:     c,L,L,c  (4px)
+drawSymRow(82, 0, 'LLc',     mouthMap);  // lower lip:  c,L,L,L,L,c  (6px)
+drawSymRow(82, 1, 'llll',    mouthMap);  // lip line:   l,l,l,l,l,l,l,l  (8px)
+// Upper lip with slight downward angle at outer edges
+{
+  const cx2 = Math.round(bodyCenterX * MULT);
+  const baseZ2 = 83 * MULT; // z2=166
+  const pattern = 'UUUUD'; // 5 chars = 10px total
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    const colorName = mouthMap[ch];
+    if (!colorName) continue;
+    // Outer 2 pixels drop by 1
+    const dz = (i >= 3) ? -1 : 0;
+    const xR = cx2 + i;
+    const xL = cx2 - 1 - i;
+    featureVoxels.push({ x2: xR, z2: baseZ2 + dz, color: colorName });
+    if (xL !== xR) featureVoxels.push({ x2: xL, z2: baseZ2 + dz, color: colorName });
+  }
+}
 
 // ========================================================================
 // Build final voxels on body surface
@@ -249,15 +287,13 @@ for (const fv of featureVoxels) {
 
   const ci = getColorIdx(color);
 
-  // Place at surface and 1 in front (y = surfY - 1 and surfY)
-  for (const dy of [-1, 0]) {
-    const vy = surfY + dy;
-    if (vy < 0 || vy >= GY) continue;
-    const posKey = `${x2},${vy},${z2}`;
-    if (posSet.has(posKey)) continue;
-    posSet.add(posKey);
-    voxels.push({ x: x2, y: vy, z: z2, c: ci });
-  }
+  // Place 1 in front of surface only (1 voxel thick)
+  const vy = surfY - 1;
+  if (vy < 0 || vy >= GY) continue;
+  const posKey = `${x2},${vy},${z2}`;
+  if (posSet.has(posKey)) continue;
+  posSet.add(posKey);
+  voxels.push({ x: x2, y: vy, z: z2, c: ci });
 }
 
 console.log(`Face voxels: ${voxels.length}, Palette: ${palette.length} colors`);
