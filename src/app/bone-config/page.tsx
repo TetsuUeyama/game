@@ -6,9 +6,12 @@ import {
   Engine, Scene, ArcRotateCamera, HemisphericLight,
   Vector3, Color4, Mesh, VertexData, ShaderMaterial, Effect,
   MeshBuilder, StandardMaterial, Color3, Plane, PointerEventTypes,
+  TransformNode,
 } from '@babylonjs/core';
 import { loadVoxFile, SCALE, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import type { VoxelEntry } from '@/lib/vox-parser';
+import { MODEL_REGISTRY, DEFAULT_MODEL_ID } from '@/lib/model-registry';
+import type { ModelEntry } from '@/lib/model-registry';
 
 // ========================================================================
 // Key Markers
@@ -177,8 +180,6 @@ function getDefaultMarkers(centerX: number): MarkerData {
 // ========================================================================
 // Helpers
 // ========================================================================
-const VOX_BODY_URL = '/box5/vagrant_rig_vagrant_body.vox';
-
 function createUnlitMaterial(scene: Scene, name: string): ShaderMaterial {
   Effect.ShadersStore[name + 'VertexShader'] = `
     precision highp float;
@@ -247,6 +248,310 @@ function viewerToVoxel(viewerPos: Vector3, cx: number, cy: number): Vec3 {
 function r1(n: number): number { return Math.round(n * 10) / 10; }
 
 // ========================================================================
+// Preview: body mover with split parts, pivots, caps, rotation
+// ========================================================================
+interface PreviewPartDef {
+  name: string;
+  label: string;
+  color: string;
+  classify: (x: number, y: number, z: number) => boolean;
+  pivotX: number | 'auto';
+  pivotZ: number | 'auto';
+  capLayers: number;
+}
+
+function buildPreviewParts(bones: Record<string, Vec3>): PreviewPartDef[] {
+  const neck = bones['Neck'];
+  const hips = bones['Hips'];
+  const lShoulder = bones['LeftShoulder'];
+  const rShoulder = bones['RightShoulder'];
+  const spine1 = bones['Spine1'];
+  const headZ = neck.z;
+  const legZ = hips.z;
+  const armLeftX = lShoulder.x;
+  const armRightX = rShoulder.x;
+  const legCenterX = hips.x;
+  const torsoCenterX = (hips.x + neck.x) / 2;
+  const torsoCenterZ = spine1.z;
+
+  return [
+    { name: 'head', label: 'Head', color: '#ffaa44', classify: (_x, _y, z) => z >= headZ, pivotX: neck.x, pivotZ: headZ, capLayers: 4 },
+    { name: 'leftArm', label: 'Left Arm', color: '#44aaff', classify: (x, _y, z) => z >= legZ && z < headZ && x < armLeftX, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
+    { name: 'rightArm', label: 'Right Arm', color: '#ff44aa', classify: (x, _y, z) => z >= legZ && z < headZ && x > armRightX, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
+    { name: 'leftLeg', label: 'Left Leg', color: '#44ffaa', classify: (x, _y, z) => z < legZ && x < legCenterX, pivotX: bones['LeftUpLeg'].x, pivotZ: legZ, capLayers: 4 },
+    { name: 'rightLeg', label: 'Right Leg', color: '#aaff44', classify: (x, _y, z) => z < legZ && x >= legCenterX, pivotX: bones['RightUpLeg'].x, pivotZ: legZ, capLayers: 4 },
+    { name: 'torso', label: 'Torso', color: '#aaaaaa', classify: () => true, pivotX: torsoCenterX, pivotZ: torsoCenterZ, capLayers: 4 },
+  ];
+}
+
+interface PreviewPartState { rotX: number; rotZ: number; }
+
+function buildPartMeshOpaque(voxels: VoxelEntry[], scene: Scene, name: string, cx: number, cy: number): Mesh {
+  const occupied = new Set<string>();
+  for (const v of voxels) occupied.add(`${v.x},${v.y},${v.z}`);
+  const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+  for (const voxel of voxels) {
+    for (let f = 0; f < 6; f++) {
+      const [dx, dy, dz] = FACE_DIRS[f];
+      if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;
+      const bi = positions.length / 3;
+      const fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
+      for (let vi = 0; vi < 4; vi++) {
+        positions.push((voxel.x + fv[vi][0] - cx) * SCALE, (voxel.z + fv[vi][2]) * SCALE, -(voxel.y + fv[vi][1] - cy) * SCALE);
+        normals.push(fn[0], fn[2], -fn[1]);
+        colors.push(voxel.r, voxel.g, voxel.b, 1);
+      }
+      indices.push(bi, bi + 1, bi + 2, bi, bi + 2, bi + 3);
+    }
+  }
+  const vd = new VertexData();
+  vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
+  const mesh = new Mesh(name, scene);
+  vd.applyToMesh(mesh);
+  mesh.material = createUnlitMaterial(scene, name + '_unlit');
+  return mesh;
+}
+
+function buildPreviewMeshes(
+  voxels: VoxelEntry[], bones: Record<string, Vec3>,
+  scene: Scene, cx: number, cy: number,
+): { nodes: Map<string, TransformNode>; meshes: Map<string, Mesh>; parts: PreviewPartDef[] } {
+  const parts = buildPreviewParts(bones);
+
+  // Classify voxels
+  const partVoxels: Record<string, VoxelEntry[]> = {};
+  for (const p of parts) partVoxels[p.name] = [];
+  for (const v of voxels) {
+    let assigned = false;
+    for (const p of parts) {
+      if (p.name === 'torso') continue;
+      if (p.classify(v.x, v.y, v.z)) { partVoxels[p.name].push(v); assigned = true; break; }
+    }
+    if (!assigned) partVoxels['torso'].push(v);
+  }
+
+  // Build allOccupied + surface color map for caps
+  const allOccupied = new Set<string>();
+  const surfaceColorMap = new Map<string, { r: number; g: number; b: number }>();
+  for (const v of voxels) {
+    const k = `${v.x},${v.y},${v.z}`;
+    allOccupied.add(k);
+    surfaceColorMap.set(k, { r: v.r, g: v.g, b: v.b });
+  }
+
+  // Pyramid caps per part
+  for (const part of parts) {
+    const thisSet = new Set<string>();
+    for (const v of partVoxels[part.name]) thisSet.add(`${v.x},${v.y},${v.z}`);
+
+    interface BInfo { x: number; y: number; z: number; dx: number; dy: number; dz: number; r: number; g: number; b: number }
+    const boundaries: BInfo[] = [];
+    for (const v of partVoxels[part.name]) {
+      for (const [dx, dy, dz] of FACE_DIRS) {
+        const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
+        if (allOccupied.has(nk) && !thisSet.has(nk)) {
+          const sc = surfaceColorMap.get(`${v.x},${v.y},${v.z}`) ?? { r: v.r, g: v.g, b: v.b };
+          boundaries.push({ x: v.x, y: v.y, z: v.z, dx, dy, dz, r: sc.r, g: sc.g, b: sc.b });
+        }
+      }
+    }
+
+    const dirGroups = new Map<string, BInfo[]>();
+    for (const b of boundaries) {
+      const dk = `${b.dx},${b.dy},${b.dz}`;
+      if (!dirGroups.has(dk)) dirGroups.set(dk, []);
+      dirGroups.get(dk)!.push(b);
+    }
+
+    const capVoxels: VoxelEntry[] = [];
+    const perpDirs = (dx: number, dy: number, dz: number) =>
+      FACE_DIRS.filter(([fx, fy, fz]) => !(fx === dx && fy === dy && fz === dz) && !(fx === -dx && fy === -dy && fz === -dz));
+
+    for (const [, group] of dirGroups) {
+      const { dx, dy, dz } = group[0];
+      let section = new Map<string, VoxelEntry>();
+      for (const b of group) {
+        const k = `${b.x},${b.y},${b.z}`;
+        if (!section.has(k)) section.set(k, { x: b.x, y: b.y, z: b.z, r: b.r, g: b.g, b: b.b });
+      }
+      const pd = perpDirs(dx, dy, dz);
+      let depth = 0;
+      for (let stage = 0; stage < part.capLayers; stage++) {
+        if (stage > 0) {
+          const eroded = new Map<string, VoxelEntry>();
+          for (const [k, v] of section) {
+            let nc = 0;
+            for (const [px, py, pz] of pd) {
+              if (section.has(`${v.x + px},${v.y + py},${v.z + pz}`)) nc++;
+            }
+            if (nc >= 3) eroded.set(k, v);
+          }
+          section = eroded;
+        }
+        if (section.size === 0) break;
+        depth++;
+        for (const [, v] of section) {
+          const ck = `${v.x + dx * depth},${v.y + dy * depth},${v.z + dz * depth}`;
+          if (!thisSet.has(ck)) {
+            capVoxels.push({ x: v.x + dx * depth, y: v.y + dy * depth, z: v.z + dz * depth, r: v.r, g: v.g, b: v.b });
+            thisSet.add(ck);
+          }
+        }
+      }
+    }
+    partVoxels[part.name].push(...capVoxels);
+  }
+
+  // Build meshes with TransformNodes
+  const nodes = new Map<string, TransformNode>();
+  const meshes = new Map<string, Mesh>();
+
+  for (const part of parts) {
+    const pv = partVoxels[part.name];
+    if (pv.length === 0) continue;
+
+    // Compute pivot
+    let rpX = typeof part.pivotX === 'number' ? part.pivotX : 0;
+    let rpZ = typeof part.pivotZ === 'number' ? part.pivotZ : 0;
+    if (part.pivotX === 'auto' || part.pivotZ === 'auto') {
+      const thisSet = new Set<string>();
+      for (const v of pv) thisSet.add(`${v.x},${v.y},${v.z}`);
+      const bvs: VoxelEntry[] = [];
+      for (const v of pv) {
+        for (const [dx, dy, dz] of FACE_DIRS) {
+          if (allOccupied.has(`${v.x + dx},${v.y + dy},${v.z + dz}`) && !thisSet.has(`${v.x + dx},${v.y + dy},${v.z + dz}`)) {
+            bvs.push(v); break;
+          }
+        }
+      }
+      if (bvs.length > 0) {
+        if (part.pivotX === 'auto') { const xs = bvs.map(v => v.x); rpX = (Math.min(...xs) + Math.max(...xs) + 1) / 2; }
+        if (part.pivotZ === 'auto') { const zs = bvs.map(v => v.z); rpZ = (Math.min(...zs) + Math.max(...zs) + 1) / 2; }
+      }
+    }
+
+    const pivotViewX = (rpX - cx) * SCALE;
+    const pivotViewY = rpZ * SCALE;
+
+    const node = new TransformNode(`pivot_${part.name}`, scene);
+    node.position = new Vector3(pivotViewX, pivotViewY, 0);
+
+    const mesh = buildPartMeshOpaque(pv, scene, `preview_${part.name}`, cx, cy);
+    mesh.position = new Vector3(-pivotViewX, -pivotViewY, 0);
+    mesh.parent = node;
+    mesh.isPickable = false;
+
+    nodes.set(part.name, node);
+    meshes.set(part.name, mesh);
+  }
+
+  return { nodes, meshes, parts };
+}
+
+// ========================================================================
+// Motion presets for split verification
+// ========================================================================
+interface MotionPreset {
+  name: string;
+  label: string;
+  cycleDuration: number; // seconds per loop
+  evaluate: (t: number) => Record<string, PreviewPartState>; // t in [0,1]
+}
+
+const MOTION_PRESETS: MotionPreset[] = [
+  {
+    name: 'walk',
+    label: 'Walk (歩行)',
+    cycleDuration: 1.2,
+    evaluate: (t) => {
+      const a = t * Math.PI * 2;
+      const sin = Math.sin, cos = Math.cos;
+      return {
+        head:     { rotX: sin(a * 2) * 3,  rotZ: sin(a) * 2 },
+        leftArm:  { rotX: -sin(a) * 25,    rotZ: 5 },
+        rightArm: { rotX: sin(a) * 25,     rotZ: -5 },
+        leftLeg:  { rotX: sin(a) * 30,     rotZ: 0 },
+        rightLeg: { rotX: -sin(a) * 30,    rotZ: 0 },
+        torso:    { rotX: cos(a * 2) * 2,  rotZ: sin(a) * 3 },
+      };
+    },
+  },
+  {
+    name: 'run',
+    label: 'Run (走行)',
+    cycleDuration: 0.6,
+    evaluate: (t) => {
+      const a = t * Math.PI * 2;
+      const sin = Math.sin, cos = Math.cos;
+      return {
+        head:     { rotX: sin(a * 2) * 5,  rotZ: sin(a) * 3 },
+        leftArm:  { rotX: -sin(a) * 50,    rotZ: -10 },
+        rightArm: { rotX: sin(a) * 50,     rotZ: 10 },
+        leftLeg:  { rotX: sin(a) * 55,     rotZ: 0 },
+        rightLeg: { rotX: -sin(a) * 55,    rotZ: 0 },
+        torso:    { rotX: cos(a * 2) * 5,  rotZ: sin(a) * 5 },
+      };
+    },
+  },
+  {
+    name: 'idle',
+    label: 'Idle (待機)',
+    cycleDuration: 3.0,
+    evaluate: (t) => {
+      const a = t * Math.PI * 2;
+      const sin = Math.sin;
+      return {
+        head:     { rotX: sin(a) * 3,        rotZ: sin(a * 0.7) * 2 },
+        leftArm:  { rotX: sin(a) * 2,        rotZ: 3 },
+        rightArm: { rotX: sin(a + 0.5) * 2,  rotZ: -3 },
+        leftLeg:  { rotX: 0, rotZ: 0 },
+        rightLeg: { rotX: 0, rotZ: 0 },
+        torso:    { rotX: sin(a) * 2, rotZ: 0 },
+      };
+    },
+  },
+  {
+    name: 'jump',
+    label: 'Jump (ジャンプ)',
+    cycleDuration: 1.5,
+    evaluate: (t) => {
+      const sin = Math.sin, a = t * Math.PI * 2;
+      // Crouch → stretch → land
+      const phase = t < 0.3 ? t / 0.3 : t < 0.6 ? 1 - (t - 0.3) / 0.3 : 0;
+      const crouch = sin(phase * Math.PI) * 40;
+      const armLift = sin(phase * Math.PI) * -60;
+      return {
+        head:     { rotX: -crouch * 0.2,  rotZ: 0 },
+        leftArm:  { rotX: armLift,         rotZ: -20 * phase },
+        rightArm: { rotX: armLift,         rotZ: 20 * phase },
+        leftLeg:  { rotX: crouch,          rotZ: sin(a) * 3 },
+        rightLeg: { rotX: crouch,          rotZ: -sin(a) * 3 },
+        torso:    { rotX: -crouch * 0.3,   rotZ: 0 },
+      };
+    },
+  },
+  {
+    name: 'dance',
+    label: 'Dance (ダンス)',
+    cycleDuration: 2.0,
+    evaluate: (t) => {
+      const a = t * Math.PI * 2;
+      const sin = Math.sin, cos = Math.cos;
+      return {
+        head:     { rotX: sin(a * 2) * 8,   rotZ: cos(a) * 10 },
+        leftArm:  { rotX: sin(a) * 40,      rotZ: cos(a * 2) * 30 - 15 },
+        rightArm: { rotX: -sin(a) * 40,     rotZ: -cos(a * 2) * 30 + 15 },
+        leftLeg:  { rotX: sin(a * 2) * 20,  rotZ: cos(a) * 10 },
+        rightLeg: { rotX: -sin(a * 2) * 20, rotZ: -cos(a) * 10 },
+        torso:    { rotX: sin(a * 2) * 5,   rotZ: sin(a) * 12 },
+      };
+    },
+  },
+];
+
+type PageMode = 'edit' | 'preview';
+
+// ========================================================================
 // Component
 // ========================================================================
 export default function BoneConfigPage() {
@@ -262,7 +567,22 @@ export default function BoneConfigPage() {
   const draggingRef = useRef<{ markerName: string; plane: Plane; offset: Vector3 } | null>(null);
   const viewRef = useRef<ViewDirection>('front');
   const autoMirrorRef = useRef(true);
+  const previewNodesRef = useRef<Map<string, TransformNode>>(new Map());
+  const previewMeshesRef = useRef<Map<string, Mesh>>(new Map());
+  const previewPartsRef = useRef<PreviewPartDef[]>([]);
+  const voxelsRef = useRef<VoxelEntry[]>([]);
 
+  const [currentModel] = useState<ModelEntry>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const modelId = params.get('model');
+      if (modelId) {
+        const m = MODEL_REGISTRY.find(e => e.id === modelId);
+        if (m) return m;
+      }
+    }
+    return MODEL_REGISTRY.find(m => m.id === DEFAULT_MODEL_ID) ?? MODEL_REGISTRY[0];
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [markers, setMarkers] = useState<MarkerData>(() => getDefaultMarkers(35));
@@ -275,6 +595,13 @@ export default function BoneConfigPage() {
   const [tab, setTab] = useState<'markers' | 'bones'>('markers');
   const [viewDir, setViewDir] = useState<ViewDirection>('front');
   const [autoMirror, setAutoMirror] = useState(true);
+  const [mode, setMode] = useState<PageMode>('edit');
+  const [previewPartStates, setPreviewPartStates] = useState<Record<string, PreviewPartState>>({});
+  const [playingMotion, setPlayingMotion] = useState<string | null>(null);
+  const [motionSpeed, setMotionSpeed] = useState(1.0);
+  const animCallbackRef = useRef<(() => void) | null>(null);
+  const animTimeRef = useRef(0);
+  const loadKeyRef = useRef(0);
 
   // Keep refs in sync
   useEffect(() => { autoMirrorRef.current = autoMirror; }, [autoMirror]);
@@ -556,39 +883,60 @@ export default function BoneConfigPage() {
     return () => { window.removeEventListener('resize', onResize); engine.dispose(); };
   }, []);
 
-  // Load body + saved config
+  // Load body + saved config (re-runs when model changes)
   useEffect(() => {
     if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    const thisLoadKey = ++loadKeyRef.current;
+
+    // Clear existing body mesh
+    if (bodyMeshRef.current) { bodyMeshRef.current.dispose(); bodyMeshRef.current = null; }
+
+    setLoading(true);
+    setError(null);
+    setDirty(false);
+
     (async () => {
       try {
-        const { model, voxels } = await loadVoxFile(VOX_BODY_URL);
+        const { model, voxels } = await loadVoxFile(currentModel.bodyFile);
+        if (loadKeyRef.current !== thisLoadKey) return; // stale
+
         const cx = model.sizeX / 2;
         const cy = model.sizeY / 2;
         const maxZ = model.sizeZ;
         centerRef.current = { cx, cy, maxZ };
+        voxelsRef.current = voxels;
 
-        bodyMeshRef.current = buildBodyMesh(voxels, sceneRef.current!, cx, cy, 0.25);
+        bodyMeshRef.current = buildBodyMesh(voxels, scene, cx, cy, 0.25);
 
+        // Load saved bone config for this model
+        let loaded = false;
         try {
-          const resp = await fetch('/api/bone-config');
+          const resp = await fetch(`/api/bone-config?dir=${currentModel.dir}`);
           if (resp.ok) {
             const data = await resp.json();
             if (data?.markers && typeof data.markers === 'object') {
               setMarkers(prev => ({ ...prev, ...data.markers }));
               if (data.autoMirror === false) setAutoMirror(false);
-            } else if (data && typeof data === 'object' && !data.markers) {
-              setMarkers(getDefaultMarkers(cx));
+              else setAutoMirror(true);
+              loaded = true;
             }
           }
         } catch { /* use defaults */ }
 
+        if (!loaded) {
+          setMarkers(getDefaultMarkers(cx));
+          setAutoMirror(true);
+        }
+
         setLoading(false);
       } catch (e) {
+        if (loadKeyRef.current !== thisLoadKey) return;
         setError(e instanceof Error ? e.message : String(e));
         setLoading(false);
       }
     })();
-  }, []);
+  }, [currentModel]);
 
   // Rebuild visuals
   useEffect(() => {
@@ -644,10 +992,120 @@ export default function BoneConfigPage() {
     });
   }, [selectedMarker, applyAutoMirror]);
 
-  const handleSave = useCallback(async () => {
+  const resetToDefaults = useCallback(() => {
+    const { cx } = centerRef.current;
+    setMarkers(getDefaultMarkers(cx));
+    setAutoMirror(true);
+    setDirty(true);
+  }, []);
+
+
+  // Enter preview: hide edit visuals, build body mover meshes, free camera
+  const enterPreview = useCallback(() => {
+    const scene = sceneRef.current;
+    const canvas = canvasRef.current;
+    if (!scene || !canvas || Object.keys(calculatedBones).length === 0) return;
+    const { cx, cy } = centerRef.current;
+
+    // Hide edit visuals
+    if (bodyMeshRef.current) bodyMeshRef.current.setEnabled(false);
+    for (const m of markerSpheresRef.current.values()) m.setEnabled(false);
+    for (const m of jointSpheresRef.current.values()) m.setEnabled(false);
+    for (const m of boneLineMeshesRef.current) m.setEnabled(false);
+    if (centerLineMeshRef.current) centerLineMeshRef.current.setEnabled(false);
+
+    // Dispose old preview
+    for (const m of previewMeshesRef.current.values()) m.dispose();
+    for (const n of previewNodesRef.current.values()) n.dispose();
+    previewMeshesRef.current.clear();
+    previewNodesRef.current.clear();
+
+    // Build body mover meshes with pivots and caps
+    const { nodes, meshes, parts } = buildPreviewMeshes(voxelsRef.current, calculatedBones, scene, cx, cy);
+    previewNodesRef.current = nodes;
+    previewMeshesRef.current = meshes;
+    previewPartsRef.current = parts;
+
+    // Init part states
+    const states: Record<string, PreviewPartState> = {};
+    for (const p of parts) states[p.name] = { rotX: 0, rotZ: 0 };
+    setPreviewPartStates(states);
+
+    // Enable free camera rotation
+    const camera = cameraRef.current;
+    if (camera) {
+      camera.inputs.addPointers();
+      camera.attachControl(canvas, true);
+    }
+
+    setMode('preview');
+  }, [calculatedBones]);
+
+  // Exit preview: restore edit visuals, dispose preview meshes, fixed camera
+  const exitPreview = useCallback(() => {
+    // Stop animation
+    const scene = sceneRef.current;
+    if (scene && animCallbackRef.current) {
+      scene.unregisterBeforeRender(animCallbackRef.current);
+      animCallbackRef.current = null;
+    }
+    animTimeRef.current = 0;
+    setPlayingMotion(null);
+
+    // Dispose preview meshes
+    for (const m of previewMeshesRef.current.values()) m.dispose();
+    for (const n of previewNodesRef.current.values()) n.dispose();
+    previewMeshesRef.current.clear();
+    previewNodesRef.current.clear();
+    previewPartsRef.current = [];
+
+    // Restore edit visuals
+    if (bodyMeshRef.current) bodyMeshRef.current.setEnabled(showBody);
+    for (const m of markerSpheresRef.current.values()) m.setEnabled(true);
+    for (const m of jointSpheresRef.current.values()) m.setEnabled(true);
+    for (const m of boneLineMeshesRef.current) m.setEnabled(true);
+    if (centerLineMeshRef.current) centerLineMeshRef.current.setEnabled(true);
+
+    // Restore fixed camera
+    const camera = cameraRef.current;
+    if (camera) {
+      camera.detachControl();
+      camera.inputs.clear();
+      camera.inputs.addMouseWheel();
+      setCameraView(viewRef.current);
+    }
+
+    setMode('edit');
+  }, [showBody, setCameraView]);
+
+  // Apply preview part rotations
+  useEffect(() => {
+    if (mode !== 'preview') return;
+    for (const [name, state] of Object.entries(previewPartStates)) {
+      const node = previewNodesRef.current.get(name);
+      if (!node) continue;
+      node.rotation.x = (state.rotX * Math.PI) / 180;
+      node.rotation.z = (state.rotZ * Math.PI) / 180;
+    }
+  }, [previewPartStates, mode]);
+
+  const updatePreviewPart = useCallback((name: string, field: keyof PreviewPartState, value: number) => {
+    setPreviewPartStates(prev => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
+  }, []);
+
+  const resetPreviewParts = useCallback(() => {
+    setPreviewPartStates(prev => {
+      const next: Record<string, PreviewPartState> = {};
+      for (const k of Object.keys(prev)) next[k] = { rotX: 0, rotZ: 0 };
+      return next;
+    });
+  }, []);
+
+  // Save from preview mode
+  const handleConfirmSave = useCallback(async () => {
     setSaving(true);
     try {
-      const resp = await fetch('/api/bone-config', {
+      const resp = await fetch(`/api/bone-config?dir=${currentModel.dir}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markers, bones: calculatedBones, autoMirror }),
@@ -658,14 +1116,67 @@ export default function BoneConfigPage() {
       alert(e instanceof Error ? e.message : String(e));
     }
     setSaving(false);
-  }, [markers, calculatedBones, autoMirror]);
+  }, [markers, calculatedBones, autoMirror, currentModel]);
 
-  const resetToDefaults = useCallback(() => {
-    const { cx } = centerRef.current;
-    setMarkers(getDefaultMarkers(cx));
-    setAutoMirror(true);
-    setDirty(true);
+  // Motion playback
+  const stopMotion = useCallback(() => {
+    const scene = sceneRef.current;
+    if (scene && animCallbackRef.current) {
+      scene.unregisterBeforeRender(animCallbackRef.current);
+    }
+    animCallbackRef.current = null;
+    animTimeRef.current = 0;
+    setPlayingMotion(null);
   }, []);
+
+  const startMotion = useCallback((presetName: string) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    // Stop any running animation
+    if (animCallbackRef.current) {
+      scene.unregisterBeforeRender(animCallbackRef.current);
+      animCallbackRef.current = null;
+    }
+
+    const preset = MOTION_PRESETS.find(p => p.name === presetName);
+    if (!preset) return;
+
+    animTimeRef.current = 0;
+    let lastTime = performance.now();
+
+    const callback = () => {
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      animTimeRef.current += dt * motionSpeed;
+
+      const t = (animTimeRef.current % preset.cycleDuration) / preset.cycleDuration;
+      const states = preset.evaluate(t);
+
+      // Apply directly to nodes (skip React state for performance)
+      for (const [name, state] of Object.entries(states)) {
+        const node = previewNodesRef.current.get(name);
+        if (node) {
+          node.rotation.x = (state.rotX * Math.PI) / 180;
+          node.rotation.z = (state.rotZ * Math.PI) / 180;
+        }
+      }
+    };
+
+    animCallbackRef.current = callback;
+    scene.registerBeforeRender(callback);
+    setPlayingMotion(presetName);
+  }, [motionSpeed]);
+
+  // Update speed on running animation
+  useEffect(() => {
+    if (playingMotion) {
+      // Restart with new speed
+      startMotion(playingMotion);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motionSpeed]);
 
   const selMarker = MARKER_DEFS.find(m => m.name === selectedMarker);
   const selPos = selectedMarker ? markers[selectedMarker] : null;
@@ -686,78 +1197,86 @@ export default function BoneConfigPage() {
             <span style={{ fontWeight: 'bold', fontSize: 16 }}>Bone Config</span>
             <Link href="/" style={{ color: '#888', fontSize: 11, textDecoration: 'none' }}>Top</Link>
           </div>
-          <div style={{ fontSize: 11, color: '#888' }}>マーカーで20ボーンを自動配置</div>
+          <div style={{ fontSize: 11, color: '#888' }}>
+            Model: <span style={{ color: '#aaf' }}>{currentModel.label}</span>
+          </div>
         </div>
 
         {error && <div style={{ padding: 12, color: '#f88', fontSize: 12 }}>Error: {error}</div>}
         {loading && <div style={{ padding: 12, color: '#88f', fontSize: 12 }}>Loading...</div>}
 
-        {/* View direction */}
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>View Direction</div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {VIEW_DEFS.map(vDef => {
-              const active = viewDir === vDef.key;
-              return (
-                <button
-                  key={vDef.key}
-                  onClick={() => switchView(vDef.key)}
-                  style={{
-                    flex: 1, padding: '6px 0', border: 'none', borderRadius: 4, cursor: 'pointer',
-                    fontSize: 12, fontWeight: 'bold',
-                    background: active ? '#3a3a8e' : '#1a1a3e',
-                    color: active ? '#fff' : '#888',
-                    outline: active ? '2px solid #66f' : '1px solid #333',
-                  }}
-                >{vDef.label}</button>
-              );
-            })}
+        {/* View direction (edit mode only) */}
+        {mode === 'edit' && (
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>View Direction</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {VIEW_DEFS.map(vDef => {
+                const active = viewDir === vDef.key;
+                return (
+                  <button
+                    key={vDef.key}
+                    onClick={() => switchView(vDef.key)}
+                    style={{
+                      flex: 1, padding: '6px 0', border: 'none', borderRadius: 4, cursor: 'pointer',
+                      fontSize: 12, fontWeight: 'bold',
+                      background: active ? '#3a3a8e' : '#1a1a3e',
+                      color: active ? '#fff' : '#888',
+                      outline: active ? '2px solid #66f' : '1px solid #333',
+                    }}
+                  >{vDef.label}</button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
+              ドラッグ軸: {currentViewDef.axisLabels}
+            </div>
           </div>
-          <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
-            ドラッグ軸: {currentViewDef.axisLabels}
+        )}
+
+        {/* Toggles (edit mode only) */}
+        {mode === 'edit' && (
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #333', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={showBody} onChange={() => setShowBody(!showBody)} />
+              Body
+            </label>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={showBones} onChange={() => setShowBones(!showBones)} />
+              Bones
+            </label>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={autoMirror} onChange={toggleAutoMirror} />
+              <span style={{ color: autoMirror ? '#88f' : '#888' }}>左右対称</span>
+            </label>
           </div>
-        </div>
+        )}
 
-        {/* Toggles */}
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #333', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="checkbox" checked={showBody} onChange={() => setShowBody(!showBody)} />
-            Body
-          </label>
-          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="checkbox" checked={showBones} onChange={() => setShowBones(!showBones)} />
-            Bones
-          </label>
-          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="checkbox" checked={autoMirror} onChange={toggleAutoMirror} />
-            <span style={{ color: autoMirror ? '#88f' : '#888' }}>左右対称</span>
-          </label>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
-          <button
-            onClick={() => setTab('markers')}
-            style={{
-              flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold',
-              background: tab === 'markers' ? '#2a2a5e' : 'transparent',
-              color: tab === 'markers' ? '#fff' : '#888',
-              borderBottom: tab === 'markers' ? '2px solid #88f' : '2px solid transparent',
-            }}
-          >Markers ({autoMirror ? 5 : 8})</button>
-          <button
-            onClick={() => setTab('bones')}
-            style={{
-              flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold',
-              background: tab === 'bones' ? '#2a2a5e' : 'transparent',
-              color: tab === 'bones' ? '#fff' : '#888',
-              borderBottom: tab === 'bones' ? '2px solid #88f' : '2px solid transparent',
-            }}
-          >Auto Bones (20)</button>
-        </div>
+        {/* Tabs (edit mode only) */}
+        {mode === 'edit' && (
+          <div style={{ display: 'flex', borderBottom: '1px solid #333' }}>
+            <button
+              onClick={() => setTab('markers')}
+              style={{
+                flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold',
+                background: tab === 'markers' ? '#2a2a5e' : 'transparent',
+                color: tab === 'markers' ? '#fff' : '#888',
+                borderBottom: tab === 'markers' ? '2px solid #88f' : '2px solid transparent',
+              }}
+            >Markers ({autoMirror ? 5 : 8})</button>
+            <button
+              onClick={() => setTab('bones')}
+              style={{
+                flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 'bold',
+                background: tab === 'bones' ? '#2a2a5e' : 'transparent',
+                color: tab === 'bones' ? '#fff' : '#888',
+                borderBottom: tab === 'bones' ? '2px solid #88f' : '2px solid transparent',
+              }}
+            >Auto Bones (20)</button>
+          </div>
+        )}
 
         {/* Markers tab */}
-        {tab === 'markers' && (
+        {mode === 'edit' && tab === 'markers' && (
           <>
             {selMarker && selPos && (
               <div style={{ padding: '10px 12px', borderBottom: '1px solid #333', background: '#11112a' }}>
@@ -849,7 +1368,7 @@ export default function BoneConfigPage() {
         )}
 
         {/* Bones tab */}
-        {tab === 'bones' && (
+        {mode === 'edit' && tab === 'bones' && (
           <div style={{ flex: 1, overflow: 'auto' }}>
             <div style={{ padding: '6px 12px', fontSize: 11, color: '#888', borderBottom: '1px solid #222' }}>
               自動計算されたボーン (読み取り専用)
@@ -883,54 +1402,191 @@ export default function BoneConfigPage() {
         )}
 
         {/* Actions */}
-        <div style={{ padding: '10px 12px', borderTop: '1px solid #333', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button onClick={resetToDefaults} style={{
-            padding: '6px 0', borderRadius: 4, cursor: 'pointer',
-            background: '#3a2a2a', color: '#ccc', border: '1px solid #555', fontSize: 11,
-          }}>Reset to Defaults</button>
-          <button onClick={handleSave} disabled={saving || !dirty} style={{
-            padding: '10px 0', borderRadius: 4,
-            cursor: dirty ? 'pointer' : 'default',
-            background: dirty ? '#4a6' : '#1a1a2e',
-            color: dirty ? '#fff' : '#444',
-            border: dirty ? '2px solid #5b7' : '1px solid #333',
-            fontSize: 13, fontWeight: 'bold',
-          }}>
-            {saving ? 'Saving...' : dirty ? 'Save' : 'Saved'}
-          </button>
-        </div>
+        {mode === 'edit' && (
+          <div style={{ padding: '10px 12px', borderTop: '1px solid #333', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button onClick={resetToDefaults} style={{
+              padding: '6px 0', borderRadius: 4, cursor: 'pointer',
+              background: '#3a2a2a', color: '#ccc', border: '1px solid #555', fontSize: 11,
+            }}>Reset to Defaults</button>
+            <button
+              onClick={enterPreview}
+              disabled={Object.keys(calculatedBones).length === 0}
+              style={{
+                padding: '10px 0', borderRadius: 4, cursor: 'pointer',
+                background: '#3a5a8a', color: '#fff',
+                border: '2px solid #5588cc', fontSize: 13, fontWeight: 'bold',
+              }}
+            >
+              決定 → プレビュー
+            </button>
+          </div>
+        )}
+        {mode === 'preview' && (
+          <>
+            {/* Motion presets */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
+              <div style={{ fontSize: 12, fontWeight: 'bold', color: '#fff', marginBottom: 8 }}>
+                Motion
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                {MOTION_PRESETS.map(preset => {
+                  const isActive = playingMotion === preset.name;
+                  return (
+                    <button
+                      key={preset.name}
+                      onClick={() => isActive ? stopMotion() : startMotion(preset.name)}
+                      style={{
+                        padding: '5px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 11,
+                        background: isActive ? '#4a7a4a' : '#2a2a4e',
+                        color: isActive ? '#fff' : '#aaa',
+                        border: isActive ? '2px solid #6a6' : '1px solid #444',
+                        fontWeight: isActive ? 'bold' : 'normal',
+                      }}
+                    >
+                      {isActive ? '■ ' : '▶ '}{preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Speed control */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: '#888', width: 40 }}>Speed</span>
+                <input type="range" min={0.2} max={3.0} step={0.1}
+                  value={motionSpeed}
+                  onChange={e => setMotionSpeed(Number(e.target.value))}
+                  style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, color: '#888', width: 30, textAlign: 'right' }}>{motionSpeed.toFixed(1)}x</span>
+              </div>
+            </div>
+
+            {/* Manual sliders (disabled during animation) */}
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, color: '#888' }}>
+                {playingMotion ? 'モーション再生中' : '手動操作'}
+              </span>
+              {!playingMotion && (
+                <button onClick={resetPreviewParts} style={{
+                  padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
+                  background: '#3a3a3a', color: '#aaa', border: '1px solid #555', fontSize: 10,
+                }}>Reset</button>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflow: 'auto', opacity: playingMotion ? 0.4 : 1, pointerEvents: playingMotion ? 'none' : 'auto' }}>
+              {previewPartsRef.current.filter(p => p.name !== 'torso').map(part => {
+                const st = previewPartStates[part.name];
+                if (!st) return null;
+                return (
+                  <div key={part.name} style={{ padding: '8px 12px', borderBottom: '1px solid #222' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, display: 'inline-block', background: part.color }} />
+                      <span style={{ fontWeight: 'bold', fontSize: 12, color: '#ccc' }}>{part.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <span style={{ width: 60, fontSize: 10, color: '#aaa' }}>Fwd/Back</span>
+                      <input type="range" min={-90} max={90} step={1}
+                        value={st.rotX}
+                        onChange={e => updatePreviewPart(part.name, 'rotX', Number(e.target.value))}
+                        style={{ flex: 1 }} />
+                      <span style={{ width: 32, fontSize: 10, textAlign: 'right', color: '#888' }}>{st.rotX}°</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 60, fontSize: 10, color: '#aaa' }}>L/R</span>
+                      <input type="range" min={-90} max={90} step={1}
+                        value={st.rotZ}
+                        onChange={e => updatePreviewPart(part.name, 'rotZ', Number(e.target.value))}
+                        style={{ flex: 1 }} />
+                      <span style={{ width: 32, fontSize: 10, textAlign: 'right', color: '#888' }}>{st.rotZ}°</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Save / Back buttons */}
+            <div style={{ padding: '10px 12px', borderTop: '1px solid #333', display: 'flex', gap: 6 }}>
+              <button
+                onClick={exitPreview}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 4, cursor: 'pointer',
+                  background: '#3a2a2a', color: '#ccc', border: '1px solid #555', fontSize: 12,
+                }}
+              >
+                ← 戻る
+              </button>
+              <button
+                onClick={handleConfirmSave}
+                disabled={saving}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 4, cursor: 'pointer',
+                  background: '#4a6', color: '#fff', border: '2px solid #5b7',
+                  fontSize: 12, fontWeight: 'bold',
+                }}
+              >
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Canvas */}
       <div style={{ flex: 1, position: 'relative' }}>
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%', outline: 'none' }} />
 
-        <div style={{
-          position: 'absolute', top: 12, left: 12, padding: '6px 14px',
-          background: 'rgba(50, 50, 140, 0.8)', borderRadius: 6, fontSize: 14, color: '#fff', fontWeight: 'bold',
-        }}>
-          {currentViewDef.label}
-        </div>
+        {mode === 'edit' && (
+          <>
+            <div style={{
+              position: 'absolute', top: 12, left: 12, padding: '6px 14px',
+              background: 'rgba(50, 50, 140, 0.8)', borderRadius: 6, fontSize: 14, color: '#fff', fontWeight: 'bold',
+            }}>
+              {currentViewDef.label}
+            </div>
 
-        {dirty && (
-          <div style={{
-            position: 'absolute', top: 12, right: 12, padding: '4px 10px',
-            background: 'rgba(255, 130, 50, 0.8)', borderRadius: 4, fontSize: 12, color: '#fff',
-          }}>Unsaved changes</div>
+            {dirty && (
+              <div style={{
+                position: 'absolute', top: 12, right: 12, padding: '4px 10px',
+                background: 'rgba(255, 130, 50, 0.8)', borderRadius: 4, fontSize: 12, color: '#fff',
+              }}>Unsaved changes</div>
+            )}
+
+            <div style={{
+              position: 'absolute', bottom: 12, left: 12, padding: '8px 12px',
+              background: 'rgba(0, 0, 0, 0.6)', borderRadius: 6, fontSize: 11, color: '#aaa',
+            }}>
+              <div>● マーカーをドラッグして配置</div>
+              <div>マウスホイールでズーム</div>
+              <div style={{ marginTop: 4, color: '#666' }}>
+                {autoMirror
+                  ? `左右対称 ON (center: X=${r1(mirrorCenterX)})`
+                  : '左右対称 OFF (左右独立)'}
+              </div>
+            </div>
+          </>
         )}
 
-        <div style={{
-          position: 'absolute', bottom: 12, left: 12, padding: '8px 12px',
-          background: 'rgba(0, 0, 0, 0.6)', borderRadius: 6, fontSize: 11, color: '#aaa',
-        }}>
-          <div>● マーカーをドラッグして配置</div>
-          <div>マウスホイールでズーム</div>
-          <div style={{ marginTop: 4, color: '#666' }}>
-            {autoMirror
-              ? `左右対称 ON (center: X=${r1(mirrorCenterX)})`
-              : '左右対称 OFF (左右独立)'}
-          </div>
-        </div>
+        {mode === 'preview' && (
+          <>
+            <div style={{
+              position: 'absolute', top: 12, left: 12, padding: '6px 14px',
+              background: 'rgba(80, 140, 50, 0.8)', borderRadius: 6, fontSize: 14, color: '#fff', fontWeight: 'bold',
+            }}>
+              Split Preview
+              {playingMotion && (
+                <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.8 }}>
+                  {MOTION_PRESETS.find(p => p.name === playingMotion)?.label}
+                </span>
+              )}
+            </div>
+            <div style={{
+              position: 'absolute', bottom: 12, left: 12, padding: '8px 12px',
+              background: 'rgba(0, 0, 0, 0.6)', borderRadius: 6, fontSize: 11, color: '#aaa',
+            }}>
+              <div>マウスドラッグで回転、ホイールでズーム</div>
+              <div style={{ marginTop: 4, color: '#888' }}>問題なければ「保存」、修正は「戻る」</div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
