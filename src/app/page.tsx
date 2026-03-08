@@ -9,6 +9,9 @@ const pages = [
   { href: '/vox-viewer', label: 'Vox Viewer' },
   { href: '/vox-viewer2', label: 'Vox Viewer 2' },
   { href: '/vox-compare', label: 'Vox Compare' },
+  { href: '/fbx-viewer', label: 'Voxel Body Mover' },
+  { href: '/equip-config', label: 'Equipment Behavior Config' },
+  { href: '/bone-config', label: 'Bone Config (Skeleton Setup)' },
 ];
 
 export default function Home() {
