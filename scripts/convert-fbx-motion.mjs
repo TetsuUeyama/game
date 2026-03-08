@@ -142,13 +142,9 @@ async function convertFBX(inputPath, outputPath) {
       trackedBoneNames.add(cleanBoneName(rawName));
     }
 
-    // Use AnimationMixer for proper world-space evaluation
-    const mixer = new THREE.AnimationMixer(group);
-    const action = mixer.clipAction(clip);
-    action.play();
-
-    // Capture REST pose (frame 0) world transforms
-    mixer.setTime(0);
+    // Capture BIND POSE (T-pose, before any animation) as rest reference.
+    // This is critical: the voxel viewer model is in T-pose, so delta quaternions
+    // must represent changes from T-pose (bind pose), NOT from frame 0.
     group.updateMatrixWorld(true);
 
     const restWorldPos = {};
@@ -163,7 +159,12 @@ async function convertFBX(inputPath, outputPath) {
       restWorldQuat[name] = quat.clone();
     }
 
-    // Compute FBX body scale (Hips to Head world distance)
+    // Now set up animation mixer for frame evaluation
+    const mixer = new THREE.AnimationMixer(group);
+    const action = mixer.clipAction(clip);
+    action.play();
+
+    // Compute FBX body scale (Hips to Head world distance) from bind pose
     const hipsRestY = restWorldPos['Hips']?.y ?? 0;
     const headRestY = restWorldPos['Head']?.y ?? 1;
     const fbxBodyHeight = headRestY - hipsRestY;
