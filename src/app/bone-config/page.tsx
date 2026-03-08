@@ -6,7 +6,7 @@ import {
   Engine, Scene, ArcRotateCamera, HemisphericLight,
   Vector3, Color4, Mesh, VertexData, ShaderMaterial, Effect,
   MeshBuilder, StandardMaterial, Color3, Plane, PointerEventTypes,
-  TransformNode,
+  TransformNode, Quaternion,
 } from '@babylonjs/core';
 import { loadVoxFile, SCALE, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import type { VoxelEntry } from '@/lib/vox-parser';
@@ -39,7 +39,7 @@ interface Vec3 { x: number; y: number; z: number; }
 type MarkerData = Record<string, Vec3>;
 
 // ========================================================================
-// Bone definitions (20 Mixamo bones)
+// Bone definitions (all 41 Mixamo standard bones)
 // ========================================================================
 interface BoneDef {
   name: string;
@@ -49,26 +49,54 @@ interface BoneDef {
 }
 
 const BONE_DEFS: BoneDef[] = [
-  { name: 'Hips',           label: 'Hips',       parent: null,             color: '#ff4444' },
-  { name: 'Spine',          label: 'Spine',      parent: 'Hips',           color: '#ff6644' },
-  { name: 'Spine1',         label: 'Spine1',     parent: 'Spine',          color: '#ff8844' },
-  { name: 'Spine2',         label: 'Spine2',     parent: 'Spine1',         color: '#ffaa44' },
-  { name: 'Neck',           label: 'Neck',       parent: 'Spine2',         color: '#ffcc44' },
-  { name: 'Head',           label: 'Head',       parent: 'Neck',           color: '#ffee44' },
-  { name: 'LeftShoulder',   label: 'L.Shoulder', parent: 'Spine2',         color: '#44aaff' },
-  { name: 'LeftArm',        label: 'L.Arm',      parent: 'LeftShoulder',   color: '#4488ff' },
-  { name: 'LeftForeArm',    label: 'L.ForeArm',  parent: 'LeftArm',        color: '#4466ff' },
-  { name: 'LeftHand',       label: 'L.Hand',     parent: 'LeftForeArm',    color: '#4444ff' },
-  { name: 'RightShoulder',  label: 'R.Shoulder', parent: 'Spine2',         color: '#ff44aa' },
-  { name: 'RightArm',       label: 'R.Arm',      parent: 'RightShoulder',  color: '#ff4488' },
-  { name: 'RightForeArm',   label: 'R.ForeArm',  parent: 'RightArm',       color: '#ff4466' },
-  { name: 'RightHand',      label: 'R.Hand',     parent: 'RightForeArm',   color: '#ff4444' },
-  { name: 'LeftUpLeg',      label: 'L.UpLeg',    parent: 'Hips',           color: '#44ff88' },
-  { name: 'LeftLeg',        label: 'L.Leg',      parent: 'LeftUpLeg',      color: '#44ff66' },
-  { name: 'LeftFoot',       label: 'L.Foot',     parent: 'LeftLeg',        color: '#44ff44' },
-  { name: 'RightUpLeg',     label: 'R.UpLeg',    parent: 'Hips',           color: '#aaff44' },
-  { name: 'RightLeg',       label: 'R.Leg',      parent: 'RightUpLeg',     color: '#88ff44' },
-  { name: 'RightFoot',      label: 'R.Foot',     parent: 'RightLeg',       color: '#66ff44' },
+  // Center chain
+  { name: 'Hips',           label: 'Hips',           parent: null,             color: '#ff4444' },
+  { name: 'Spine',          label: 'Spine',          parent: 'Hips',           color: '#ff6644' },
+  { name: 'Spine1',         label: 'Spine1',         parent: 'Spine',          color: '#ff8844' },
+  { name: 'Spine2',         label: 'Spine2',         parent: 'Spine1',         color: '#ffaa44' },
+  { name: 'Neck',           label: 'Neck',           parent: 'Spine2',         color: '#ffcc44' },
+  { name: 'Head',           label: 'Head',           parent: 'Neck',           color: '#ffee44' },
+  { name: 'HeadTop_End',    label: 'HeadTop',        parent: 'Head',           color: '#ffffaa' },
+  // Left arm chain
+  { name: 'LeftShoulder',   label: 'L.Shoulder',     parent: 'Spine2',         color: '#44aaff' },
+  { name: 'LeftArm',        label: 'L.Arm',          parent: 'LeftShoulder',   color: '#4488ff' },
+  { name: 'LeftForeArm',    label: 'L.ForeArm',      parent: 'LeftArm',        color: '#4466ff' },
+  { name: 'LeftHand',       label: 'L.Hand',         parent: 'LeftForeArm',    color: '#4444ff' },
+  // Left hand fingers
+  { name: 'LeftHandThumb1', label: 'L.Thumb1',       parent: 'LeftHand',       color: '#5555ff' },
+  { name: 'LeftHandThumb2', label: 'L.Thumb2',       parent: 'LeftHandThumb1', color: '#5555ee' },
+  { name: 'LeftHandThumb3', label: 'L.Thumb3',       parent: 'LeftHandThumb2', color: '#5555dd' },
+  { name: 'LeftHandThumb4', label: 'L.Thumb4',       parent: 'LeftHandThumb3', color: '#5555cc' },
+  { name: 'LeftHandIndex1', label: 'L.Index1',       parent: 'LeftHand',       color: '#6666ff' },
+  { name: 'LeftHandIndex2', label: 'L.Index2',       parent: 'LeftHandIndex1', color: '#6666ee' },
+  { name: 'LeftHandIndex3', label: 'L.Index3',       parent: 'LeftHandIndex2', color: '#6666dd' },
+  { name: 'LeftHandIndex4', label: 'L.Index4',       parent: 'LeftHandIndex3', color: '#6666cc' },
+  // Right arm chain
+  { name: 'RightShoulder',  label: 'R.Shoulder',     parent: 'Spine2',         color: '#ff44aa' },
+  { name: 'RightArm',       label: 'R.Arm',          parent: 'RightShoulder',  color: '#ff4488' },
+  { name: 'RightForeArm',   label: 'R.ForeArm',      parent: 'RightArm',       color: '#ff4466' },
+  { name: 'RightHand',      label: 'R.Hand',         parent: 'RightForeArm',   color: '#ff4444' },
+  // Right hand fingers
+  { name: 'RightHandThumb1',label: 'R.Thumb1',       parent: 'RightHand',      color: '#ff5555' },
+  { name: 'RightHandThumb2',label: 'R.Thumb2',       parent: 'RightHandThumb1',color: '#ee5555' },
+  { name: 'RightHandThumb3',label: 'R.Thumb3',       parent: 'RightHandThumb2',color: '#dd5555' },
+  { name: 'RightHandThumb4',label: 'R.Thumb4',       parent: 'RightHandThumb3',color: '#cc5555' },
+  { name: 'RightHandIndex1',label: 'R.Index1',       parent: 'RightHand',      color: '#ff6666' },
+  { name: 'RightHandIndex2',label: 'R.Index2',       parent: 'RightHandIndex1',color: '#ee6666' },
+  { name: 'RightHandIndex3',label: 'R.Index3',       parent: 'RightHandIndex2',color: '#dd6666' },
+  { name: 'RightHandIndex4',label: 'R.Index4',       parent: 'RightHandIndex3',color: '#cc6666' },
+  // Left leg chain
+  { name: 'LeftUpLeg',      label: 'L.UpLeg',        parent: 'Hips',           color: '#44ff88' },
+  { name: 'LeftLeg',        label: 'L.Leg',          parent: 'LeftUpLeg',      color: '#44ff66' },
+  { name: 'LeftFoot',       label: 'L.Foot',         parent: 'LeftLeg',        color: '#44ff44' },
+  { name: 'LeftToeBase',    label: 'L.ToeBase',      parent: 'LeftFoot',       color: '#44ee44' },
+  { name: 'LeftToe_End',    label: 'L.ToeEnd',       parent: 'LeftToeBase',    color: '#44dd44' },
+  // Right leg chain
+  { name: 'RightUpLeg',     label: 'R.UpLeg',        parent: 'Hips',           color: '#aaff44' },
+  { name: 'RightLeg',       label: 'R.Leg',          parent: 'RightUpLeg',     color: '#88ff44' },
+  { name: 'RightFoot',      label: 'R.Foot',         parent: 'RightLeg',       color: '#66ff44' },
+  { name: 'RightToeBase',   label: 'R.ToeBase',      parent: 'RightFoot',      color: '#55ee44' },
+  { name: 'RightToe_End',   label: 'R.ToeEnd',       parent: 'RightToeBase',   color: '#55dd44' },
 ];
 
 // ========================================================================
@@ -92,7 +120,7 @@ const VIEW_DEFS: ViewDef[] = [
 ];
 
 // ========================================================================
-// Auto-calculation: markers → 20 bones
+// Auto-calculation: markers → all 41 bones
 // ========================================================================
 function calculateAllBones(
   markers: MarkerData, bodyMaxZ: number,
@@ -116,6 +144,7 @@ function calculateAllBones(
   const hips: Vec3 = { x: groin.x, y: groin.y, z: groin.z };
   const neck: Vec3 = { x: chin.x, y: chin.y, z: chin.z - 4 };
   const head: Vec3 = { x: chin.x, y: chin.y, z: Math.min(chin.z + 8, bodyMaxZ) };
+  const headTopEnd: Vec3 = { x: head.x, y: head.y, z: Math.min(head.z + 6, bodyMaxZ) };
 
   const spine  = lerp3(hips, neck, 0.25);
   const spine1 = lerp3(hips, neck, 0.50);
@@ -128,6 +157,19 @@ function calculateAllBones(
   const lForeArm: Vec3 = { ...lElbow };
   const lHand: Vec3 = { ...lWrist };
 
+  // Left hand fingers (small offsets from hand position)
+  const lFingerDir = { x: lHand.x - lForeArm.x, y: lHand.y - lForeArm.y, z: lHand.z - lForeArm.z };
+  const lFingerLen = Math.sqrt(lFingerDir.x * lFingerDir.x + lFingerDir.y * lFingerDir.y + lFingerDir.z * lFingerDir.z) || 1;
+  const lFD = { x: lFingerDir.x / lFingerLen, y: lFingerDir.y / lFingerLen, z: lFingerDir.z / lFingerLen };
+  const lThumb1: Vec3 = { x: lHand.x + lFD.x * 1, y: lHand.y + lFD.y * 1, z: lHand.z + lFD.z * 1 };
+  const lThumb2: Vec3 = { x: lThumb1.x + lFD.x * 0.8, y: lThumb1.y + lFD.y * 0.8, z: lThumb1.z + lFD.z * 0.8 };
+  const lThumb3: Vec3 = { x: lThumb2.x + lFD.x * 0.7, y: lThumb2.y + lFD.y * 0.7, z: lThumb2.z + lFD.z * 0.7 };
+  const lThumb4: Vec3 = { x: lThumb3.x + lFD.x * 0.5, y: lThumb3.y + lFD.y * 0.5, z: lThumb3.z + lFD.z * 0.5 };
+  const lIndex1: Vec3 = { x: lHand.x + lFD.x * 1.5, y: lHand.y + lFD.y * 1.5, z: lHand.z + lFD.z * 1.5 };
+  const lIndex2: Vec3 = { x: lIndex1.x + lFD.x * 1, y: lIndex1.y + lFD.y * 1, z: lIndex1.z + lFD.z * 1 };
+  const lIndex3: Vec3 = { x: lIndex2.x + lFD.x * 0.8, y: lIndex2.y + lFD.y * 0.8, z: lIndex2.z + lFD.z * 0.8 };
+  const lIndex4: Vec3 = { x: lIndex3.x + lFD.x * 0.7, y: lIndex3.y + lFD.y * 0.7, z: lIndex3.z + lFD.z * 0.7 };
+
   // Right arm (independent)
   const rShoulderOffset = (rElbow.x - spine2.x) * 0.35;
   const rShoulder: Vec3 = { x: spine2.x + rShoulderOffset, y: spine2.y, z: spine2.z + 2 };
@@ -135,25 +177,46 @@ function calculateAllBones(
   const rForeArm: Vec3 = { ...rElbow };
   const rHand: Vec3 = { ...rWrist };
 
+  // Right hand fingers
+  const rFingerDir = { x: rHand.x - rForeArm.x, y: rHand.y - rForeArm.y, z: rHand.z - rForeArm.z };
+  const rFingerLen = Math.sqrt(rFingerDir.x * rFingerDir.x + rFingerDir.y * rFingerDir.y + rFingerDir.z * rFingerDir.z) || 1;
+  const rFD = { x: rFingerDir.x / rFingerLen, y: rFingerDir.y / rFingerLen, z: rFingerDir.z / rFingerLen };
+  const rThumb1: Vec3 = { x: rHand.x + rFD.x * 1, y: rHand.y + rFD.y * 1, z: rHand.z + rFD.z * 1 };
+  const rThumb2: Vec3 = { x: rThumb1.x + rFD.x * 0.8, y: rThumb1.y + rFD.y * 0.8, z: rThumb1.z + rFD.z * 0.8 };
+  const rThumb3: Vec3 = { x: rThumb2.x + rFD.x * 0.7, y: rThumb2.y + rFD.y * 0.7, z: rThumb2.z + rFD.z * 0.7 };
+  const rThumb4: Vec3 = { x: rThumb3.x + rFD.x * 0.5, y: rThumb3.y + rFD.y * 0.5, z: rThumb3.z + rFD.z * 0.5 };
+  const rIndex1: Vec3 = { x: rHand.x + rFD.x * 1.5, y: rHand.y + rFD.y * 1.5, z: rHand.z + rFD.z * 1.5 };
+  const rIndex2: Vec3 = { x: rIndex1.x + rFD.x * 1, y: rIndex1.y + rFD.y * 1, z: rIndex1.z + rFD.z * 1 };
+  const rIndex3: Vec3 = { x: rIndex2.x + rFD.x * 0.8, y: rIndex2.y + rFD.y * 0.8, z: rIndex2.z + rFD.z * 0.8 };
+  const rIndex4: Vec3 = { x: rIndex3.x + rFD.x * 0.7, y: rIndex3.y + rFD.y * 0.7, z: rIndex3.z + rFD.z * 0.7 };
+
   // Left leg
   const lLegOffsetX = (lKnee.x - groin.x) * 0.8;
   const lUpLeg: Vec3 = { x: groin.x + lLegOffsetX, y: groin.y, z: groin.z };
   const lLeg: Vec3 = { ...lKnee };
   const lFoot: Vec3 = { x: lKnee.x, y: Math.max(lKnee.y - 4, 0), z: 2 };
+  const lToeBase: Vec3 = { x: lFoot.x, y: Math.max(lFoot.y - 3, 0), z: 1 };
+  const lToeEnd: Vec3 = { x: lToeBase.x, y: Math.max(lToeBase.y - 2, 0), z: 0 };
 
   // Right leg (independent)
   const rLegOffsetX = (rKnee.x - groin.x) * 0.8;
   const rUpLeg: Vec3 = { x: groin.x + rLegOffsetX, y: groin.y, z: groin.z };
   const rLeg: Vec3 = { ...rKnee };
   const rFoot: Vec3 = { x: rKnee.x, y: Math.max(rKnee.y - 4, 0), z: 2 };
+  const rToeBase: Vec3 = { x: rFoot.x, y: Math.max(rFoot.y - 3, 0), z: 1 };
+  const rToeEnd: Vec3 = { x: rToeBase.x, y: Math.max(rToeBase.y - 2, 0), z: 0 };
 
   return {
     Hips: hips, Spine: spine, Spine1: spine1, Spine2: spine2,
-    Neck: neck, Head: head,
+    Neck: neck, Head: head, HeadTop_End: headTopEnd,
     LeftShoulder: lShoulder, LeftArm: lArm, LeftForeArm: lForeArm, LeftHand: lHand,
+    LeftHandThumb1: lThumb1, LeftHandThumb2: lThumb2, LeftHandThumb3: lThumb3, LeftHandThumb4: lThumb4,
+    LeftHandIndex1: lIndex1, LeftHandIndex2: lIndex2, LeftHandIndex3: lIndex3, LeftHandIndex4: lIndex4,
     RightShoulder: rShoulder, RightArm: rArm, RightForeArm: rForeArm, RightHand: rHand,
-    LeftUpLeg: lUpLeg, LeftLeg: lLeg, LeftFoot: lFoot,
-    RightUpLeg: rUpLeg, RightLeg: rLeg, RightFoot: rFoot,
+    RightHandThumb1: rThumb1, RightHandThumb2: rThumb2, RightHandThumb3: rThumb3, RightHandThumb4: rThumb4,
+    RightHandIndex1: rIndex1, RightHandIndex2: rIndex2, RightHandIndex3: rIndex3, RightHandIndex4: rIndex4,
+    LeftUpLeg: lUpLeg, LeftLeg: lLeg, LeftFoot: lFoot, LeftToeBase: lToeBase, LeftToe_End: lToeEnd,
+    RightUpLeg: rUpLeg, RightLeg: rLeg, RightFoot: rFoot, RightToeBase: rToeBase, RightToe_End: rToeEnd,
   };
 }
 
@@ -248,45 +311,46 @@ function viewerToVoxel(viewerPos: Vector3, cx: number, cy: number): Vec3 {
 function r1(n: number): number { return Math.round(n * 10) / 10; }
 
 // ========================================================================
-// Preview: body mover with split parts, pivots, caps, rotation
+// Preview: 20-bone hierarchical skeletal animation
 // ========================================================================
-interface PreviewPartDef {
-  name: string;
-  label: string;
-  color: string;
-  classify: (x: number, y: number, z: number) => boolean;
-  pivotX: number | 'auto';
-  pivotZ: number | 'auto';
-  capLayers: number;
+
+// Assign each voxel to nearest bone (in voxel space)
+function assignVoxelsToBones(
+  voxels: VoxelEntry[],
+  bones: Record<string, Vec3>,
+): Record<string, VoxelEntry[]> {
+  const boneNames = Object.keys(bones);
+  const result: Record<string, VoxelEntry[]> = {};
+  for (const name of boneNames) result[name] = [];
+
+  for (const v of voxels) {
+    let bestBone = boneNames[0];
+    let bestDist = Infinity;
+    for (const name of boneNames) {
+      const b = bones[name];
+      const dx = v.x - b.x;
+      const dy = v.y - b.y;
+      const dz = v.z - b.z;
+      const dist = dx * dx + dy * dy + dz * dz;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestBone = name;
+      }
+    }
+    result[bestBone].push(v);
+  }
+  return result;
 }
 
-function buildPreviewParts(bones: Record<string, Vec3>): PreviewPartDef[] {
-  const neck = bones['Neck'];
-  const hips = bones['Hips'];
-  const lShoulder = bones['LeftShoulder'];
-  const rShoulder = bones['RightShoulder'];
-  const spine1 = bones['Spine1'];
-  const headZ = neck.z;
-  const legZ = hips.z;
-  const armLeftX = lShoulder.x;
-  const armRightX = rShoulder.x;
-  const legCenterX = hips.x;
-  const torsoCenterX = (hips.x + neck.x) / 2;
-  const torsoCenterZ = spine1.z;
+// Build mesh with vertices in bone-local space (offset baked into vertex data)
+function buildBoneMeshLocal(
+  voxels: VoxelEntry[], scene: Scene, name: string,
+  cx: number, cy: number, bonePos: Vec3,
+): Mesh {
+  const boneViewX = (bonePos.x - cx) * SCALE;
+  const boneViewY = bonePos.z * SCALE;
+  const boneViewZ = -(bonePos.y - cy) * SCALE;
 
-  return [
-    { name: 'head', label: 'Head', color: '#ffaa44', classify: (_x, _y, z) => z >= headZ, pivotX: neck.x, pivotZ: headZ, capLayers: 4 },
-    { name: 'leftArm', label: 'Left Arm', color: '#44aaff', classify: (x, _y, z) => z >= legZ && z < headZ && x < armLeftX, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
-    { name: 'rightArm', label: 'Right Arm', color: '#ff44aa', classify: (x, _y, z) => z >= legZ && z < headZ && x > armRightX, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
-    { name: 'leftLeg', label: 'Left Leg', color: '#44ffaa', classify: (x, _y, z) => z < legZ && x < legCenterX, pivotX: bones['LeftUpLeg'].x, pivotZ: legZ, capLayers: 4 },
-    { name: 'rightLeg', label: 'Right Leg', color: '#aaff44', classify: (x, _y, z) => z < legZ && x >= legCenterX, pivotX: bones['RightUpLeg'].x, pivotZ: legZ, capLayers: 4 },
-    { name: 'torso', label: 'Torso', color: '#aaaaaa', classify: () => true, pivotX: torsoCenterX, pivotZ: torsoCenterZ, capLayers: 4 },
-  ];
-}
-
-interface PreviewPartState { rotX: number; rotZ: number; }
-
-function buildPartMeshOpaque(voxels: VoxelEntry[], scene: Scene, name: string, cx: number, cy: number): Mesh {
   const occupied = new Set<string>();
   for (const v of voxels) occupied.add(`${v.x},${v.y},${v.z}`);
   const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
@@ -297,7 +361,12 @@ function buildPartMeshOpaque(voxels: VoxelEntry[], scene: Scene, name: string, c
       const bi = positions.length / 3;
       const fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
       for (let vi = 0; vi < 4; vi++) {
-        positions.push((voxel.x + fv[vi][0] - cx) * SCALE, (voxel.z + fv[vi][2]) * SCALE, -(voxel.y + fv[vi][1] - cy) * SCALE);
+        // Vertex position relative to bone (bone-local space)
+        positions.push(
+          (voxel.x + fv[vi][0] - cx) * SCALE - boneViewX,
+          (voxel.z + fv[vi][2]) * SCALE - boneViewY,
+          -(voxel.y + fv[vi][1] - cy) * SCALE - boneViewZ,
+        );
         normals.push(fn[0], fn[2], -fn[1]);
         colors.push(voxel.r, voxel.g, voxel.b, 1);
       }
@@ -312,244 +381,103 @@ function buildPartMeshOpaque(voxels: VoxelEntry[], scene: Scene, name: string, c
   return mesh;
 }
 
-function buildPreviewMeshes(
+// Build HIERARCHICAL TransformNode tree with bone-local vertex data.
+// Each node is positioned relative to its parent bone.
+// Animation converts world-space deltas → local deltas via parent inverse.
+function buildSkeletalPreview(
   voxels: VoxelEntry[], bones: Record<string, Vec3>,
   scene: Scene, cx: number, cy: number,
-): { nodes: Map<string, TransformNode>; meshes: Map<string, Mesh>; parts: PreviewPartDef[] } {
-  const parts = buildPreviewParts(bones);
+): { nodes: Map<string, TransformNode>; meshes: Map<string, Mesh> } {
+  const boneVoxels = assignVoxelsToBones(voxels, bones);
 
-  // Classify voxels
-  const partVoxels: Record<string, VoxelEntry[]> = {};
-  for (const p of parts) partVoxels[p.name] = [];
-  for (const v of voxels) {
-    let assigned = false;
-    for (const p of parts) {
-      if (p.name === 'torso') continue;
-      if (p.classify(v.x, v.y, v.z)) { partVoxels[p.name].push(v); assigned = true; break; }
-    }
-    if (!assigned) partVoxels['torso'].push(v);
-  }
-
-  // Build allOccupied + surface color map for caps
-  const allOccupied = new Set<string>();
-  const surfaceColorMap = new Map<string, { r: number; g: number; b: number }>();
-  for (const v of voxels) {
-    const k = `${v.x},${v.y},${v.z}`;
-    allOccupied.add(k);
-    surfaceColorMap.set(k, { r: v.r, g: v.g, b: v.b });
-  }
-
-  // Pyramid caps per part
-  for (const part of parts) {
-    const thisSet = new Set<string>();
-    for (const v of partVoxels[part.name]) thisSet.add(`${v.x},${v.y},${v.z}`);
-
-    interface BInfo { x: number; y: number; z: number; dx: number; dy: number; dz: number; r: number; g: number; b: number }
-    const boundaries: BInfo[] = [];
-    for (const v of partVoxels[part.name]) {
-      for (const [dx, dy, dz] of FACE_DIRS) {
-        const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
-        if (allOccupied.has(nk) && !thisSet.has(nk)) {
-          const sc = surfaceColorMap.get(`${v.x},${v.y},${v.z}`) ?? { r: v.r, g: v.g, b: v.b };
-          boundaries.push({ x: v.x, y: v.y, z: v.z, dx, dy, dz, r: sc.r, g: sc.g, b: sc.b });
-        }
-      }
-    }
-
-    const dirGroups = new Map<string, BInfo[]>();
-    for (const b of boundaries) {
-      const dk = `${b.dx},${b.dy},${b.dz}`;
-      if (!dirGroups.has(dk)) dirGroups.set(dk, []);
-      dirGroups.get(dk)!.push(b);
-    }
-
-    const capVoxels: VoxelEntry[] = [];
-    const perpDirs = (dx: number, dy: number, dz: number) =>
-      FACE_DIRS.filter(([fx, fy, fz]) => !(fx === dx && fy === dy && fz === dz) && !(fx === -dx && fy === -dy && fz === -dz));
-
-    for (const [, group] of dirGroups) {
-      const { dx, dy, dz } = group[0];
-      let section = new Map<string, VoxelEntry>();
-      for (const b of group) {
-        const k = `${b.x},${b.y},${b.z}`;
-        if (!section.has(k)) section.set(k, { x: b.x, y: b.y, z: b.z, r: b.r, g: b.g, b: b.b });
-      }
-      const pd = perpDirs(dx, dy, dz);
-      let depth = 0;
-      for (let stage = 0; stage < part.capLayers; stage++) {
-        if (stage > 0) {
-          const eroded = new Map<string, VoxelEntry>();
-          for (const [k, v] of section) {
-            let nc = 0;
-            for (const [px, py, pz] of pd) {
-              if (section.has(`${v.x + px},${v.y + py},${v.z + pz}`)) nc++;
-            }
-            if (nc >= 3) eroded.set(k, v);
-          }
-          section = eroded;
-        }
-        if (section.size === 0) break;
-        depth++;
-        for (const [, v] of section) {
-          const ck = `${v.x + dx * depth},${v.y + dy * depth},${v.z + dz * depth}`;
-          if (!thisSet.has(ck)) {
-            capVoxels.push({ x: v.x + dx * depth, y: v.y + dy * depth, z: v.z + dz * depth, r: v.r, g: v.g, b: v.b });
-            thisSet.add(ck);
-          }
-        }
-      }
-    }
-    partVoxels[part.name].push(...capVoxels);
-  }
-
-  // Build meshes with TransformNodes
   const nodes = new Map<string, TransformNode>();
   const meshes = new Map<string, Mesh>();
 
-  for (const part of parts) {
-    const pv = partVoxels[part.name];
-    if (pv.length === 0) continue;
-
-    // Compute pivot
-    let rpX = typeof part.pivotX === 'number' ? part.pivotX : 0;
-    let rpZ = typeof part.pivotZ === 'number' ? part.pivotZ : 0;
-    if (part.pivotX === 'auto' || part.pivotZ === 'auto') {
-      const thisSet = new Set<string>();
-      for (const v of pv) thisSet.add(`${v.x},${v.y},${v.z}`);
-      const bvs: VoxelEntry[] = [];
-      for (const v of pv) {
-        for (const [dx, dy, dz] of FACE_DIRS) {
-          if (allOccupied.has(`${v.x + dx},${v.y + dy},${v.z + dz}`) && !thisSet.has(`${v.x + dx},${v.y + dy},${v.z + dz}`)) {
-            bvs.push(v); break;
-          }
-        }
-      }
-      if (bvs.length > 0) {
-        if (part.pivotX === 'auto') { const xs = bvs.map(v => v.x); rpX = (Math.min(...xs) + Math.max(...xs) + 1) / 2; }
-        if (part.pivotZ === 'auto') { const zs = bvs.map(v => v.z); rpZ = (Math.min(...zs) + Math.max(...zs) + 1) / 2; }
-      }
-    }
-
-    const pivotViewX = (rpX - cx) * SCALE;
-    const pivotViewY = rpZ * SCALE;
-
-    const node = new TransformNode(`pivot_${part.name}`, scene);
-    node.position = new Vector3(pivotViewX, pivotViewY, 0);
-
-    const mesh = buildPartMeshOpaque(pv, scene, `preview_${part.name}`, cx, cy);
-    mesh.position = new Vector3(-pivotViewX, -pivotViewY, 0);
-    mesh.parent = node;
-    mesh.isPickable = false;
-
-    nodes.set(part.name, node);
-    meshes.set(part.name, mesh);
+  // Create all nodes
+  for (const boneDef of BONE_DEFS) {
+    const bonePos = bones[boneDef.name];
+    if (!bonePos) continue;
+    const node = new TransformNode(`bone_${boneDef.name}`, scene);
+    nodes.set(boneDef.name, node);
   }
 
-  return { nodes, meshes, parts };
+  // Set up hierarchy and relative positions
+  for (const boneDef of BONE_DEFS) {
+    const node = nodes.get(boneDef.name);
+    const bonePos = bones[boneDef.name];
+    if (!node || !bonePos) continue;
+
+    const viewPos = voxelToViewer(bonePos.x, bonePos.y, bonePos.z, cx, cy);
+
+    if (boneDef.parent) {
+      const parentNode = nodes.get(boneDef.parent);
+      const parentPos = bones[boneDef.parent];
+      if (parentNode && parentPos) {
+        node.parent = parentNode;
+        const parentViewPos = voxelToViewer(parentPos.x, parentPos.y, parentPos.z, cx, cy);
+        node.position = viewPos.subtract(parentViewPos);
+      } else {
+        node.position = viewPos;
+      }
+    } else {
+      node.position = viewPos;
+    }
+  }
+
+  // Create meshes with bone-local vertices
+  for (const boneDef of BONE_DEFS) {
+    const bv = boneVoxels[boneDef.name];
+    const node = nodes.get(boneDef.name);
+    const bonePos = bones[boneDef.name];
+    if (!bv || bv.length === 0 || !node || !bonePos) continue;
+
+    const mesh = buildBoneMeshLocal(bv, scene, `preview_${boneDef.name}`, cx, cy, bonePos);
+    mesh.parent = node;
+    mesh.isPickable = false;
+    meshes.set(boneDef.name, mesh);
+  }
+
+  return { nodes, meshes };
 }
 
 // ========================================================================
-// Motion presets for split verification
+// FBX Motion data (loaded from .motion.json converted by scripts/convert-fbx-motion.mjs)
+// Per-bone WORLD-SPACE delta quaternion + delta position from rest pose
 // ========================================================================
-interface MotionPreset {
+interface BoneFrameData {
+  dq: [number, number, number, number]; // delta quaternion xyzw (world space, Three.js coords)
+  dp?: [number, number, number];        // delta position xyz (world space, Three.js coords)
+}
+
+interface MotionClip {
   name: string;
   label: string;
-  cycleDuration: number; // seconds per loop
-  evaluate: (t: number) => Record<string, PreviewPartState>; // t in [0,1]
+  duration: number;
+  fps: number;
+  frameCount: number;
+  fbxBodyHeight: number;    // FBX Hips→Head distance for scaling
+  outputBones: string[];
+  frames: Record<string, BoneFrameData>[];
 }
 
-const MOTION_PRESETS: MotionPreset[] = [
-  {
-    name: 'walk',
-    label: 'Walk (歩行)',
-    cycleDuration: 1.2,
-    evaluate: (t) => {
-      const a = t * Math.PI * 2;
-      const sin = Math.sin, cos = Math.cos;
-      return {
-        head:     { rotX: sin(a * 2) * 3,  rotZ: sin(a) * 2 },
-        leftArm:  { rotX: -sin(a) * 25,    rotZ: 5 },
-        rightArm: { rotX: sin(a) * 25,     rotZ: -5 },
-        leftLeg:  { rotX: sin(a) * 30,     rotZ: 0 },
-        rightLeg: { rotX: -sin(a) * 30,    rotZ: 0 },
-        torso:    { rotX: cos(a * 2) * 2,  rotZ: sin(a) * 3 },
-      };
-    },
-  },
-  {
-    name: 'run',
-    label: 'Run (走行)',
-    cycleDuration: 0.6,
-    evaluate: (t) => {
-      const a = t * Math.PI * 2;
-      const sin = Math.sin, cos = Math.cos;
-      return {
-        head:     { rotX: sin(a * 2) * 5,  rotZ: sin(a) * 3 },
-        leftArm:  { rotX: -sin(a) * 50,    rotZ: -10 },
-        rightArm: { rotX: sin(a) * 50,     rotZ: 10 },
-        leftLeg:  { rotX: sin(a) * 55,     rotZ: 0 },
-        rightLeg: { rotX: -sin(a) * 55,    rotZ: 0 },
-        torso:    { rotX: cos(a * 2) * 5,  rotZ: sin(a) * 5 },
-      };
-    },
-  },
-  {
-    name: 'idle',
-    label: 'Idle (待機)',
-    cycleDuration: 3.0,
-    evaluate: (t) => {
-      const a = t * Math.PI * 2;
-      const sin = Math.sin;
-      return {
-        head:     { rotX: sin(a) * 3,        rotZ: sin(a * 0.7) * 2 },
-        leftArm:  { rotX: sin(a) * 2,        rotZ: 3 },
-        rightArm: { rotX: sin(a + 0.5) * 2,  rotZ: -3 },
-        leftLeg:  { rotX: 0, rotZ: 0 },
-        rightLeg: { rotX: 0, rotZ: 0 },
-        torso:    { rotX: sin(a) * 2, rotZ: 0 },
-      };
-    },
-  },
-  {
-    name: 'jump',
-    label: 'Jump (ジャンプ)',
-    cycleDuration: 1.5,
-    evaluate: (t) => {
-      const sin = Math.sin, a = t * Math.PI * 2;
-      // Crouch → stretch → land
-      const phase = t < 0.3 ? t / 0.3 : t < 0.6 ? 1 - (t - 0.3) / 0.3 : 0;
-      const crouch = sin(phase * Math.PI) * 40;
-      const armLift = sin(phase * Math.PI) * -60;
-      return {
-        head:     { rotX: -crouch * 0.2,  rotZ: 0 },
-        leftArm:  { rotX: armLift,         rotZ: -20 * phase },
-        rightArm: { rotX: armLift,         rotZ: 20 * phase },
-        leftLeg:  { rotX: crouch,          rotZ: sin(a) * 3 },
-        rightLeg: { rotX: crouch,          rotZ: -sin(a) * 3 },
-        torso:    { rotX: -crouch * 0.3,   rotZ: 0 },
-      };
-    },
-  },
-  {
-    name: 'dance',
-    label: 'Dance (ダンス)',
-    cycleDuration: 2.0,
-    evaluate: (t) => {
-      const a = t * Math.PI * 2;
-      const sin = Math.sin, cos = Math.cos;
-      return {
-        head:     { rotX: sin(a * 2) * 8,   rotZ: cos(a) * 10 },
-        leftArm:  { rotX: sin(a) * 40,      rotZ: cos(a * 2) * 30 - 15 },
-        rightArm: { rotX: -sin(a) * 40,     rotZ: -cos(a * 2) * 30 + 15 },
-        leftLeg:  { rotX: sin(a * 2) * 20,  rotZ: cos(a) * 10 },
-        rightLeg: { rotX: -sin(a * 2) * 20, rotZ: -cos(a) * 10 },
-        torso:    { rotX: sin(a * 2) * 5,   rotZ: sin(a) * 12 },
-      };
-    },
-  },
+// Available motion files under /models/character-motion/
+const MOTION_FILES: { name: string; label: string; file: string }[] = [
+  { name: 'hip_hop', label: 'Hip Hop Dancing', file: '/models/character-motion/Hip Hop Dancing.motion.json' },
 ];
 
 type PageMode = 'edit' | 'preview';
+
+// Quaternion conversion from Three.js to viewer coordinate system.
+// Axis mapping: viewer = (-Three_x, Three_y, -Three_z) = 180° Y rotation
+// This is a proper rotation (det=+1), so the quaternion conversion is conjugation:
+//   q_viewer = q_Y180 × q_three × q_Y180⁻¹ = (-x, y, -z, w)
+type QuatConversion = 'correct' | 'conv1' | 'conv2' | 'identity';
+const QUAT_CONVERSIONS: { key: QuatConversion; label: string; desc: string }[] = [
+  { key: 'correct',  label: '(-x,y,-z,w)',  desc: 'Y180° rotation (correct)' },
+  { key: 'conv1',    label: '(-x,-y,z,w)',   desc: 'Z-flip only (old)' },
+  { key: 'conv2',    label: '(x,y,-z,w)',    desc: 'Negate Z only' },
+  { key: 'identity', label: '(x,y,z,w)',     desc: 'No conversion' },
+];
 
 // ========================================================================
 // Component
@@ -569,7 +497,8 @@ export default function BoneConfigPage() {
   const autoMirrorRef = useRef(true);
   const previewNodesRef = useRef<Map<string, TransformNode>>(new Map());
   const previewMeshesRef = useRef<Map<string, Mesh>>(new Map());
-  const previewPartsRef = useRef<PreviewPartDef[]>([]);
+  const boneRestPosRef = useRef<Map<string, Vector3>>(new Map());
+  const voxelBodyHeightRef = useRef(0);  // viewer-space Hips→Head distance
   const voxelsRef = useRef<VoxelEntry[]>([]);
 
   const [currentModel] = useState<ModelEntry>(() => {
@@ -596,15 +525,22 @@ export default function BoneConfigPage() {
   const [viewDir, setViewDir] = useState<ViewDirection>('front');
   const [autoMirror, setAutoMirror] = useState(true);
   const [mode, setMode] = useState<PageMode>('edit');
-  const [previewPartStates, setPreviewPartStates] = useState<Record<string, PreviewPartState>>({});
   const [playingMotion, setPlayingMotion] = useState<string | null>(null);
   const [motionSpeed, setMotionSpeed] = useState(1.0);
+  const [loadedClips, setLoadedClips] = useState<Record<string, MotionClip>>({});
+  const [loadingMotion, setLoadingMotion] = useState(false);
+  const [quatConv, setQuatConv] = useState<QuatConversion>('correct');
+  const [paused, setPaused] = useState(false);
+  const [currentFrame, setCurrentFrame] = useState(0);
   const animCallbackRef = useRef<(() => void) | null>(null);
   const animTimeRef = useRef(0);
+  const pausedRef = useRef(false);
+  const applyFrameRef = useRef<((frame: number) => void) | null>(null);
   const loadKeyRef = useRef(0);
 
   // Keep refs in sync
   useEffect(() => { autoMirrorRef.current = autoMirror; }, [autoMirror]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   // Compute mirror center from Chin/Groin X
   const getMirrorCenterX = useCallback(() => {
@@ -1000,7 +936,7 @@ export default function BoneConfigPage() {
   }, []);
 
 
-  // Enter preview: hide edit visuals, build body mover meshes, free camera
+  // Enter preview: hide edit visuals, build skeletal hierarchy, free camera
   const enterPreview = useCallback(() => {
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
@@ -1020,16 +956,27 @@ export default function BoneConfigPage() {
     previewMeshesRef.current.clear();
     previewNodesRef.current.clear();
 
-    // Build body mover meshes with pivots and caps
-    const { nodes, meshes, parts } = buildPreviewMeshes(voxelsRef.current, calculatedBones, scene, cx, cy);
+    // Build hierarchical 20-bone skeleton with voxel meshes
+    const { nodes, meshes } = buildSkeletalPreview(voxelsRef.current, calculatedBones, scene, cx, cy);
     previewNodesRef.current = nodes;
     previewMeshesRef.current = meshes;
-    previewPartsRef.current = parts;
 
-    // Init part states
-    const states: Record<string, PreviewPartState> = {};
-    for (const p of parts) states[p.name] = { rotX: 0, rotZ: 0 };
-    setPreviewPartStates(states);
+    // Store rest positions for all bones (for animation delta application)
+    const restPosMap = new Map<string, Vector3>();
+    for (const boneDef of BONE_DEFS) {
+      const bp = calculatedBones[boneDef.name];
+      if (bp) {
+        restPosMap.set(boneDef.name, voxelToViewer(bp.x, bp.y, bp.z, cx, cy));
+      }
+    }
+    boneRestPosRef.current = restPosMap;
+
+    // Compute voxel body height (Hips→Head in viewer space) for FBX scale matching
+    const hipsPos = calculatedBones['Hips'];
+    const headPos = calculatedBones['Head'];
+    if (hipsPos && headPos) {
+      voxelBodyHeightRef.current = (headPos.z - hipsPos.z) * SCALE;
+    }
 
     // Enable free camera rotation
     const camera = cameraRef.current;
@@ -1057,7 +1004,6 @@ export default function BoneConfigPage() {
     for (const n of previewNodesRef.current.values()) n.dispose();
     previewMeshesRef.current.clear();
     previewNodesRef.current.clear();
-    previewPartsRef.current = [];
 
     // Restore edit visuals
     if (bodyMeshRef.current) bodyMeshRef.current.setEnabled(showBody);
@@ -1077,29 +1023,6 @@ export default function BoneConfigPage() {
 
     setMode('edit');
   }, [showBody, setCameraView]);
-
-  // Apply preview part rotations
-  useEffect(() => {
-    if (mode !== 'preview') return;
-    for (const [name, state] of Object.entries(previewPartStates)) {
-      const node = previewNodesRef.current.get(name);
-      if (!node) continue;
-      node.rotation.x = (state.rotX * Math.PI) / 180;
-      node.rotation.z = (state.rotZ * Math.PI) / 180;
-    }
-  }, [previewPartStates, mode]);
-
-  const updatePreviewPart = useCallback((name: string, field: keyof PreviewPartState, value: number) => {
-    setPreviewPartStates(prev => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
-  }, []);
-
-  const resetPreviewParts = useCallback(() => {
-    setPreviewPartStates(prev => {
-      const next: Record<string, PreviewPartState> = {};
-      for (const k of Object.keys(prev)) next[k] = { rotX: 0, rotZ: 0 };
-      return next;
-    });
-  }, []);
 
   // Save from preview mode
   const handleConfirmSave = useCallback(async () => {
@@ -1129,54 +1052,156 @@ export default function BoneConfigPage() {
     setPlayingMotion(null);
   }, []);
 
-  const startMotion = useCallback((presetName: string) => {
+  // Load a motion clip from JSON file
+  const loadMotionClip = useCallback(async (motionName: string): Promise<MotionClip | null> => {
+    if (loadedClips[motionName]) return loadedClips[motionName];
+
+    const motionDef = MOTION_FILES.find(m => m.name === motionName);
+    if (!motionDef) return null;
+
+    setLoadingMotion(true);
+    try {
+      const resp = await fetch(motionDef.file);
+      if (!resp.ok) throw new Error(`Failed to load ${motionDef.file}`);
+      const data = await resp.json();
+      const clip: MotionClip = {
+        name: motionName,
+        label: motionDef.label,
+        duration: data.duration,
+        fps: data.fps,
+        frameCount: data.frameCount,
+        fbxBodyHeight: data.fbxBodyHeight || 2.748,
+        outputBones: data.outputBones || [],
+        frames: data.frames,
+      };
+      setLoadedClips(prev => ({ ...prev, [motionName]: clip }));
+      setLoadingMotion(false);
+      return clip;
+    } catch (e) {
+      console.error('Failed to load motion:', e);
+      setLoadingMotion(false);
+      return null;
+    }
+  }, [loadedClips]);
+
+  const playMotionClip = useCallback((clip: MotionClip) => {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Stop any running animation
     if (animCallbackRef.current) {
       scene.unregisterBeforeRender(animCallbackRef.current);
       animCallbackRef.current = null;
     }
 
-    const preset = MOTION_PRESETS.find(p => p.name === presetName);
-    if (!preset) return;
+    // Scale factor for Hips root motion: voxel body height / FBX body height
+    const scaleFactor = clip.fbxBodyHeight > 0
+      ? voxelBodyHeightRef.current / clip.fbxBodyHeight
+      : 1;
 
     animTimeRef.current = 0;
     let lastTime = performance.now();
+    const frameDuration = 1.0 / clip.fps;
+
+    // Convert Three.js world-space delta quat → viewer-space
+    // Axis mapping: viewer = (-Three_x, Three_y, -Three_z) = 180° Y rotation
+    const toViewerQuat = (dq: [number, number, number, number]) => {
+      switch (quatConv) {
+        case 'correct':  return new Quaternion(-dq[0], dq[1], -dq[2], dq[3]);
+        case 'conv1':    return new Quaternion(-dq[0], -dq[1], dq[2], dq[3]);
+        case 'conv2':    return new Quaternion(dq[0], dq[1], -dq[2], dq[3]);
+        case 'identity': return new Quaternion(dq[0], dq[1], dq[2], dq[3]);
+      }
+    };
+
+    // Apply a specific frame to the skeleton
+    const applyFrame = (frameIndex: number) => {
+      const frame = clip.frames[frameIndex];
+
+      // Step 1: Convert all world deltas to viewer space
+      const worldDeltas = new Map<string, Quaternion>();
+      for (const [boneName, data] of Object.entries(frame)) {
+        worldDeltas.set(boneName, toViewerQuat(data.dq));
+      }
+
+      // Step 2: For each bone, compute LOCAL delta = parentWorldDelta⁻¹ × boneWorldDelta
+      // With hierarchy, parent rotation propagates to children automatically.
+      // We only need the LOCAL delta (rotation relative to parent's animated frame).
+      for (const boneDef of BONE_DEFS) {
+        const node = previewNodesRef.current.get(boneDef.name);
+        if (!node) continue;
+
+        const worldDQ = worldDeltas.get(boneDef.name);
+        if (!worldDQ) {
+          // No animation data for this bone → identity (no rotation change)
+          node.rotationQuaternion = Quaternion.Identity();
+          continue;
+        }
+
+        if (!boneDef.parent) {
+          // Root bone (Hips): local delta = world delta
+          node.rotationQuaternion = worldDQ;
+
+          // Apply Hips root motion (position delta)
+          // Axis mapping: viewer = (-Three_x, Three_y, -Three_z)
+          const data = frame[boneDef.name];
+          if (data?.dp) {
+            const restPos = boneRestPosRef.current.get(boneDef.name);
+            if (restPos) {
+              node.position.x = restPos.x - data.dp[0] * scaleFactor;
+              node.position.y = restPos.y + data.dp[1] * scaleFactor;
+              node.position.z = restPos.z - data.dp[2] * scaleFactor;
+            }
+          }
+        } else {
+          // Child bone: localDelta = parentWorldDelta⁻¹ × boneWorldDelta
+          const parentWorldDQ = worldDeltas.get(boneDef.parent);
+          if (parentWorldDQ) {
+            const parentInv = parentWorldDQ.clone();
+            parentInv.invertInPlace();
+            node.rotationQuaternion = parentInv.multiply(worldDQ);
+          } else {
+            // Parent has no animation → local = world
+            node.rotationQuaternion = worldDQ;
+          }
+        }
+      }
+    };
 
     const callback = () => {
+      if (pausedRef.current) return;
       const now = performance.now();
       const dt = (now - lastTime) / 1000;
       lastTime = now;
       animTimeRef.current += dt * motionSpeed;
 
-      const t = (animTimeRef.current % preset.cycleDuration) / preset.cycleDuration;
-      const states = preset.evaluate(t);
-
-      // Apply directly to nodes (skip React state for performance)
-      for (const [name, state] of Object.entries(states)) {
-        const node = previewNodesRef.current.get(name);
-        if (node) {
-          node.rotation.x = (state.rotX * Math.PI) / 180;
-          node.rotation.z = (state.rotZ * Math.PI) / 180;
-        }
-      }
+      const loopedTime = animTimeRef.current % clip.duration;
+      const frameIndex = Math.min(
+        Math.floor(loopedTime / frameDuration),
+        clip.frameCount - 1
+      );
+      setCurrentFrame(frameIndex);
+      applyFrame(frameIndex);
     };
 
+    // Store applyFrame for manual stepping
+    applyFrameRef.current = applyFrame;
     animCallbackRef.current = callback;
     scene.registerBeforeRender(callback);
-    setPlayingMotion(presetName);
-  }, [motionSpeed]);
+    setPlayingMotion(clip.name);
+  }, [motionSpeed, quatConv]);
+
+  const startMotion = useCallback(async (motionName: string) => {
+    const clip = await loadMotionClip(motionName);
+    if (clip) playMotionClip(clip);
+  }, [loadMotionClip, playMotionClip]);
 
   // Update speed on running animation
   useEffect(() => {
-    if (playingMotion) {
-      // Restart with new speed
-      startMotion(playingMotion);
+    if (playingMotion && loadedClips[playingMotion]) {
+      playMotionClip(loadedClips[playingMotion]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [motionSpeed]);
+  }, [motionSpeed, quatConv]);
 
   const selMarker = MARKER_DEFS.find(m => m.name === selectedMarker);
   const selPos = selectedMarker ? markers[selectedMarker] : null;
@@ -1271,7 +1296,7 @@ export default function BoneConfigPage() {
                 color: tab === 'bones' ? '#fff' : '#888',
                 borderBottom: tab === 'bones' ? '2px solid #88f' : '2px solid transparent',
               }}
-            >Auto Bones (20)</button>
+            >Auto Bones (41)</button>
           </div>
         )}
 
@@ -1423,27 +1448,30 @@ export default function BoneConfigPage() {
         )}
         {mode === 'preview' && (
           <>
-            {/* Motion presets */}
+            {/* Motion clips */}
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
               <div style={{ fontSize: 12, fontWeight: 'bold', color: '#fff', marginBottom: 8 }}>
                 Motion
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                {MOTION_PRESETS.map(preset => {
-                  const isActive = playingMotion === preset.name;
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                {MOTION_FILES.map(motion => {
+                  const isActive = playingMotion === motion.name;
+                  const isLoaded = !!loadedClips[motion.name];
                   return (
                     <button
-                      key={preset.name}
-                      onClick={() => isActive ? stopMotion() : startMotion(preset.name)}
+                      key={motion.name}
+                      onClick={() => isActive ? stopMotion() : startMotion(motion.name)}
+                      disabled={loadingMotion}
                       style={{
-                        padding: '5px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 11,
+                        padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 11,
+                        textAlign: 'left',
                         background: isActive ? '#4a7a4a' : '#2a2a4e',
                         color: isActive ? '#fff' : '#aaa',
                         border: isActive ? '2px solid #6a6' : '1px solid #444',
                         fontWeight: isActive ? 'bold' : 'normal',
                       }}
                     >
-                      {isActive ? '■ ' : '▶ '}{preset.label}
+                      {loadingMotion && !isLoaded ? '⏳ ' : isActive ? '■ ' : '▶ '}{motion.label}
                     </button>
                   );
                 })}
@@ -1457,47 +1485,100 @@ export default function BoneConfigPage() {
                   style={{ flex: 1 }} />
                 <span style={{ fontSize: 11, color: '#888', width: 30, textAlign: 'right' }}>{motionSpeed.toFixed(1)}x</span>
               </div>
+              {/* Quaternion conversion formula selector */}
+              <div style={{ marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: '#888' }}>Quat Conv:</span>
+                <select
+                  value={quatConv}
+                  onChange={e => setQuatConv(e.target.value as QuatConversion)}
+                  style={{
+                    marginLeft: 6, fontSize: 11, background: '#1a1a2e',
+                    color: '#ccc', border: '1px solid #444', borderRadius: 3, padding: '2px 4px',
+                  }}
+                >
+                  {QUAT_CONVERSIONS.map(c => (
+                    <option key={c.key} value={c.key}>
+                      {c.label} - {c.desc}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Manual sliders (disabled during animation) */}
-            <div style={{ padding: '6px 12px', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Frame controls */}
+            {playingMotion && (
+              <div style={{ padding: '6px 12px', borderBottom: '1px solid #333' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    onClick={() => setPaused(p => !p)}
+                    style={{
+                      padding: '2px 8px', fontSize: 11, cursor: 'pointer',
+                      background: paused ? '#664400' : '#333', color: '#ccc',
+                      border: '1px solid #555', borderRadius: 3,
+                    }}
+                  >
+                    {paused ? '▶ Play' : '⏸ Pause'}
+                  </button>
+                  {paused && (
+                    <>
+                      <button
+                        onClick={() => {
+                          const clip = loadedClips[playingMotion!];
+                          if (!clip || !applyFrameRef.current) return;
+                          const prev = Math.max(0, currentFrame - 1);
+                          setCurrentFrame(prev);
+                          applyFrameRef.current(prev);
+                        }}
+                        style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer', background: '#333', color: '#ccc', border: '1px solid #555', borderRadius: 3 }}
+                      >◀</button>
+                      <button
+                        onClick={() => {
+                          const clip = loadedClips[playingMotion!];
+                          if (!clip || !applyFrameRef.current) return;
+                          const next = Math.min(clip.frameCount - 1, currentFrame + 1);
+                          setCurrentFrame(next);
+                          applyFrameRef.current(next);
+                        }}
+                        style={{ padding: '2px 6px', fontSize: 11, cursor: 'pointer', background: '#333', color: '#ccc', border: '1px solid #555', borderRadius: 3 }}
+                      >▶</button>
+                    </>
+                  )}
+                  <span style={{ fontSize: 11, color: '#aaa' }}>
+                    Frame: {currentFrame} / {loadedClips[playingMotion!]?.frameCount ?? '?'}
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* Bone info */}
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid #333' }}>
               <span style={{ fontSize: 11, color: '#888' }}>
-                {playingMotion ? 'モーション再生中' : '手動操作'}
+                {playingMotion ? 'モーション再生中 (41ボーン階層アニメーション)' : 'モーションを選択してください'}
               </span>
-              {!playingMotion && (
-                <button onClick={resetPreviewParts} style={{
-                  padding: '2px 8px', borderRadius: 3, cursor: 'pointer',
-                  background: '#3a3a3a', color: '#aaa', border: '1px solid #555', fontSize: 10,
-                }}>Reset</button>
-              )}
             </div>
 
-            <div style={{ flex: 1, overflow: 'auto', opacity: playingMotion ? 0.4 : 1, pointerEvents: playingMotion ? 'none' : 'auto' }}>
-              {previewPartsRef.current.filter(p => p.name !== 'torso').map(part => {
-                const st = previewPartStates[part.name];
-                if (!st) return null;
+            {/* Bone list (read-only status) */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <div style={{ padding: '6px 12px', fontSize: 11, color: '#666', borderBottom: '1px solid #222' }}>
+                ボーン分割一覧 (41ボーン)
+              </div>
+              {BONE_DEFS.map(bone => {
+                const hasMesh = previewMeshesRef.current.has(bone.name);
+                const depth = getDepth(bone.name);
                 return (
-                  <div key={part.name} style={{ padding: '8px 12px', borderBottom: '1px solid #222' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, display: 'inline-block', background: part.color }} />
-                      <span style={{ fontWeight: 'bold', fontSize: 12, color: '#ccc' }}>{part.label}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ width: 60, fontSize: 10, color: '#aaa' }}>Fwd/Back</span>
-                      <input type="range" min={-90} max={90} step={1}
-                        value={st.rotX}
-                        onChange={e => updatePreviewPart(part.name, 'rotX', Number(e.target.value))}
-                        style={{ flex: 1 }} />
-                      <span style={{ width: 32, fontSize: 10, textAlign: 'right', color: '#888' }}>{st.rotX}°</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 60, fontSize: 10, color: '#aaa' }}>L/R</span>
-                      <input type="range" min={-90} max={90} step={1}
-                        value={st.rotZ}
-                        onChange={e => updatePreviewPart(part.name, 'rotZ', Number(e.target.value))}
-                        style={{ flex: 1 }} />
-                      <span style={{ width: 32, fontSize: 10, textAlign: 'right', color: '#888' }}>{st.rotZ}°</span>
-                    </div>
+                  <div
+                    key={bone.name}
+                    style={{
+                      padding: '3px 12px', paddingLeft: 12 + depth * 12,
+                      fontSize: 10, color: hasMesh ? '#aaa' : '#555',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}
+                  >
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: bone.color, display: 'inline-block',
+                      opacity: hasMesh ? 1 : 0.3,
+                    }} />
+                    <span>{bone.label}</span>
                   </div>
                 );
               })}
@@ -1574,7 +1655,7 @@ export default function BoneConfigPage() {
               Split Preview
               {playingMotion && (
                 <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.8 }}>
-                  {MOTION_PRESETS.find(p => p.name === playingMotion)?.label}
+                  {MOTION_FILES.find(p => p.name === playingMotion)?.label}
                 </span>
               )}
             </div>
