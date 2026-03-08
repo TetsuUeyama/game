@@ -501,7 +501,7 @@ export default function BoneConfigPage() {
   const voxelBodyHeightRef = useRef(0);  // viewer-space Hips→Head distance
   const voxelsRef = useRef<VoxelEntry[]>([]);
 
-  const [currentModel] = useState<ModelEntry>(() => {
+  const [currentModel, setCurrentModel] = useState<ModelEntry>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const modelId = params.get('model');
@@ -1222,8 +1222,27 @@ export default function BoneConfigPage() {
             <span style={{ fontWeight: 'bold', fontSize: 16 }}>Bone Config</span>
             <Link href="/" style={{ color: '#888', fontSize: 11, textDecoration: 'none' }}>Top</Link>
           </div>
-          <div style={{ fontSize: 11, color: '#888' }}>
-            Model: <span style={{ color: '#aaf' }}>{currentModel.label}</span>
+          <div style={{ fontSize: 11, color: '#888', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>Model:</span>
+            <select
+              value={currentModel.id}
+              onChange={e => {
+                const m = MODEL_REGISTRY.find(r => r.id === e.target.value);
+                if (m && m.id !== currentModel.id) {
+                  if (mode === 'preview') exitPreview();
+                  setCurrentModel(m);
+                }
+              }}
+              style={{
+                fontSize: 11, background: '#1a1a2e', color: '#aaf',
+                border: '1px solid #444', borderRadius: 3, padding: '2px 6px',
+                cursor: 'pointer',
+              }}
+            >
+              {MODEL_REGISTRY.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
           </div>
         </div>
 
