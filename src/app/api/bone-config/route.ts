@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-function getConfigPath(): string {
-  return path.join(process.cwd(), 'public', 'box2', 'bone-config.json');
+// Validate dir to prevent directory traversal
+function isValidDir(dir: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(dir);
 }
 
-export async function GET() {
-  const filePath = getConfigPath();
+function getConfigPath(dir: string): string {
+  return path.join(process.cwd(), 'public', dir, 'bone-config.json');
+}
+
+export async function GET(request: NextRequest) {
+  const dir = request.nextUrl.searchParams.get('dir');
+  if (!dir || !isValidDir(dir)) {
+    return NextResponse.json({ error: 'Missing or invalid dir parameter' }, { status: 400 });
+  }
+
+  const filePath = getConfigPath(dir);
   try {
     if (fs.existsSync(filePath)) {
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
@@ -20,9 +30,14 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const dir = request.nextUrl.searchParams.get('dir');
+  if (!dir || !isValidDir(dir)) {
+    return NextResponse.json({ error: 'Missing or invalid dir parameter' }, { status: 400 });
+  }
+
   try {
     const body = await request.json();
-    const filePath = getConfigPath();
+    const filePath = getConfigPath(dir);
     fs.writeFileSync(filePath, JSON.stringify(body, null, 2), 'utf-8');
     return NextResponse.json({ success: true });
   } catch (e) {

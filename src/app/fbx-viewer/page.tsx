@@ -17,6 +17,8 @@ import {
   ShaderMaterial,
   Effect,
 } from '@babylonjs/core';
+import { MODEL_REGISTRY, DEFAULT_MODEL_ID } from '@/lib/model-registry';
+import type { ModelEntry } from '@/lib/model-registry';
 
 // ========================================================================
 // VOX parser
@@ -85,46 +87,80 @@ interface EquipConfig {
 }
 
 // ========================================================================
-// Body part definitions
+// Body part definitions - generated from bone config
 // ========================================================================
-const LIMB_PARTS: BodyPartDef[] = [
-  {
-    name: 'head', label: 'Head', color: '#ffaa44',
-    classify: (_x, _y, z) => z >= 79,
-    pivotX: 41.5, pivotZ: 79,
-    capLayers: 4,
-  },
-  {
-    name: 'leftArm', label: 'Left Arm', color: '#44aaff',
-    classify: (x, _y, z) => z >= 35 && z < 79 && x < 28,
-    pivotX: 'auto', pivotZ: 'auto',
-    capLayers: 2,
-  },
-  {
-    name: 'rightArm', label: 'Right Arm', color: '#ff44aa',
-    classify: (x, _y, z) => z >= 35 && z < 79 && x > 54,
-    pivotX: 'auto', pivotZ: 'auto',
-    capLayers: 2,
-  },
-  {
-    name: 'leftLeg', label: 'Left Leg', color: '#44ffaa',
-    classify: (x, _y, z) => z < 35 && x < 41,
-    pivotX: 33, pivotZ: 35,
-    capLayers: 4,
-  },
-  {
-    name: 'rightLeg', label: 'Right Leg', color: '#aaff44',
-    classify: (x, _y, z) => z < 35 && x >= 41,
-    pivotX: 49, pivotZ: 35,
-    capLayers: 4,
-  },
-  {
-    name: 'torso', label: 'Torso', color: '#aaaaaa',
-    classify: () => true,
-    pivotX: 41.5, pivotZ: 50,
-    capLayers: 4,
-  },
+interface BonePositions {
+  [boneName: string]: { x: number; y: number; z: number };
+}
+
+// Fallback hardcoded values (used when bone-config.json is not available)
+const FALLBACK_LIMB_PARTS: BodyPartDef[] = [
+  { name: 'head', label: 'Head', color: '#ffaa44', classify: (_x, _y, z) => z >= 79, pivotX: 41.5, pivotZ: 79, capLayers: 4 },
+  { name: 'leftArm', label: 'Left Arm', color: '#44aaff', classify: (x, _y, z) => z >= 35 && z < 79 && x < 28, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
+  { name: 'rightArm', label: 'Right Arm', color: '#ff44aa', classify: (x, _y, z) => z >= 35 && z < 79 && x > 54, pivotX: 'auto', pivotZ: 'auto', capLayers: 2 },
+  { name: 'leftLeg', label: 'Left Leg', color: '#44ffaa', classify: (x, _y, z) => z < 35 && x < 41, pivotX: 33, pivotZ: 35, capLayers: 4 },
+  { name: 'rightLeg', label: 'Right Leg', color: '#aaff44', classify: (x, _y, z) => z < 35 && x >= 41, pivotX: 49, pivotZ: 35, capLayers: 4 },
+  { name: 'torso', label: 'Torso', color: '#aaaaaa', classify: () => true, pivotX: 41.5, pivotZ: 50, capLayers: 4 },
 ];
+
+function buildLimbPartsFromBones(bones: BonePositions): BodyPartDef[] {
+  const neck = bones['Neck'];
+  const hips = bones['Hips'];
+  const lShoulder = bones['LeftShoulder'];
+  const rShoulder = bones['RightShoulder'];
+  const spine1 = bones['Spine1'];
+
+  // Split boundaries derived from bone positions
+  const headZ = neck.z;                          // head starts at neck height
+  const legZ = hips.z;                            // legs below hips
+  const armLeftX = lShoulder.x;                   // left arm: x < left shoulder
+  const armRightX = rShoulder.x;                  // right arm: x > right shoulder
+  const legCenterX = hips.x;                      // left/right leg split at hips center
+  const torsoCenterX = (hips.x + neck.x) / 2;    // torso center
+  const torsoCenterZ = spine1.z;                  // torso pivot at spine1
+
+  return [
+    {
+      name: 'head', label: 'Head', color: '#ffaa44',
+      classify: (_x, _y, z) => z >= headZ,
+      pivotX: neck.x, pivotZ: headZ,
+      capLayers: 4,
+    },
+    {
+      name: 'leftArm', label: 'Left Arm', color: '#44aaff',
+      classify: (x, _y, z) => z >= legZ && z < headZ && x < armLeftX,
+      pivotX: 'auto', pivotZ: 'auto',
+      capLayers: 2,
+    },
+    {
+      name: 'rightArm', label: 'Right Arm', color: '#ff44aa',
+      classify: (x, _y, z) => z >= legZ && z < headZ && x > armRightX,
+      pivotX: 'auto', pivotZ: 'auto',
+      capLayers: 2,
+    },
+    {
+      name: 'leftLeg', label: 'Left Leg', color: '#44ffaa',
+      classify: (x, _y, z) => z < legZ && x < legCenterX,
+      pivotX: bones['LeftUpLeg'].x, pivotZ: legZ,
+      capLayers: 4,
+    },
+    {
+      name: 'rightLeg', label: 'Right Leg', color: '#aaff44',
+      classify: (x, _y, z) => z < legZ && x >= legCenterX,
+      pivotX: bones['RightUpLeg'].x, pivotZ: legZ,
+      capLayers: 4,
+    },
+    {
+      name: 'torso', label: 'Torso', color: '#aaaaaa',
+      classify: () => true,
+      pivotX: torsoCenterX, pivotZ: torsoCenterZ,
+      capLayers: 4,
+    },
+  ];
+}
+
+// Will be set at runtime after loading bone config
+let LIMB_PARTS: BodyPartDef[] = FALLBACK_LIMB_PARTS;
 
 // ========================================================================
 // Mesh building
@@ -224,18 +260,14 @@ function saveEquipConfig(config: EquipConfig) {
 }
 
 // ========================================================================
-// Constants
-// ========================================================================
-const VOX_BODY_URL = '/box2/cyberpunk_elf_body_base.vox';
-const VOX_PARTS_MANIFEST = '/box2/cyberpunk_elf_parts.json';
-
-
-// ========================================================================
 // Component
 // ========================================================================
 interface PartState { rotX: number; rotZ: number; }
 
 export default function FbxViewerPage() {
+  const [currentModel, setCurrentModel] = useState<ModelEntry>(
+    MODEL_REGISTRY.find(m => m.id === DEFAULT_MODEL_ID) ?? MODEL_REGISTRY[0]
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
   const partNodesRef = useRef<Map<string, TransformNode>>(new Map());
@@ -288,19 +320,42 @@ export default function FbxViewerPage() {
     return () => { window.removeEventListener('resize', onResize); engine.dispose(); };
   }, []);
 
-  // Load data
+  // Load data (re-runs when model changes)
   useEffect(() => {
     if (!initialized) return;
+    setLoaded(false);
+    setError(null);
     (async () => {
       try {
-        const { model, voxels: bodyVoxels } = await loadVoxFile(VOX_BODY_URL);
+        // Load bone config for this model
+        try {
+          const boneResp = await fetch(`/api/bone-config?dir=${currentModel.dir}`);
+          if (boneResp.ok) {
+            const boneData = await boneResp.json();
+            if (boneData?.bones && typeof boneData.bones === 'object') {
+              const bones: BonePositions = boneData.bones;
+              const required = ['Neck', 'Hips', 'LeftShoulder', 'RightShoulder', 'Spine1', 'LeftUpLeg', 'RightUpLeg'];
+              if (required.every(b => bones[b])) {
+                LIMB_PARTS = buildLimbPartsFromBones(bones);
+              } else {
+                LIMB_PARTS = FALLBACK_LIMB_PARTS;
+              }
+            } else {
+              LIMB_PARTS = FALLBACK_LIMB_PARTS;
+            }
+          } else {
+            LIMB_PARTS = FALLBACK_LIMB_PARTS;
+          }
+        } catch { LIMB_PARTS = FALLBACK_LIMB_PARTS; }
+
+        const { model, voxels: bodyVoxels } = await loadVoxFile(currentModel.bodyFile);
         bodyVoxelsRef.current = bodyVoxels;
         bodySizeRef.current = { cx: model.sizeX / 2, cy: model.sizeY / 2 };
 
-        const manifestResp = await fetch(VOX_PARTS_MANIFEST + `?v=${Date.now()}`);
+        const manifestResp = await fetch(currentModel.partsManifest + `?v=${Date.now()}`);
         if (manifestResp.ok) {
           const parts: EquipPart[] = await manifestResp.json();
-          const equipParts = parts.filter(p => p.key !== 'body');
+          const equipParts = parts.filter(p => p.key !== currentModel.bodyKey);
           setEquipList(equipParts);
 
           // Load saved config or use defaults
@@ -324,10 +379,10 @@ export default function FbxViewerPage() {
           for (const r of results) { if (r) map.set(r.key, r.voxels); }
           equipVoxelsRef.current = map;
         }
-        setRebuildKey(1);
+        setRebuildKey(k => k + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     })();
-  }, [initialized]);
+  }, [initialized, currentModel]);
 
   // Build meshes
   useEffect(() => {
@@ -569,12 +624,36 @@ export default function FbxViewerPage() {
         width: 320, minWidth: 320, background: '#0f0f23', color: '#ccc',
         borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', overflow: 'auto',
       }}>
-        <div style={{ padding: '12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 'bold', fontSize: 14 }}>Voxel Body Mover</span>
-          <button onClick={resetAll} style={{
-            padding: '4px 12px', borderRadius: 4, background: '#6a3a3a', color: '#eee',
-            border: '1px solid #555', cursor: 'pointer', fontSize: 11,
-          }}>Reset All</button>
+        <div style={{ padding: '12px', borderBottom: '1px solid #333' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontWeight: 'bold', fontSize: 14 }}>Voxel Body Mover</span>
+            <button onClick={resetAll} style={{
+              padding: '4px 12px', borderRadius: 4, background: '#6a3a3a', color: '#eee',
+              border: '1px solid #555', cursor: 'pointer', fontSize: 11,
+            }}>Reset All</button>
+          </div>
+          {/* Model selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#888' }}>Model:</span>
+            <select
+              value={currentModel.id}
+              onChange={e => {
+                const m = MODEL_REGISTRY.find(r => r.id === e.target.value);
+                if (m) setCurrentModel(m);
+              }}
+              style={{
+                flex: 1, fontSize: 12, padding: '3px 6px', borderRadius: 4,
+                background: '#1a1a3e', color: '#ccc', border: '1px solid #444',
+              }}
+            >
+              {MODEL_REGISTRY.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+            <a href={`/bone-config`} target="_blank" style={{ fontSize: 10, color: '#68f', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              Bone Config
+            </a>
+          </div>
         </div>
 
         {error && <div style={{ padding: 12, color: '#f88' }}>Error: {error}</div>}
