@@ -10,7 +10,7 @@ import type { AttackDef } from '@/GamePlay/FightGame/Config/AttackConfig';
 import type { FighterInput } from '@/GamePlay/FightGame/Core/InputHandler';
 import { STAGE_CONFIG } from '@/GamePlay/FightGame/Config/FighterConfig';
 
-export type FighterAction = 'idle' | 'walk_fwd' | 'walk_back' | 'strafe' | 'jump' | 'block' | 'attack' | 'hitstun' | 'knockdown';
+export type FighterAction = 'idle' | 'walk_fwd' | 'walk_back' | 'strafe' | 'jump' | 'block' | 'attack' | 'hitstun' | 'knockdown' | 'grapple' | 'grappled';
 export type AttackPhase = 'startup' | 'active' | 'recovery';
 
 export interface FighterState {
@@ -51,6 +51,9 @@ export interface FighterState {
 
   // Knockdown variant: 'knockdown' (backward) or 'knockdown_fwd' (forward)
   knockdownVariant: string;
+
+  // Grapple motion key: e.g., 'grapple_takedown_atk' or 'grapple_takedown_def'
+  grappleMotionKey: string | null;
 }
 
 export function createFighter(spawnX: number, spawnZ: number, facingAngle: number, stats?: Partial<FighterStats>): FighterState {
@@ -75,6 +78,7 @@ export function createFighter(spawnX: number, spawnZ: number, facingAngle: numbe
     currentMotion: null,
     motionTime: 0,
     knockdownVariant: 'knockdown',
+    grappleMotionKey: null,
   };
 }
 

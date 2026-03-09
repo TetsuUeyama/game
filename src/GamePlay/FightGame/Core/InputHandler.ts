@@ -19,11 +19,15 @@ export interface FighterInput {
   /** Attack name or null. Height derived from directional input. */
   attack: string | null; // e.g., 'r_punch_mid', 'l_kick_upper'
   block: boolean;        // held
+  /** Grapple input: 'takedown' | 'hip_throw' | null */
+  grapple: string | null;
+  /** Any button mashed this frame (for grapple escape) */
+  mash: boolean;
 }
 
 const EMPTY_INPUT: FighterInput = {
   forward: false, backward: false, strafeLeft: false, strafeRight: false,
-  jump: false, attack: null, block: false,
+  jump: false, attack: null, block: false, grapple: null, mash: false,
 };
 
 type Height = 'upper' | 'mid' | 'lower';
@@ -83,6 +87,14 @@ export class InputHandler {
     else if (this.keysJustPressed.has('l')) attack = resolveAttack('l_punch', h);
     else if (this.keysJustPressed.has('u')) attack = resolveAttack('l_kick', h);
 
+    // Grapple: G = takedown, H = hip throw
+    let grapple: string | null = null;
+    if (this.keysJustPressed.has('g')) grapple = 'takedown';
+    else if (this.keysJustPressed.has('h')) grapple = 'hip_throw';
+
+    // Mash: any just-pressed key counts for escape
+    const mash = this.keysJustPressed.size > 0;
+
     return {
       forward:     this.keysDown.has('w'),
       backward:    this.keysDown.has('s'),
@@ -91,6 +103,8 @@ export class InputHandler {
       jump:        this.keysJustPressed.has(' '),
       attack,
       block:       this.keysDown.has('f'),
+      grapple,
+      mash,
     };
   }
 
@@ -103,6 +117,13 @@ export class InputHandler {
     else if (this.keysJustPressed.has('3')) attack = resolveAttack('l_punch', h);
     else if (this.keysJustPressed.has('4')) attack = resolveAttack('l_kick', h);
 
+    // Grapple: 5 = takedown, 7 = hip throw
+    let grapple: string | null = null;
+    if (this.keysJustPressed.has('5')) grapple = 'takedown';
+    else if (this.keysJustPressed.has('7')) grapple = 'hip_throw';
+
+    const mash = this.keysJustPressed.size > 0;
+
     return {
       forward:     this.keysDown.has('arrowup'),
       backward:    this.keysDown.has('arrowdown'),
@@ -111,6 +132,8 @@ export class InputHandler {
       jump:        this.keysJustPressed.has('0'),
       attack,
       block:       this.keysDown.has('6'),
+      grapple,
+      mash,
     };
   }
 

@@ -29,6 +29,10 @@ interface AIConfig {
   preferredDist: number;
   /** Probability to strafe instead of walking straight (0-1) */
   strafeChance: number;
+  /** Probability to attempt grapple at close range (0-1) */
+  grappleChance: number;
+  /** Mash speed during grapple escape (inputs per decision) */
+  escapeMashRate: number;
 }
 
 const AI_CONFIGS: Record<AIDifficulty, AIConfig> = {
@@ -39,6 +43,8 @@ const AI_CONFIGS: Record<AIDifficulty, AIConfig> = {
     comboChance: 0.15,
     preferredDist: 0.5,
     strafeChance: 0.1,
+    grappleChance: 0.05,
+    escapeMashRate: 1,
   },
   normal: {
     reactionTime: 0.25,
@@ -47,6 +53,8 @@ const AI_CONFIGS: Record<AIDifficulty, AIConfig> = {
     comboChance: 0.4,
     preferredDist: 0.45,
     strafeChance: 0.25,
+    grappleChance: 0.12,
+    escapeMashRate: 2,
   },
   hard: {
     reactionTime: 0.1,
@@ -55,6 +63,8 @@ const AI_CONFIGS: Record<AIDifficulty, AIConfig> = {
     comboChance: 0.65,
     preferredDist: 0.4,
     strafeChance: 0.35,
+    grappleChance: 0.2,
+    escapeMashRate: 3,
   },
 };
 
@@ -126,6 +136,28 @@ export class FighterAI {
       }
     }
 
+    // === GRAPPLE: Very close range ===
+    const grappleRange = 0.4;
+    const canGrapple = self.action === 'idle' || self.action === 'walk_fwd' ||
+      self.action === 'strafe';
+
+    if (dist < grappleRange && canGrapple && Math.random() < this.config.grappleChance) {
+      input.grapple = Math.random() < 0.5 ? 'takedown' : 'hip_throw';
+      return input;
+    }
+
+    // === ESCAPE: Mash when grappled ===
+    if (self.action === 'grappled') {
+      input.mash = Math.random() < 0.5; // random mashing per frame
+      return input;
+    }
+
+    // === MOUNT PUNCH: Attack when grappling (mounted) ===
+    if (self.action === 'grapple') {
+      input.attack = 'r_punch_mid'; // mount punches
+      return input;
+    }
+
     // === ATTACK: When in range ===
     const attackRange = 0.65;
     const canAttack = self.action === 'idle' || self.action === 'walk_fwd' ||
@@ -195,6 +227,7 @@ export class FighterAI {
       forward: false, backward: false,
       strafeLeft: false, strafeRight: false,
       jump: false, attack: null, block: false,
+      grapple: null, mash: false,
     };
   }
 }

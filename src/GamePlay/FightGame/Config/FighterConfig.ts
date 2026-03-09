@@ -55,5 +55,5 @@ export const STAGE_CONFIG = {
 };
 
 /** Player spawn positions (viewer XZ) */
-export const P1_SPAWN = { x: -0.6, z: 0 };
-export const P2_SPAWN = { x: 0.6, z: 0 };
+export const P1_SPAWN = { x: 0.6, z: 0 };
+export const P2_SPAWN = { x: -0.6, z: 0 };
