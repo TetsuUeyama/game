@@ -549,9 +549,17 @@ function addSphereCaps(
       const nLen = Math.sqrt(ndx * ndx + ndy * ndy + ndz * ndz) || 1;
       const nnx = ndx / nLen, nny = ndy / nLen, nnz = ndz / nLen;
 
-      // Radius: based on smaller boundary size
-      const smallerCount = Math.min(thisBnd.size, otherBnd.size);
-      const radius = Math.max(2, Math.sqrt(smallerCount / Math.PI));
+      // Radius: max distance from midpoint to any boundary voxel (= actual cross-section size)
+      let maxDistSq = 0;
+      for (const v of thisBnd.values()) {
+        const dsq = (v.x - mx) ** 2 + (v.y - my) ** 2 + (v.z - mz) ** 2;
+        if (dsq > maxDistSq) maxDistSq = dsq;
+      }
+      for (const v of otherBnd.values()) {
+        const dsq = (v.x - mx) ** 2 + (v.y - my) ** 2 + (v.z - mz) ** 2;
+        if (dsq > maxDistSq) maxDistSq = dsq;
+      }
+      const radius = Math.max(1, Math.sqrt(maxDistSq) / 2);
       const radiusSq = radius * radius;
       const ri = Math.ceil(radius);
 
@@ -732,6 +740,8 @@ const MOTION_FILES: { name: string; label: string; file: string }[] = [
   { name: 'snake_hip_hop', label: 'Snake Hip Hop', file: '/models/character-motion/Snake Hip Hop Dance.motion.json' },
 ];
 
+interface EquipPart { key: string; file: string; default_on: boolean; voxels: number; }
+
 type PageMode = 'edit' | 'preview';
 
 // Quaternion conversion from Three.js to viewer coordinate system.
@@ -806,6 +816,12 @@ export default function BoneConfigPage() {
   const pausedRef = useRef(false);
   const applyFrameRef = useRef<((frame: number) => void) | null>(null);
   const loadKeyRef = useRef(0);
+
+  // Equipment state
+  const [equipParts, setEquipParts] = useState<EquipPart[]>([]);
+  const [equipEnabled, setEquipEnabled] = useState<Record<string, boolean>>({});
+  const [equipVoxelCache, setEquipVoxelCache] = useState<Record<string, VoxelEntry[]>>({});
+  const [equipLoading, setEquipLoading] = useState(false);
 
   // Keep refs in sync
   useEffect(() => { autoMirrorRef.current = autoMirror; }, [autoMirror]);
@@ -1114,6 +1130,22 @@ export default function BoneConfigPage() {
 
         bodyMeshRef.current = buildBodyMesh(voxels, scene, cx, cy, 0.25);
 
+        // Load equipment manifest
+        try {
+          const partsResp = await fetch(currentModel.partsManifest + `?v=${Date.now()}`);
+          if (partsResp.ok) {
+            const parts: EquipPart[] = await partsResp.json();
+            // Filter out the body itself
+            const equipOnly = parts.filter(p => p.key !== currentModel.bodyKey);
+            setEquipParts(equipOnly);
+            // Set default enabled state
+            const enabled: Record<string, boolean> = {};
+            for (const p of equipOnly) enabled[p.key] = p.default_on;
+            setEquipEnabled(enabled);
+            setEquipVoxelCache({});
+          }
+        } catch { /* no equipment available */ }
+
         // Load saved bone config for this model
         let loaded = false;
         try {
@@ -1205,8 +1237,43 @@ export default function BoneConfigPage() {
   }, []);
 
 
+  // Load equipment voxels for enabled parts
+  const loadEquipmentVoxels = useCallback(async (): Promise<VoxelEntry[]> => {
+    const enabledKeys = Object.entries(equipEnabled).filter(([, v]) => v).map(([k]) => k);
+    if (enabledKeys.length === 0) return [];
+
+    const cache = { ...equipVoxelCache };
+    const toLoad = enabledKeys.filter(k => !cache[k]);
+
+    if (toLoad.length > 0) {
+      setEquipLoading(true);
+      const results = await Promise.all(
+        toLoad.map(async key => {
+          const part = equipParts.find(p => p.key === key);
+          if (!part) return { key, voxels: [] as VoxelEntry[] };
+          try {
+            const { voxels } = await loadVoxFile(part.file);
+            return { key, voxels };
+          } catch {
+            return { key, voxels: [] as VoxelEntry[] };
+          }
+        })
+      );
+      for (const r of results) cache[r.key] = r.voxels;
+      setEquipVoxelCache(cache);
+      setEquipLoading(false);
+    }
+
+    // Merge all enabled equipment voxels
+    const allEquip: VoxelEntry[] = [];
+    for (const key of enabledKeys) {
+      if (cache[key]) allEquip.push(...cache[key]);
+    }
+    return allEquip;
+  }, [equipEnabled, equipParts, equipVoxelCache]);
+
   // Enter preview: hide edit visuals, build skeletal hierarchy, free camera
-  const enterPreview = useCallback(() => {
+  const enterPreview = useCallback(async () => {
     const scene = sceneRef.current;
     const canvas = canvasRef.current;
     if (!scene || !canvas || Object.keys(calculatedBones).length === 0) return;
@@ -1225,8 +1292,27 @@ export default function BoneConfigPage() {
     previewMeshesRef.current.clear();
     previewNodesRef.current.clear();
 
+    // Load equipment voxels and merge with body
+    const equipVoxels = await loadEquipmentVoxels();
+    const mergedVoxels = [...voxelsRef.current];
+    if (equipVoxels.length > 0) {
+      // Equipment voxels override body voxels at same position (clothing priority)
+      const bodySet = new Set<string>();
+      for (const v of mergedVoxels) bodySet.add(`${v.x},${v.y},${v.z}`);
+      for (const v of equipVoxels) {
+        const k = `${v.x},${v.y},${v.z}`;
+        if (bodySet.has(k)) {
+          // Replace body voxel with equipment voxel
+          const idx = mergedVoxels.findIndex(bv => bv.x === v.x && bv.y === v.y && bv.z === v.z);
+          if (idx >= 0) mergedVoxels[idx] = v;
+        } else {
+          mergedVoxels.push(v);
+        }
+      }
+    }
+
     // Build hierarchical 20-bone skeleton with voxel meshes
-    const { nodes, meshes } = buildSkeletalPreview(voxelsRef.current, calculatedBones, scene, cx, cy);
+    const { nodes, meshes } = buildSkeletalPreview(mergedVoxels, calculatedBones, scene, cx, cy);
     previewNodesRef.current = nodes;
     previewMeshesRef.current = meshes;
 
@@ -1255,7 +1341,7 @@ export default function BoneConfigPage() {
     }
 
     setMode('preview');
-  }, [calculatedBones]);
+  }, [calculatedBones, loadEquipmentVoxels]);
 
   // Exit preview: restore edit visuals, dispose preview meshes, fixed camera
   const exitPreview = useCallback(() => {
@@ -2053,6 +2139,86 @@ export default function BoneConfigPage() {
                 </div>
               </div>
             )}
+            {/* Equipment toggles */}
+            {equipParts.length > 0 && (
+              <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
+                <div style={{ fontSize: 12, fontWeight: 'bold', color: '#fff', marginBottom: 8 }}>
+                  Equipment {equipLoading && <span style={{ fontSize: 10, color: '#888' }}>(loading...)</span>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {equipParts.map(part => (
+                    <label key={part.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 11 }}>
+                      <input
+                        type="checkbox"
+                        checked={equipEnabled[part.key] ?? false}
+                        onChange={e => {
+                          setEquipEnabled(prev => ({ ...prev, [part.key]: e.target.checked }));
+                        }}
+                      />
+                      <span style={{ color: equipEnabled[part.key] ? '#ccc' : '#666' }}>{part.key}</span>
+                      <span style={{ fontSize: 9, color: '#555' }}>({part.voxels})</span>
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={async () => {
+                    // Rebuild preview with new equipment
+                    const scene = sceneRef.current;
+                    if (!scene) return;
+                    const { cx, cy } = centerRef.current;
+                    // Stop current motion
+                    if (animCallbackRef.current) {
+                      scene.unregisterBeforeRender(animCallbackRef.current);
+                      animCallbackRef.current = null;
+                    }
+                    const wasPlaying = playingMotion;
+                    setPlayingMotion(null);
+
+                    // Dispose old preview
+                    for (const m of previewMeshesRef.current.values()) m.dispose();
+                    for (const n of previewNodesRef.current.values()) n.dispose();
+                    previewMeshesRef.current.clear();
+                    previewNodesRef.current.clear();
+                    for (const s of debugBonesRef.current.spheres) s.dispose();
+                    if (debugBonesRef.current.lines) debugBonesRef.current.lines.dispose();
+                    debugBonesRef.current = { spheres: [], lines: null };
+
+                    // Load equipment and rebuild
+                    const equipVoxels = await loadEquipmentVoxels();
+                    const mergedVoxels = [...voxelsRef.current];
+                    if (equipVoxels.length > 0) {
+                      const bodySet = new Set<string>();
+                      for (const v of mergedVoxels) bodySet.add(`${v.x},${v.y},${v.z}`);
+                      for (const v of equipVoxels) {
+                        const k = `${v.x},${v.y},${v.z}`;
+                        if (bodySet.has(k)) {
+                          const idx = mergedVoxels.findIndex(bv => bv.x === v.x && bv.y === v.y && bv.z === v.z);
+                          if (idx >= 0) mergedVoxels[idx] = v;
+                        } else {
+                          mergedVoxels.push(v);
+                        }
+                      }
+                    }
+
+                    const { nodes, meshes } = buildSkeletalPreview(mergedVoxels, calculatedBones, scene, cx, cy);
+                    previewNodesRef.current = nodes;
+                    previewMeshesRef.current = meshes;
+
+                    // Restart motion if was playing
+                    if (wasPlaying && loadedClips[wasPlaying]) {
+                      playMotionClip(loadedClips[wasPlaying]);
+                    }
+                  }}
+                  style={{
+                    marginTop: 6, padding: '4px 0', width: '100%', borderRadius: 3, cursor: 'pointer',
+                    background: '#2a3a5e', color: '#aaf', border: '1px solid #446', fontSize: 11,
+                  }}
+                >
+                  装備を反映
+                </button>
+              </div>
+            )}
+
             {/* Bone info */}
             <div style={{ padding: '6px 12px', borderBottom: '1px solid #333' }}>
               <span style={{ fontSize: 11, color: '#888' }}>
