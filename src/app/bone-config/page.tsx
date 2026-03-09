@@ -56,7 +56,7 @@ const BONE_DEFS: BoneDef[] = [
   { name: 'Spine2',         label: 'Spine2',         parent: 'Spine1',         color: '#ffaa44' },
   { name: 'Neck',           label: 'Neck',           parent: 'Spine2',         color: '#ffcc44' },
   { name: 'Head',           label: 'Head',           parent: 'Neck',           color: '#ffee44' },
-  { name: 'HeadTop_End',    label: 'HeadTop',        parent: 'Head',           color: '#ffffaa' },
+  // HeadTop_End removed — leaf bone not needed for motion, voxels assigned to Head instead
   // Left arm chain
   { name: 'LeftShoulder',   label: 'L.Shoulder',     parent: 'Spine2',         color: '#44aaff' },
   { name: 'LeftArm',        label: 'L.Arm',          parent: 'LeftShoulder',   color: '#4488ff' },
@@ -144,7 +144,7 @@ function calculateAllBones(
   const hips: Vec3 = { x: groin.x, y: groin.y, z: groin.z };
   const neck: Vec3 = { x: chin.x, y: chin.y, z: chin.z - 4 };
   const head: Vec3 = { x: chin.x, y: chin.y, z: Math.min(chin.z + 8, bodyMaxZ) };
-  const headTopEnd: Vec3 = { x: head.x, y: head.y, z: Math.min(head.z + 6, bodyMaxZ) };
+
 
   const spine  = lerp3(hips, neck, 0.25);
   const spine1 = lerp3(hips, neck, 0.50);
@@ -208,7 +208,7 @@ function calculateAllBones(
 
   return {
     Hips: hips, Spine: spine, Spine1: spine1, Spine2: spine2,
-    Neck: neck, Head: head, HeadTop_End: headTopEnd,
+    Neck: neck, Head: head,
     LeftShoulder: lShoulder, LeftArm: lArm, LeftForeArm: lForeArm, LeftHand: lHand,
     LeftHandThumb1: lThumb1, LeftHandThumb2: lThumb2, LeftHandThumb3: lThumb3, LeftHandThumb4: lThumb4,
     LeftHandIndex1: lIndex1, LeftHandIndex2: lIndex2, LeftHandIndex3: lIndex3, LeftHandIndex4: lIndex4,
@@ -259,9 +259,10 @@ function createUnlitMaterial(scene: Scene, name: string): ShaderMaterial {
   `;
   const mat = new ShaderMaterial(name, scene, { vertex: name, fragment: name }, {
     attributes: ['position', 'color'], uniforms: ['worldViewProjection'],
-    needAlphaBlending: true,
+    needAlphaBlending: false,
   });
   mat.backFaceCulling = false;
+  mat.forceDepthWrite = true;
   return mat;
 }
 
@@ -382,96 +383,221 @@ function assignVoxelsToBones(
     }
     result[bestBone].push(v);
   }
+
+  // Connectivity check: for each bone, keep only voxels connected to the
+  // largest cluster. Disconnected voxels are reassigned to the nearest
+  // face-adjacent bone that they connect to.
+  const globalMap = new Map<string, string>(); // position → boneName
+  for (const [boneName, bvs] of Object.entries(result)) {
+    for (const v of bvs) globalMap.set(`${v.x},${v.y},${v.z}`, boneName);
+  }
+
+  for (const boneName of boneNames) {
+    const bvs = result[boneName];
+    if (bvs.length === 0) continue;
+
+    // Build set for this bone
+    const posSet = new Set<string>();
+    const posMap = new Map<string, VoxelEntry>();
+    for (const v of bvs) {
+      const k = `${v.x},${v.y},${v.z}`;
+      posSet.add(k);
+      posMap.set(k, v);
+    }
+
+    // Find connected components via flood fill
+    const visited = new Set<string>();
+    const components: VoxelEntry[][] = [];
+
+    for (const v of bvs) {
+      const k = `${v.x},${v.y},${v.z}`;
+      if (visited.has(k)) continue;
+      const component: VoxelEntry[] = [];
+      const queue = [k];
+      visited.add(k);
+      while (queue.length > 0) {
+        const ck = queue.pop()!;
+        component.push(posMap.get(ck)!);
+        const cv = posMap.get(ck)!;
+        for (const [dx, dy, dz] of FACE_DIRS) {
+          const nk = `${cv.x + dx},${cv.y + dy},${cv.z + dz}`;
+          if (posSet.has(nk) && !visited.has(nk)) {
+            visited.add(nk);
+            queue.push(nk);
+          }
+        }
+      }
+      components.push(component);
+    }
+
+    if (components.length <= 1) continue;
+
+    // Keep largest component, reassign others
+    components.sort((a, b) => b.length - a.length);
+    const keep = components[0];
+    result[boneName] = keep;
+
+    // Reassign disconnected voxels to nearest adjacent bone
+    for (let ci = 1; ci < components.length; ci++) {
+      for (const v of components[ci]) {
+        // Find nearest adjacent bone via face neighbors
+        let reassignTo: string | null = null;
+        let reassignDist = Infinity;
+        for (const [dx, dy, dz] of FACE_DIRS) {
+          const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
+          const nb = globalMap.get(nk);
+          if (nb && nb !== boneName) {
+            // Use segment distance to decide which bone
+            for (const seg of segments) {
+              if (seg.name !== nb) continue;
+              const d = distToSegmentSq(v.x, v.y, v.z, seg.ax, seg.ay, seg.az, seg.bx, seg.by, seg.bz);
+              if (d < reassignDist) { reassignDist = d; reassignTo = nb; }
+            }
+          }
+        }
+        if (!reassignTo) {
+          // No adjacent bone found, use nearest segment
+          let bestDist = Infinity;
+          for (const seg of segments) {
+            if (seg.name === boneName) continue;
+            const d = distToSegmentSq(v.x, v.y, v.z, seg.ax, seg.ay, seg.az, seg.bx, seg.by, seg.bz);
+            if (d < bestDist) { bestDist = d; reassignTo = seg.name; }
+          }
+        }
+        if (reassignTo) {
+          result[reassignTo].push(v);
+          globalMap.set(`${v.x},${v.y},${v.z}`, reassignTo);
+        }
+      }
+    }
+  }
+
   return result;
 }
 
-// Add pyramid caps at bone partition boundaries.
-// For each bone's voxel set, find boundary faces (adjacent to another bone's voxels),
-// then erode the cross-section inward to create a tapered cap that seals the cut.
-const CAP_LAYERS = 3;
-function addPyramidCaps(
+// Seal bone partition cross-sections with sphere caps.
+// At each boundary, place a sphere at the midpoint. The sphere is split
+// into hemispheres: each bone gets the hemisphere on the OTHER side
+// (extending into the other bone's territory). Overlapping voxels from
+// the original bone at those positions are removed.
+function addSphereCaps(
   boneVoxels: Record<string, VoxelEntry[]>,
 ): void {
-  // Build global occupied set and per-bone sets
-  const allOccupied = new Set<string>();
-  const boneSets = new Map<string, Set<string>>();
+  // Build per-bone lookup: position → VoxelEntry
+  const boneMaps = new Map<string, Map<string, VoxelEntry>>();
   for (const [boneName, voxels] of Object.entries(boneVoxels)) {
-    const s = new Set<string>();
-    for (const v of voxels) {
-      const k = `${v.x},${v.y},${v.z}`;
-      allOccupied.add(k);
-      s.add(k);
-    }
-    boneSets.set(boneName, s);
+    const m = new Map<string, VoxelEntry>();
+    for (const v of voxels) m.set(`${v.x},${v.y},${v.z}`, v);
+    boneMaps.set(boneName, m);
   }
 
-  for (const [boneName, voxels] of Object.entries(boneVoxels)) {
-    const thisSet = boneSets.get(boneName)!;
+  const processedPairs = new Set<string>();
 
-    // Find boundary voxels: voxels in this bone adjacent to voxels in another bone
-    interface BInfo { x: number; y: number; z: number; dx: number; dy: number; dz: number; r: number; g: number; b: number }
-    const boundaries: BInfo[] = [];
-    for (const v of voxels) {
+  // Collect all modifications to apply after iteration
+  const toAdd = new Map<string, VoxelEntry[]>();
+  for (const name of Object.keys(boneVoxels)) {
+    toAdd.set(name, []);
+  }
+
+  for (const [boneName] of Object.entries(boneVoxels)) {
+    const thisMap = boneMaps.get(boneName)!;
+
+    // Find boundary voxels grouped by adjacent bone
+    const adjBoundary = new Map<string, Map<string, VoxelEntry>>();
+    for (const [k, v] of thisMap) {
       for (const [dx, dy, dz] of FACE_DIRS) {
         const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
-        if (allOccupied.has(nk) && !thisSet.has(nk)) {
-          boundaries.push({ x: v.x, y: v.y, z: v.z, dx, dy, dz, r: v.r, g: v.g, b: v.b });
+        if (thisMap.has(nk)) continue;
+        for (const [otherName, otherMap] of boneMaps) {
+          if (otherName !== boneName && otherMap.has(nk)) {
+            if (!adjBoundary.has(otherName)) adjBoundary.set(otherName, new Map());
+            adjBoundary.get(otherName)!.set(k, v);
+            break;
+          }
         }
       }
     }
-    if (boundaries.length === 0) continue;
 
-    // Group by direction
-    const dirGroups = new Map<string, BInfo[]>();
-    for (const b of boundaries) {
-      const dk = `${b.dx},${b.dy},${b.dz}`;
-      if (!dirGroups.has(dk)) dirGroups.set(dk, []);
-      dirGroups.get(dk)!.push(b);
-    }
+    for (const [otherName, thisBnd] of adjBoundary) {
+      const pairKey = [boneName, otherName].sort().join('|');
+      if (processedPairs.has(pairKey)) continue;
+      processedPairs.add(pairKey);
 
-    // Generate pyramid cap per direction group
-    const capVoxels: VoxelEntry[] = [];
-    const perpDirs = (dx: number, dy: number, dz: number) =>
-      FACE_DIRS.filter(([fx, fy, fz]) =>
-        !(fx === dx && fy === dy && fz === dz) && !(fx === -dx && fy === -dy && fz === -dz)
-      );
+      const otherMap = boneMaps.get(otherName)!;
 
-    for (const [, group] of dirGroups) {
-      const { dx, dy, dz } = group[0];
-      let section = new Map<string, VoxelEntry>();
-      for (const b of group) {
-        const k = `${b.x},${b.y},${b.z}`;
-        if (!section.has(k)) section.set(k, { x: b.x, y: b.y, z: b.z, r: b.r, g: b.g, b: b.b });
+      // Other side's boundary
+      const otherBnd = new Map<string, VoxelEntry>();
+      for (const [, v] of otherMap) {
+        for (const [dx, dy, dz] of FACE_DIRS) {
+          const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
+          if (thisMap.has(nk)) { otherBnd.set(`${v.x},${v.y},${v.z}`, v); break; }
+        }
       }
-      const perps = perpDirs(dx, dy, dz);
-      let depth = 0;
-      for (let stage = 0; stage < CAP_LAYERS; stage++) {
-        if (stage > 0) {
-          const eroded = new Map<string, VoxelEntry>();
-          for (const [k, v] of section) {
-            let nc = 0;
-            for (const [px, py, pz] of perps) {
-              if (section.has(`${v.x + px},${v.y + py},${v.z + pz}`)) nc++;
+
+      // Centers of each side's boundary
+      let tx = 0, ty = 0, tz = 0;
+      for (const v of thisBnd.values()) { tx += v.x; ty += v.y; tz += v.z; }
+      tx /= thisBnd.size; ty /= thisBnd.size; tz /= thisBnd.size;
+
+      let ox = 0, oy = 0, oz = 0;
+      for (const v of otherBnd.values()) { ox += v.x; oy += v.y; oz += v.z; }
+      ox /= otherBnd.size; oy /= otherBnd.size; oz /= otherBnd.size;
+
+      // Midpoint and normal
+      const mx = (tx + ox) / 2, my = (ty + oy) / 2, mz = (tz + oz) / 2;
+      const ndx = ox - tx, ndy = oy - ty, ndz = oz - tz;
+      const nLen = Math.sqrt(ndx * ndx + ndy * ndy + ndz * ndz) || 1;
+      const nnx = ndx / nLen, nny = ndy / nLen, nnz = ndz / nLen;
+
+      // Radius: based on smaller boundary size
+      const smallerCount = Math.min(thisBnd.size, otherBnd.size);
+      const radius = Math.max(2, Math.sqrt(smallerCount / Math.PI));
+      const radiusSq = radius * radius;
+      const ri = Math.ceil(radius);
+
+      // All boundary voxels for color lookup
+      const allBnd = [...thisBnd.values(), ...otherBnd.values()];
+
+      for (let sx = -ri; sx <= ri; sx++) {
+        for (let sy = -ri; sy <= ri; sy++) {
+          for (let sz = -ri; sz <= ri; sz++) {
+            const vx = Math.round(mx) + sx;
+            const vy = Math.round(my) + sy;
+            const vz = Math.round(mz) + sz;
+            if ((vx - mx) ** 2 + (vy - my) ** 2 + (vz - mz) ** 2 > radiusSq) continue;
+
+            const k = `${vx},${vy},${vz}`;
+
+            // Color from nearest boundary voxel
+            let nearestDist = Infinity;
+            let nearestColor = { r: 0.5, g: 0.5, b: 0.5 };
+            for (const bv of allBnd) {
+              const d = (vx - bv.x) ** 2 + (vy - bv.y) ** 2 + (vz - bv.z) ** 2;
+              if (d < nearestDist) { nearestDist = d; nearestColor = { r: bv.r, g: bv.g, b: bv.b }; }
             }
-            if (nc >= 3) eroded.set(k, v);
-          }
-          section = eroded;
-        }
-        if (section.size === 0) break;
-        depth++;
-        for (const [, v] of section) {
-          const nx = v.x + dx * depth, ny = v.y + dy * depth, nz = v.z + dz * depth;
-          const ck = `${nx},${ny},${nz}`;
-          if (!thisSet.has(ck)) {
-            capVoxels.push({ x: nx, y: ny, z: nz, r: v.r, g: v.g, b: v.b });
-            thisSet.add(ck);
+            const entry: VoxelEntry = { x: vx, y: vy, z: vz, r: nearestColor.r, g: nearestColor.g, b: nearestColor.b };
+
+            // Split: each bone gets the hemisphere extending INTO the other's territory.
+            // depthProj > 0 = toward otherBone → assign to thisBone (cap for thisBone)
+            // depthProj <= 0 = toward thisBone → assign to otherBone (cap for otherBone)
+            const depthProj = (vx - mx) * nnx + (vy - my) * nny + (vz - mz) * nnz;
+
+            if (depthProj > 0) {
+              // This position is in otherBone's territory → add to thisBone as cap
+              if (!thisMap.has(k)) toAdd.get(boneName)!.push(entry);
+            } else {
+              // This position is in thisBone's territory → add to otherBone as cap
+              if (!otherMap.has(k)) toAdd.get(otherName)!.push(entry);
+            }
           }
         }
       }
     }
-    if (capVoxels.length > 0) {
-      boneVoxels[boneName].push(...capVoxels);
-    }
+  }
+
+  // Apply modifications
+  for (const [boneName, addVoxels] of toAdd) {
+    if (addVoxels.length > 0) boneVoxels[boneName].push(...addVoxels);
   }
 }
 
@@ -522,7 +648,7 @@ function buildSkeletalPreview(
   scene: Scene, cx: number, cy: number,
 ): { nodes: Map<string, TransformNode>; meshes: Map<string, Mesh> } {
   const boneVoxels = assignVoxelsToBones(voxels, bones);
-  addPyramidCaps(boneVoxels);
+  addSphereCaps(boneVoxels);
 
   const nodes = new Map<string, TransformNode>();
   const meshes = new Map<string, Mesh>();
