@@ -227,11 +227,11 @@ function mirrorMarker(leftPos: Vec3, mirrorCenterX: number): Vec3 {
 
 function getDefaultMarkers(centerX: number): MarkerData {
   const left: MarkerData = {
-    Chin:       { x: centerX, y: 13, z: 82 },
-    Groin:      { x: centerX, y: 13, z: 31 },
-    LeftWrist:  { x: 10, y: 13, z: 34 },
-    LeftElbow:  { x: 14, y: 13, z: 48 },
-    LeftKnee:   { x: 24, y: 13, z: 17 },
+    Chin:       { x: 42.5, y: 13, z: 82 },
+    Groin:      { x: 41, y: 13, z: 47.5 },
+    LeftWrist:  { x: 9, y: 13, z: 63.5 },
+    LeftElbow:  { x: 23, y: 13, z: 70 },
+    LeftKnee:   { x: 32.5, y: 15.5, z: 27.5 },
   };
   // Default right = mirrored from left
   left['RightWrist'] = mirrorMarker(left['LeftWrist'], centerX);
@@ -315,6 +315,21 @@ function r1(n: number): number { return Math.round(n * 10) / 10; }
 // ========================================================================
 
 // Assign each voxel to nearest bone (in voxel space)
+// Distance from point P to line segment AB (squared)
+function distToSegmentSq(px: number, py: number, pz: number,
+  ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
+  const abx = bx - ax, aby = by - ay, abz = bz - az;
+  const apx = px - ax, apy = py - ay, apz = pz - az;
+  const lenSq = abx * abx + aby * aby + abz * abz;
+  if (lenSq < 0.0001) {
+    // Degenerate segment (same point) — use point distance
+    return apx * apx + apy * apy + apz * apz;
+  }
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / lenSq));
+  const cx = ax + abx * t - px, cy = ay + aby * t - py, cz = az + abz * t - pz;
+  return cx * cx + cy * cy + cz * cz;
+}
+
 function assignVoxelsToBones(
   voxels: VoxelEntry[],
   bones: Record<string, Vec3>,
@@ -323,23 +338,141 @@ function assignVoxelsToBones(
   const result: Record<string, VoxelEntry[]> = {};
   for (const name of boneNames) result[name] = [];
 
+  // Build bone segments: each bone owns the segment from ITSELF to its CHILDREN.
+  // When a bone rotates, the body part from this joint toward the child joint moves.
+  // e.g. LeftForeArm (elbow) owns the forearm = elbow→wrist (LeftForeArm→LeftHand)
+  //      LeftArm owns the upper arm = LeftArm→LeftForeArm
+  // Leaf bones (no children) use point distance.
+
+  // Build children map
+  const childrenMap = new Map<string, string[]>();
+  for (const name of boneNames) childrenMap.set(name, []);
+  for (const def of BONE_DEFS) {
+    if (boneNames.includes(def.name) && def.parent && boneNames.includes(def.parent)) {
+      childrenMap.get(def.parent)!.push(def.name);
+    }
+  }
+
+  // Build segments: bone → each child (one segment per parent-child pair, owned by parent)
+  type Segment = { name: string; ax: number; ay: number; az: number; bx: number; by: number; bz: number };
+  const segments: Segment[] = [];
+  for (const name of boneNames) {
+    const b = bones[name];
+    const children = childrenMap.get(name) ?? [];
+    if (children.length > 0) {
+      for (const childName of children) {
+        const c = bones[childName];
+        segments.push({ name, ax: b.x, ay: b.y, az: b.z, bx: c.x, by: c.y, bz: c.z });
+      }
+    } else {
+      // Leaf bone — use point (degenerate segment)
+      segments.push({ name, ax: b.x, ay: b.y, az: b.z, bx: b.x, by: b.y, bz: b.z });
+    }
+  }
+
   for (const v of voxels) {
-    let bestBone = boneNames[0];
+    let bestBone = segments[0].name;
     let bestDist = Infinity;
-    for (const name of boneNames) {
-      const b = bones[name];
-      const dx = v.x - b.x;
-      const dy = v.y - b.y;
-      const dz = v.z - b.z;
-      const dist = dx * dx + dy * dy + dz * dz;
+    for (const seg of segments) {
+      const dist = distToSegmentSq(v.x, v.y, v.z, seg.ax, seg.ay, seg.az, seg.bx, seg.by, seg.bz);
       if (dist < bestDist) {
         bestDist = dist;
-        bestBone = name;
+        bestBone = seg.name;
       }
     }
     result[bestBone].push(v);
   }
   return result;
+}
+
+// Add pyramid caps at bone partition boundaries.
+// For each bone's voxel set, find boundary faces (adjacent to another bone's voxels),
+// then erode the cross-section inward to create a tapered cap that seals the cut.
+const CAP_LAYERS = 3;
+function addPyramidCaps(
+  boneVoxels: Record<string, VoxelEntry[]>,
+): void {
+  // Build global occupied set and per-bone sets
+  const allOccupied = new Set<string>();
+  const boneSets = new Map<string, Set<string>>();
+  for (const [boneName, voxels] of Object.entries(boneVoxels)) {
+    const s = new Set<string>();
+    for (const v of voxels) {
+      const k = `${v.x},${v.y},${v.z}`;
+      allOccupied.add(k);
+      s.add(k);
+    }
+    boneSets.set(boneName, s);
+  }
+
+  for (const [boneName, voxels] of Object.entries(boneVoxels)) {
+    const thisSet = boneSets.get(boneName)!;
+
+    // Find boundary voxels: voxels in this bone adjacent to voxels in another bone
+    interface BInfo { x: number; y: number; z: number; dx: number; dy: number; dz: number; r: number; g: number; b: number }
+    const boundaries: BInfo[] = [];
+    for (const v of voxels) {
+      for (const [dx, dy, dz] of FACE_DIRS) {
+        const nk = `${v.x + dx},${v.y + dy},${v.z + dz}`;
+        if (allOccupied.has(nk) && !thisSet.has(nk)) {
+          boundaries.push({ x: v.x, y: v.y, z: v.z, dx, dy, dz, r: v.r, g: v.g, b: v.b });
+        }
+      }
+    }
+    if (boundaries.length === 0) continue;
+
+    // Group by direction
+    const dirGroups = new Map<string, BInfo[]>();
+    for (const b of boundaries) {
+      const dk = `${b.dx},${b.dy},${b.dz}`;
+      if (!dirGroups.has(dk)) dirGroups.set(dk, []);
+      dirGroups.get(dk)!.push(b);
+    }
+
+    // Generate pyramid cap per direction group
+    const capVoxels: VoxelEntry[] = [];
+    const perpDirs = (dx: number, dy: number, dz: number) =>
+      FACE_DIRS.filter(([fx, fy, fz]) =>
+        !(fx === dx && fy === dy && fz === dz) && !(fx === -dx && fy === -dy && fz === -dz)
+      );
+
+    for (const [, group] of dirGroups) {
+      const { dx, dy, dz } = group[0];
+      let section = new Map<string, VoxelEntry>();
+      for (const b of group) {
+        const k = `${b.x},${b.y},${b.z}`;
+        if (!section.has(k)) section.set(k, { x: b.x, y: b.y, z: b.z, r: b.r, g: b.g, b: b.b });
+      }
+      const perps = perpDirs(dx, dy, dz);
+      let depth = 0;
+      for (let stage = 0; stage < CAP_LAYERS; stage++) {
+        if (stage > 0) {
+          const eroded = new Map<string, VoxelEntry>();
+          for (const [k, v] of section) {
+            let nc = 0;
+            for (const [px, py, pz] of perps) {
+              if (section.has(`${v.x + px},${v.y + py},${v.z + pz}`)) nc++;
+            }
+            if (nc >= 3) eroded.set(k, v);
+          }
+          section = eroded;
+        }
+        if (section.size === 0) break;
+        depth++;
+        for (const [, v] of section) {
+          const nx = v.x + dx * depth, ny = v.y + dy * depth, nz = v.z + dz * depth;
+          const ck = `${nx},${ny},${nz}`;
+          if (!thisSet.has(ck)) {
+            capVoxels.push({ x: nx, y: ny, z: nz, r: v.r, g: v.g, b: v.b });
+            thisSet.add(ck);
+          }
+        }
+      }
+    }
+    if (capVoxels.length > 0) {
+      boneVoxels[boneName].push(...capVoxels);
+    }
+  }
 }
 
 // Build mesh with vertices in bone-local space (offset baked into vertex data)
@@ -389,6 +522,7 @@ function buildSkeletalPreview(
   scene: Scene, cx: number, cy: number,
 ): { nodes: Map<string, TransformNode>; meshes: Map<string, Mesh> } {
   const boneVoxels = assignVoxelsToBones(voxels, bones);
+  addPyramidCaps(boneVoxels);
 
   const nodes = new Map<string, TransformNode>();
   const meshes = new Map<string, Mesh>();
@@ -457,23 +591,30 @@ interface MotionClip {
   frameCount: number;
   fbxBodyHeight: number;    // FBX Hips→Head distance for scaling
   outputBones: string[];
+  bindWorldPositions?: Record<string, [number, number, number]>; // FBX bind-pose world positions (Three.js coords)
   frames: Record<string, BoneFrameData>[];
 }
 
 // Available motion files under /models/character-motion/
 const MOTION_FILES: { name: string; label: string; file: string }[] = [
   { name: 'hip_hop', label: 'Hip Hop Dancing', file: '/models/character-motion/Hip Hop Dancing.motion.json' },
+  { name: 'belly_dance', label: 'Belly Dance', file: '/models/character-motion/Belly Dance.motion.json' },
+  { name: 'jump', label: 'Jump', file: '/models/character-motion/Jump.motion.json' },
+  { name: 'martelo', label: 'Martelo 3', file: '/models/character-motion/Martelo 3.motion.json' },
+  { name: 'mma_kick', label: 'MMA Kick', file: '/models/character-motion/Mma Kick.motion.json' },
+  { name: 'roundhouse', label: 'Roundhouse Kick', file: '/models/character-motion/Roundhouse Kick.motion.json' },
+  { name: 'snake_hip_hop', label: 'Snake Hip Hop', file: '/models/character-motion/Snake Hip Hop Dance.motion.json' },
 ];
 
 type PageMode = 'edit' | 'preview';
 
 // Quaternion conversion from Three.js to viewer coordinate system.
-// Axis mapping: viewer = (-Three_x, Three_y, -Three_z) = 180° Y rotation
-// This is a proper rotation (det=+1), so the quaternion conversion is conjugation:
-//   q_viewer = q_Y180 × q_three × q_Y180⁻¹ = (-x, y, -z, w)
+// Axis mapping: viewer = (-Three_x, Three_y, Three_z) = X-reflection
+// This is a reflection (det=-1) for right→left handedness change.
+// q_viewer = (x, -y, -z, w) from q_three = (x, y, z, w)
 type QuatConversion = 'correct' | 'conv1' | 'conv2' | 'identity';
 const QUAT_CONVERSIONS: { key: QuatConversion; label: string; desc: string }[] = [
-  { key: 'correct',  label: '(-x,y,-z,w)',  desc: 'Y180° rotation (correct)' },
+  { key: 'correct',  label: '(x,-y,-z,w)',  desc: 'X-reflect (correct)' },
   { key: 'conv1',    label: '(-x,-y,z,w)',   desc: 'Z-flip only (old)' },
   { key: 'conv2',    label: '(x,y,-z,w)',    desc: 'Negate Z only' },
   { key: 'identity', label: '(x,y,z,w)',     desc: 'No conversion' },
@@ -497,6 +638,7 @@ export default function BoneConfigPage() {
   const autoMirrorRef = useRef(true);
   const previewNodesRef = useRef<Map<string, TransformNode>>(new Map());
   const previewMeshesRef = useRef<Map<string, Mesh>>(new Map());
+  const debugBonesRef = useRef<{ spheres: Mesh[]; lines: Mesh | null }>({ spheres: [], lines: null });
   const boneRestPosRef = useRef<Map<string, Vector3>>(new Map());
   const voxelBodyHeightRef = useRef(0);  // viewer-space Hips→Head distance
   const voxelsRef = useRef<VoxelEntry[]>([]);
@@ -532,6 +674,7 @@ export default function BoneConfigPage() {
   const [quatConv, setQuatConv] = useState<QuatConversion>('correct');
   const [paused, setPaused] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [showBonesOnly, setShowBonesOnly] = useState(false);
   const animCallbackRef = useRef<(() => void) | null>(null);
   const animTimeRef = useRef(0);
   const pausedRef = useRef(false);
@@ -999,11 +1142,15 @@ export default function BoneConfigPage() {
     animTimeRef.current = 0;
     setPlayingMotion(null);
 
-    // Dispose preview meshes
+    // Dispose preview meshes and debug bones
     for (const m of previewMeshesRef.current.values()) m.dispose();
     for (const n of previewNodesRef.current.values()) n.dispose();
     previewMeshesRef.current.clear();
     previewNodesRef.current.clear();
+    for (const s of debugBonesRef.current.spheres) s.dispose();
+    if (debugBonesRef.current.lines) debugBonesRef.current.lines.dispose();
+    debugBonesRef.current = { spheres: [], lines: null };
+    setShowBonesOnly(false);
 
     // Restore edit visuals
     if (bodyMeshRef.current) bodyMeshRef.current.setEnabled(showBody);
@@ -1070,8 +1217,9 @@ export default function BoneConfigPage() {
         duration: data.duration,
         fps: data.fps,
         frameCount: data.frameCount,
-        fbxBodyHeight: data.fbxBodyHeight || 2.748,
+        fbxBodyHeight: data.fbxBodyHeight || 2.854,
         outputBones: data.outputBones || [],
+        bindWorldPositions: data.bindWorldPositions,
         frames: data.frames,
       };
       setLoadedClips(prev => ({ ...prev, [motionName]: clip }));
@@ -1087,83 +1235,279 @@ export default function BoneConfigPage() {
   const playMotionClip = useCallback((clip: MotionClip) => {
     const scene = sceneRef.current;
     if (!scene) return;
-
     if (animCallbackRef.current) {
       scene.unregisterBeforeRender(animCallbackRef.current);
       animCallbackRef.current = null;
     }
 
-    // Scale factor for Hips root motion: voxel body height / FBX body height
+    // Scale factor: voxel body height / FBX body height
     const scaleFactor = clip.fbxBodyHeight > 0
       ? voxelBodyHeightRef.current / clip.fbxBodyHeight
       : 1;
+
+    const bwp = clip.bindWorldPositions;
+    const voxelHipsPos = boneRestPosRef.current.get('Hips') ?? Vector3.Zero();
+    const hipsBindFBX = bwp?.['Hips'] ?? [0, 0, 0];
+
+    // FBX rest positions in viewer space (for debug bones only)
+    const fbxRestViewer = new Map<string, Vector3>();
+    for (const boneDef of BONE_DEFS) {
+      const bp = bwp?.[boneDef.name];
+      if (bp) {
+        const relX = bp[0] - hipsBindFBX[0];
+        const relY = bp[1] - hipsBindFBX[1];
+        const relZ = bp[2] - hipsBindFBX[2];
+        fbxRestViewer.set(boneDef.name, new Vector3(
+          voxelHipsPos.x + (-relX) * scaleFactor,
+          voxelHipsPos.y + relY * scaleFactor,
+          voxelHipsPos.z + relZ * scaleFactor,
+        ));
+      }
+    }
+
+    // HIERARCHICAL APPROACH: Keep node hierarchy from buildSkeletalPreview.
+    // Convert world-space dq → local rotation via parent inverse.
+    // Apply rest pose correction: rotate voxel bone direction to match FBX bone direction.
+
+    // Compute rest pose correction for each bone:
+    // correctionQ rotates voxelBoneDir → fbxBoneDir (both in viewer space).
+    // This ensures FBX rotation deltas produce correct results on voxel geometry.
+    const restCorrections = new Map<string, Quaternion>();
+    for (const boneDef of BONE_DEFS) {
+      if (!boneDef.parent) continue;
+      const voxelChild = boneRestPosRef.current.get(boneDef.name);
+      const voxelParent = boneRestPosRef.current.get(boneDef.parent);
+      const fbxChild = fbxRestViewer.get(boneDef.name);
+      const fbxParent = fbxRestViewer.get(boneDef.parent);
+      if (!voxelChild || !voxelParent || !fbxChild || !fbxParent) continue;
+
+      const voxelDir = voxelChild.subtract(voxelParent);
+      const fbxDirRaw = fbxChild.subtract(fbxParent);
+      // Flip Z: FBX bone direction Z is inverted relative to voxel viewer Z
+      // (same root cause as the body front/back inversion fixed earlier)
+      const fbxDir = new Vector3(fbxDirRaw.x, fbxDirRaw.y, -fbxDirRaw.z);
+      if (voxelDir.length() < 0.001 || fbxDir.length() < 0.001) continue;
+
+      voxelDir.normalize();
+      fbxDir.normalize();
+
+      // DEBUG: Log bone directions for investigation
+      if (['LeftArm','LeftForeArm','LeftUpLeg','LeftLeg','Spine','Spine2','Neck'].includes(boneDef.name)) {
+        console.log(`[RestCorr] ${boneDef.name}: voxel=(${voxelDir.x.toFixed(3)},${voxelDir.y.toFixed(3)},${voxelDir.z.toFixed(3)}) fbx=(${fbxDir.x.toFixed(3)},${fbxDir.y.toFixed(3)},${fbxDir.z.toFixed(3)}) dot=${Vector3.Dot(voxelDir, fbxDir).toFixed(3)}`);
+      }
+
+      // Quaternion from voxelDir → fbxDir
+      const dot = Vector3.Dot(voxelDir, fbxDir);
+      if (dot > 0.9999) {
+        // Already aligned
+        continue;
+      }
+      if (dot < -0.9999) {
+        // Opposite: rotate 180° around any perpendicular axis
+        const perp = Math.abs(voxelDir.x) < 0.9
+          ? Vector3.Cross(voxelDir, Vector3.Right())
+          : Vector3.Cross(voxelDir, Vector3.Up());
+        perp.normalize();
+        restCorrections.set(boneDef.name, new Quaternion(perp.x, perp.y, perp.z, 0));
+        continue;
+      }
+      const axis = Vector3.Cross(voxelDir, fbxDir);
+      axis.normalize();
+      const angle = Math.acos(Math.min(1, Math.max(-1, dot)));
+      restCorrections.set(boneDef.name, Quaternion.RotationAxis(axis, angle));
+    }
+
+    // Ensure hierarchy is intact (restore if previously detached)
+    for (const boneDef of BONE_DEFS) {
+      const node = previewNodesRef.current.get(boneDef.name);
+      if (!node) continue;
+      if (boneDef.parent) {
+        const parentNode = previewNodesRef.current.get(boneDef.parent);
+        if (parentNode && node.parent !== parentNode) {
+          node.parent = parentNode;
+          const bonePos = boneRestPosRef.current.get(boneDef.name);
+          const parentPos = boneRestPosRef.current.get(boneDef.parent);
+          if (bonePos && parentPos) {
+            node.position = bonePos.subtract(parentPos);
+          }
+        }
+      } else {
+        node.parent = null;
+        const rest = boneRestPosRef.current.get(boneDef.name);
+        if (rest) node.position = rest.clone();
+      }
+      node.rotationQuaternion = Quaternion.Identity();
+    }
+
+    // Create debug bone spheres
+    for (const s of debugBonesRef.current.spheres) s.dispose();
+    if (debugBonesRef.current.lines) debugBonesRef.current.lines.dispose();
+    const debugSpheres: Mesh[] = [];
+    for (const boneDef of BONE_DEFS) {
+      const fbxRest = fbxRestViewer.get(boneDef.name);
+      if (!fbxRest) continue;
+      const sphere = MeshBuilder.CreateSphere(`dbg_${boneDef.name}`, { diameter: 0.15 }, scene);
+      const mat = new StandardMaterial(`dbg_mat_${boneDef.name}`, scene);
+      mat.diffuseColor = Color3.FromHexString(boneDef.color);
+      mat.emissiveColor = Color3.FromHexString(boneDef.color).scale(0.5);
+      sphere.material = mat;
+      sphere.position = fbxRest.clone();
+      sphere.isPickable = false;
+      sphere.setEnabled(showBonesOnly);
+      debugSpheres.push(sphere);
+    }
+    // DEBUG: Draw direction arrows for each bone
+    // Red line = voxel bone direction, Green line = FBX bone direction
+    // Both start from the bone's voxel rest position
+    const debugArrows: Mesh[] = [];
+    const arrowLen = 0.8;
+    const debugBones = ['LeftArm','LeftForeArm','LeftUpLeg','LeftLeg','LeftHand','Spine','Spine2','Neck','Head','RightArm','RightForeArm','RightUpLeg','RightLeg'];
+    for (const boneName of debugBones) {
+      const boneDef = BONE_DEFS.find(d => d.name === boneName);
+      if (!boneDef?.parent) continue;
+      const vChild = boneRestPosRef.current.get(boneDef.name);
+      const vParent = boneRestPosRef.current.get(boneDef.parent);
+      const fChild = fbxRestViewer.get(boneDef.name);
+      const fParent = fbxRestViewer.get(boneDef.parent);
+      if (!vChild || !vParent || !fChild || !fParent) continue;
+
+      const vDir = vChild.subtract(vParent).normalize().scale(arrowLen);
+      const fDirRaw = fChild.subtract(fParent);
+      const fDir = new Vector3(fDirRaw.x, fDirRaw.y, -fDirRaw.z).normalize().scale(arrowLen);
+      const origin = vParent.clone();
+
+      // Red = voxel direction
+      const redLine = MeshBuilder.CreateLines(`dbg_vdir_${boneName}`, {
+        points: [origin, origin.add(vDir)],
+      }, scene);
+      redLine.color = new Color3(1, 0, 0);
+      redLine.isPickable = false;
+      redLine.setEnabled(showBonesOnly);
+      debugArrows.push(redLine);
+
+      // Green = FBX direction
+      const greenLine = MeshBuilder.CreateLines(`dbg_fdir_${boneName}`, {
+        points: [origin, origin.add(fDir)],
+      }, scene);
+      greenLine.color = new Color3(0, 1, 0);
+      greenLine.isPickable = false;
+      greenLine.setEnabled(showBonesOnly);
+      debugArrows.push(greenLine);
+    }
+    debugSpheres.push(...debugArrows);
+
+    debugBonesRef.current = { spheres: debugSpheres, lines: null };
+    const boneToSphereIdx = new Map<string, number>();
+    let sIdx = 0;
+    for (const boneDef of BONE_DEFS) {
+      if (fbxRestViewer.has(boneDef.name)) boneToSphereIdx.set(boneDef.name, sIdx++);
+    }
 
     animTimeRef.current = 0;
     let lastTime = performance.now();
     const frameDuration = 1.0 / clip.fps;
 
-    // Convert Three.js world-space delta quat → viewer-space
-    // Axis mapping: viewer = (-Three_x, Three_y, -Three_z) = 180° Y rotation
+    // Quaternion conversion: X-reflection (-Three_x, Three_y, Three_z)
+    // q_viewer = (x, -y, -z, w)
     const toViewerQuat = (dq: [number, number, number, number]) => {
       switch (quatConv) {
-        case 'correct':  return new Quaternion(-dq[0], dq[1], -dq[2], dq[3]);
+        case 'correct':  return new Quaternion(dq[0], -dq[1], -dq[2], dq[3]);
         case 'conv1':    return new Quaternion(-dq[0], -dq[1], dq[2], dq[3]);
         case 'conv2':    return new Quaternion(dq[0], dq[1], -dq[2], dq[3]);
         case 'identity': return new Quaternion(dq[0], dq[1], dq[2], dq[3]);
       }
     };
 
-    // Apply a specific frame to the skeleton
     const applyFrame = (frameIndex: number) => {
       const frame = clip.frames[frameIndex];
 
-      // Step 1: Convert all world deltas to viewer space
-      const worldDeltas = new Map<string, Quaternion>();
-      for (const [boneName, data] of Object.entries(frame)) {
-        worldDeltas.set(boneName, toViewerQuat(data.dq));
+      // Step 1: Compute world-space dq in viewer coords for all bones
+      const worldDqs = new Map<string, Quaternion>();
+      for (const boneDef of BONE_DEFS) {
+        const data = frame[boneDef.name];
+        worldDqs.set(boneDef.name, data ? toViewerQuat(data.dq) : Quaternion.Identity());
       }
 
-      // Step 2: For each bone, compute LOCAL delta = parentWorldDelta⁻¹ × boneWorldDelta
-      // With hierarchy, parent rotation propagates to children automatically.
-      // We only need the LOCAL delta (rotation relative to parent's animated frame).
+      // Step 2: Convert world dq → local rotation with rest pose correction.
+      // For each bone: localRot = correction × parentWorldDq⁻¹ × childWorldDq × correction⁻¹
+      // The correction rotates from voxel bone direction to FBX bone direction.
+      // correction⁻¹ on the right ensures the rotation acts in the FBX frame,
+      // then correction on the left maps the result back to voxel frame.
       for (const boneDef of BONE_DEFS) {
         const node = previewNodesRef.current.get(boneDef.name);
         if (!node) continue;
 
-        const worldDQ = worldDeltas.get(boneDef.name);
-        if (!worldDQ) {
-          // No animation data for this bone → identity (no rotation change)
-          node.rotationQuaternion = Quaternion.Identity();
-          continue;
-        }
+        const worldDq = worldDqs.get(boneDef.name) ?? Quaternion.Identity();
 
-        if (!boneDef.parent) {
-          // Root bone (Hips): local delta = world delta
-          node.rotationQuaternion = worldDQ;
+        if (boneDef.parent) {
+          const parentWorldDq = worldDqs.get(boneDef.parent) ?? Quaternion.Identity();
+          const parentInv = Quaternion.Inverse(parentWorldDq);
+          let localDq = parentInv.multiply(worldDq);
 
-          // Apply Hips root motion (position delta)
-          // Axis mapping: viewer = (-Three_x, Three_y, -Three_z)
-          const data = frame[boneDef.name];
-          if (data?.dp) {
-            const restPos = boneRestPosRef.current.get(boneDef.name);
-            if (restPos) {
-              node.position.x = restPos.x - data.dp[0] * scaleFactor;
-              node.position.y = restPos.y + data.dp[1] * scaleFactor;
-              node.position.z = restPos.z - data.dp[2] * scaleFactor;
-            }
-          }
+          // Rest pose correction DISABLED for testing
+          // const corr = restCorrections.get(boneDef.name);
+          // if (corr) {
+          //   const corrInv = Quaternion.Inverse(corr);
+          //   localDq = corr.multiply(localDq).multiply(corrInv);
+          // }
+
+          node.rotationQuaternion = localDq;
         } else {
-          // Child bone: localDelta = parentWorldDelta⁻¹ × boneWorldDelta
-          const parentWorldDQ = worldDeltas.get(boneDef.parent);
-          if (parentWorldDQ) {
-            const parentInv = parentWorldDQ.clone();
-            parentInv.invertInPlace();
-            node.rotationQuaternion = parentInv.multiply(worldDQ);
-          } else {
-            // Parent has no animation → local = world
-            node.rotationQuaternion = worldDQ;
-          }
+          node.rotationQuaternion = worldDq;
         }
+      }
+
+      // Step 3: Hips position from dp
+      const hipsData = frame['Hips'];
+      const hipsNode = previewNodesRef.current.get('Hips');
+      if (hipsNode && hipsData?.dp) {
+        hipsNode.position.x = voxelHipsPos.x + (-hipsData.dp[0]) * scaleFactor;
+        hipsNode.position.y = voxelHipsPos.y + hipsData.dp[1] * scaleFactor;
+        hipsNode.position.z = voxelHipsPos.z + hipsData.dp[2] * scaleFactor;
+      } else if (hipsNode) {
+        hipsNode.position.copyFrom(voxelHipsPos);
+      }
+
+      // Debug: update sphere positions and lines (using dp world positions)
+      const debugPositions = new Map<string, Vector3>();
+      for (const boneDef of BONE_DEFS) {
+        const fbxRest = fbxRestViewer.get(boneDef.name);
+        if (!fbxRest) continue;
+        const data = frame[boneDef.name];
+        if (data?.dp) {
+          debugPositions.set(boneDef.name, new Vector3(
+            fbxRest.x + (-data.dp[0]) * scaleFactor,
+            fbxRest.y + data.dp[1] * scaleFactor,
+            fbxRest.z + data.dp[2] * scaleFactor,
+          ));
+        } else {
+          debugPositions.set(boneDef.name, fbxRest.clone());
+        }
+      }
+      const spheres = debugBonesRef.current.spheres;
+      for (const boneDef of BONE_DEFS) {
+        const idx = boneToSphereIdx.get(boneDef.name);
+        if (idx === undefined) continue;
+        const pos = debugPositions.get(boneDef.name);
+        if (pos && spheres[idx]) spheres[idx].position.copyFrom(pos);
+      }
+      if (debugBonesRef.current.lines) {
+        debugBonesRef.current.lines.dispose();
+        debugBonesRef.current.lines = null;
+      }
+      const linePoints: Vector3[][] = [];
+      for (const boneDef of BONE_DEFS) {
+        if (!boneDef.parent) continue;
+        const childPos = debugPositions.get(boneDef.name);
+        const parentPos = debugPositions.get(boneDef.parent);
+        if (childPos && parentPos) linePoints.push([parentPos, childPos]);
+      }
+      if (linePoints.length > 0) {
+        const linesMesh = MeshBuilder.CreateLineSystem('dbg_lines', { lines: linePoints }, scene);
+        linesMesh.color = new Color3(1, 1, 0);
+        linesMesh.isPickable = false;
+        linesMesh.setEnabled(showBonesOnly);
+        debugBonesRef.current.lines = linesMesh;
       }
     };
 
@@ -1183,12 +1527,11 @@ export default function BoneConfigPage() {
       applyFrame(frameIndex);
     };
 
-    // Store applyFrame for manual stepping
     applyFrameRef.current = applyFrame;
     animCallbackRef.current = callback;
     scene.registerBeforeRender(callback);
     setPlayingMotion(clip.name);
-  }, [motionSpeed, quatConv]);
+  }, [motionSpeed, quatConv, calculatedBones, showBonesOnly]);
 
   const startMotion = useCallback(async (motionName: string) => {
     const clip = await loadMotionClip(motionName);
@@ -1201,7 +1544,14 @@ export default function BoneConfigPage() {
       playMotionClip(loadedClips[playingMotion]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [motionSpeed, quatConv]);
+  }, [motionSpeed, quatConv, showBonesOnly]);
+
+  // Toggle voxel mesh / debug bone visibility
+  useEffect(() => {
+    for (const m of previewMeshesRef.current.values()) m.setEnabled(!showBonesOnly);
+    for (const s of debugBonesRef.current.spheres) s.setEnabled(showBonesOnly);
+    if (debugBonesRef.current.lines) debugBonesRef.current.lines.setEnabled(showBonesOnly);
+  }, [showBonesOnly]);
 
   const selMarker = MARKER_DEFS.find(m => m.name === selectedMarker);
   const selPos = selectedMarker ? markers[selectedMarker] : null;
@@ -1522,6 +1872,15 @@ export default function BoneConfigPage() {
                   ))}
                 </select>
               </div>
+              {/* Bones-only toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={showBonesOnly}
+                  onChange={e => setShowBonesOnly(e.target.checked)}
+                />
+                <span style={{ fontSize: 11, color: '#ff8' }}>Bones Only (dp positions)</span>
+              </label>
             </div>
 
             {/* Frame controls */}
