@@ -196,14 +196,16 @@ async function convertFBX(inputPath, outputPath) {
         // Delta position = animated - rest (in FBX world space)
         const dp = worldPos.clone().sub(restWorldPos[name]);
 
-        // Delta rotation = restInverse * animated (world space)
-        const dq = restWorldQuat[name].clone().invert().multiply(worldQuat);
+        // Delta rotation = animated * restInverse (RIGHT-SIDED)
+        // This ensures dq.rotate(bindBoneVec) = Q_anim.rotate(localOffset)
+        // which is required for correct FK positioning with bind-pose bone vectors.
+        const dq = worldQuat.clone().multiply(restWorldQuat[name].clone().invert());
 
         const entry = {
           dq: [round4(dq.x), round4(dq.y), round4(dq.z), round4(dq.w)],
         };
 
-        // Include delta position if non-negligible
+        // Include delta position for root motion (Hips etc.)
         if (Math.abs(dp.x) > 0.0001 || Math.abs(dp.y) > 0.0001 || Math.abs(dp.z) > 0.0001) {
           entry.dp = [round4(dp.x), round4(dp.y), round4(dp.z)];
         }
@@ -223,6 +225,16 @@ async function convertFBX(inputPath, outputPath) {
     console.log(`  Frame ${mid} Hips: ${JSON.stringify(frames[mid].Hips)}`);
     console.log(`  Frame ${mid} Head: ${JSON.stringify(frames[mid].Head)}`);
 
+    // Bind-pose world positions for FK bone vectors
+    // The viewer needs these to compute correct bone directions
+    const bindWorldPositions = {};
+    for (const bone of allBones) {
+      const name = cleanBoneName(bone.name);
+      if (!outputBones.includes(name)) continue;
+      const wp = restWorldPos[name];
+      bindWorldPositions[name] = [round4(wp.x), round4(wp.y), round4(wp.z)];
+    }
+
     results.push({
       name: clip.name || path.basename(inputPath, '.fbx'),
       label: path.basename(inputPath, '.fbx'),
@@ -232,6 +244,7 @@ async function convertFBX(inputPath, outputPath) {
       fbxBodyHeight,
       hierarchy,
       outputBones,
+      bindWorldPositions,
       frames,
     });
   }
