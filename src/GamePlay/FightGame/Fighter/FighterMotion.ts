@@ -46,10 +46,12 @@ export class FighterMotionPlayer {
     // Determine desired motion
     const attackName = fighter.currentAttack?.name;
     const kdVariant = fighter.action === 'knockdown' ? fighter.knockdownVariant : undefined;
-    const motionDef = getMotionForAction(fighter.action, attackName, kdVariant);
+    const grappleKey = (fighter.action === 'grapple' || fighter.action === 'grappled')
+      ? fighter.grappleMotionKey : undefined;
+    const motionDef = getMotionForAction(fighter.action, attackName, kdVariant, grappleKey);
     const motionKey = motionDef?.file
       ? `${motionDef.file}:${motionDef.speed}`
-      : `action:${fighter.action}:${attackName ?? ''}:${kdVariant ?? ''}`;
+      : `action:${fighter.action}:${attackName ?? ''}:${kdVariant ?? ''}:${grappleKey ?? ''}`;
 
     // Switch motion if changed
     if (motionKey !== this.currentMotionKey) {
@@ -87,6 +89,20 @@ export class FighterMotionPlayer {
 
     // Apply to skeleton
     this.applyToSkeleton();
+
+    // Floor clamp: prevent character from sinking below ground.
+    // When lying flat, hips (body center) must be elevated by the body's
+    // cross-section radius so the skin doesn't clip through the floor.
+    const hipsNode = this.nodes.get('Hips');
+    if (hipsNode) {
+      const rootY = (hipsNode.parent instanceof TransformNode) ? hipsNode.parent.position.y : 0;
+      // Body radius ≈ 20% of body height (torso thickness when lying down)
+      const bodyRadius = this.voxelBodyHeight * 0.2;
+      const minLocalY = bodyRadius - rootY;
+      if (hipsNode.position.y < minLocalY) {
+        hipsNode.position.y = minLocalY;
+      }
+    }
   }
 
   /**

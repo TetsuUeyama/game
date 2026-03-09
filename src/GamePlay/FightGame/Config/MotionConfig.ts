@@ -59,17 +59,25 @@ export const ACTION_MOTIONS: Record<string, MotionDef> = {
     blendIn: 0.05,
   },
   knockdown: {
-    file: '/models/character-motion/knockdown.motion.json',
+    file: '/models/character-motion/brutal_assassination.motion.json',
     loop: false,
     speed: 1.0,
-    blendIn: 0.08,
+    blendIn: 0.1,
   },
   knockdown_fwd: {
-    file: '/models/character-motion/knockdown_forward.motion.json',
+    file: '/models/character-motion/brutal_assassination.motion.json',
     loop: false,
     speed: 1.0,
-    blendIn: 0.08,
+    blendIn: 0.1,
   },
+  // Grapple attacker motions (selected dynamically by grapple name)
+  grapple: { file: null, loop: false, speed: 1.0, blendIn: 0.1 },
+  grapple_takedown_atk: { file: '/models/character-motion/takedown_atk.motion.json', loop: false, speed: 1.0, blendIn: 0.1 },
+  grapple_hip_throw_atk: { file: '/models/character-motion/hip_throw_atk.motion.json', loop: false, speed: 1.0, blendIn: 0.1 },
+  // Grapple defender motions
+  grappled: { file: null, loop: false, speed: 1.0, blendIn: 0.1 },
+  grapple_takedown_def: { file: '/models/character-motion/takedown_def.motion.json', loop: false, speed: 1.0, blendIn: 0.1 },
+  grapple_hip_throw_def: { file: '/models/character-motion/hip_throw_def.motion.json', loop: false, speed: 1.0, blendIn: 0.1 },
 };
 
 /**
@@ -98,13 +106,22 @@ export const ATTACK_MOTIONS: Record<string, MotionDef> = {
 /**
  * Get the motion def for a fighter's current state.
  * @param knockdownVariant - optional: 'knockdown' or 'knockdown_fwd'
+ * @param grappleMotionKey - optional: e.g. 'grapple_takedown_atk'
  */
-export function getMotionForAction(action: string, attackName?: string, knockdownVariant?: string): MotionDef | null {
+export function getMotionForAction(
+  action: string,
+  attackName?: string,
+  knockdownVariant?: string,
+  grappleMotionKey?: string | null,
+): MotionDef | null {
   if (action === 'attack' && attackName) {
     return ATTACK_MOTIONS[attackName] ?? null;
   }
   if (action === 'knockdown' && knockdownVariant) {
     return ACTION_MOTIONS[knockdownVariant] ?? ACTION_MOTIONS['knockdown'];
+  }
+  if ((action === 'grapple' || action === 'grappled') && grappleMotionKey) {
+    return ACTION_MOTIONS[grappleMotionKey] ?? ACTION_MOTIONS[action];
   }
   return ACTION_MOTIONS[action] ?? null;
 }

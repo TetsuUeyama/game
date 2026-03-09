@@ -39,6 +39,11 @@ import { FighterAI } from '@/GamePlay/FightGame/Core/FighterAI';
 import type { AIDifficulty } from '@/GamePlay/FightGame/Core/FighterAI';
 import { buildStage } from '@/GamePlay/FightGame/Stage/StageBuilder';
 import { SoundManager } from '@/GamePlay/FightGame/Audio/SoundManager';
+import {
+  createGrappleState, canInitiateGrapple, startGrapple,
+  updateGrapple, isGrappleActive,
+} from '@/GamePlay/FightGame/Combat/GrappleSystem';
+import type { GrappleState } from '@/GamePlay/FightGame/Combat/GrappleSystem';
 
 // ========================================================================
 // Page component
@@ -127,8 +132,8 @@ export default function FightPage() {
 
     // Game state
     const matchState = createInitialFightState(DEFAULT_FIGHTER_STATS.maxHp);
-    const p1 = createFighter(P1_SPAWN.x, P1_SPAWN.z, 0);
-    const p2 = createFighter(P2_SPAWN.x, P2_SPAWN.z, Math.PI);
+    const p1 = createFighter(P1_SPAWN.x, P1_SPAWN.z, Math.PI);
+    const p2 = createFighter(P2_SPAWN.x, P2_SPAWN.z, 0);
 
     // Character roots
     const p1Root = new TransformNode('p1_root', scene);
@@ -146,6 +151,8 @@ export default function FightPage() {
     // Combo tracking: p1Combo tracks P1's hits ON P2, p2Combo tracks P2's hits ON P1
     const p1Combo: ComboState = createComboState();
     const p2Combo: ComboState = createComboState();
+    // Grapple state (shared between both fighters)
+    const grapple: GrappleState = createGrappleState();
     let p1DelayHpVal = DEFAULT_FIGHTER_STATS.maxHp;
     let p2DelayHpVal = DEFAULT_FIGHTER_STATS.maxHp;
 
@@ -241,8 +248,10 @@ export default function FightPage() {
         p1Root.position.z = P1_SPAWN.z;
         p2Root.position.x = P2_SPAWN.x;
         p2Root.position.z = P2_SPAWN.z;
-        // P2 faces P1 initially (facingAngle=PI, model offset +PI/2)
-        p2Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI + Math.PI / 2);
+        // P1 faces P2 (facingAngle=PI, model offset +PI/2)
+        p1Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI + Math.PI / 2);
+        // P2 faces P1 (facingAngle=0, model offset +PI/2)
+        p2Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI / 2);
 
         matchState.phase = 'intro';
         matchState.phaseTimer = 0;
@@ -299,17 +308,25 @@ export default function FightPage() {
         matchState.matchWinner = null;
         matchState.hitstopTimer = 0;
         p1.x = P1_SPAWN.x; p1.y = 0; p1.z = P1_SPAWN.z; p1.vy = 0;
+        p1.facingAngle = Math.PI;
         p1.action = 'idle'; p1.stunTimer = 0; p1.currentAttack = null;
-        p1.guard = p1.stats.maxGuard; p1.guardBroken = false; p1.currentMotion = null;
+        p1.guard = p1.stats.maxGuard; p1.guardBroken = false;
+        p1.currentMotion = null; p1.grappleMotionKey = null; p1.knockdownVariant = 'knockdown';
         p2.x = P2_SPAWN.x; p2.y = 0; p2.z = P2_SPAWN.z; p2.vy = 0;
+        p2.facingAngle = 0;
         p2.action = 'idle'; p2.stunTimer = 0; p2.currentAttack = null;
-        p2.guard = p2.stats.maxGuard; p2.guardBroken = false; p2.currentMotion = null;
+        p2.guard = p2.stats.maxGuard; p2.guardBroken = false;
+        p2.currentMotion = null; p2.grappleMotionKey = null; p2.knockdownVariant = 'knockdown';
         p1Root.position.set(P1_SPAWN.x, 0, P1_SPAWN.z);
+        p1Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI + Math.PI / 2);
         p2Root.position.set(P2_SPAWN.x, 0, P2_SPAWN.z);
+        p2Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI / 2);
         p1DelayHpVal = p1.stats.maxHp;
         p2DelayHpVal = p2.stats.maxHp;
         resetCombo(p1Combo);
         resetCombo(p2Combo);
+        grapple.active = null; grapple.phase = 'none'; grapple.phaseTimer = 0;
+        grapple.escapeProgress = 0; grapple.mountTimer = 0; grapple.mountHits = 0;
         return;
       }
 
@@ -328,9 +345,14 @@ export default function FightPage() {
       }
 
       if (matchState.phase === 'ko') {
-        // On first frame of KO: play sound + force loser into knockdown
+        // On first frame of KO: play sound + force loser into knockdown + clear grapple
         if (matchState.phaseTimer < dt * 2) {
           soundRef.current?.play('ko');
+          // Clear any active grapple immediately
+          grapple.active = null; grapple.phase = 'none'; grapple.phaseTimer = 0;
+          grapple.escapeProgress = 0; grapple.mountTimer = 0; grapple.mountHits = 0;
+          p1.grappleMotionKey = null;
+          p2.grappleMotionKey = null;
           // Set loser to knockdown action (randomly pick fall direction)
           if (matchState.winner === 'p1' || matchState.winner === 'draw') {
             p2.action = 'knockdown';
@@ -353,26 +375,32 @@ export default function FightPage() {
         if (p1Motion) p1Motion.update(p1, koDt);
         if (p2Motion) p2Motion.update(p2, koDt);
 
-        if (matchState.phaseTimer >= 3.0) {
+        if (matchState.phaseTimer >= 5.5) {
           if (matchState.matchWinner) {
             matchState.phase = 'result';
             matchState.phaseTimer = 0;
           } else {
             startNewRound(matchState);
             p1.x = P1_SPAWN.x; p1.y = 0; p1.z = P1_SPAWN.z; p1.vy = 0;
+            p1.facingAngle = Math.PI;
             p1.action = 'idle'; p1.stunTimer = 0; p1.currentAttack = null;
             p1.guard = p1.stats.maxGuard; p1.guardBroken = false;
-            p1.currentMotion = null;
+            p1.currentMotion = null; p1.grappleMotionKey = null; p1.knockdownVariant = 'knockdown';
             p2.x = P2_SPAWN.x; p2.y = 0; p2.z = P2_SPAWN.z; p2.vy = 0;
+            p2.facingAngle = 0;
             p2.action = 'idle'; p2.stunTimer = 0; p2.currentAttack = null;
             p2.guard = p2.stats.maxGuard; p2.guardBroken = false;
-            p2.currentMotion = null;
+            p2.currentMotion = null; p2.grappleMotionKey = null; p2.knockdownVariant = 'knockdown';
             p1Root.position.set(P1_SPAWN.x, 0, P1_SPAWN.z);
+            p1Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI + Math.PI / 2);
             p2Root.position.set(P2_SPAWN.x, 0, P2_SPAWN.z);
+            p2Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), Math.PI / 2);
             p1DelayHpVal = p1.stats.maxHp;
             p2DelayHpVal = p2.stats.maxHp;
             resetCombo(p1Combo);
             resetCombo(p2Combo);
+            grapple.active = null; grapple.phase = 'none'; grapple.phaseTimer = 0;
+            grapple.escapeProgress = 0; grapple.mountTimer = 0; grapple.mountHits = 0;
           }
         }
         return;
@@ -392,6 +420,91 @@ export default function FightPage() {
       const p2Input = (mode === 'cpu' || mode === 'cpuvcpu') && aiRef.current
         ? aiRef.current.update(p2, p1, dt)
         : inputHandler.getP2Input();
+
+      // === GRAPPLE SYSTEM ===
+      if (isGrappleActive(grapple)) {
+        // During grapple, skip normal fighter updates — grapple controls both
+        const isP1Attacker = grapple.attackerIndex === 1;
+        const atkr = isP1Attacker ? p1 : p2;
+        const defr = isP1Attacker ? p2 : p1;
+        const defInput = isP1Attacker ? p2Input : p1Input;
+        const atkInput = isP1Attacker ? p1Input : p2Input;
+
+        const gResult = updateGrapple(
+          grapple, atkr, defr,
+          defInput.mash,     // defender escape mashing
+          atkInput.attack !== null, // attacker punch (for mount)
+          dt,
+        );
+
+        if (gResult.damage > 0) {
+          if (isP1Attacker) {
+            matchState.p2Hp = Math.max(0, matchState.p2Hp - gResult.damage);
+          } else {
+            matchState.p1Hp = Math.max(0, matchState.p1Hp - gResult.damage);
+          }
+          triggerScreenShake(0.02, 0.1);
+          soundRef.current?.play(gResult.mountPunchLanded ? 'hit_light' : 'hit_heavy');
+        }
+
+        // Update root positions during grapple
+        p1Root.position.x = p1.x;
+        p1Root.position.y = p1.y;
+        p1Root.position.z = p1.z;
+        p2Root.position.x = p2.x;
+        p2Root.position.y = p2.y;
+        p2Root.position.z = p2.z;
+        p1Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), p1.facingAngle + Math.PI / 2);
+        p2Root.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), p2.facingAngle + Math.PI / 2);
+
+        if (p1Motion) p1Motion.update(p1, dt);
+        if (p2Motion) p2Motion.update(p2, dt);
+
+        // Camera track
+        const midX = (p1.x + p2.x) / 2;
+        const midZ = (p1.z + p2.z) / 2;
+        camera.target.x = midX;
+        camera.target.z = midZ;
+        camera.target.y = STAGE_CONFIG.cameraHeight;
+
+        updateScreenShake(camera, dt);
+        updateDamageNumbers(dt);
+        inputHandler.consumeFrame();
+
+        // Check round end
+        checkRoundEnd(matchState);
+
+        // UI update
+        uiUpdateCounter++;
+        if (uiUpdateCounter % 6 === 0) {
+          setP1Hp(matchState.p1Hp);
+          setP2Hp(matchState.p2Hp);
+          setP1DelayHp(p1DelayHpVal);
+          setP2DelayHp(p2DelayHpVal);
+          setP1Guard(p1.guard);
+          setP2Guard(p2.guard);
+          setP1GuardBroken(p1.guardBroken);
+          setP2GuardBroken(p2.guardBroken);
+          setTimer(matchState.timer);
+          setPhase(matchState.phase);
+          setRoundNum(matchState.roundNumber);
+          setP1Wins(matchState.p1Wins);
+          setP2Wins(matchState.p2Wins);
+          setP1Action(p1.action + (p1.grappleMotionKey ? `:${p1.grappleMotionKey}` : ''));
+          setP2Action(p2.action + (p2.grappleMotionKey ? `:${p2.grappleMotionKey}` : ''));
+          setMatchWinner(matchState.matchWinner);
+        }
+        return;
+      }
+
+      // Check grapple initiation (P1)
+      if (p1Input.grapple && canInitiateGrapple(p1, p2, grapple)) {
+        startGrapple(p1Input.grapple, grapple, 1, p1, p2);
+      }
+      // Check grapple initiation (P2)
+      if (p2Input.grapple && canInitiateGrapple(p2, p1, grapple)) {
+        startGrapple(p2Input.grapple, grapple, 2, p2, p1);
+      }
 
       // Update fighters (3D: pass opponent XZ)
       updateFighter(p1, p1Input, p2.x, p2.z, dt);
@@ -952,8 +1065,8 @@ export default function FightPage() {
         background: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 4,
         textAlign: 'right',
       }}>
-        {gameMode !== 'cpuvcpu' && <div>P1: WASD=move Space=jump F=block J=R.punch K=R.kick L=L.punch U=L.kick</div>}
-        {gameMode === 'pvp' && <div>P2: Arrows=move 0=jump 6=block 1=R.punch 2=R.kick 3=L.punch 4=L.kick</div>}
+        {gameMode !== 'cpuvcpu' && <div>P1: WASD=move Space=jump F=block J=R.punch K=R.kick L=L.punch U=L.kick G=takedown H=throw</div>}
+        {gameMode === 'pvp' && <div>P2: Arrows=move 0=jump 6=block 1=R.punch 2=R.kick 3=L.punch 4=L.kick 5=takedown 7=throw</div>}
         {gameMode !== 'cpuvcpu' && <div style={{ color: '#666', marginTop: 2 }}>W/Up+attack=upper S/Down+attack=lower neutral=mid</div>}
         {gameMode === 'cpuvcpu' && <div>CPU vs CPU - Watch mode</div>}
         <div style={{ color: '#666', marginTop: 2 }}>Mouse drag=rotate camera, Wheel=zoom</div>
