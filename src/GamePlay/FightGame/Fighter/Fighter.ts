@@ -59,7 +59,7 @@ export interface FighterState {
 export function createFighter(spawnX: number, spawnZ: number, facingAngle: number, stats?: Partial<FighterStats>): FighterState {
   return {
     x: spawnX,
-    y: 0,
+    y: STAGE_CONFIG.groundY,
     z: spawnZ,
     vy: 0,
     facingAngle,
@@ -83,7 +83,7 @@ export function createFighter(spawnX: number, spawnZ: number, facingAngle: numbe
 }
 
 export function isGrounded(f: FighterState): boolean {
-  return f.y <= 0.001;
+  return f.y <= STAGE_CONFIG.groundY + 0.001;
 }
 
 export function canAct(f: FighterState): boolean {
@@ -273,11 +273,12 @@ function startAttack(f: FighterState, attackName: string): void {
 }
 
 function applyGravity(f: FighterState, dt: number): void {
+  const ground = STAGE_CONFIG.groundY;
   if (!isGrounded(f) || f.vy > 0) {
     f.vy -= f.stats.gravity * dt;
     f.y += f.vy * dt;
-    if (f.y <= 0) {
-      f.y = 0;
+    if (f.y <= ground) {
+      f.y = ground;
       f.vy = 0;
       if (f.action === 'jump') {
         f.action = 'idle';
@@ -287,15 +288,13 @@ function applyGravity(f: FighterState, dt: number): void {
   }
 }
 
-/** Clamp fighter position to circular arena */
+/** Clamp fighter position to active battle zone (rectangular) */
 function clampToArena(f: FighterState): void {
-  const distSq = f.x * f.x + f.z * f.z;
-  const r = STAGE_CONFIG.arenaRadius;
-  if (distSq > r * r) {
-    const dist = Math.sqrt(distSq);
-    f.x = (f.x / dist) * r;
-    f.z = (f.z / dist) * r;
-  }
+  const zone = STAGE_CONFIG.activeZone;
+  if (f.x > zone.halfX) f.x = zone.halfX;
+  else if (f.x < -zone.halfX) f.x = -zone.halfX;
+  if (f.z > zone.halfZ) f.z = zone.halfZ;
+  else if (f.z < -zone.halfZ) f.z = -zone.halfZ;
 }
 
 /**

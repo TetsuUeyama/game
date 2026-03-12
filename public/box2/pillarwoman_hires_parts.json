@@ -1,0 +1,14 @@
+[
+  {
+    "key": "body",
+    "file": "/box2/pillarwoman_body_hires_sym.vox",
+    "voxels": 110322,
+    "default_on": true
+  },
+  {
+    "key": "bra",
+    "file": "/box2/pillarwoman_bra.vox",
+    "voxels": 6729,
+    "default_on": true
+  }
+]

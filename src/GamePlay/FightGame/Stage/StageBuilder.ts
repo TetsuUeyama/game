@@ -1,6 +1,7 @@
 /**
- * Stage decoration builder for the fighting game arena.
- * Creates floor grid, boundary pillars, ambient particles, and lighting.
+ * Stage builder for the fighting game open field.
+ * Combines voxel objects (trees, rocks, flowers, grass) with
+ * a ground plane, zone markers, and natural lighting.
  */
 
 import {
@@ -8,6 +9,8 @@ import {
   PointLight, GlowLayer, Mesh,
 } from '@babylonjs/core';
 import { STAGE_CONFIG } from '@/GamePlay/FightGame/Config/FighterConfig';
+import { buildVoxelTerrain } from '@/GamePlay/FightGame/Stage/TerrainBuilder';
+import type { FieldLayout } from '@/GamePlay/FightGame/Stage/TerrainObjectRegistry';
 
 export interface StageElements {
   meshes: Mesh[];
@@ -16,130 +19,91 @@ export interface StageElements {
 }
 
 /**
- * Build a decorated arena stage.
+ * Build the open field stage with voxel objects.
+ * Optionally accepts a FieldLayout for custom object placement.
  * Call once after scene creation.
  */
-export function buildStage(scene: Scene): StageElements {
-  const r = STAGE_CONFIG.arenaRadius;
+export async function buildStage(scene: Scene, layout?: FieldLayout): Promise<StageElements> {
+  const fhx = STAGE_CONFIG.fieldHalfX;
+  const fhz = STAGE_CONFIG.fieldHalfZ;
+  const zone = STAGE_CONFIG.activeZone;
   const meshes: Mesh[] = [];
   const lights: PointLight[] = [];
 
-  // === GROUND ===
-  // Main floor disc
-  const ground = MeshBuilder.CreateDisc('ground', {
-    radius: r + 0.5,
-    tessellation: 64,
+  // === GROUND PLANE (grass-colored) ===
+  const ground = MeshBuilder.CreateGround('ground', {
+    width: fhx * 2 + 4,
+    height: fhz * 2 + 4,
+    subdivisions: 1,
   }, scene);
-  ground.rotation.x = Math.PI / 2;
+  ground.position.y = STAGE_CONFIG.groundY;
   const gMat = new StandardMaterial('gMat', scene);
-  gMat.diffuseColor = new Color3(0.08, 0.08, 0.14);
-  gMat.specularColor = new Color3(0.05, 0.05, 0.1);
+  gMat.diffuseColor = new Color3(0.25, 0.55, 0.20);
+  gMat.specularColor = new Color3(0.05, 0.05, 0.05);
   ground.material = gMat;
   ground.isPickable = false;
   meshes.push(ground);
 
-  // Inner ring (fight zone marker)
-  const innerRing = MeshBuilder.CreateTorus('innerRing', {
-    diameter: r * 1.4,
-    thickness: 0.015,
-    tessellation: 64,
-  }, scene);
-  innerRing.position.y = 0.005;
-  const innerRingMat = new StandardMaterial('innerRingMat', scene);
-  innerRingMat.diffuseColor = new Color3(0.15, 0.15, 0.3);
-  innerRingMat.emissiveColor = new Color3(0.08, 0.08, 0.2);
-  innerRing.material = innerRingMat;
-  innerRing.isPickable = false;
-  meshes.push(innerRing);
+  // === VOXEL OBJECTS (trees, rocks, flowers, grass) ===
+  const voxelObjects = await buildVoxelTerrain(scene, layout);
+  meshes.push(...voxelObjects);
 
-  // Arena boundary ring (glowing)
-  const ring = MeshBuilder.CreateTorus('ring', {
-    diameter: r * 2,
-    thickness: 0.04,
-    tessellation: 64,
-  }, scene);
-  ring.position.y = 0.015;
-  const ringMat = new StandardMaterial('ringMat', scene);
-  ringMat.diffuseColor = new Color3(0.5, 0.12, 0.12);
-  ringMat.emissiveColor = new Color3(0.35, 0.06, 0.06);
-  ring.material = ringMat;
-  ring.isPickable = false;
-  meshes.push(ring);
+  // === ACTIVE ZONE BORDER ===
+  const zoneBorderThickness = 0.06;
+  const zoneBorderHeight = 0.015;
+  const zoneMat = new StandardMaterial('zoneMat', scene);
+  zoneMat.diffuseColor = new Color3(0.5, 0.18, 0.18);
+  zoneMat.emissiveColor = new Color3(0.35, 0.08, 0.08);
 
-  // Outer decorative ring
-  const outerRing = MeshBuilder.CreateTorus('outerRing', {
-    diameter: (r + 0.5) * 2,
-    thickness: 0.025,
-    tessellation: 64,
-  }, scene);
-  outerRing.position.y = 0.01;
-  const outerRingMat = new StandardMaterial('outerRingMat', scene);
-  outerRingMat.diffuseColor = new Color3(0.2, 0.2, 0.3);
-  outerRingMat.emissiveColor = new Color3(0.05, 0.05, 0.12);
-  outerRing.material = outerRingMat;
-  outerRing.isPickable = false;
-  meshes.push(outerRing);
-
-  // === CORNER PILLARS ===
-  const pillarCount = 8;
-  const pillarDist = r + 0.6;
-  for (let i = 0; i < pillarCount; i++) {
-    const angle = (i / pillarCount) * Math.PI * 2;
-    const px = Math.cos(angle) * pillarDist;
-    const pz = Math.sin(angle) * pillarDist;
-
-    // Base pillar
-    const pillar = MeshBuilder.CreateCylinder(`pillar_${i}`, {
-      height: 0.8,
-      diameterTop: 0.04,
-      diameterBottom: 0.06,
-      tessellation: 8,
+  const zoneEdges = [
+    { w: zone.halfX * 2 + zoneBorderThickness, d: zoneBorderThickness, x: 0, z: zone.halfZ },
+    { w: zone.halfX * 2 + zoneBorderThickness, d: zoneBorderThickness, x: 0, z: -zone.halfZ },
+    { w: zoneBorderThickness, d: zone.halfZ * 2, x: zone.halfX, z: 0 },
+    { w: zoneBorderThickness, d: zone.halfZ * 2, x: -zone.halfX, z: 0 },
+  ];
+  zoneEdges.forEach((e, i) => {
+    const edge = MeshBuilder.CreateBox(`zoneBorder_${i}`, {
+      width: e.w, height: zoneBorderHeight, depth: e.d,
     }, scene);
-    pillar.position.set(px, 0.4, pz);
-    const pillarMat = new StandardMaterial(`pillarMat_${i}`, scene);
-    pillarMat.diffuseColor = new Color3(0.15, 0.15, 0.25);
-    pillarMat.emissiveColor = new Color3(0.05, 0.05, 0.1);
-    pillar.material = pillarMat;
-    pillar.isPickable = false;
-    meshes.push(pillar);
+    edge.position.set(e.x, STAGE_CONFIG.groundY + zoneBorderHeight / 2 + 0.005, e.z);
+    edge.material = zoneMat;
+    edge.isPickable = false;
+    meshes.push(edge);
+  });
 
-    // Glowing tip
-    const tip = MeshBuilder.CreateSphere(`tip_${i}`, { diameter: 0.06, segments: 8 }, scene);
-    tip.position.set(px, 0.82, pz);
-    const tipMat = new StandardMaterial(`tipMat_${i}`, scene);
-    // Alternate between blue-ish and red-ish tones
-    if (i % 2 === 0) {
-      tipMat.emissiveColor = new Color3(0.2, 0.2, 0.6);
-    } else {
-      tipMat.emissiveColor = new Color3(0.6, 0.15, 0.15);
-    }
-    tipMat.diffuseColor = Color3.Black();
-    tip.material = tipMat;
-    tip.isPickable = false;
-    meshes.push(tip);
-  }
+  // === ARENA FLOOR (covers the full active zone) ===
+  const arenaFloor = MeshBuilder.CreateGround('arenaFloor', {
+    width: zone.halfX * 2,
+    height: zone.halfZ * 2,
+    subdivisions: 1,
+  }, scene);
+  arenaFloor.position.y = STAGE_CONFIG.groundY + 0.005;
+  const arenaMat = new StandardMaterial('arenaMat', scene);
+  arenaMat.diffuseColor = new Color3(0.55, 0.45, 0.30);
+  arenaMat.specularColor = new Color3(0.05, 0.05, 0.05);
+  arenaFloor.material = arenaMat;
+  arenaFloor.isPickable = false;
+  meshes.push(arenaFloor);
 
-  // === AMBIENT POINT LIGHTS ===
-  // Blue corner light
-  const lightBlue = new PointLight('stageLight1', new Vector3(-r * 0.6, 1.2, -r * 0.6), scene);
-  lightBlue.diffuse = new Color3(0.3, 0.3, 0.8);
-  lightBlue.intensity = 0.4;
-  lightBlue.range = 4;
-  lights.push(lightBlue);
+  // === LIGHTING (natural outdoor) ===
+  const sunLight = new PointLight('sun', new Vector3(10, 20, 5), scene);
+  sunLight.diffuse = new Color3(1.0, 0.95, 0.85);
+  sunLight.intensity = 1.5;
+  sunLight.range = 80;
+  lights.push(sunLight);
 
-  // Red corner light
-  const lightRed = new PointLight('stageLight2', new Vector3(r * 0.6, 1.2, r * 0.6), scene);
-  lightRed.diffuse = new Color3(0.8, 0.2, 0.2);
-  lightRed.intensity = 0.4;
-  lightRed.range = 4;
-  lights.push(lightRed);
+  const fillLight = new PointLight('fill', new Vector3(-10, 12, -8), scene);
+  fillLight.diffuse = new Color3(0.5, 0.6, 0.9);
+  fillLight.intensity = 0.5;
+  fillLight.range = 60;
+  lights.push(fillLight);
 
   // === GLOW LAYER ===
   const glowLayer = new GlowLayer('glow', scene, {
     mainTextureFixedSize: 256,
     blurKernelSize: 32,
   });
-  glowLayer.intensity = 0.6;
+  glowLayer.intensity = 0.3;
 
   return { meshes, lights, glowLayer };
 }
