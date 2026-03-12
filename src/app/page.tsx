@@ -12,17 +12,22 @@ const pages = [
   { href: '/fbx-viewer', label: 'Voxel Body Mover' },
   { href: '/equip-config', label: 'Equipment Behavior Config' },
   { href: '/bone-config', label: 'Bone Config (Skeleton Setup)' },
+  { href: '/model-import', label: 'Model Import' },
+  { href: '/template-editor', label: 'Template Editor' },
+  { href: '/fight', label: 'Fight' },
+  { href: '/cap-viewer', label: 'Cap Viewer' },
 ];
 
 export default function Home() {
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+    <div style={{ padding: '2rem' }}>
       <h1 style={{ marginBottom: '1.5rem' }}>Pages</h1>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
         {pages.map((page) => (
           <Link
             key={page.href}
             href={page.href}
+            target="_blank"
             style={{
               display: 'block',
               padding: '0.75rem 1.25rem',

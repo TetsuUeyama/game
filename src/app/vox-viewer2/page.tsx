@@ -121,6 +121,7 @@ interface CharacterConfig {
 const BASE_BODIES: Record<string, { label: string; file: string }> = {
   female: { label: 'Female (CE)', file: '/box2/cyberpunk_elf_body_base.vox' },
   male: { label: 'Male (Vagrant)', file: '/box5/vagrant_rig_vagrant_body.vox' },
+  pillarwoman: { label: 'PillarWoman', file: '/box2/pillarwoman_body_hires_sym.vox' },
 };
 
 // Face part variant: one per character per face slot
@@ -197,6 +198,12 @@ const CHARACTERS: Record<string, CharacterConfig> = {
     manifest: '/box5/vagrant_rig_parts.json',
     offset: [0, 0, 0],
     baseBody: 'male',
+  },
+  pillarwoman: {
+    label: 'PillarWoman',
+    manifest: '/box2/pillarwoman_hires_parts.json',
+    offset: [0, 0, 0],
+    baseBody: 'pillarwoman',
   },
 };
 
