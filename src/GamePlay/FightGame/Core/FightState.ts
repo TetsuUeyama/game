@@ -14,6 +14,8 @@ export interface FightMatchState {
   p1Hp: number;
   p2Hp: number;
   maxHp: number;
+  p1MaxHp: number;         // per-fighter max HP (may differ from maxHp)
+  p2MaxHp: number;
   timer: number;           // seconds remaining
   hitstopTimer: number;    // frames remaining for hitstop (both fighters freeze)
   phaseTimer: number;      // time in current phase (for intro/ko animations)
@@ -30,6 +32,8 @@ export function createInitialFightState(maxHp: number): FightMatchState {
     p1Hp: maxHp,
     p2Hp: maxHp,
     maxHp,
+    p1MaxHp: maxHp,
+    p2MaxHp: maxHp,
     timer: STAGE_CONFIG.roundTime,
     hitstopTimer: 0,
     phaseTimer: 0,
@@ -40,8 +44,8 @@ export function createInitialFightState(maxHp: number): FightMatchState {
 
 export function startNewRound(state: FightMatchState): void {
   state.phase = 'intro';
-  state.p1Hp = state.maxHp;
-  state.p2Hp = state.maxHp;
+  state.p1Hp = state.p1MaxHp;
+  state.p2Hp = state.p2MaxHp;
   state.timer = STAGE_CONFIG.roundTime;
   state.hitstopTimer = 0;
   state.phaseTimer = 0;

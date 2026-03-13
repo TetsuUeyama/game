@@ -104,7 +104,7 @@ async function loadVoxMesh(scene: Scene, url: string, name: string, scale: numbe
 }
 
 // ========================================================================
-// Part manifest type
+// Part manifest type & character config
 // ========================================================================
 
 interface PartEntry {
@@ -115,6 +115,97 @@ interface PartEntry {
   meshes: string[];
   is_body: boolean;
 }
+
+interface GridInfo {
+  voxel_size: number;
+  gx: number;
+  gy: number;
+  gz: number;
+}
+
+interface CharacterConfig {
+  label: string;
+  manifest: string;
+  gridJson: string;
+}
+
+const CHARACTERS: Record<string, CharacterConfig> = {
+  cyberpunkelf: {
+    label: 'CyberpunkElf',
+    manifest: '/realistic/parts.json',
+    gridJson: '/realistic/grid.json',
+  },
+  darkelfblader: {
+    label: 'DarkElfBlader',
+    manifest: '/realistic-darkelf/parts.json',
+    gridJson: '/realistic-darkelf/grid.json',
+  },
+  highpriestess: {
+    label: 'HighPriestess',
+    manifest: '/realistic-highpriestess/parts.json',
+    gridJson: '/realistic-highpriestess/grid.json',
+  },
+  pillarwoman: {
+    label: 'PillarWoman',
+    manifest: '/realistic-pillarwoman/parts.json',
+    gridJson: '/realistic-pillarwoman/grid.json',
+  },
+  bunnyirelia: {
+    label: 'BunnyIrelia',
+    manifest: '/realistic-bunnyirelia/parts.json',
+    gridJson: '/realistic-bunnyirelia/grid.json',
+  },
+  daemongirl: {
+    label: 'DaemonGirl',
+    manifest: '/realistic-daemongirl/parts.json',
+    gridJson: '/realistic-daemongirl/grid.json',
+  },
+  daemongirl_default: {
+    label: 'DaemonGirl Default',
+    manifest: '/realistic-daemongirl-default/parts.json',
+    gridJson: '/realistic-daemongirl-default/grid.json',
+  },
+  daemongirl_bunny: {
+    label: 'DaemonGirl Bunny',
+    manifest: '/realistic-daemongirl-bunny/parts.json',
+    gridJson: '/realistic-daemongirl-bunny/grid.json',
+  },
+  daemongirl_bunnysuit: {
+    label: 'DaemonGirl BunnySuit',
+    manifest: '/realistic-daemongirl-bunnysuit/parts.json',
+    gridJson: '/realistic-daemongirl-bunnysuit/grid.json',
+  },
+  daemongirl_ponytail: {
+    label: 'DaemonGirl Ponytail',
+    manifest: '/realistic-daemongirl-ponytail/parts.json',
+    gridJson: '/realistic-daemongirl-ponytail/grid.json',
+  },
+  primrose_egypt: {
+    label: 'Primrose Egypt',
+    manifest: '/realistic-primrose-egypt/parts.json',
+    gridJson: '/realistic-primrose-egypt/grid.json',
+  },
+  primrose_officelady: {
+    label: 'Primrose OfficeLady',
+    manifest: '/realistic-primrose-officelady/parts.json',
+    gridJson: '/realistic-primrose-officelady/grid.json',
+  },
+  primrose_bunnysuit: {
+    label: 'Primrose Bunnysuit',
+    manifest: '/realistic-primrose-bunnysuit/parts.json',
+    gridJson: '/realistic-primrose-bunnysuit/grid.json',
+  },
+  primrose_swimsuit: {
+    label: 'Primrose Swimsuit',
+    manifest: '/realistic-primrose-swimsuit/parts.json',
+    gridJson: '/realistic-primrose-swimsuit/grid.json',
+  },
+  primrose_milkapron: {
+    label: 'Primrose MilkApron',
+    manifest: '/realistic-primrose-milkapron/parts.json',
+    gridJson: '/realistic-primrose-milkapron/grid.json',
+  },
+};
 
 // ========================================================================
 // Component
@@ -136,6 +227,7 @@ function RealisticViewerPage() {
 
   const meshesRef = useRef<Record<string, Mesh>>({});
 
+  const [charKey, setCharKey] = useState('darkelfblader');
   const [parts, setParts] = useState<PartEntry[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -224,39 +316,6 @@ function RealisticViewerPage() {
     partMat.zOffset = -2;
     partMatRef.current = partMat;
 
-    // Load parts manifest
-    (async () => {
-      try {
-        const resp = await fetch('/realistic/parts.json' + CACHE_BUST);
-        if (!resp.ok) {
-          setError('parts.json not found. Run the voxelization pipeline first.');
-          setLoading(false);
-          return;
-        }
-        const allParts: PartEntry[] = await resp.json();
-        setParts(allParts);
-
-        const vis: Record<string, boolean> = {};
-        for (const part of allParts) {
-          vis[part.key] = part.default_on;
-          try {
-            const mesh = await loadVoxMesh(scene, part.file, `part_${part.key}`);
-            mesh.material = part.is_body ? bodyMat : partMat;
-            mesh.setEnabled(part.default_on);
-            meshesRef.current[part.key] = mesh;
-          } catch (e) {
-            console.error(`Failed to load ${part.file}:`, e);
-          }
-        }
-        setPartVisibility(vis);
-        setLoading(false);
-      } catch (e) {
-        setError('Failed to load parts manifest');
-        setLoading(false);
-        console.error(e);
-      }
-    })();
-
     engine.runRenderLoop(() => scene.render());
     const onResize = () => engine.resize();
     window.addEventListener('resize', onResize);
@@ -268,6 +327,81 @@ function RealisticViewerPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load character parts when charKey changes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const bodyMat = bodyMatRef.current;
+    const partMat = partMatRef.current;
+    if (!scene || !bodyMat || !partMat) return;
+
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+
+      // Dispose old meshes
+      for (const mesh of Object.values(meshesRef.current)) {
+        mesh.dispose();
+      }
+      meshesRef.current = {};
+
+      const config = CHARACTERS[charKey];
+      if (!config) {
+        setError(`Unknown character: ${charKey}`);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Load grid.json to get voxel_size for correct physical scale
+        const gridResp = await fetch(config.gridJson + CACHE_BUST);
+        let voxelScale = SCALE;
+        if (gridResp.ok) {
+          const grid: GridInfo = await gridResp.json();
+          // Use voxel_size directly so characters render at correct relative sizes
+          voxelScale = grid.voxel_size;
+        }
+
+        const resp = await fetch(config.manifest + CACHE_BUST);
+        if (!resp.ok) {
+          setError(`${config.label}: parts.json not found. Run the voxelization pipeline first.`);
+          setLoading(false);
+          return;
+        }
+        const allParts: PartEntry[] = await resp.json();
+        if (cancelled) return;
+        setParts(allParts);
+
+        const vis: Record<string, boolean> = {};
+        for (const part of allParts) {
+          vis[part.key] = part.default_on;
+          try {
+            const mesh = await loadVoxMesh(scene, part.file, `part_${part.key}`, voxelScale);
+            if (cancelled) { mesh.dispose(); return; }
+            // Eyes need partMat (zOffset) to render in front of body
+            mesh.material = (part.is_body && part.key !== 'eyes') ? bodyMat : partMat;
+            mesh.setEnabled(part.default_on);
+            meshesRef.current[part.key] = mesh;
+          } catch (e) {
+            console.error(`Failed to load ${part.file}:`, e);
+          }
+        }
+        setPartVisibility(vis);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError('Failed to load parts manifest');
+          setLoading(false);
+          console.error(e);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [charKey]);
 
   const partLabel = (key: string) => {
     return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
@@ -288,9 +422,25 @@ function RealisticViewerPage() {
         <h2 style={{ margin: '0 0 6px', fontSize: 16, color: '#fff' }}>
           Realistic Viewer
         </h2>
-        <p style={{ margin: '0 0 14px', fontSize: 10, color: '#888' }}>
+        <p style={{ margin: '0 0 8px', fontSize: 10, color: '#888' }}>
           Original proportions - no deformation
         </p>
+
+        {/* Character selector */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
+          {Object.entries(CHARACTERS).map(([key, config]) => (
+            <button key={key} onClick={() => setCharKey(key)} style={{
+              flex: 1, padding: '6px 4px', fontSize: 10, fontWeight: charKey === key ? 'bold' : 'normal',
+              border: charKey === key ? '2px solid #fa0' : '1px solid #555',
+              borderRadius: 4,
+              background: charKey === key ? 'rgba(180,120,0,0.25)' : 'rgba(40,40,60,0.4)',
+              color: charKey === key ? '#fda' : '#999',
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
+              {config.label}
+            </button>
+          ))}
+        </div>
 
         {loading && (
           <div style={{ color: '#8af', fontSize: 13, padding: '20px 0' }}>

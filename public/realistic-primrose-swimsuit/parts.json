@@ -1,0 +1,101 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-primrose-swimsuit/body/body.vox",
+    "voxels": 72709,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-primrose-swimsuit/body/eyes.vox",
+    "voxels": 614,
+    "default_on": false,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-primrose-swimsuit/body/body_hair.vox",
+    "voxels": 65,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-primrose-swimsuit/hair/hair.vox",
+    "voxels": 19179,
+    "default_on": true,
+    "meshes": [
+      "Primrose Hair - Ponytail"
+    ],
+    "is_body": false,
+    "category": "hair"
+  },
+  {
+    "key": "primrose_extras_-_earrings",
+    "file": "/realistic-primrose-swimsuit/armor/primrose_extras_-_earrings.vox",
+    "voxels": 261,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Earrings"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "primrose_extras_-_glasses",
+    "file": "/realistic-primrose-swimsuit/other/primrose_extras_-_glasses.vox",
+    "voxels": 446,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_gris_swimsuit_-_choker",
+    "file": "/realistic-primrose-swimsuit/clothing/primrose_gris_swimsuit_-_choker.vox",
+    "voxels": 885,
+    "default_on": true,
+    "meshes": [
+      "Primrose Gris Swimsuit - Choker"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_gris_swimsuit_-_swimsuit",
+    "file": "/realistic-primrose-swimsuit/clothing/primrose_gris_swimsuit_-_swimsuit.vox",
+    "voxels": 10551,
+    "default_on": true,
+    "meshes": [
+      "Primrose Gris Swimsuit - Swimsuit"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_gris_swimsuit_-_thigh_strap",
+    "file": "/realistic-primrose-swimsuit/clothing/primrose_gris_swimsuit_-_thigh_strap.vox",
+    "voxels": 3378,
+    "default_on": true,
+    "meshes": [
+      "Primrose Gris Swimsuit - Thigh Strap"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  }
+]

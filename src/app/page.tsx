@@ -1,11 +1,7 @@
 import Link from 'next/link';
 
 const pages = [
-  { href: '/character-move-1on1', label: 'Character Move 1on1' },
-  { href: '/league', label: 'League' },
-  { href: '/league/match', label: 'League Match' },
-  { href: '/teams', label: 'Teams' },
-  { href: '/admin/upload', label: 'Admin Upload' },
+  { href: '/fight', label: 'Fight' },
   { href: '/vox-viewer', label: 'Vox Viewer' },
   { href: '/vox-viewer2', label: 'Vox Viewer 2' },
   { href: '/vox-compare', label: 'Vox Compare' },
@@ -14,7 +10,6 @@ const pages = [
   { href: '/bone-config', label: 'Bone Config (Skeleton Setup)' },
   { href: '/model-import', label: 'Model Import' },
   { href: '/template-editor', label: 'Template Editor' },
-  { href: '/fight', label: 'Fight' },
   { href: '/cap-viewer', label: 'Cap Viewer' },
 ];
 

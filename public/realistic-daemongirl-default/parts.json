@@ -1,0 +1,123 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-daemongirl-default/body/body.vox",
+    "voxels": 72580,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-daemongirl-default/body/eyes.vox",
+    "voxels": 565,
+    "default_on": false,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-daemongirl-default/body/body_hair.vox",
+    "voxels": 77,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "daemongirl_default_-_bra",
+    "file": "/realistic-daemongirl-default/clothing/daemongirl_default_-_bra.vox",
+    "voxels": 2796,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Default - Bra"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_default_-_choker",
+    "file": "/realistic-daemongirl-default/other/daemongirl_default_-_choker.vox",
+    "voxels": 1011,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Default - Choker"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_default_-_gloves",
+    "file": "/realistic-daemongirl-default/accessories/daemongirl_default_-_gloves.vox",
+    "voxels": 6985,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Default - Gloves"
+    ],
+    "is_body": false,
+    "category": "accessories"
+  },
+  {
+    "key": "daemongirl_default_-_panties",
+    "file": "/realistic-daemongirl-default/clothing/daemongirl_default_-_panties.vox",
+    "voxels": 2354,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Default - Panties"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_default_-_stockings",
+    "file": "/realistic-daemongirl-default/other/daemongirl_default_-_stockings.vox",
+    "voxels": 28110,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Default - Stockings"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_glasses",
+    "file": "/realistic-daemongirl-default/other/daemongirl_extras_-_glasses.vox",
+    "voxels": 393,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_horns",
+    "file": "/realistic-daemongirl-default/other/daemongirl_extras_-_horns.vox",
+    "voxels": 2537,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Horns"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-daemongirl-default/hair/hair.vox",
+    "voxels": 57151,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Hair Long"
+    ],
+    "is_body": false,
+    "category": "hair"
+  }
+]

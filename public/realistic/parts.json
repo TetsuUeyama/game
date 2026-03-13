@@ -2,7 +2,7 @@
   {
     "key": "body",
     "file": "/realistic/body/body.vox",
-    "voxels": 71238,
+    "voxels": 70836,
     "default_on": true,
     "meshes": [
       "CyberpunkElf Body"
@@ -13,7 +13,7 @@
   {
     "key": "eyes",
     "file": "/realistic/body/eyes.vox",
-    "voxels": 369,
+    "voxels": 771,
     "default_on": false,
     "meshes": [
       "CyberpunkElf Body"
@@ -165,8 +165,8 @@
     "category": "clothing"
   },
   {
-    "key": "cyberpunkelf_hair_-_default",
-    "file": "/realistic/hair/cyberpunkelf_hair_-_default.vox",
+    "key": "hair",
+    "file": "/realistic/hair/hair.vox",
     "voxels": 76568,
     "default_on": true,
     "meshes": [

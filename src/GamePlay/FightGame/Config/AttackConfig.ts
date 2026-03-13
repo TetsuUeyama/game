@@ -25,6 +25,14 @@ export interface AttackDef {
   knockback: number;         // push distance on hit (viewer units)
   lunge: number;             // forward movement during startup (viewer units)
   canChainInto?: string[];   // attack names this can cancel into during recovery
+  /** If set, this attack spawns a projectile instead of using melee hitbox */
+  projectile?: string;       // projectile def name (from ProjectileSystem.PROJECTILE_DEFS)
+  /** If set, hit causes this knockdown variant instead of hitstun */
+  knockdownType?: string;
+  /** If set, hit applies a vine bind (seconds of restraint) */
+  bindDuration?: number;
+  /** DOT damage per second while bound */
+  bindDotPerSec?: number;
 }
 
 // ===== Custom attack motions =====
@@ -42,7 +50,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.12,
     hitStun: 0.3,
     knockback: 0.08,
-    lunge: 0.15,
+    lunge: 0.35,
     canChainInto: ['l_punch_mid', 'l_punch_upper', 'r_kick_mid'],
   },
   r_punch_mid: {
@@ -55,7 +63,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.1,
     hitStun: 0.2,
     knockback: 0.05,
-    lunge: 0.18,
+    lunge: 0.40,
     canChainInto: ['l_punch_mid', 'l_punch_upper', 'r_punch_upper', 'r_kick_mid'],
   },
   r_punch_lower: {
@@ -68,7 +76,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.1,
     hitStun: 0.25,
     knockback: 0.06,
-    lunge: 0.12,
+    lunge: 0.30,
     canChainInto: ['l_punch_mid', 'r_kick_lower'],
   },
 
@@ -83,7 +91,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.15,
     hitStun: 0.35,
     knockback: 0.1,
-    lunge: 0.15,
+    lunge: 0.35,
     canChainInto: ['r_kick_upper', 'l_kick_mid'],
   },
   l_punch_mid: {
@@ -96,7 +104,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.12,
     hitStun: 0.25,
     knockback: 0.06,
-    lunge: 0.16,
+    lunge: 0.38,
     canChainInto: ['r_punch_mid', 'r_punch_upper', 'l_kick_mid'],
   },
   l_punch_lower: {
@@ -109,7 +117,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.1,
     hitStun: 0.28,
     knockback: 0.07,
-    lunge: 0.12,
+    lunge: 0.30,
     canChainInto: ['r_punch_lower', 'r_kick_lower'],
   },
 
@@ -124,7 +132,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.25,
     hitStun: 0.5,
     knockback: 0.2,
-    lunge: 0.1,
+    lunge: 0.25,
   },
   r_kick_mid: {
     name: 'r_kick_mid',
@@ -136,7 +144,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.2,
     hitStun: 0.4,
     knockback: 0.15,
-    lunge: 0.12,
+    lunge: 0.30,
     canChainInto: ['l_kick_mid'],
   },
   r_kick_lower: {
@@ -149,7 +157,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.15,
     hitStun: 0.3,
     knockback: 0.08,
-    lunge: 0.08,
+    lunge: 0.22,
     canChainInto: ['r_kick_mid', 'l_kick_lower'],
   },
 
@@ -164,7 +172,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.28,
     hitStun: 0.55,
     knockback: 0.22,
-    lunge: 0.1,
+    lunge: 0.25,
   },
   l_kick_mid: {
     name: 'l_kick_mid',
@@ -176,7 +184,7 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.22,
     hitStun: 0.42,
     knockback: 0.16,
-    lunge: 0.12,
+    lunge: 0.30,
     canChainInto: ['r_kick_mid'],
   },
   l_kick_lower: {
@@ -189,7 +197,54 @@ export const ATTACKS: Record<string, AttackDef> = {
     blockStun: 0.15,
     hitStun: 0.32,
     knockback: 0.09,
-    lunge: 0.08,
+    lunge: 0.22,
     canChainInto: ['l_kick_mid', 'r_kick_lower'],
+  },
+
+  // ---- PROJECTILE ATTACKS ----
+  energy_ball: {
+    name: 'energy_ball',
+    motionFile: '/models/character-motion/right_punch_mid.motion.json',
+    damage: 3,                 // low damage, rapid fire
+    hitBones: ['RightHand'],
+    hitRadius: 0.12,
+    timing: { startup: 0.02, active: 0.02, recovery: 0.05 },
+    blockStun: 0.05,
+    hitStun: 0.1,
+    knockback: 0.03,
+    lunge: 0,
+    projectile: 'energy_ball',
+  },
+  thunder_bolt: {
+    name: 'thunder_bolt',
+    motionFile: '/models/character-motion/right_punch_upper.motion.json',
+    damage: 25,
+    hitBones: ['RightHand'],
+    hitRadius: 0.2,
+    timing: { startup: 0.3, active: 0.1, recovery: 0.6 },
+    blockStun: 0.3,
+    hitStun: 0.6,
+    knockback: 0.2,
+    lunge: 0,
+    projectile: 'thunder_bolt',
+    /** Knockdown variant triggered on hit */
+    knockdownType: 'knockdown_electrocuted',
+  },
+
+  // ---- VINE WHIP (Healer special) ----
+  vine_whip: {
+    name: 'vine_whip',
+    motionFile: '/models/character-motion/right_punch_upper.motion.json',
+    damage: 5,
+    hitBones: ['RightHand'],
+    hitRadius: 0.3,
+    timing: { startup: 0.15, active: 0.1, recovery: 0.35 },
+    blockStun: 0.2,
+    hitStun: 0.3,
+    knockback: 0.02,           // minimal knockback — restraint, not push
+    lunge: 0,                  // no lunge — projectile does the work
+    projectile: 'vine_whip',   // fires snake-like vine projectile
+    bindDuration: 9999,        // permanent until KO
+    bindDotPerSec: 3,          // 3 HP/sec DOT while bound
   },
 };

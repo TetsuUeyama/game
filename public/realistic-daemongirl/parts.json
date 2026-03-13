@@ -1,0 +1,134 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-daemongirl/body/body.vox",
+    "voxels": 72331,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-daemongirl/body/eyes.vox",
+    "voxels": 599,
+    "default_on": false,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-daemongirl/body/body_hair.vox",
+    "voxels": 71,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-_armlace",
+    "file": "/realistic-daemongirl/other/daemongirl_business_-_lingerie_-_armlace.vox",
+    "voxels": 510,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie - Armlace"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-_bra",
+    "file": "/realistic-daemongirl/clothing/daemongirl_business_-_lingerie_-_bra.vox",
+    "voxels": 5192,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie - Bra"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-_garter_belt",
+    "file": "/realistic-daemongirl/clothing/daemongirl_business_-_lingerie_-_garter_belt.vox",
+    "voxels": 4171,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie - Garter Belt"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-_heels",
+    "file": "/realistic-daemongirl/other/daemongirl_business_-_lingerie_-_heels.vox",
+    "voxels": 7187,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie - Heels"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-_panties",
+    "file": "/realistic-daemongirl/clothing/daemongirl_business_-_lingerie_-_panties.vox",
+    "voxels": 2420,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie - Panties"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_business_-_lingerie_-stockings",
+    "file": "/realistic-daemongirl/other/daemongirl_business_-_lingerie_-stockings.vox",
+    "voxels": 24444,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Business - Lingerie -Stockings"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_glasses",
+    "file": "/realistic-daemongirl/other/daemongirl_extras_-_glasses.vox",
+    "voxels": 410,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_horns",
+    "file": "/realistic-daemongirl/other/daemongirl_extras_-_horns.vox",
+    "voxels": 2517,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Horns"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-daemongirl/hair/hair.vox",
+    "voxels": 57057,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Hair Long"
+    ],
+    "is_body": false,
+    "category": "hair"
+  }
+]

@@ -1,0 +1,178 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-primrose-bunnysuit/body/body.vox",
+    "voxels": 61260,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-primrose-bunnysuit/body/eyes.vox",
+    "voxels": 538,
+    "default_on": false,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-primrose-bunnysuit/body/body_hair.vox",
+    "voxels": 59,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-primrose-bunnysuit/hair/hair.vox",
+    "voxels": 15662,
+    "default_on": true,
+    "meshes": [
+      "Primrose Hair - Ponytail"
+    ],
+    "is_body": false,
+    "category": "hair"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_bunny_ears",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_bunny_ears.vox",
+    "voxels": 1983,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Bunny Ears"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_collar",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_collar.vox",
+    "voxels": 802,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Collar"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_gloves",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_gloves.vox",
+    "voxels": 2755,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Gloves"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_jacket",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_jacket.vox",
+    "voxels": 18036,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Jacket"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_leotard",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_leotard.vox",
+    "voxels": 6384,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Leotard"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_nipples_pads",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_nipples_pads.vox",
+    "voxels": 315,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Nipples Pads"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_stockings",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_stockings.vox",
+    "voxels": 34453,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Stockings"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_tail",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_tail.vox",
+    "voxels": 1371,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Tail"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_vagina_pad",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_vagina_pad.vox",
+    "voxels": 85,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Vagina Pad"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_deluxe_bunnysuit_-_vest",
+    "file": "/realistic-primrose-bunnysuit/clothing/primrose_deluxe_bunnysuit_-_vest.vox",
+    "voxels": 5176,
+    "default_on": true,
+    "meshes": [
+      "Primrose Deluxe Bunnysuit - Vest"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_extras_-_earrings",
+    "file": "/realistic-primrose-bunnysuit/armor/primrose_extras_-_earrings.vox",
+    "voxels": 231,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Earrings"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "primrose_extras_-_glasses",
+    "file": "/realistic-primrose-bunnysuit/other/primrose_extras_-_glasses.vox",
+    "voxels": 389,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  }
+]

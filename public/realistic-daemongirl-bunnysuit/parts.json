@@ -1,0 +1,178 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-daemongirl-bunnysuit/body/body.vox",
+    "voxels": 67686,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-daemongirl-bunnysuit/body/eyes.vox",
+    "voxels": 605,
+    "default_on": false,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-daemongirl-bunnysuit/body/body_hair.vox",
+    "voxels": 67,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_bunnyears",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_bunnyears.vox",
+    "voxels": 1918,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - BunnyEars"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_bunnytail",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_bunnytail.vox",
+    "voxels": 1368,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - BunnyTail"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_collar",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_collar.vox",
+    "voxels": 842,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Collar"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_gloves",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_gloves.vox",
+    "voxels": 3204,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Gloves"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_jacket",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_jacket.vox",
+    "voxels": 19672,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Jacket"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_leotard",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_leotard.vox",
+    "voxels": 6841,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Leotard"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_nipple_pads",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_nipple_pads.vox",
+    "voxels": 297,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Nipple Pads"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_stockings",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_stockings.vox",
+    "voxels": 34835,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Stockings"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_vagina_pad",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_vagina_pad.vox",
+    "voxels": 89,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Vagina Pad"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_bunnysuit_-_vest",
+    "file": "/realistic-daemongirl-bunnysuit/clothing/daemongirl_bunnysuit_-_vest.vox",
+    "voxels": 4860,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl BunnySuit - Vest"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "daemongirl_extras_-_glasses",
+    "file": "/realistic-daemongirl-bunnysuit/other/daemongirl_extras_-_glasses.vox",
+    "voxels": 403,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_horns",
+    "file": "/realistic-daemongirl-bunnysuit/other/daemongirl_extras_-_horns.vox",
+    "voxels": 2375,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Horns"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-daemongirl-bunnysuit/hair/hair.vox",
+    "voxels": 52844,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Hair Long"
+    ],
+    "is_body": false,
+    "category": "hair"
+  }
+]

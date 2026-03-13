@@ -23,11 +23,15 @@ export interface FighterInput {
   grapple: string | null;
   /** Any button mashed this frame (for grapple escape) */
   mash: boolean;
+  /** Special attack (e.g., projectile). Key press only — engine decides what it does. */
+  special: boolean;
+  /** Strong special attack (e.g., thunder bolt). */
+  strongSpecial: boolean;
 }
 
 const EMPTY_INPUT: FighterInput = {
   forward: false, backward: false, strafeLeft: false, strafeRight: false,
-  jump: false, attack: null, block: false, grapple: null, mash: false,
+  jump: false, attack: null, block: false, grapple: null, mash: false, special: false, strongSpecial: false,
 };
 
 type Height = 'upper' | 'mid' | 'lower';
@@ -105,6 +109,8 @@ export class InputHandler {
       block:       this.keysDown.has('f'),
       grapple,
       mash,
+      special:     this.keysJustPressed.has('i'),
+      strongSpecial: this.keysJustPressed.has('o'),
     };
   }
 
@@ -134,6 +140,8 @@ export class InputHandler {
       block:       this.keysDown.has('6'),
       grapple,
       mash,
+      special:     this.keysJustPressed.has('8'),
+      strongSpecial: this.keysJustPressed.has('9'),
     };
   }
 

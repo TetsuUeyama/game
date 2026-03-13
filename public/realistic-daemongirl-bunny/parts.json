@@ -1,0 +1,68 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-daemongirl-bunny/body/body.vox",
+    "voxels": 73192,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-daemongirl-bunny/body/eyes.vox",
+    "voxels": 590,
+    "default_on": false,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-daemongirl-bunny/body/body_hair.vox",
+    "voxels": 76,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "daemongirl_extras_-_glasses",
+    "file": "/realistic-daemongirl-bunny/other/daemongirl_extras_-_glasses.vox",
+    "voxels": 427,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "daemongirl_extras_-_horns",
+    "file": "/realistic-daemongirl-bunny/other/daemongirl_extras_-_horns.vox",
+    "voxels": 2544,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Extras - Horns"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-daemongirl-bunny/hair/hair.vox",
+    "voxels": 57819,
+    "default_on": true,
+    "meshes": [
+      "DaemonGirl Hair Long"
+    ],
+    "is_body": false,
+    "category": "hair"
+  }
+]

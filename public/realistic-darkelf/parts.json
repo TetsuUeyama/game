@@ -1,0 +1,244 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-darkelf/body/body.vox",
+    "voxels": 66294,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Body "
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-darkelf/body/eyes.vox",
+    "voxels": 562,
+    "default_on": false,
+    "meshes": [
+      "DarkElfBlader Body "
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-darkelf/body/body_hair.vox",
+    "voxels": 58,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Body "
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "darkelfblader_armor_-_arms",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_arms.vox",
+    "voxels": 14186,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Arms"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_belt_cape",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_belt_cape.vox",
+    "voxels": 20238,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Belt Cape"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_belt_inner",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_belt_inner.vox",
+    "voxels": 2123,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Belt Inner"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_belt_outer",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_belt_outer.vox",
+    "voxels": 7945,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Belt Outer"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_belt_scabbards",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_belt_scabbards.vox",
+    "voxels": 18590,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Belt Scabbards"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_cape",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_cape.vox",
+    "voxels": 4933,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Cape"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_earrings",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_earrings.vox",
+    "voxels": 62,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Earrings"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_legs",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_legs.vox",
+    "voxels": 44918,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Legs"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_mask",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_mask.vox",
+    "voxels": 943,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Mask"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_shoulders_",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_shoulders_.vox",
+    "voxels": 5101,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Shoulders "
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_shoulders_clavice",
+    "file": "/realistic-darkelf/armor/darkelfblader_armor_-_shoulders_clavice.vox",
+    "voxels": 1482,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Shoulders Clavice"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_armor_-_suit",
+    "file": "/realistic-darkelf/clothing/darkelfblader_armor_-_suit.vox",
+    "voxels": 11345,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Suit"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "darkelfblader_armor_-_suit_bra",
+    "file": "/realistic-darkelf/clothing/darkelfblader_armor_-_suit_bra.vox",
+    "voxels": 2524,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Suit Bra"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "darkelfblader_armor_-_suit_plates",
+    "file": "/realistic-darkelf/clothing/darkelfblader_armor_-_suit_plates.vox",
+    "voxels": 757,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Armor - Suit Plates"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "darkelfblader_extras_-_weapon_a",
+    "file": "/realistic-darkelf/weapons/darkelfblader_extras_-_weapon_a.vox",
+    "voxels": 5252,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Extras - Weapon A"
+    ],
+    "is_body": false,
+    "category": "weapons"
+  },
+  {
+    "key": "darkelfblader_extras_-_weapon_a_scabbard",
+    "file": "/realistic-darkelf/armor/darkelfblader_extras_-_weapon_a_scabbard.vox",
+    "voxels": 11598,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Extras - Weapon A Scabbard"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "darkelfblader_extras_-_weapon_b",
+    "file": "/realistic-darkelf/weapons/darkelfblader_extras_-_weapon_b.vox",
+    "voxels": 3218,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Extras - Weapon B"
+    ],
+    "is_body": false,
+    "category": "weapons"
+  },
+  {
+    "key": "darkelfblader_extras_-_weapon_b_scabbard",
+    "file": "/realistic-darkelf/armor/darkelfblader_extras_-_weapon_b_scabbard.vox",
+    "voxels": 6914,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Extras - Weapon B Scabbard"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-darkelf/hair/hair.vox",
+    "voxels": 56288,
+    "default_on": true,
+    "meshes": [
+      "DarkElfBlader Hair"
+    ],
+    "is_body": false,
+    "category": "hair"
+  }
+]

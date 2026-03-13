@@ -1,0 +1,200 @@
+[
+  {
+    "key": "body",
+    "file": "/realistic-primrose-officelady/body/body.vox",
+    "voxels": 71451,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "eyes",
+    "file": "/realistic-primrose-officelady/body/eyes.vox",
+    "voxels": 579,
+    "default_on": false,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": true,
+    "category": "body"
+  },
+  {
+    "key": "body_hair",
+    "file": "/realistic-primrose-officelady/body/body_hair.vox",
+    "voxels": 67,
+    "default_on": true,
+    "meshes": [
+      "Primrose_Body"
+    ],
+    "is_body": false,
+    "category": "body"
+  },
+  {
+    "key": "hair",
+    "file": "/realistic-primrose-officelady/hair/hair.vox",
+    "voxels": 18656,
+    "default_on": true,
+    "meshes": [
+      "Primrose Hair - Ponytail"
+    ],
+    "is_body": false,
+    "category": "hair"
+  },
+  {
+    "key": "primrose_extras_-_earrings",
+    "file": "/realistic-primrose-officelady/armor/primrose_extras_-_earrings.vox",
+    "voxels": 261,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Earrings"
+    ],
+    "is_body": false,
+    "category": "armor"
+  },
+  {
+    "key": "primrose_extras_-_glasses",
+    "file": "/realistic-primrose-officelady/other/primrose_extras_-_glasses.vox",
+    "voxels": 444,
+    "default_on": true,
+    "meshes": [
+      "Primrose Extras - Glasses"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_bra",
+    "file": "/realistic-primrose-officelady/clothing/primrose_office_lady_-_lingerie_-_bra.vox",
+    "voxels": 5183,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Bra"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_choker",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_lingerie_-_choker.vox",
+    "voxels": 479,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Choker"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_garter",
+    "file": "/realistic-primrose-officelady/clothing/primrose_office_lady_-_lingerie_-_garter.vox",
+    "voxels": 3987,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Garter"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_heels",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_lingerie_-_heels.vox",
+    "voxels": 6251,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Heels"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_panties",
+    "file": "/realistic-primrose-officelady/clothing/primrose_office_lady_-_lingerie_-_panties.vox",
+    "voxels": 1609,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Panties"
+    ],
+    "is_body": false,
+    "category": "clothing"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_stockings",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_lingerie_-_stockings.vox",
+    "voxels": 29111,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Stockings"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_lingerie_-_wrist",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_lingerie_-_wrist.vox",
+    "voxels": 561,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Lingerie - Wrist"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_shirt",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_shirt.vox",
+    "voxels": 28137,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Shirt"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_skirt",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_skirt.vox",
+    "voxels": 15299,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Skirt"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_tie",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_tie.vox",
+    "voxels": 993,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Tie"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_vest",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_vest.vox",
+    "voxels": 14030,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - Vest"
+    ],
+    "is_body": false,
+    "category": "other"
+  },
+  {
+    "key": "primrose_office_lady_-_wristwatch",
+    "file": "/realistic-primrose-officelady/other/primrose_office_lady_-_wristwatch.vox",
+    "voxels": 247,
+    "default_on": true,
+    "meshes": [
+      "Primrose Office Lady - WristWatch"
+    ],
+    "is_body": false,
+    "category": "other"
+  }
+]
