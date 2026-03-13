@@ -13,12 +13,84 @@ import {
 import type { MotionClip } from '@/lib/voxel-skeleton';
 import { getMotionForAction } from '@/GamePlay/FightGame/Config/MotionConfig';
 import type { MotionDef } from '@/GamePlay/FightGame/Config/MotionConfig';
+import type { CharacterGender } from '@/lib/model-registry';
 import type { FighterState } from '@/GamePlay/FightGame/Fighter/Fighter';
 
 interface ActiveMotion {
   clip: MotionClip;
   def: MotionDef;
   time: number;        // current playback time
+}
+
+// ====================================================================
+// Procedural attack body overlay
+// Adds upper-body twist, forward lean, and hip rotation during attacks
+// so that the whole body drives into the strike.
+// ====================================================================
+
+interface AttackBodyTwist {
+  /** Y-axis twist for Spine/Spine1/Spine2 (radians, negative = twist left/push right side forward) */
+  spineTwistY: number;
+  /** X-axis lean for Spine/Spine1/Spine2 (radians, positive = lean forward) */
+  spineForwardX: number;
+  /** Z-axis roll for Spine (radians, positive = lean right, negative = lean left) */
+  spineRollZ: number;
+  /** Y-axis twist for Hips (radians) */
+  hipsTwistY: number;
+  /** X-axis lean for Hips (radians, positive = lean forward) */
+  hipsForwardX: number;
+  /** Z-axis roll for Hips (radians, positive = lean right, negative = lean left) */
+  hipsRollZ: number;
+}
+
+/** Per-attack procedural body twist configuration.
+ *
+ * Punches:  torso twists toward the punching arm and leans into it (side lean).
+ *           Right punch → twist left + lean left (weight shifts into the punch).
+ *           Left punch  → twist right + lean right.
+ *
+ * Kicks:    hips rotate to drive the kicking leg forward.
+ *           Body leans away from the kicking leg for balance (counter-lean).
+ *           Right kick → hips twist left, body leans left (away from right leg).
+ *           Left kick  → hips twist right, body leans right.
+ */
+const ATTACK_BODY_TWIST: Record<string, AttackBodyTwist> = {
+  // Right punches: twist left + lean left into the punch
+  r_punch_upper:  { spineTwistY: -0.45, spineForwardX: 0.12, spineRollZ: -0.18, hipsTwistY: -0.15, hipsForwardX: 0.06, hipsRollZ: -0.08 },
+  r_punch_mid:    { spineTwistY: -0.40, spineForwardX: 0.18, spineRollZ: -0.15, hipsTwistY: -0.12, hipsForwardX: 0.10, hipsRollZ: -0.06 },
+  r_punch_lower:  { spineTwistY: -0.35, spineForwardX: 0.30, spineRollZ: -0.12, hipsTwistY: -0.10, hipsForwardX: 0.15, hipsRollZ: -0.05 },
+  // Left punches: twist right + lean right into the punch
+  l_punch_upper:  { spineTwistY:  0.45, spineForwardX: 0.12, spineRollZ:  0.18, hipsTwistY:  0.15, hipsForwardX: 0.06, hipsRollZ:  0.08 },
+  l_punch_mid:    { spineTwistY:  0.40, spineForwardX: 0.18, spineRollZ:  0.15, hipsTwistY:  0.12, hipsForwardX: 0.10, hipsRollZ:  0.06 },
+  l_punch_lower:  { spineTwistY:  0.35, spineForwardX: 0.30, spineRollZ:  0.12, hipsTwistY:  0.10, hipsForwardX: 0.15, hipsRollZ:  0.05 },
+  // Right kicks: hips twist left, body counter-leans left (away from kicking leg)
+  r_kick_upper:   { spineTwistY: -0.20, spineForwardX: -0.15, spineRollZ: -0.25, hipsTwistY: -0.35, hipsForwardX: 0.10, hipsRollZ: -0.20 },
+  r_kick_mid:     { spineTwistY: -0.15, spineForwardX: 0.10,  spineRollZ: -0.20, hipsTwistY: -0.30, hipsForwardX: 0.12, hipsRollZ: -0.15 },
+  r_kick_lower:   { spineTwistY: -0.10, spineForwardX: 0.20,  spineRollZ: -0.12, hipsTwistY: -0.25, hipsForwardX: 0.08, hipsRollZ: -0.10 },
+  // Left kicks: mirrored — hips twist right, body counter-leans right
+  l_kick_upper:   { spineTwistY:  0.20, spineForwardX: -0.15, spineRollZ:  0.25, hipsTwistY:  0.35, hipsForwardX: 0.10, hipsRollZ:  0.20 },
+  l_kick_mid:     { spineTwistY:  0.15, spineForwardX: 0.10,  spineRollZ:  0.20, hipsTwistY:  0.30, hipsForwardX: 0.12, hipsRollZ:  0.15 },
+  l_kick_lower:   { spineTwistY:  0.10, spineForwardX: 0.20,  spineRollZ:  0.12, hipsTwistY:  0.25, hipsForwardX: 0.08, hipsRollZ:  0.10 },
+};
+
+/**
+ * Compute the overlay intensity [0..1] based on attack phase.
+ * Ramps up during startup, full during active, ramps down during recovery.
+ */
+function getOverlayIntensity(fighter: FighterState): number {
+  if (fighter.action !== 'attack' || !fighter.currentAttack) return 0;
+  const timing = fighter.currentAttack.timing;
+  const t = fighter.attackPhaseTimer;
+  switch (fighter.attackPhase) {
+    case 'startup':
+      return Math.min(1, t / Math.max(0.01, timing.startup));
+    case 'active':
+      return 1;
+    case 'recovery':
+      return Math.max(0, 1 - t / Math.max(0.01, timing.recovery));
+    default:
+      return 0;
+  }
 }
 
 export class FighterMotionPlayer {
@@ -32,11 +104,22 @@ export class FighterMotionPlayer {
   private static clipCache = new Map<string, MotionClip>();
   private static loadingFiles = new Map<string, Promise<MotionClip | null>>();
 
+  private gender: CharacterGender;
+  private nodes: Map<string, TransformNode>;
+  private boneRestPos: Map<string, Vector3>;
+  private voxelBodyHeight: number;
+
   constructor(
-    private nodes: Map<string, TransformNode>,
-    private boneRestPos: Map<string, Vector3>,
-    private voxelBodyHeight: number,
-  ) {}
+    nodes: Map<string, TransformNode>,
+    boneRestPos: Map<string, Vector3>,
+    voxelBodyHeight: number,
+    gender: CharacterGender = 'male',
+  ) {
+    this.nodes = nodes;
+    this.boneRestPos = boneRestPos;
+    this.voxelBodyHeight = voxelBodyHeight;
+    this.gender = gender;
+  }
 
   /**
    * Update motion based on fighter state. Call every frame.
@@ -48,7 +131,7 @@ export class FighterMotionPlayer {
     const kdVariant = fighter.action === 'knockdown' ? fighter.knockdownVariant : undefined;
     const grappleKey = (fighter.action === 'grapple' || fighter.action === 'grappled')
       ? fighter.grappleMotionKey : undefined;
-    const motionDef = getMotionForAction(fighter.action, attackName, kdVariant, grappleKey);
+    const motionDef = getMotionForAction(fighter.action, attackName, kdVariant, grappleKey, this.gender);
     const motionKey = motionDef?.file
       ? `${motionDef.file}:${motionDef.speed}`
       : `action:${fighter.action}:${attackName ?? ''}:${kdVariant ?? ''}:${grappleKey ?? ''}`;
@@ -89,6 +172,9 @@ export class FighterMotionPlayer {
 
     // Apply to skeleton
     this.applyToSkeleton();
+
+    // Procedural attack body overlay: twist torso and hips into the strike
+    this.applyAttackBodyOverlay(fighter);
 
     // Floor clamp: prevent character from sinking below ground.
     // When lying flat, hips (body center) must be elevated by the body's
@@ -399,6 +485,56 @@ export class FighterMotionPlayer {
           node.position = bonePos.subtract(parentPos);
         }
       }
+    }
+  }
+
+  /**
+   * Apply procedural body twist during attacks.
+   * Adds rotation to Spine, Spine1, Spine2 and Hips
+   * based on attack type and phase progress.
+   */
+  private applyAttackBodyOverlay(fighter: FighterState): void {
+    if (fighter.action !== 'attack' || !fighter.currentAttack) return;
+
+    const twist = ATTACK_BODY_TWIST[fighter.currentAttack.name];
+    if (!twist) return;
+
+    const intensity = getOverlayIntensity(fighter);
+    if (intensity <= 0) return;
+
+    // Smooth ease-in-out for more natural feel
+    const eased = intensity < 0.5
+      ? 2 * intensity * intensity
+      : 1 - 2 * (1 - intensity) * (1 - intensity);
+
+    // Apply twist to spine bones (distributed across Spine, Spine1, Spine2)
+    const spineBones = ['Spine', 'Spine1', 'Spine2'];
+    const spineWeights = [0.25, 0.35, 0.40]; // more twist at upper spine
+
+    for (let i = 0; i < spineBones.length; i++) {
+      const node = this.nodes.get(spineBones[i]);
+      if (!node) continue;
+
+      const w = spineWeights[i];
+      const twistY = twist.spineTwistY * w * eased;
+      const leanX = twist.spineForwardX * w * eased;
+      const rollZ = twist.spineRollZ * w * eased;
+
+      // Create overlay rotation: lean forward (X), twist (Y), side lean (Z)
+      const overlay = Quaternion.RotationYawPitchRoll(twistY, leanX, rollZ);
+      const current = node.rotationQuaternion ?? Quaternion.Identity();
+      node.rotationQuaternion = current.multiply(overlay);
+    }
+
+    // Apply twist to Hips
+    const hipsNode = this.nodes.get('Hips');
+    if (hipsNode) {
+      const hipTwistY = twist.hipsTwistY * eased;
+      const hipLeanX = twist.hipsForwardX * eased;
+      const hipRollZ = twist.hipsRollZ * eased;
+      const overlay = Quaternion.RotationYawPitchRoll(hipTwistY, hipLeanX, hipRollZ);
+      const current = hipsNode.rotationQuaternion ?? Quaternion.Identity();
+      hipsNode.rotationQuaternion = current.multiply(overlay);
     }
   }
 }

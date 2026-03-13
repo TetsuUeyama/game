@@ -62,15 +62,27 @@ export const STAGE_CONFIG = {
   fieldHalfX: 20,
   fieldHalfZ: 20,
   /** Active battle zone (determines movement boundary) */
-  activeZone: BATTLE_ZONES.duel as BattleZone,
+  activeZone: BATTLE_ZONES.small as BattleZone,
   groundY: 0,              // ground level
-  cameraDistance: 8.0,
-  cameraHeight: 2.0,
-  roundTime: 60,           // seconds
+  cameraDistance: 15.0,
+  cameraHeight: 3.0,
+  roundTime: 90,           // seconds (longer for team battle)
   roundsToWin: 2,
   hitstopFrames: 3,        // frames to freeze on hit
 };
 
-/** Player spawn positions (viewer XZ) */
+/** Player spawn positions (viewer XZ) — kept for reference */
 export const P1_SPAWN = { x: 2.0, z: 0 };
 export const P2_SPAWN = { x: -2.0, z: 0 };
+
+/** Team spawn positions (3v3) */
+export const TEAM1_SPAWNS = [
+  { x: 4, z: -2 },
+  { x: 4, z: 0 },
+  { x: 4, z: 2 },
+];
+export const TEAM2_SPAWNS = [
+  { x: -4, z: -2 },
+  { x: -4, z: 0 },
+  { x: -4, z: 2 },
+];

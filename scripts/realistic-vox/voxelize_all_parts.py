@@ -9,13 +9,17 @@ Usage:
 
 Options:
   --resolution N      Max voxel count along longest axis (default: 250)
+  --voxel-size F      Fixed voxel size in meters (overrides --resolution).
+                      Use this to unify scale across characters (e.g. 0.007108 from CE reference)
   --body KEYWORD      Keywords identifying body meshes (repeatable, default: "body")
   --symmetrize        Enable left-right symmetry for body parts only
+  --exclude KEYWORD   Exclude matching parts from BBox calculation (still voxelized)
   --group NAME:KW,KW  Group meshes by keyword into a single part (repeatable)
                       e.g. --group "hair:hair,bangs" --group "boots:boot_l,boot_r"
 
 Examples:
   blender --background --python voxelize_all_parts.py -- model.blend ./output --resolution 250 --symmetrize
+  blender --background --python voxelize_all_parts.py -- model.blend ./output --voxel-size 0.007108 --group "hair:hair"
   blender --background --python voxelize_all_parts.py -- model.blend ./output --body body --group "hair:hair,bangs,ponytail"
 """
 import bpy
@@ -65,8 +69,14 @@ for i, a in enumerate(script_args):
 INPUT_PATH = positional[0]
 OUT_DIR = positional[1]
 RESOLUTION = int(get_arg('resolution', '250'))
+FIXED_VOXEL_SIZE = get_arg('voxel-size', None)
+if FIXED_VOXEL_SIZE is not None:
+    FIXED_VOXEL_SIZE = float(FIXED_VOXEL_SIZE)
 BODY_KEYWORDS = [kw.lower() for kw in get_arg_list('body')] or ['body']
 SYMMETRIZE = '--symmetrize' in script_args
+EXCLUDE_KEYWORDS = [kw.lower() for kw in get_arg_list('exclude')]
+SHOW_KEYWORDS = [kw.lower() for kw in get_arg_list('show')]
+HIDE_KEYWORDS = [kw.lower() for kw in get_arg_list('hide')]
 
 # Parse group definitions
 GROUP_DEFS = {}  # group_name -> [keywords]
@@ -81,12 +91,17 @@ print(f"  Realistic All-Parts Voxelizer")
 print(f"{'='*60}")
 print(f"  Input:      {INPUT_PATH}")
 print(f"  Output dir: {OUT_DIR}")
-print(f"  Resolution: {RESOLUTION}")
+if FIXED_VOXEL_SIZE:
+    print(f"  Voxel size: {FIXED_VOXEL_SIZE:.6f} (fixed)")
+else:
+    print(f"  Resolution: {RESOLUTION}")
 print(f"  Body KWs:   {BODY_KEYWORDS}")
 if SYMMETRIZE:
     print(f"  Symmetrize: body parts only")
 if GROUP_DEFS:
     print(f"  Groups:     {GROUP_DEFS}")
+if EXCLUDE_KEYWORDS:
+    print(f"  Exclude:    {EXCLUDE_KEYWORDS}")
 
 # ========================================================================
 # Load file
@@ -113,6 +128,39 @@ for obj in bpy.context.scene.objects:
     for mod in list(obj.modifiers):
         if mod.type == 'SURFACE_DEFORM':
             obj.modifiers.remove(mod)
+
+# Apply --show / --hide visibility overrides
+if SHOW_KEYWORDS or HIDE_KEYWORDS:
+    # Step 1: Enable all layer collections so hidden-by-collection objects become accessible.
+    # Without this, objects in excluded collections return visible_get()=False
+    # even after hide_set(False).
+    def enable_layer_collections(layer_col):
+        layer_col.exclude = False
+        layer_col.hide_viewport = False
+        for child in layer_col.children:
+            enable_layer_collections(child)
+    enable_layer_collections(bpy.context.view_layer.layer_collection)
+    bpy.context.view_layer.update()
+
+    # Also ensure data-level collection visibility
+    for col in bpy.data.collections:
+        col.hide_viewport = False
+
+    # Step 2: Apply object-level show/hide
+    for obj in bpy.context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        name_lower = obj.name.lower()
+        for kw in SHOW_KEYWORDS:
+            if kw in name_lower:
+                obj.hide_set(False)
+                obj.hide_viewport = False
+                print(f"  SHOW: {obj.name}")
+        for kw in HIDE_KEYWORDS:
+            if kw in name_lower:
+                obj.hide_set(True)
+                obj.hide_viewport = True
+                print(f"  HIDE: {obj.name}")
 
 bpy.context.view_layer.update()
 
@@ -147,17 +195,37 @@ for obj in all_meshes:
         part_map[safe_key] = []
     part_map[safe_key].append(obj)
 
+# Apply --exclude filter (exclude from BBox only, still voxelize)
+bbox_excluded_keys = set()
+if EXCLUDE_KEYWORDS:
+    for key in part_map.keys():
+        if any(kw in key.lower() for kw in EXCLUDE_KEYWORDS):
+            bbox_excluded_keys.add(key)
+    if bbox_excluded_keys:
+        print(f"\n  BBox-excluded parts ({len(bbox_excluded_keys)}): {list(bbox_excluded_keys)}")
+
 print(f"\n  Parts ({len(part_map)}):")
 for key, objs in part_map.items():
-    print(f"    {key}: {[o.name for o in objs]}")
+    tag = " [bbox-excluded]" if key in bbox_excluded_keys else ""
+    print(f"    {key}: {[o.name for o in objs]}{tag}")
 
 # ========================================================================
-# Compute unified bounding box (from ALL meshes)
+# Compute unified bounding box
+# - voxel_size: from non-excluded parts only (body detail preserved)
+# - grid extent: from ALL parts (so excluded parts like weapons fit in grid)
 # ========================================================================
+remaining_meshes = set()
+all_part_meshes = set()
+for key, objs in part_map.items():
+    for obj in objs:
+        all_part_meshes.add(obj)
+        if key not in bbox_excluded_keys:
+            remaining_meshes.add(obj)
+
+# BBox for voxel_size (body only)
 bb_min = Vector((1e9, 1e9, 1e9))
 bb_max = Vector((-1e9, -1e9, -1e9))
-
-for obj in all_meshes:
+for obj in remaining_meshes:
     dg = bpy.context.evaluated_depsgraph_get()
     eo = obj.evaluated_get(dg)
     me = eo.to_mesh()
@@ -169,13 +237,52 @@ for obj in all_meshes:
     eo.to_mesh_clear()
 
 size = bb_max - bb_min
-print(f"\n  Full BBox: {size.x:.4f} x {size.y:.4f} x {size.z:.4f}")
+print(f"\n  Body BBox: {size.x:.4f} x {size.y:.4f} x {size.z:.4f}")
+if FIXED_VOXEL_SIZE:
+    # .vox format limits to 256 per axis; auto-increase if model doesn't fit
+    min_voxel_size = max(size) / (256 - 6)  # minus margin
+    if FIXED_VOXEL_SIZE < min_voxel_size:
+        voxel_size = min_voxel_size
+        print(f"  WARNING: fixed voxel_size {FIXED_VOXEL_SIZE:.6f} too small for this model")
+        print(f"  Auto-adjusted to {voxel_size:.6f} (model needs {max(size)/FIXED_VOXEL_SIZE:.0f} voxels)")
+    else:
+        voxel_size = FIXED_VOXEL_SIZE
+    print(f"  Using voxel_size: {voxel_size:.6f}")
+else:
+    voxel_size = max(size) / RESOLUTION
 
-voxel_size = max(size) / RESOLUTION
+# Full BBox for grid extent (including excluded parts)
+if bbox_excluded_keys:
+    full_min = bb_min.copy()
+    full_max = bb_max.copy()
+    for obj in all_part_meshes:
+        if obj in remaining_meshes:
+            continue
+        dg = bpy.context.evaluated_depsgraph_get()
+        eo = obj.evaluated_get(dg)
+        me = eo.to_mesh()
+        me.transform(obj.matrix_world)
+        for v in me.vertices:
+            for i in range(3):
+                full_min[i] = min(full_min[i], v.co[i])
+                full_max[i] = max(full_max[i], v.co[i])
+        eo.to_mesh_clear()
+    full_size = full_max - full_min
+    print(f"  Full BBox: {full_size.x:.4f} x {full_size.y:.4f} x {full_size.z:.4f}")
+else:
+    full_min = bb_min
+    full_max = bb_max
+    full_size = size
+
 margin = 2
-grid_origin = bb_min - Vector((voxel_size * margin,) * 3)
-gx = min(256, int(size.x / voxel_size) + margin * 2 + 2)
-gy = min(256, int(size.y / voxel_size) + margin * 2 + 2)
+# Grid origin: use full extent for X/Y (weapons), body extent for Z (height preserved)
+grid_origin = Vector((
+    full_min.x - voxel_size * margin,
+    full_min.y - voxel_size * margin,
+    bb_min.z - voxel_size * margin,
+))
+gx = min(256, int(full_size.x / voxel_size) + margin * 2 + 2)
+gy = min(256, int(full_size.y / voxel_size) + margin * 2 + 2)
 gz = min(256, int(size.z / voxel_size) + margin * 2 + 2)
 print(f"  Grid: {gx}x{gy}x{gz}, voxel={voxel_size:.6f}")
 
@@ -200,6 +307,8 @@ thr = voxel_size * 1.2
 # ========================================================================
 texture_cache = {}
 
+TEX_MAX_SIZE = 1024  # Downsample textures larger than this to save memory
+
 def cache_texture(image):
     if image.name in texture_cache:
         return
@@ -207,8 +316,19 @@ def cache_texture(image):
     if w == 0 or h == 0:
         return
     pixels = np.array(image.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    # Downsample large textures to reduce memory usage
+    if w > TEX_MAX_SIZE or h > TEX_MAX_SIZE:
+        scale = TEX_MAX_SIZE / max(w, h)
+        nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+        # Simple nearest-neighbor downsample via index mapping
+        ys = np.linspace(0, h - 1, nh).astype(int)
+        xs = np.linspace(0, w - 1, nw).astype(int)
+        pixels = pixels[np.ix_(ys, xs)]
+        print(f"    Cached texture: {image.name} ({w}x{h} -> {nw}x{nh})")
+        w, h = nw, nh
+    else:
+        print(f"    Cached texture: {image.name} ({w}x{h})")
     texture_cache[image.name] = {'w': w, 'h': h, 'px': pixels}
-    print(f"    Cached texture: {image.name} ({w}x{h})")
 
 def sample_texture(tex_name, uv_x, uv_y):
     tc = texture_cache.get(tex_name)
@@ -227,11 +347,35 @@ def find_input_link(node_tree, node, socket_name):
             return link
     return None
 
+def find_color_input(node, socket_name):
+    """Find the color/vector version of an input socket (not the float version).
+    Blender 4.x MIX nodes have duplicate socket names for float and color inputs."""
+    matches = [inp for inp in node.inputs if inp.name == socket_name]
+    # Prefer the color/vector input (type RGBA or VECTOR) over float
+    for inp in matches:
+        if inp.type in ('RGBA', 'VECTOR'):
+            return inp
+    # Fallback to first match
+    return matches[0] if matches else None
+
 def trace_input(node_tree, node, socket_name):
     inp = node.inputs.get(socket_name)
     if inp is None:
         return ('value', 0.0)
-    link = find_input_link(node_tree, node, socket_name)
+    # For MIX nodes, prefer color inputs over float inputs
+    if node.type == 'MIX' and socket_name in ('A', 'B', 'Factor'):
+        color_inp = find_color_input(node, socket_name)
+        if color_inp:
+            inp = color_inp
+    # Find link specifically to this socket instance
+    link = None
+    for l in node_tree.links:
+        if l.to_node == node and l.to_socket == inp:
+            link = l
+            break
+    if link is None:
+        # Fallback: search by name (for older Blender versions)
+        link = find_input_link(node_tree, node, socket_name)
     if link is None:
         val = inp.default_value
         if hasattr(val, '__len__') and len(val) >= 3:
@@ -284,6 +428,33 @@ def trace_output(node_tree, node, output_socket):
     elif node.type == 'CURVE_RGB':
         return trace_input(node_tree, node, 'Color')
     elif node.type == 'MATH':
+        # Try to evaluate constant math operations
+        op = getattr(node, 'operation', '')
+        inputs_val = []
+        for inp in node.inputs:
+            if inp.name == 'Value':
+                if inp.is_linked:
+                    t = trace_input(node_tree, node, 'Value')
+                    if t[0] == 'value':
+                        inputs_val.append(t[1])
+                    else:
+                        return t  # Non-constant, pass through
+                else:
+                    inputs_val.append(float(inp.default_value))
+                if len(inputs_val) >= 2:
+                    break
+        if len(inputs_val) >= 2:
+            a, b = inputs_val[0], inputs_val[1]
+            if op == 'GREATER_THAN':
+                return ('value', 1.0 if a > b else 0.0)
+            elif op == 'LESS_THAN':
+                return ('value', 1.0 if a < b else 0.0)
+            elif op == 'MULTIPLY':
+                return ('value', a * b)
+            elif op == 'ADD':
+                return ('value', a + b)
+            elif op == 'SUBTRACT':
+                return ('value', a - b)
         return trace_input(node_tree, node, 'Value')
     elif node.type == 'RGB':
         c = node.outputs[0].default_value
@@ -291,6 +462,48 @@ def trace_output(node_tree, node, output_socket):
 
     elif node.type == 'GROUP' and node.node_tree:
         gt_name = node.node_tree.name if hasattr(node.node_tree, 'name') else ''
+
+        # Special handling: Skin Selector groups (picks between Default/Inquisitor/Corrupted skins)
+        # Always use the "Default" input as the chosen skin.
+        if 'skin' in gt_name.lower() and 'selector' in gt_name.lower():
+            for inp in node.inputs:
+                if inp.name.lower() == 'default' and inp.is_linked:
+                    src_link = inp.links[0]
+                    result = trace_output(node_tree, src_link.from_node, src_link.from_socket)
+                    print(f"      Skin Selector: using Default -> {result[0]}:{result[1] if len(result) > 1 else ''}")
+                    return result
+
+        # Special handling: Texture Selector groups (MustardUI pattern)
+        # These groups select between multiple texture inputs based on a numeric selector.
+        # Instead of tracing the complex internal MIX chain, directly pick the selected texture.
+        if 'texture' in gt_name.lower() and 'selector' in gt_name.lower():
+            # Find the texture number value
+            tex_num = 1  # default to first texture
+            for inp in node.inputs:
+                if 'number' in inp.name.lower() or 'select' in inp.name.lower():
+                    if inp.is_linked:
+                        src_node = inp.links[0].from_node
+                        if src_node.type == 'VALUE':
+                            tex_num = max(1, int(round(float(src_node.outputs[0].default_value))))
+                    else:
+                        tex_num = max(1, int(round(float(inp.default_value))))
+                    break
+
+            # Texture inputs are 0-indexed: "Texture 1" = input[0], "Texture 2" = input[1], etc.
+            tex_idx = tex_num - 1
+            if tex_idx < len(node.inputs) and node.inputs[tex_idx].is_linked:
+                src_link = node.inputs[tex_idx].links[0]
+                result = trace_output(node_tree, src_link.from_node, src_link.from_socket)
+                print(f"      Texture Selector: picked Texture {tex_num} -> {result[0]}:{result[1] if len(result) > 1 else ''}")
+                return result
+            # Fallback to first linked texture input
+            for inp in node.inputs:
+                if inp.is_linked:
+                    src = inp.links[0].from_node
+                    if src.type == 'TEX_IMAGE' and src.image:
+                        cache_texture(src.image)
+                        return ('texture', src.image.name)
+
         inp_map = {}
         for i, inp in enumerate(node.inputs):
             if inp.is_linked:
@@ -344,6 +557,19 @@ def eval_tree(tree, uv_x, uv_y):
 # ========================================================================
 # Build material info for ALL meshes
 # ========================================================================
+def find_principled_bsdf(node_tree):
+    """Find Principled BSDF in node tree, searching inside group nodes if needed."""
+    for nd in node_tree.nodes:
+        if nd.type == 'BSDF_PRINCIPLED':
+            return node_tree, nd
+    # Search inside group nodes connected to Material Output
+    for nd in node_tree.nodes:
+        if nd.type == 'GROUP' and nd.node_tree:
+            result = find_principled_bsdf(nd.node_tree)
+            if result:
+                return result
+    return None
+
 mat_info = {}
 for obj in all_meshes:
     for mat in obj.data.materials:
@@ -351,18 +577,40 @@ for obj in all_meshes:
             continue
         info = {'eval_tree': None, 'color': (180, 180, 180)}
         if mat.use_nodes:
-            for nd in mat.node_tree.nodes:
-                if nd.type == 'BSDF_PRINCIPLED':
-                    bc = nd.inputs.get('Base Color')
-                    if bc:
-                        if bc.is_linked:
-                            info['eval_tree'] = trace_input(mat.node_tree, nd, 'Base Color')
-                            print(f"    Material '{mat.name}': traced")
-                        else:
-                            c = bc.default_value
-                            info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
-                            print(f"    Material '{mat.name}': color {info['color']}")
-                    break
+            result = find_principled_bsdf(mat.node_tree)
+            if result:
+                bsdf_tree, bsdf_node = result
+                bc = bsdf_node.inputs.get('Base Color')
+                if bc:
+                    if bc.is_linked:
+                        # Set up group input mapping if BSDF is inside a group
+                        if bsdf_tree != mat.node_tree:
+                            # Find the group node in the parent tree that uses this subtree
+                            for nd in mat.node_tree.nodes:
+                                if nd.type == 'GROUP' and nd.node_tree == bsdf_tree:
+                                    # Map group inputs: index -> traced value from parent tree
+                                    inp_map = {}
+                                    for i, inp in enumerate(nd.inputs):
+                                        if inp.is_linked:
+                                            link = None
+                                            for l in mat.node_tree.links:
+                                                if l.to_node == nd and l.to_socket == inp:
+                                                    link = l
+                                                    break
+                                            if link:
+                                                inp_map[i] = trace_output(mat.node_tree, link.from_node, link.from_socket)
+                                        else:
+                                            val = inp.default_value
+                                            if hasattr(val, '__len__') and len(val) >= 3:
+                                                inp_map[i] = ('color', (float(val[0]), float(val[1]), float(val[2])))
+                                    _group_input_map[bsdf_tree.name] = inp_map
+                                    break
+                        info['eval_tree'] = trace_input(bsdf_tree, bsdf_node, 'Base Color')
+                        print(f"    Material '{mat.name}': traced")
+                    else:
+                        c = bc.default_value
+                        info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
+                        print(f"    Material '{mat.name}': color {info['color']}")
         mat_info[mat.name] = info
 
 # ========================================================================
@@ -438,21 +686,40 @@ def get_color(mi, face_idx, loc):
     return color, mat_name
 
 # Eye-related material keywords (separated from body)
-EYE_MAT_KEYWORDS = ['eye', 'cornea', 'eyelash']
+# 'eyes' (plural) to avoid matching 'eyeshadow'
+EYE_MAT_KEYWORDS = ['eyes', 'cornea', 'eyelash']
+EYE_MAT_EXCLUDES = ['eyeshadow', 'eyebrow']
 
 def is_eye_material(mat_name):
     if not mat_name:
         return False
     name_lower = mat_name.lower()
+    if any(exc in name_lower for exc in EYE_MAT_EXCLUDES):
+        return False
     return any(kw in name_lower for kw in EYE_MAT_KEYWORDS)
+
+# Hair-related material keywords (separated from body)
+# Body meshes often include hair material faces; split them out
+# so body height = skull top, not hair top
+HAIR_MAT_KEYWORDS = ['hair']
+HAIR_MAT_EXCLUDES = []  # add if needed
+
+def is_hair_material(mat_name):
+    if not mat_name:
+        return False
+    name_lower = mat_name.lower()
+    if any(exc in name_lower for exc in HAIR_MAT_EXCLUDES):
+        return False
+    return any(kw in name_lower for kw in HAIR_MAT_KEYWORDS)
 
 # ========================================================================
 # Voxelize a single part
 # ========================================================================
-def voxelize_part(mesh_list, split_eyes=False):
-    """Voxelize meshes. If split_eyes=True, returns (body_voxels, eye_voxels)."""
+def voxelize_part(mesh_list, split_body=False):
+    """Voxelize meshes. If split_body=True, returns (body_voxels, eye_voxels, hair_voxels)."""
     voxels = {}
-    eye_voxels = {} if split_eyes else None
+    eye_voxels = {} if split_body else None
+    hair_voxels = {} if split_body else None
     for vz in range(gz):
         if vz % 30 == 0:
             total = len(voxels) + (len(eye_voxels) if eye_voxels else 0)
@@ -473,12 +740,14 @@ def voxelize_part(mesh_list, split_eyes=False):
                         best_dist = dist
                         best_color, best_mat = get_color(mi, fi, loc)
                 if best_color:
-                    if split_eyes and is_eye_material(best_mat):
+                    if split_body and is_eye_material(best_mat):
                         eye_voxels[(vx, vy, vz)] = best_color
+                    elif split_body and is_hair_material(best_mat):
+                        hair_voxels[(vx, vy, vz)] = best_color
                     else:
                         voxels[(vx, vy, vz)] = best_color
-    if split_eyes:
-        return voxels, eye_voxels
+    if split_body:
+        return voxels, eye_voxels, hair_voxels
     return voxels
 
 # ========================================================================
@@ -571,7 +840,9 @@ def write_vox(path, sx, sy, sz, voxels_data, palette):
 CATEGORY_RULES = {
     'body':        ['body', 'eyes'],
     'hair':        ['hair', 'bangs', 'ponytail'],
-    'clothing':    ['bra', 'panties', 'jacket', 'leggings', 'garter', 'necktie'],
+    'clothing':    ['bra', 'panties', 'jacket', 'leggings', 'garter', 'necktie', 'suit'],
+    'armor':       ['armor', 'mask', 'cape', 'belt', 'shoulder', 'earring', 'scabbard'],
+    'weapons':     ['weapon'],
     'accessories': ['armband', 'hat', 'hip_plate', 'hologram', 'gloves', 'glove'],
 }
 
@@ -602,7 +873,7 @@ def save_part(part_key, voxels, mesh_names, is_body, default_on=True):
     print(f"    -> {category}/{part_key}.vox: {len(voxel_list)} voxels, {len(colors)} colors")
     manifest.append({
         'key': part_key,
-        'file': f"/realistic/{category}/{part_key}.vox",
+        'file': f"/{os.path.basename(OUT_DIR)}/{category}/{part_key}.vox",
         'voxels': len(voxel_list),
         'default_on': default_on,
         'meshes': mesh_names,
@@ -616,9 +887,30 @@ for part_key, objs in sorted(part_map.items()):
     is_body = part_key == 'body'
 
     if is_body:
-        # Split eyes from body
-        body_voxels, eye_voxels = voxelize_part(mesh_list, split_eyes=True)
-        print(f"    Body voxels: {len(body_voxels)}, Eye voxels: {len(eye_voxels)}")
+        # Split eyes and hair from body
+        body_voxels, eye_voxels, hair_voxels = voxelize_part(mesh_list, split_body=True)
+        print(f"    Body voxels: {len(body_voxels)}, Eye voxels: {len(eye_voxels)}, Hair voxels: {len(hair_voxels)}")
+
+        # Expand eye region: body voxels adjacent to eye voxels are likely
+        # cornea/eyelid geometry that got classified as body by BVH nearest.
+        # Flood-fill from eye voxels into nearby body voxels (max N iterations).
+        if eye_voxels:
+            eye_set = set(eye_voxels.keys())
+            EXPAND_ITERATIONS = 3  # expand up to 3 voxels outward
+            for iteration in range(EXPAND_ITERATIONS):
+                new_eye = {}
+                for (ex, ey, ez) in eye_set:
+                    for dx, dy, dz in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]:
+                        nb = (ex+dx, ey+dy, ez+dz)
+                        if nb in body_voxels and nb not in eye_voxels:
+                            new_eye[nb] = body_voxels[nb]
+                if not new_eye:
+                    break
+                for pos, col in new_eye.items():
+                    eye_voxels[pos] = col
+                    del body_voxels[pos]
+                eye_set = set(eye_voxels.keys())
+                print(f"    Eye expand iter {iteration+1}: +{len(new_eye)} -> {len(eye_voxels)} eye voxels")
 
         # Symmetrize body only
         if SYMMETRIZE:
@@ -629,6 +921,10 @@ for part_key, objs in sorted(part_map.items()):
         mesh_names = [o.name for o in objs]
         save_part('body', body_voxels, mesh_names, is_body=True)
         save_part('eyes', eye_voxels, mesh_names, is_body=True, default_on=False)
+        # Hair from body mesh is merged into the hair group part (if exists)
+        # or saved as a separate body_hair part
+        if hair_voxels:
+            save_part('body_hair', hair_voxels, mesh_names, is_body=False, default_on=True)
     else:
         voxels = voxelize_part(mesh_list)
         print(f"    Voxels: {len(voxels)}")
