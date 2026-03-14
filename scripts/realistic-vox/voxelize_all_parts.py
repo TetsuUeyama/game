@@ -570,6 +570,13 @@ def find_principled_bsdf(node_tree):
                 return result
     return None
 
+def find_group_with_base_color(node_tree):
+    """Find a Group node connected to Material Output that has a 'Base Color' input."""
+    for nd in node_tree.nodes:
+        if nd.type == 'GROUP' and nd.inputs.get('Base Color'):
+            return nd
+    return None
+
 mat_info = {}
 for obj in all_meshes:
     for mat in obj.data.materials:
@@ -611,6 +618,20 @@ for obj in all_meshes:
                         c = bc.default_value
                         info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
                         print(f"    Material '{mat.name}': color {info['color']}")
+            else:
+                # Fallback: Group node with 'Base Color' input (no BSDF_PRINCIPLED)
+                group_nd = find_group_with_base_color(mat.node_tree)
+                if group_nd:
+                    bc = group_nd.inputs.get('Base Color')
+                    if bc and bc.is_linked:
+                        info['eval_tree'] = trace_input(mat.node_tree, group_nd, 'Base Color')
+                        print(f"    Material '{mat.name}': traced (via Group 'Base Color')")
+                    elif bc:
+                        c = bc.default_value
+                        info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
+                        print(f"    Material '{mat.name}': color {info['color']} (via Group)")
+                else:
+                    print(f"    Material '{mat.name}': WARNING no BSDF or Group with Base Color, using default gray")
         mat_info[mat.name] = info
 
 # ========================================================================

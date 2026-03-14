@@ -129,81 +129,214 @@ interface CharacterConfig {
   gridJson: string;
 }
 
+const VOX_API = '/api/vox';
+
 const CHARACTERS: Record<string, CharacterConfig> = {
   cyberpunkelf: {
     label: 'CyberpunkElf',
-    manifest: '/realistic/parts.json',
-    gridJson: '/realistic/grid.json',
+    manifest: `${VOX_API}/female/realistic/parts.json`,
+    gridJson: `${VOX_API}/female/realistic/grid.json`,
   },
   darkelfblader: {
     label: 'DarkElfBlader',
-    manifest: '/realistic-darkelf/parts.json',
-    gridJson: '/realistic-darkelf/grid.json',
+    manifest: `${VOX_API}/female/realistic-darkelf/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`,
   },
   highpriestess: {
     label: 'HighPriestess',
-    manifest: '/realistic-highpriestess/parts.json',
-    gridJson: '/realistic-highpriestess/grid.json',
+    manifest: `${VOX_API}/female/realistic-highpriestess/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-highpriestess/grid.json`,
   },
   pillarwoman: {
     label: 'PillarWoman',
-    manifest: '/realistic-pillarwoman/parts.json',
-    gridJson: '/realistic-pillarwoman/grid.json',
+    manifest: `${VOX_API}/female/realistic-pillarwoman/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-pillarwoman/grid.json`,
   },
   bunnyirelia: {
     label: 'BunnyIrelia',
-    manifest: '/realistic-bunnyirelia/parts.json',
-    gridJson: '/realistic-bunnyirelia/grid.json',
+    manifest: `${VOX_API}/female/realistic-bunnyirelia/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-bunnyirelia/grid.json`,
   },
   daemongirl: {
     label: 'DaemonGirl',
-    manifest: '/realistic-daemongirl/parts.json',
-    gridJson: '/realistic-daemongirl/grid.json',
+    manifest: `${VOX_API}/female/realistic-daemongirl/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-daemongirl/grid.json`,
   },
   daemongirl_default: {
     label: 'DaemonGirl Default',
-    manifest: '/realistic-daemongirl-default/parts.json',
-    gridJson: '/realistic-daemongirl-default/grid.json',
+    manifest: `${VOX_API}/female/realistic-daemongirl-default/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-daemongirl-default/grid.json`,
   },
   daemongirl_bunny: {
     label: 'DaemonGirl Bunny',
-    manifest: '/realistic-daemongirl-bunny/parts.json',
-    gridJson: '/realistic-daemongirl-bunny/grid.json',
+    manifest: `${VOX_API}/female/realistic-daemongirl-bunny/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-daemongirl-bunny/grid.json`,
   },
   daemongirl_bunnysuit: {
     label: 'DaemonGirl BunnySuit',
-    manifest: '/realistic-daemongirl-bunnysuit/parts.json',
-    gridJson: '/realistic-daemongirl-bunnysuit/grid.json',
+    manifest: `${VOX_API}/female/realistic-daemongirl-bunnysuit/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-daemongirl-bunnysuit/grid.json`,
   },
   daemongirl_ponytail: {
     label: 'DaemonGirl Ponytail',
-    manifest: '/realistic-daemongirl-ponytail/parts.json',
-    gridJson: '/realistic-daemongirl-ponytail/grid.json',
+    manifest: `${VOX_API}/female/realistic-daemongirl-ponytail/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-daemongirl-ponytail/grid.json`,
   },
   primrose_egypt: {
     label: 'Primrose Egypt',
-    manifest: '/realistic-primrose-egypt/parts.json',
-    gridJson: '/realistic-primrose-egypt/grid.json',
+    manifest: `${VOX_API}/female/realistic-primrose-egypt/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-primrose-egypt/grid.json`,
   },
   primrose_officelady: {
     label: 'Primrose OfficeLady',
-    manifest: '/realistic-primrose-officelady/parts.json',
-    gridJson: '/realistic-primrose-officelady/grid.json',
+    manifest: `${VOX_API}/female/realistic-primrose-officelady/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-primrose-officelady/grid.json`,
   },
   primrose_bunnysuit: {
     label: 'Primrose Bunnysuit',
-    manifest: '/realistic-primrose-bunnysuit/parts.json',
-    gridJson: '/realistic-primrose-bunnysuit/grid.json',
+    manifest: `${VOX_API}/female/realistic-primrose-bunnysuit/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-primrose-bunnysuit/grid.json`,
   },
   primrose_swimsuit: {
     label: 'Primrose Swimsuit',
-    manifest: '/realistic-primrose-swimsuit/parts.json',
-    gridJson: '/realistic-primrose-swimsuit/grid.json',
+    manifest: `${VOX_API}/female/realistic-primrose-swimsuit/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-primrose-swimsuit/grid.json`,
   },
   primrose_milkapron: {
     label: 'Primrose MilkApron',
-    manifest: '/realistic-primrose-milkapron/parts.json',
-    gridJson: '/realistic-primrose-milkapron/grid.json',
+    manifest: `${VOX_API}/female/realistic-primrose-milkapron/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-primrose-milkapron/grid.json`,
+  },
+  queenmarika_default: {
+    label: 'QueenMarika Default',
+    manifest: `${VOX_API}/female/realistic-queenmarika-default/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-queenmarika-default/grid.json`,
+  },
+  queenmarika_goldenbikini: {
+    label: 'QueenMarika GoldenBikini',
+    manifest: `${VOX_API}/female/realistic-queenmarika-goldenbikini/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-queenmarika-goldenbikini/grid.json`,
+  },
+  bunnyakali: {
+    label: 'BunnyAkali',
+    manifest: `${VOX_API}/female/realistic-bunnyakali/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-bunnyakali/grid.json`,
+  },
+  artorialancer_default: {
+    label: 'ArtoriaLancer Default',
+    manifest: `${VOX_API}/female/realistic-artorialancer-default/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-artorialancer-default/grid.json`,
+  },
+  artorialancer_alter: {
+    label: 'ArtoriaLancer Alter',
+    manifest: `${VOX_API}/female/realistic-artorialancer-alter/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-artorialancer-alter/grid.json`,
+  },
+  artorialancer_bunnysuit: {
+    label: 'ArtoriaLancer BunnySuit',
+    manifest: `${VOX_API}/female/realistic-artorialancer-bunnysuit/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-artorialancer-bunnysuit/grid.json`,
+  },
+  artorialancer_weapons: {
+    label: 'ArtoriaLancer Weapons',
+    manifest: `${VOX_API}/female/realistic-artorialancer-weapons/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-artorialancer-weapons/grid.json`,
+  },
+  elfpaladin: {
+    label: 'ElfPaladin',
+    manifest: `${VOX_API}/female/realistic-elfpaladin/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-elfpaladin/grid.json`,
+  },
+  elfpaladin_weapons: {
+    label: 'ElfPaladin Weapons',
+    manifest: `${VOX_API}/female/realistic-elfpaladin-weapons/parts.json`,
+    gridJson: `${VOX_API}/female/realistic-elfpaladin-weapons/grid.json`,
+  },
+  radagon: {
+    label: 'Radagon',
+    manifest: `${VOX_API}/male/realistic-radagon/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-radagon/grid.json`,
+  },
+  radagon_weapons: {
+    label: 'Radagon Weapons',
+    manifest: `${VOX_API}/male/realistic-radagon-weapons/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-radagon-weapons/grid.json`,
+  },
+  vagrant: {
+    label: 'Vagrant',
+    manifest: `${VOX_API}/male/realistic-vagrant/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-vagrant/grid.json`,
+  },
+  spartanhoplite: {
+    label: 'SpartanHoplite',
+    manifest: `${VOX_API}/male/realistic-spartanhoplite/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-spartanhoplite/grid.json`,
+  },
+  spartanhoplite_weapons: {
+    label: 'SpartanHoplite Weapons',
+    manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons/grid.json`,
+  },
+  radagon_tall: {
+    label: 'Radagon (Tall)',
+    manifest: `${VOX_API}/male/realistic-radagon-tall/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-radagon-tall/grid.json`,
+  },
+  radagon_tall_weapons: {
+    label: 'Radagon (Tall) Weapons',
+    manifest: `${VOX_API}/male/realistic-radagon-weapons-tall/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-radagon-weapons-tall/grid.json`,
+  },
+  spartanhoplite_tall: {
+    label: 'SpartanHoplite (Tall)',
+    manifest: `${VOX_API}/male/realistic-spartanhoplite-tall/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-spartanhoplite-tall/grid.json`,
+  },
+  spartanhoplite_tall_weapons: {
+    label: 'SpartanHoplite (Tall) Weapons',
+    manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/grid.json`,
+  },
+  vagrant_tall: {
+    label: 'Vagrant (Tall)',
+    manifest: `${VOX_API}/male/realistic-vagrant-tall/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-vagrant-tall/grid.json`,
+  },
+  // ---- Male Base Bodies ----
+  male_small_1: {
+    label: 'MaleSmallSizeModel1 (1.758m)',
+    manifest: `${VOX_API}/male/MaleSmallSizeModel1/parts.json`,
+    gridJson: `${VOX_API}/male/MaleSmallSizeModel1/grid.json`,
+  },
+  male_small_2: {
+    label: 'MaleSmallSizeModel2 (1.798m)',
+    manifest: `${VOX_API}/male/MaleSmallSizeModel2/parts.json`,
+    gridJson: `${VOX_API}/male/MaleSmallSizeModel2/grid.json`,
+  },
+  male_middle_1: {
+    label: 'MaleMiddleSizeModel1 (1.846m)',
+    manifest: `${VOX_API}/male/MaleMiddleSizeModel1/parts.json`,
+    gridJson: `${VOX_API}/male/MaleMiddleSizeModel1/grid.json`,
+  },
+  male_middle_2: {
+    label: 'MaleMiddleSizeModel2 (1.886m)',
+    manifest: `${VOX_API}/male/MaleMiddleSizeModel2/parts.json`,
+    gridJson: `${VOX_API}/male/MaleMiddleSizeModel2/grid.json`,
+  },
+  male_big_1: {
+    label: 'MaleBigSizeModel1 (1.969m)',
+    manifest: `${VOX_API}/male/MaleBigSizeModel1/parts.json`,
+    gridJson: `${VOX_API}/male/MaleBigSizeModel1/grid.json`,
+  },
+  male_big_2: {
+    label: 'MaleBigSizeModel2 (2.009m)',
+    manifest: `${VOX_API}/male/MaleBigSizeModel2/parts.json`,
+    gridJson: `${VOX_API}/male/MaleBigSizeModel2/grid.json`,
+  },
+  dido: {
+    label: 'Dido (MaleSmall2)',
+    manifest: `${VOX_API}/male/realistic-dido/parts.json`,
+    gridJson: `${VOX_API}/male/realistic-dido/grid.json`,
   },
 };
 
@@ -372,6 +505,15 @@ function RealisticViewerPage() {
         }
         const allParts: PartEntry[] = await resp.json();
         if (cancelled) return;
+        // Prefix part file paths with VOX API route + gender folder
+        // Extract gender prefix from manifest path (e.g., "/api/vox/female/realistic-..." -> "female")
+        const manifestPath = config.manifest.replace(VOX_API + '/', '');
+        const genderPrefix = manifestPath.split('/')[0]; // "female" or "male"
+        for (const p of allParts) {
+          if (!p.file.startsWith(VOX_API)) {
+            p.file = `${VOX_API}/${genderPrefix}${p.file}`;
+          }
+        }
         setParts(allParts);
 
         const vis: Record<string, boolean> = {};
