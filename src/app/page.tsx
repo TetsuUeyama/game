@@ -1,16 +1,10 @@
 import Link from 'next/link';
 
 const pages = [
-  { href: '/fight', label: 'Fight' },
-  { href: '/vox-viewer', label: 'Vox Viewer' },
-  { href: '/vox-viewer2', label: 'Vox Viewer 2' },
-  { href: '/vox-compare', label: 'Vox Compare' },
-  { href: '/fbx-viewer', label: 'Voxel Body Mover' },
+  { href: '/realistic-viewer', label: 'Realistic Viewer' },
   { href: '/equip-config', label: 'Equipment Behavior Config' },
-  { href: '/bone-config', label: 'Bone Config (Skeleton Setup)' },
   { href: '/model-import', label: 'Model Import' },
   { href: '/template-editor', label: 'Template Editor' },
-  { href: '/cap-viewer', label: 'Cap Viewer' },
 ];
 
 export default function Home() {
