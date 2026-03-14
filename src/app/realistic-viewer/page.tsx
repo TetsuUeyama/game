@@ -125,11 +125,14 @@ interface GridInfo {
   gz: number;
 }
 
+type CharCategory = 'female' | 'male' | 'base' | 'weapons';
+
 interface CharacterConfig {
   label: string;
   manifest: string;
   gridJson: string;
   gender: 'female' | 'male';
+  category: CharCategory;
 }
 
 interface HairOption {
@@ -179,265 +182,49 @@ const GAME_ASSETS_API = '/api/game-assets';
 const VOX_API = '/api/vox';
 
 const CHARACTERS: Record<string, CharacterConfig> = {
-  basic_body_female: {
-    label: 'BasicBody Female',
-    manifest: `${VOX_API}/female/BasicBodyFemale/parts.json`,
-    gridJson: `${VOX_API}/female/BasicBodyFemale/grid.json`,
-    gender: 'female',
-  },
-  basic_body_male: {
-    label: 'BasicBody Male',
-    manifest: `${VOX_API}/male/BasicBodyMale/parts.json`,
-    gridJson: `${VOX_API}/male/BasicBodyMale/grid.json`,
-    gender: 'male',
-  },
-  cyberpunkelf: {
-    label: 'CyberpunkElf',
-    manifest: `${VOX_API}/female/realistic/parts.json`,
-    gridJson: `${VOX_API}/female/realistic/grid.json`,
-    gender: 'female',
-  },
-  darkelfblader: {
-    label: 'DarkElfBlader',
-    manifest: `${VOX_API}/female/realistic-darkelf/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`,
-    gender: 'female',
-  },
-  highpriestess: {
-    label: 'HighPriestess',
-    manifest: `${VOX_API}/female/realistic-highpriestess/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-highpriestess/grid.json`,
-    gender: 'female',
-  },
-  pillarwoman: {
-    label: 'PillarWoman',
-    manifest: `${VOX_API}/female/realistic-pillarwoman/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-pillarwoman/grid.json`,
-    gender: 'female',
-  },
-  bunnyirelia: {
-    label: 'BunnyIrelia',
-    manifest: `${VOX_API}/female/realistic-bunnyirelia/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-bunnyirelia/grid.json`,
-    gender: 'female',
-  },
-  daemongirl: {
-    label: 'DaemonGirl',
-    manifest: `${VOX_API}/female/realistic-daemongirl/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-daemongirl/grid.json`,
-    gender: 'female',
-  },
-  daemongirl_default: {
-    label: 'DaemonGirl Default',
-    manifest: `${VOX_API}/female/realistic-daemongirl-default/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-daemongirl-default/grid.json`,
-    gender: 'female',
-  },
-  daemongirl_bunny: {
-    label: 'DaemonGirl Bunny',
-    manifest: `${VOX_API}/female/realistic-daemongirl-bunny/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-daemongirl-bunny/grid.json`,
-    gender: 'female',
-  },
-  daemongirl_bunnysuit: {
-    label: 'DaemonGirl BunnySuit',
-    manifest: `${VOX_API}/female/realistic-daemongirl-bunnysuit/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-daemongirl-bunnysuit/grid.json`,
-    gender: 'female',
-  },
-  daemongirl_ponytail: {
-    label: 'DaemonGirl Ponytail',
-    manifest: `${VOX_API}/female/realistic-daemongirl-ponytail/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-daemongirl-ponytail/grid.json`,
-    gender: 'female',
-  },
-  primrose_egypt: {
-    label: 'Primrose Egypt',
-    manifest: `${VOX_API}/female/realistic-primrose-egypt/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-primrose-egypt/grid.json`,
-    gender: 'female',
-  },
-  primrose_officelady: {
-    label: 'Primrose OfficeLady',
-    manifest: `${VOX_API}/female/realistic-primrose-officelady/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-primrose-officelady/grid.json`,
-    gender: 'female',
-  },
-  primrose_bunnysuit: {
-    label: 'Primrose Bunnysuit',
-    manifest: `${VOX_API}/female/realistic-primrose-bunnysuit/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-primrose-bunnysuit/grid.json`,
-    gender: 'female',
-  },
-  primrose_swimsuit: {
-    label: 'Primrose Swimsuit',
-    manifest: `${VOX_API}/female/realistic-primrose-swimsuit/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-primrose-swimsuit/grid.json`,
-    gender: 'female',
-  },
-  primrose_milkapron: {
-    label: 'Primrose MilkApron',
-    manifest: `${VOX_API}/female/realistic-primrose-milkapron/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-primrose-milkapron/grid.json`,
-    gender: 'female',
-  },
-  queenmarika_default: {
-    label: 'QueenMarika Default',
-    manifest: `${VOX_API}/female/realistic-queenmarika-default/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-queenmarika-default/grid.json`,
-    gender: 'female',
-  },
-  queenmarika_goldenbikini: {
-    label: 'QueenMarika GoldenBikini',
-    manifest: `${VOX_API}/female/realistic-queenmarika-goldenbikini/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-queenmarika-goldenbikini/grid.json`,
-    gender: 'female',
-  },
-  bunnyakali: {
-    label: 'BunnyAkali',
-    manifest: `${VOX_API}/female/realistic-bunnyakali/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-bunnyakali/grid.json`,
-    gender: 'female',
-  },
-  artorialancer_default: {
-    label: 'ArtoriaLancer Default',
-    manifest: `${VOX_API}/female/realistic-artorialancer-default/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-artorialancer-default/grid.json`,
-    gender: 'female',
-  },
-  artorialancer_alter: {
-    label: 'ArtoriaLancer Alter',
-    manifest: `${VOX_API}/female/realistic-artorialancer-alter/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-artorialancer-alter/grid.json`,
-    gender: 'female',
-  },
-  artorialancer_bunnysuit: {
-    label: 'ArtoriaLancer BunnySuit',
-    manifest: `${VOX_API}/female/realistic-artorialancer-bunnysuit/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-artorialancer-bunnysuit/grid.json`,
-    gender: 'female',
-  },
-  artorialancer_weapons: {
-    label: 'ArtoriaLancer Weapons',
-    manifest: `${VOX_API}/female/realistic-artorialancer-weapons/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-artorialancer-weapons/grid.json`,
-    gender: 'female',
-  },
-  elfpaladin: {
-    label: 'ElfPaladin',
-    manifest: `${VOX_API}/female/realistic-elfpaladin/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-elfpaladin/grid.json`,
-    gender: 'female',
-  },
-  elfpaladin_weapons: {
-    label: 'ElfPaladin Weapons',
-    manifest: `${VOX_API}/female/realistic-elfpaladin-weapons/parts.json`,
-    gridJson: `${VOX_API}/female/realistic-elfpaladin-weapons/grid.json`,
-    gender: 'female',
-  },
-  radagon: {
-    label: 'Radagon',
-    manifest: `${VOX_API}/male/realistic-radagon/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-radagon/grid.json`,
-    gender: 'male',
-  },
-  radagon_weapons: {
-    label: 'Radagon Weapons',
-    manifest: `${VOX_API}/male/realistic-radagon-weapons/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-radagon-weapons/grid.json`,
-    gender: 'male',
-  },
-  vagrant: {
-    label: 'Vagrant',
-    manifest: `${VOX_API}/male/realistic-vagrant/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-vagrant/grid.json`,
-    gender: 'male',
-  },
-  spartanhoplite: {
-    label: 'SpartanHoplite',
-    manifest: `${VOX_API}/male/realistic-spartanhoplite/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-spartanhoplite/grid.json`,
-    gender: 'male',
-  },
-  spartanhoplite_weapons: {
-    label: 'SpartanHoplite Weapons',
-    manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons/grid.json`,
-    gender: 'male',
-  },
-  radagon_tall: {
-    label: 'Radagon (Tall)',
-    manifest: `${VOX_API}/male/realistic-radagon-tall/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-radagon-tall/grid.json`,
-    gender: 'male',
-  },
-  radagon_tall_weapons: {
-    label: 'Radagon (Tall) Weapons',
-    manifest: `${VOX_API}/male/realistic-radagon-weapons-tall/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-radagon-weapons-tall/grid.json`,
-    gender: 'male',
-  },
-  spartanhoplite_tall: {
-    label: 'SpartanHoplite (Tall)',
-    manifest: `${VOX_API}/male/realistic-spartanhoplite-tall/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-spartanhoplite-tall/grid.json`,
-    gender: 'male',
-  },
-  spartanhoplite_tall_weapons: {
-    label: 'SpartanHoplite (Tall) Weapons',
-    manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/grid.json`,
-    gender: 'male',
-  },
-  vagrant_tall: {
-    label: 'Vagrant (Tall)',
-    manifest: `${VOX_API}/male/realistic-vagrant-tall/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-vagrant-tall/grid.json`,
-    gender: 'male',
-  },
-  // ---- Male Base Bodies ----
-  male_small_1: {
-    label: 'MaleSmallSizeModel1 (1.758m)',
-    manifest: `${VOX_API}/male/MaleSmallSizeModel1/parts.json`,
-    gridJson: `${VOX_API}/male/MaleSmallSizeModel1/grid.json`,
-    gender: 'male',
-  },
-  male_small_2: {
-    label: 'MaleSmallSizeModel2 (1.798m)',
-    manifest: `${VOX_API}/male/MaleSmallSizeModel2/parts.json`,
-    gridJson: `${VOX_API}/male/MaleSmallSizeModel2/grid.json`,
-    gender: 'male',
-  },
-  male_middle_1: {
-    label: 'MaleMiddleSizeModel1 (1.846m)',
-    manifest: `${VOX_API}/male/MaleMiddleSizeModel1/parts.json`,
-    gridJson: `${VOX_API}/male/MaleMiddleSizeModel1/grid.json`,
-    gender: 'male',
-  },
-  male_middle_2: {
-    label: 'MaleMiddleSizeModel2 (1.886m)',
-    manifest: `${VOX_API}/male/MaleMiddleSizeModel2/parts.json`,
-    gridJson: `${VOX_API}/male/MaleMiddleSizeModel2/grid.json`,
-    gender: 'male',
-  },
-  male_big_1: {
-    label: 'MaleBigSizeModel1 (1.969m)',
-    manifest: `${VOX_API}/male/MaleBigSizeModel1/parts.json`,
-    gridJson: `${VOX_API}/male/MaleBigSizeModel1/grid.json`,
-    gender: 'male',
-  },
-  male_big_2: {
-    label: 'MaleBigSizeModel2 (2.009m)',
-    manifest: `${VOX_API}/male/MaleBigSizeModel2/parts.json`,
-    gridJson: `${VOX_API}/male/MaleBigSizeModel2/grid.json`,
-    gender: 'male',
-  },
-  dido: {
-    label: 'Dido (MaleSmall2)',
-    manifest: `${VOX_API}/male/realistic-dido/parts.json`,
-    gridJson: `${VOX_API}/male/realistic-dido/grid.json`,
-    gender: 'male',
-  },
+  // ---- Base Bodies (segmented, with walk animation) ----
+  basic_body_female: { label: 'BasicBody Female (CyberpunkElf)', manifest: `${VOX_API}/female/BasicBodyFemale/parts.json`, gridJson: `${VOX_API}/female/BasicBodyFemale/grid.json`, gender: 'female', category: 'base' },
+  basic_body_male_vagrant: { label: 'BasicBody Male (Vagrant)', manifest: `${VOX_API}/male/BasicBodyMale-Vagrant/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Vagrant/grid.json`, gender: 'male', category: 'base' },
+  basic_body_male_radagon: { label: 'BasicBody Male (Radagon)', manifest: `${VOX_API}/male/BasicBodyMale-Radagon/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Radagon/grid.json`, gender: 'male', category: 'base' },
+  basic_body_male_spartan: { label: 'BasicBody Male (Spartan)', manifest: `${VOX_API}/male/BasicBodyMale-Spartan/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Spartan/grid.json`, gender: 'male', category: 'base' },
+  // ---- Female ----
+  cyberpunkelf: { label: 'CyberpunkElf', manifest: `${VOX_API}/female/realistic/parts.json`, gridJson: `${VOX_API}/female/realistic/grid.json`, gender: 'female', category: 'female' },
+  darkelfblader: { label: 'DarkElfBlader', manifest: `${VOX_API}/female/realistic-darkelf/parts.json`, gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`, gender: 'female', category: 'female' },
+  highpriestess: { label: 'HighPriestess', manifest: `${VOX_API}/female/realistic-highpriestess/parts.json`, gridJson: `${VOX_API}/female/realistic-highpriestess/grid.json`, gender: 'female', category: 'female' },
+  pillarwoman: { label: 'PillarWoman', manifest: `${VOX_API}/female/realistic-pillarwoman/parts.json`, gridJson: `${VOX_API}/female/realistic-pillarwoman/grid.json`, gender: 'female', category: 'female' },
+  bunnyirelia: { label: 'BunnyIrelia', manifest: `${VOX_API}/female/realistic-bunnyirelia/parts.json`, gridJson: `${VOX_API}/female/realistic-bunnyirelia/grid.json`, gender: 'female', category: 'female' },
+  daemongirl: { label: 'DaemonGirl', manifest: `${VOX_API}/female/realistic-daemongirl/parts.json`, gridJson: `${VOX_API}/female/realistic-daemongirl/grid.json`, gender: 'female', category: 'female' },
+  daemongirl_default: { label: 'DaemonGirl Default', manifest: `${VOX_API}/female/realistic-daemongirl-default/parts.json`, gridJson: `${VOX_API}/female/realistic-daemongirl-default/grid.json`, gender: 'female', category: 'female' },
+  daemongirl_bunny: { label: 'DaemonGirl Bunny', manifest: `${VOX_API}/female/realistic-daemongirl-bunny/parts.json`, gridJson: `${VOX_API}/female/realistic-daemongirl-bunny/grid.json`, gender: 'female', category: 'female' },
+  daemongirl_bunnysuit: { label: 'DaemonGirl BunnySuit', manifest: `${VOX_API}/female/realistic-daemongirl-bunnysuit/parts.json`, gridJson: `${VOX_API}/female/realistic-daemongirl-bunnysuit/grid.json`, gender: 'female', category: 'female' },
+  daemongirl_ponytail: { label: 'DaemonGirl Ponytail', manifest: `${VOX_API}/female/realistic-daemongirl-ponytail/parts.json`, gridJson: `${VOX_API}/female/realistic-daemongirl-ponytail/grid.json`, gender: 'female', category: 'female' },
+  primrose_egypt: { label: 'Primrose Egypt', manifest: `${VOX_API}/female/realistic-primrose-egypt/parts.json`, gridJson: `${VOX_API}/female/realistic-primrose-egypt/grid.json`, gender: 'female', category: 'female' },
+  primrose_officelady: { label: 'Primrose OfficeLady', manifest: `${VOX_API}/female/realistic-primrose-officelady/parts.json`, gridJson: `${VOX_API}/female/realistic-primrose-officelady/grid.json`, gender: 'female', category: 'female' },
+  primrose_bunnysuit: { label: 'Primrose Bunnysuit', manifest: `${VOX_API}/female/realistic-primrose-bunnysuit/parts.json`, gridJson: `${VOX_API}/female/realistic-primrose-bunnysuit/grid.json`, gender: 'female', category: 'female' },
+  primrose_swimsuit: { label: 'Primrose Swimsuit', manifest: `${VOX_API}/female/realistic-primrose-swimsuit/parts.json`, gridJson: `${VOX_API}/female/realistic-primrose-swimsuit/grid.json`, gender: 'female', category: 'female' },
+  primrose_milkapron: { label: 'Primrose MilkApron', manifest: `${VOX_API}/female/realistic-primrose-milkapron/parts.json`, gridJson: `${VOX_API}/female/realistic-primrose-milkapron/grid.json`, gender: 'female', category: 'female' },
+  queenmarika_default: { label: 'QueenMarika Default', manifest: `${VOX_API}/female/realistic-queenmarika-default/parts.json`, gridJson: `${VOX_API}/female/realistic-queenmarika-default/grid.json`, gender: 'female', category: 'female' },
+  queenmarika_goldenbikini: { label: 'QueenMarika GoldenBikini', manifest: `${VOX_API}/female/realistic-queenmarika-goldenbikini/parts.json`, gridJson: `${VOX_API}/female/realistic-queenmarika-goldenbikini/grid.json`, gender: 'female', category: 'female' },
+  bunnyakali: { label: 'BunnyAkali', manifest: `${VOX_API}/female/realistic-bunnyakali/parts.json`, gridJson: `${VOX_API}/female/realistic-bunnyakali/grid.json`, gender: 'female', category: 'female' },
+  artorialancer_default: { label: 'ArtoriaLancer Default', manifest: `${VOX_API}/female/realistic-artorialancer-default/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-default/grid.json`, gender: 'female', category: 'female' },
+  artorialancer_alter: { label: 'ArtoriaLancer Alter', manifest: `${VOX_API}/female/realistic-artorialancer-alter/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-alter/grid.json`, gender: 'female', category: 'female' },
+  artorialancer_bunnysuit: { label: 'ArtoriaLancer BunnySuit', manifest: `${VOX_API}/female/realistic-artorialancer-bunnysuit/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-bunnysuit/grid.json`, gender: 'female', category: 'female' },
+  elfpaladin: { label: 'ElfPaladin', manifest: `${VOX_API}/female/realistic-elfpaladin/parts.json`, gridJson: `${VOX_API}/female/realistic-elfpaladin/grid.json`, gender: 'female', category: 'female' },
+  // ---- Male ----
+  radagon: { label: 'Radagon', manifest: `${VOX_API}/male/realistic-radagon/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon/grid.json`, gender: 'male', category: 'male' },
+  vagrant: { label: 'Vagrant', manifest: `${VOX_API}/male/realistic-vagrant/parts.json`, gridJson: `${VOX_API}/male/realistic-vagrant/grid.json`, gender: 'male', category: 'male' },
+  spartanhoplite: { label: 'SpartanHoplite', manifest: `${VOX_API}/male/realistic-spartanhoplite/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite/grid.json`, gender: 'male', category: 'male' },
+  radagon_tall: { label: 'Radagon (Tall)', manifest: `${VOX_API}/male/realistic-radagon-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon-tall/grid.json`, gender: 'male', category: 'male' },
+  spartanhoplite_tall: { label: 'SpartanHoplite (Tall)', manifest: `${VOX_API}/male/realistic-spartanhoplite-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-tall/grid.json`, gender: 'male', category: 'male' },
+  vagrant_tall: { label: 'Vagrant (Tall)', manifest: `${VOX_API}/male/realistic-vagrant-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-vagrant-tall/grid.json`, gender: 'male', category: 'male' },
+  dido: { label: 'Dido (MaleSmall2)', manifest: `${VOX_API}/male/realistic-dido/parts.json`, gridJson: `${VOX_API}/male/realistic-dido/grid.json`, gender: 'male', category: 'male' },
+  // ---- Weapons ----
+  artorialancer_weapons: { label: 'ArtoriaLancer Weapons', manifest: `${VOX_API}/female/realistic-artorialancer-weapons/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-weapons/grid.json`, gender: 'female', category: 'weapons' },
+  elfpaladin_weapons: { label: 'ElfPaladin Weapons', manifest: `${VOX_API}/female/realistic-elfpaladin-weapons/parts.json`, gridJson: `${VOX_API}/female/realistic-elfpaladin-weapons/grid.json`, gender: 'female', category: 'weapons' },
+  radagon_weapons: { label: 'Radagon Weapons', manifest: `${VOX_API}/male/realistic-radagon-weapons/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon-weapons/grid.json`, gender: 'male', category: 'weapons' },
+  spartanhoplite_weapons: { label: 'SpartanHoplite Weapons', manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons/grid.json`, gender: 'male', category: 'weapons' },
+  radagon_tall_weapons: { label: 'Radagon (Tall) Weapons', manifest: `${VOX_API}/male/realistic-radagon-weapons-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon-weapons-tall/grid.json`, gender: 'male', category: 'weapons' },
+  spartanhoplite_tall_weapons: { label: 'SpartanHoplite (Tall) Weapons', manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/grid.json`, gender: 'male', category: 'weapons' },
 };
 
 // ========================================================================
@@ -460,6 +247,7 @@ function RealisticViewerPage() {
 
   const meshesRef = useRef<Record<string, Mesh>>({});
 
+  const [selectedCategory, setSelectedCategory] = useState<CharCategory>('base');
   const [charKey, setCharKey] = useState('basic_body_female');
   const [parts, setParts] = useState<PartEntry[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
@@ -833,6 +621,13 @@ function RealisticViewerPage() {
             if (cancelled) { mesh.dispose(); return; }
             // Eyes need partMat (zOffset) to render in front of body
             mesh.material = (part.is_body && part.key !== 'eyes') ? bodyMat : partMat;
+            // Apply head offset for split head segments
+            const partAny = part as unknown as Record<string, unknown>;
+            if (partAny.category === 'head_segment' || (part.key === 'head' && typeof partAny.head_offset_y === 'number')) {
+              if (typeof partAny.head_offset_x === 'number') mesh.position.x = partAny.head_offset_x as number;
+              if (typeof partAny.head_offset_y === 'number') mesh.position.y = partAny.head_offset_y as number;
+              if (typeof partAny.head_offset_z === 'number') mesh.position.z = partAny.head_offset_z as number;
+            }
             mesh.setEnabled(part.default_on);
             meshesRef.current[part.key] = mesh;
           } catch (e) {
@@ -854,22 +649,38 @@ function RealisticViewerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charKey]);
 
-  // Load animation data for BasicBody characters
+  // Load animation data for BasicBody / Split characters
   useEffect(() => {
-    if (!charKey.startsWith('basic_body_')) return;
-    const gender = CHARACTERS[charKey]?.gender;
-    if (!gender) return;
-    const baseName = gender === 'female' ? 'BasicBodyFemale' : 'BasicBodyMale';
+    if (!charKey.startsWith('basic_body_') && !charKey.startsWith('split_')) return;
+    const config = CHARACTERS[charKey];
+    if (!config) return;
+    // Extract folder name from manifest path: /api/vox/<gender>/<folderName>/...
+    const manifestPath = config.manifest.replace(VOX_API + '/', '');
+    const pathParts = manifestPath.split('/');
+    const gender = pathParts[0];
+    const folderName = pathParts[1]; // BasicBodyFemale, BasicBodyMale-Vagrant, etc.
+
+    // Motion file mapping per model
+    const motionFiles: Record<string, string> = {
+      'BasicBodyFemale': 'walk_cycle_arp.motion.json',
+      'BasicBodyMale-Vagrant': 'walk_cycle_vagrant.motion.json',
+      'BasicBodyMale-Radagon': 'walk_cycle_radagon.motion.json',
+      'BasicBodyMale-Spartan': 'walk_cycle_spartan.motion.json',
+    };
+    const motionFile = motionFiles[folderName] || 'walk_cycle_arp.motion.json';
 
     (async () => {
       try {
-        // Load segments.json (bone positions)
-        const segResp = await fetch(`${VOX_API}/${gender}/${baseName}/segments.json${CACHE_BUST}`);
+        // Load segments.json (bone positions) - check segments-split first, then segments
+        const segPath = charKey.startsWith('split_')
+          ? `${VOX_API}/${gender}/${folderName}/segments-split/segments.json`
+          : `${VOX_API}/${gender}/${folderName}/segments.json`;
+        const segResp = await fetch(`${segPath}${CACHE_BUST}`);
         if (segResp.ok) {
           segmentsDataRef.current = await segResp.json();
         }
         // Load walk cycle motion
-        const motionResp = await fetch(`${GAME_ASSETS_API}/motion/walk_cycle_arp.motion.json${CACHE_BUST}`);
+        const motionResp = await fetch(`${GAME_ASSETS_API}/motion/${motionFile}${CACHE_BUST}`);
         if (motionResp.ok) {
           motionDataRef.current = await motionResp.json();
           setAnimReady(true);
@@ -993,6 +804,25 @@ function RealisticViewerPage() {
           Original proportions - no deformation
         </p>
 
+        {/* Category selector */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          {(['base', 'female', 'male', 'weapons'] as CharCategory[]).map(cat => (
+            <button key={cat} onClick={() => {
+              setSelectedCategory(cat);
+              const first = Object.entries(CHARACTERS).find(([, c]) => c.category === cat);
+              if (first) setCharKey(first[0]);
+            }} style={{
+              flex: 1, padding: '5px 0', fontSize: 11, fontWeight: selectedCategory === cat ? 'bold' : 'normal',
+              border: selectedCategory === cat ? '2px solid #fa0' : '1px solid #555',
+              borderRadius: 4, cursor: 'pointer',
+              background: selectedCategory === cat ? 'rgba(180,120,0,0.25)' : 'rgba(40,40,60,0.4)',
+              color: selectedCategory === cat ? '#fda' : '#999',
+              textTransform: 'capitalize',
+            }}>
+              {cat}
+            </button>
+          ))}
+        </div>
         {/* Character selector */}
         <select
           value={charKey}
@@ -1003,20 +833,15 @@ function RealisticViewerPage() {
             borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace',
           }}
         >
-          <optgroup label="Female">
-            {Object.entries(CHARACTERS).filter(([, c]) => c.gender === 'female').map(([key, config]) => (
+          {Object.entries(CHARACTERS)
+            .filter(([, c]) => c.category === selectedCategory)
+            .map(([key, config]) => (
               <option key={key} value={key}>{config.label}</option>
             ))}
-          </optgroup>
-          <optgroup label="Male">
-            {Object.entries(CHARACTERS).filter(([, c]) => c.gender === 'male').map(([key, config]) => (
-              <option key={key} value={key}>{config.label}</option>
-            ))}
-          </optgroup>
         </select>
 
         {/* Animation controls (BasicBody only) */}
-        {charKey.startsWith('basic_body_') && !loading && animReady && (
+        {(charKey.startsWith('basic_body_') || charKey.startsWith('split_')) && !loading && animReady && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 'bold', color: '#fa0', fontSize: 13, marginBottom: 6 }}>
               Animation
