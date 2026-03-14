@@ -14,6 +14,7 @@ import {
   VertexData,
   StandardMaterial,
   MeshBuilder,
+  Matrix,
 } from '@babylonjs/core';
 
 // ========================================================================
@@ -90,7 +91,7 @@ function buildVoxMesh(model: VoxModel, scene: Scene, name: string, scale: number
   const vd = new VertexData();
   vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
   const mesh = new Mesh(name, scene);
-  vd.applyToMesh(mesh);
+  vd.applyToMesh(mesh, true); // updatable = true for animation
   return mesh;
 }
 
@@ -156,9 +157,40 @@ interface HairAnchorsData {
   hairs?: Record<string, AnchorPoints>;
 }
 
+interface MotionData {
+  fps: number;
+  frame_count: number;
+  bones: Record<string, {
+    matrices: number[][];  // flat 16-element skinning matrices per frame
+  }>;
+}
+
+interface SegmentsData {
+  voxel_size: number;
+  grid: { gx: number; gy: number; gz: number };
+  bone_positions: Record<string, {
+    head_voxel: number[];
+    tail_voxel: number[];
+  }>;
+  segments: Record<string, { file: string; voxels: number }>;
+}
+
+const GAME_ASSETS_API = '/api/game-assets';
 const VOX_API = '/api/vox';
 
 const CHARACTERS: Record<string, CharacterConfig> = {
+  basic_body_female: {
+    label: 'BasicBody Female',
+    manifest: `${VOX_API}/female/BasicBodyFemale/parts.json`,
+    gridJson: `${VOX_API}/female/BasicBodyFemale/grid.json`,
+    gender: 'female',
+  },
+  basic_body_male: {
+    label: 'BasicBody Male',
+    manifest: `${VOX_API}/male/BasicBodyMale/parts.json`,
+    gridJson: `${VOX_API}/male/BasicBodyMale/grid.json`,
+    gender: 'male',
+  },
   cyberpunkelf: {
     label: 'CyberpunkElf',
     manifest: `${VOX_API}/female/realistic/parts.json`,
@@ -428,7 +460,7 @@ function RealisticViewerPage() {
 
   const meshesRef = useRef<Record<string, Mesh>>({});
 
-  const [charKey, setCharKey] = useState('darkelfblader');
+  const [charKey, setCharKey] = useState('basic_body_female');
   const [parts, setParts] = useState<PartEntry[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -438,6 +470,15 @@ function RealisticViewerPage() {
   const [hairOptions, setHairOptions] = useState<HairOption[]>([]);
   const [selectedHair, setSelectedHair] = useState<string>(''); // "charKey::partKey" or '' for default
   const [hairLoading, setHairLoading] = useState(false);
+
+  // Animation state
+  const [animPlaying, setAnimPlaying] = useState(false);
+  const [animFrame, setAnimFrame] = useState(0);
+  const [animReady, setAnimReady] = useState(false);
+  const motionDataRef = useRef<MotionData | null>(null);
+  const segmentsDataRef = useRef<SegmentsData | null>(null);
+  const animFrameRef = useRef(0);
+  const restVoxelsRef = useRef<Record<string, { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }>>({});
   const [hairSizeDiff, setHairSizeDiff] = useState<string>('');
   const voxelScaleRef = useRef<number>(SCALE);
   const bodyAnchorsRef = useRef<AnchorPoints | null>(null);
@@ -813,6 +854,122 @@ function RealisticViewerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charKey]);
 
+  // Load animation data for BasicBody characters
+  useEffect(() => {
+    if (!charKey.startsWith('basic_body_')) return;
+    const gender = CHARACTERS[charKey]?.gender;
+    if (!gender) return;
+    const baseName = gender === 'female' ? 'BasicBodyFemale' : 'BasicBodyMale';
+
+    (async () => {
+      try {
+        // Load segments.json (bone positions)
+        const segResp = await fetch(`${VOX_API}/${gender}/${baseName}/segments.json${CACHE_BUST}`);
+        if (segResp.ok) {
+          segmentsDataRef.current = await segResp.json();
+        }
+        // Load walk cycle motion
+        const motionResp = await fetch(`${GAME_ASSETS_API}/motion/walk_cycle_arp.motion.json${CACHE_BUST}`);
+        if (motionResp.ok) {
+          motionDataRef.current = await motionResp.json();
+          setAnimReady(true);
+        }
+      } catch (e) {
+        console.error('Failed to load animation data:', e);
+      }
+    })();
+
+    return () => {
+      motionDataRef.current = null;
+      segmentsDataRef.current = null;
+      setAnimPlaying(false);
+      setAnimReady(false);
+    };
+  }, [charKey]);
+
+  // Store rest pose vertex data when meshes are loaded
+  useEffect(() => {
+    if (!charKey.startsWith('basic_body_')) return;
+    // Wait a tick for meshes to be ready
+    const timer = setTimeout(() => {
+      const rest: Record<string, { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }> = {};
+      for (const [key, mesh] of Object.entries(meshesRef.current)) {
+        const positions = mesh.getVerticesData('position');
+        const normals = mesh.getVerticesData('normal');
+        const colors = mesh.getVerticesData('color');
+        const indices = mesh.getIndices();
+        if (positions && normals && colors && indices) {
+          rest[key] = {
+            positions: new Float32Array(positions),
+            normals: new Float32Array(normals),
+            colors: new Float32Array(colors),
+            indices: new Uint32Array(indices),
+          };
+        }
+      }
+      restVoxelsRef.current = rest;
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [charKey, loading]);
+
+  // Animation loop
+  useEffect(() => {
+    if (!animPlaying) return;
+    const motion = motionDataRef.current;
+    if (!motion) return;
+
+    let frameCounter = animFrameRef.current;
+    const interval = setInterval(() => {
+      frameCounter = (frameCounter + 1) % motion.frame_count;
+      animFrameRef.current = frameCounter;
+      setAnimFrame(frameCounter);
+
+      // Apply skinning matrices to each segment mesh
+      for (const [segKey, mesh] of Object.entries(meshesRef.current)) {
+        const boneData = motion.bones[segKey];
+        const restData = restVoxelsRef.current[segKey];
+        if (!boneData || !restData) continue;
+
+        const mat = boneData.matrices[frameCounter];
+        if (!mat) continue;
+
+        // Transpose row-major (Blender) to column-major (Babylon.js)
+        const skinMat = Matrix.FromArray([
+          mat[0], mat[4], mat[8],  mat[12],
+          mat[1], mat[5], mat[9],  mat[13],
+          mat[2], mat[6], mat[10], mat[14],
+          mat[3], mat[7], mat[11], mat[15],
+        ]);
+
+        const newPositions = new Float32Array(restData.positions.length);
+        const newNormals = new Float32Array(restData.normals.length);
+
+        for (let i = 0; i < restData.positions.length; i += 3) {
+          const rp = Vector3.TransformCoordinates(
+            new Vector3(restData.positions[i], restData.positions[i + 1], restData.positions[i + 2]),
+            skinMat
+          );
+          newPositions[i] = rp.x;
+          newPositions[i + 1] = rp.y;
+          newPositions[i + 2] = rp.z;
+
+          const rn = Vector3.TransformNormal(
+            new Vector3(restData.normals[i], restData.normals[i + 1], restData.normals[i + 2]),
+            skinMat
+          );
+          newNormals[i] = rn.x;
+          newNormals[i + 1] = rn.y;
+          newNormals[i + 2] = rn.z;
+        }
+
+        mesh.updateVerticesData('position', newPositions);
+        mesh.updateVerticesData('normal', newNormals);
+      }
+    }, 1000 / (motion.fps || 30));
+
+    return () => clearInterval(interval);
+  }, [animPlaying]);
+
   const partLabel = (key: string) => {
     return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       .replace('  ', ' ').trim();
@@ -857,6 +1014,32 @@ function RealisticViewerPage() {
             ))}
           </optgroup>
         </select>
+
+        {/* Animation controls (BasicBody only) */}
+        {charKey.startsWith('basic_body_') && !loading && animReady && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontWeight: 'bold', color: '#fa0', fontSize: 13, marginBottom: 6 }}>
+              Animation
+            </div>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <button
+                onClick={() => setAnimPlaying(!animPlaying)}
+                style={{
+                  padding: '6px 16px', fontSize: 12, fontWeight: 'bold',
+                  border: animPlaying ? '2px solid #f44' : '2px solid #4f4',
+                  borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace',
+                  background: animPlaying ? 'rgba(80,20,20,0.4)' : 'rgba(20,80,20,0.4)',
+                  color: animPlaying ? '#faa' : '#afa',
+                }}
+              >
+                {animPlaying ? 'Stop' : 'Play Walk'}
+              </button>
+              <span style={{ fontSize: 10, color: '#888' }}>
+                Frame: {animFrame}/{motionDataRef.current?.frame_count || 0}
+              </span>
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div style={{ color: '#8af', fontSize: 13, padding: '20px 0' }}>
