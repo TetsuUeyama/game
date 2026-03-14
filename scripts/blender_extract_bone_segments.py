@@ -67,30 +67,50 @@ os.makedirs(seg_dir, exist_ok=True)
 armature = None
 body_obj = None
 
+BODY_EXCLUDE_KEYWORDS = ['hair', 'eye', 'collision', 'modular', 'penis', 'pubes',
+                         'eyelash', 'mouth', 'armor', 'weapon', 'extras', 'beard',
+                         'helmet', 'cape', 'cs_']
 for obj in bpy.context.scene.objects:
     if obj.type == 'ARMATURE':
         armature = obj
     if obj.type == 'MESH':
-        # Find body mesh (usually the largest or named "Body")
         name_lower = obj.name.lower()
-        if 'body' in name_lower and 'hair' not in name_lower:
+        if 'body' in name_lower and not any(kw in name_lower for kw in BODY_EXCLUDE_KEYWORDS):
             if body_obj is None or len(obj.data.vertices) > len(body_obj.data.vertices):
                 body_obj = obj
 
 if not body_obj:
-    # Fallback: largest mesh
-    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
+    # Fallback: largest visible mesh with vertex groups
+    meshes = [o for o in bpy.context.scene.objects
+              if o.type == 'MESH' and o.visible_get() and len(o.vertex_groups) > 10
+              and not any(kw in o.name.lower() for kw in BODY_EXCLUDE_KEYWORDS)]
     body_obj = max(meshes, key=lambda o: len(o.data.vertices)) if meshes else None
 
-if not armature:
-    print("ERROR: No armature found!")
-    sys.exit(1)
 if not body_obj:
     print("ERROR: No body mesh found!")
     sys.exit(1)
 
+# Use the armature that the body mesh is parented to or has as modifier
+if body_obj.parent and body_obj.parent.type == 'ARMATURE':
+    armature = body_obj.parent
+else:
+    for mod in body_obj.modifiers:
+        if mod.type == 'ARMATURE' and mod.object:
+            armature = mod.object
+            break
+
+if not armature:
+    print("ERROR: No armature found!")
+    sys.exit(1)
+
 print(f"  Armature: {armature.name}")
 print(f"  Body mesh: {body_obj.name} ({len(body_obj.data.vertices)} verts)")
+
+# Ensure body mesh is visible (some models like Spartan have body hidden)
+if not body_obj.visible_get():
+    body_obj.hide_set(False)
+    body_obj.hide_viewport = False
+    print(f"  Made body visible: {body_obj.name}")
 
 # ========================================================================
 # Disable MASK modifiers
@@ -147,9 +167,11 @@ bvh = BVHTree.FromBMesh(bm)
 vertex_groups = body_obj.vertex_groups
 vg_name_map = {vg.index: vg.name for vg in vertex_groups}
 
-# Build set of valid deform bone names (exclude hair, masks, physics binds)
+# Build set of valid deform bone names (exclude hair, masks, physics, accessories)
 EXCLUDE_PREFIXES = ('hair_', 'Gloves_', 'Leggings_', 'Breasts_Simpl', 'Butts_Simpl',
-                    'tie.', 'hologram', 'hipplate')
+                    'tie.', 'hologram', 'hipplate', 'spline_', 'dress_', 'belt_',
+                    'braid_', 'cc_Cape_', 'cc_skirt_', 'cc_Armor_', 'SwordHolder',
+                    'c_fist', 'c_tail_')
 valid_deform_bones = set()
 for bone in armature.data.bones:
     if bone.use_deform and not any(bone.name.startswith(p) for p in EXCLUDE_PREFIXES):
@@ -157,13 +179,54 @@ for bone in armature.data.bones:
 print(f"  Valid deform bones: {len(valid_deform_bones)}")
 
 # Map fine face bones to 'head' group for cleaner segmentation
-# Keep major face features separate: jawbone, ears, eyes
 FACE_MERGE_PREFIXES = ('c_lips_', 'c_teeth_', 'c_nose_', 'c_chin_', 'c_cheek_',
                        'c_eyebrow_', 'c_eyelid_', 'c_eye_ref_track', 'c_eye_offset',
                        'tong_')
 
+# ARP naming normalization: old ARP (no c_ prefix) -> new ARP (c_ prefix)
+# Radagon/Spartan use: thigh_stretch.l, leg_stretch.l, forearm_stretch.l, arm_stretch.l, spine_02.x
+# CyberpunkElf/Vagrant use: c_thigh_stretch.l, c_leg_stretch.l, c_forearm_stretch.l, etc.
+ARP_NORMALIZE = {
+    'thigh_stretch': 'c_thigh_stretch',
+    'thigh_twist': 'c_thigh_twist',
+    'thigh_twist_2': 'c_thigh_twist_2',
+    'leg_stretch': 'c_leg_stretch',
+    'leg_twist': 'c_leg_twist',
+    'leg_twist_2': 'c_leg_twist_2',
+    'arm_stretch': 'c_arm_stretch',
+    'arm_twist_2': 'c_arm_twist_2',
+    'c_arm_twist_offset': 'c_arm_twist',
+    'forearm_stretch': 'c_forearm_stretch',
+    'forearm_twist': 'c_forearm_twist',
+    'forearm_twist_2': 'c_forearm_twist_2',
+    'spine_01': 'c_spine_01_bend',
+    'spine_02': 'c_spine_02_bend',
+    'spine_03': 'c_spine_03_bend',
+    'root': 'c_root_bend',
+    'cc_balls': 'c_root_bend',
+}
+
+def normalize_arp_name(name):
+    """Normalize old ARP bone names to new ARP convention."""
+    # Extract suffix (.l, .r, .x)
+    suffix = ''
+    for s in ['.l', '.r', '.x']:
+        if name.endswith(s):
+            base = name[:-len(s)]
+            suffix = s
+            break
+    else:
+        base = name
+
+    if base in ARP_NORMALIZE:
+        return ARP_NORMALIZE[base] + suffix
+    return name
+
 def resolve_bone_name(name):
     """Map fine-grained bones to coarser segment names."""
+    # First normalize ARP naming
+    name = normalize_arp_name(name)
+
     if any(name.startswith(p) for p in FACE_MERGE_PREFIXES):
         return 'head.x'
     # Map toe sub-bones to foot
@@ -191,6 +254,9 @@ def resolve_bone_name(name):
     # Map nipple to breast
     if name.startswith('nipple'):
         return 'breast' + name[-2:]  # .l or .r
+    # Map c_lips_smile to head
+    if name.startswith('c_lips_smile'):
+        return 'head.x'
     return name
 
 vertex_bone_map = {}
@@ -523,7 +589,7 @@ for bone_name, info in segments_meta.items():
     safe_name = bone_name.replace(' ', '_').replace(':', '_').lower()
     parts.append({
         "key": safe_name,
-        "file": f"/BasicBodyFemale/{info['file']}",
+        "file": f"/{os.path.basename(OUT_DIR)}/{info['file']}",
         "voxels": info["voxels"],
         "default_on": True,
         "meshes": [bone_name],
