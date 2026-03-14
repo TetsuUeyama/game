@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const VOX_BASE = process.env.VOX_BASE_DIR || 'C:\\Users\\user\\developsecond\\vox';
+const VOX_BASE = process.env.VOX_BASE_DIR || 'C:\\Users\\user\\developsecond\\game-assets\\vox';
 
 const SAFE_SEGMENT = /^[a-zA-Z0-9._-]+$/;
 

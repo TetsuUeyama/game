@@ -114,6 +114,7 @@ interface PartEntry {
   default_on: boolean;
   meshes: string[];
   is_body: boolean;
+  category?: string;
 }
 
 interface GridInfo {
@@ -127,6 +128,32 @@ interface CharacterConfig {
   label: string;
   manifest: string;
   gridJson: string;
+  gender: 'female' | 'male';
+}
+
+interface HairOption {
+  label: string;
+  charKey: string;
+  file: string;        // full API path to .vox
+  partKey: string;      // original part key in parts.json
+  voxels: number;
+  anchorsUrl: string;   // URL to hair_anchors.json
+}
+
+interface AnchorPoints {
+  top: number[];
+  front: number[];
+  back: number[];
+  left: number[];
+  right: number[];
+  width: number;
+  depth: number;
+}
+
+interface HairAnchorsData {
+  voxel_size: number;
+  body_head?: AnchorPoints;
+  hairs?: Record<string, AnchorPoints>;
 }
 
 const VOX_API = '/api/vox';
@@ -136,207 +163,248 @@ const CHARACTERS: Record<string, CharacterConfig> = {
     label: 'CyberpunkElf',
     manifest: `${VOX_API}/female/realistic/parts.json`,
     gridJson: `${VOX_API}/female/realistic/grid.json`,
+    gender: 'female',
   },
   darkelfblader: {
     label: 'DarkElfBlader',
     manifest: `${VOX_API}/female/realistic-darkelf/parts.json`,
     gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`,
+    gender: 'female',
   },
   highpriestess: {
     label: 'HighPriestess',
     manifest: `${VOX_API}/female/realistic-highpriestess/parts.json`,
     gridJson: `${VOX_API}/female/realistic-highpriestess/grid.json`,
+    gender: 'female',
   },
   pillarwoman: {
     label: 'PillarWoman',
     manifest: `${VOX_API}/female/realistic-pillarwoman/parts.json`,
     gridJson: `${VOX_API}/female/realistic-pillarwoman/grid.json`,
+    gender: 'female',
   },
   bunnyirelia: {
     label: 'BunnyIrelia',
     manifest: `${VOX_API}/female/realistic-bunnyirelia/parts.json`,
     gridJson: `${VOX_API}/female/realistic-bunnyirelia/grid.json`,
+    gender: 'female',
   },
   daemongirl: {
     label: 'DaemonGirl',
     manifest: `${VOX_API}/female/realistic-daemongirl/parts.json`,
     gridJson: `${VOX_API}/female/realistic-daemongirl/grid.json`,
+    gender: 'female',
   },
   daemongirl_default: {
     label: 'DaemonGirl Default',
     manifest: `${VOX_API}/female/realistic-daemongirl-default/parts.json`,
     gridJson: `${VOX_API}/female/realistic-daemongirl-default/grid.json`,
+    gender: 'female',
   },
   daemongirl_bunny: {
     label: 'DaemonGirl Bunny',
     manifest: `${VOX_API}/female/realistic-daemongirl-bunny/parts.json`,
     gridJson: `${VOX_API}/female/realistic-daemongirl-bunny/grid.json`,
+    gender: 'female',
   },
   daemongirl_bunnysuit: {
     label: 'DaemonGirl BunnySuit',
     manifest: `${VOX_API}/female/realistic-daemongirl-bunnysuit/parts.json`,
     gridJson: `${VOX_API}/female/realistic-daemongirl-bunnysuit/grid.json`,
+    gender: 'female',
   },
   daemongirl_ponytail: {
     label: 'DaemonGirl Ponytail',
     manifest: `${VOX_API}/female/realistic-daemongirl-ponytail/parts.json`,
     gridJson: `${VOX_API}/female/realistic-daemongirl-ponytail/grid.json`,
+    gender: 'female',
   },
   primrose_egypt: {
     label: 'Primrose Egypt',
     manifest: `${VOX_API}/female/realistic-primrose-egypt/parts.json`,
     gridJson: `${VOX_API}/female/realistic-primrose-egypt/grid.json`,
+    gender: 'female',
   },
   primrose_officelady: {
     label: 'Primrose OfficeLady',
     manifest: `${VOX_API}/female/realistic-primrose-officelady/parts.json`,
     gridJson: `${VOX_API}/female/realistic-primrose-officelady/grid.json`,
+    gender: 'female',
   },
   primrose_bunnysuit: {
     label: 'Primrose Bunnysuit',
     manifest: `${VOX_API}/female/realistic-primrose-bunnysuit/parts.json`,
     gridJson: `${VOX_API}/female/realistic-primrose-bunnysuit/grid.json`,
+    gender: 'female',
   },
   primrose_swimsuit: {
     label: 'Primrose Swimsuit',
     manifest: `${VOX_API}/female/realistic-primrose-swimsuit/parts.json`,
     gridJson: `${VOX_API}/female/realistic-primrose-swimsuit/grid.json`,
+    gender: 'female',
   },
   primrose_milkapron: {
     label: 'Primrose MilkApron',
     manifest: `${VOX_API}/female/realistic-primrose-milkapron/parts.json`,
     gridJson: `${VOX_API}/female/realistic-primrose-milkapron/grid.json`,
+    gender: 'female',
   },
   queenmarika_default: {
     label: 'QueenMarika Default',
     manifest: `${VOX_API}/female/realistic-queenmarika-default/parts.json`,
     gridJson: `${VOX_API}/female/realistic-queenmarika-default/grid.json`,
+    gender: 'female',
   },
   queenmarika_goldenbikini: {
     label: 'QueenMarika GoldenBikini',
     manifest: `${VOX_API}/female/realistic-queenmarika-goldenbikini/parts.json`,
     gridJson: `${VOX_API}/female/realistic-queenmarika-goldenbikini/grid.json`,
+    gender: 'female',
   },
   bunnyakali: {
     label: 'BunnyAkali',
     manifest: `${VOX_API}/female/realistic-bunnyakali/parts.json`,
     gridJson: `${VOX_API}/female/realistic-bunnyakali/grid.json`,
+    gender: 'female',
   },
   artorialancer_default: {
     label: 'ArtoriaLancer Default',
     manifest: `${VOX_API}/female/realistic-artorialancer-default/parts.json`,
     gridJson: `${VOX_API}/female/realistic-artorialancer-default/grid.json`,
+    gender: 'female',
   },
   artorialancer_alter: {
     label: 'ArtoriaLancer Alter',
     manifest: `${VOX_API}/female/realistic-artorialancer-alter/parts.json`,
     gridJson: `${VOX_API}/female/realistic-artorialancer-alter/grid.json`,
+    gender: 'female',
   },
   artorialancer_bunnysuit: {
     label: 'ArtoriaLancer BunnySuit',
     manifest: `${VOX_API}/female/realistic-artorialancer-bunnysuit/parts.json`,
     gridJson: `${VOX_API}/female/realistic-artorialancer-bunnysuit/grid.json`,
+    gender: 'female',
   },
   artorialancer_weapons: {
     label: 'ArtoriaLancer Weapons',
     manifest: `${VOX_API}/female/realistic-artorialancer-weapons/parts.json`,
     gridJson: `${VOX_API}/female/realistic-artorialancer-weapons/grid.json`,
+    gender: 'female',
   },
   elfpaladin: {
     label: 'ElfPaladin',
     manifest: `${VOX_API}/female/realistic-elfpaladin/parts.json`,
     gridJson: `${VOX_API}/female/realistic-elfpaladin/grid.json`,
+    gender: 'female',
   },
   elfpaladin_weapons: {
     label: 'ElfPaladin Weapons',
     manifest: `${VOX_API}/female/realistic-elfpaladin-weapons/parts.json`,
     gridJson: `${VOX_API}/female/realistic-elfpaladin-weapons/grid.json`,
+    gender: 'female',
   },
   radagon: {
     label: 'Radagon',
     manifest: `${VOX_API}/male/realistic-radagon/parts.json`,
     gridJson: `${VOX_API}/male/realistic-radagon/grid.json`,
+    gender: 'male',
   },
   radagon_weapons: {
     label: 'Radagon Weapons',
     manifest: `${VOX_API}/male/realistic-radagon-weapons/parts.json`,
     gridJson: `${VOX_API}/male/realistic-radagon-weapons/grid.json`,
+    gender: 'male',
   },
   vagrant: {
     label: 'Vagrant',
     manifest: `${VOX_API}/male/realistic-vagrant/parts.json`,
     gridJson: `${VOX_API}/male/realistic-vagrant/grid.json`,
+    gender: 'male',
   },
   spartanhoplite: {
     label: 'SpartanHoplite',
     manifest: `${VOX_API}/male/realistic-spartanhoplite/parts.json`,
     gridJson: `${VOX_API}/male/realistic-spartanhoplite/grid.json`,
+    gender: 'male',
   },
   spartanhoplite_weapons: {
     label: 'SpartanHoplite Weapons',
     manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons/parts.json`,
     gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons/grid.json`,
+    gender: 'male',
   },
   radagon_tall: {
     label: 'Radagon (Tall)',
     manifest: `${VOX_API}/male/realistic-radagon-tall/parts.json`,
     gridJson: `${VOX_API}/male/realistic-radagon-tall/grid.json`,
+    gender: 'male',
   },
   radagon_tall_weapons: {
     label: 'Radagon (Tall) Weapons',
     manifest: `${VOX_API}/male/realistic-radagon-weapons-tall/parts.json`,
     gridJson: `${VOX_API}/male/realistic-radagon-weapons-tall/grid.json`,
+    gender: 'male',
   },
   spartanhoplite_tall: {
     label: 'SpartanHoplite (Tall)',
     manifest: `${VOX_API}/male/realistic-spartanhoplite-tall/parts.json`,
     gridJson: `${VOX_API}/male/realistic-spartanhoplite-tall/grid.json`,
+    gender: 'male',
   },
   spartanhoplite_tall_weapons: {
     label: 'SpartanHoplite (Tall) Weapons',
     manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/parts.json`,
     gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/grid.json`,
+    gender: 'male',
   },
   vagrant_tall: {
     label: 'Vagrant (Tall)',
     manifest: `${VOX_API}/male/realistic-vagrant-tall/parts.json`,
     gridJson: `${VOX_API}/male/realistic-vagrant-tall/grid.json`,
+    gender: 'male',
   },
   // ---- Male Base Bodies ----
   male_small_1: {
     label: 'MaleSmallSizeModel1 (1.758m)',
     manifest: `${VOX_API}/male/MaleSmallSizeModel1/parts.json`,
     gridJson: `${VOX_API}/male/MaleSmallSizeModel1/grid.json`,
+    gender: 'male',
   },
   male_small_2: {
     label: 'MaleSmallSizeModel2 (1.798m)',
     manifest: `${VOX_API}/male/MaleSmallSizeModel2/parts.json`,
     gridJson: `${VOX_API}/male/MaleSmallSizeModel2/grid.json`,
+    gender: 'male',
   },
   male_middle_1: {
     label: 'MaleMiddleSizeModel1 (1.846m)',
     manifest: `${VOX_API}/male/MaleMiddleSizeModel1/parts.json`,
     gridJson: `${VOX_API}/male/MaleMiddleSizeModel1/grid.json`,
+    gender: 'male',
   },
   male_middle_2: {
     label: 'MaleMiddleSizeModel2 (1.886m)',
     manifest: `${VOX_API}/male/MaleMiddleSizeModel2/parts.json`,
     gridJson: `${VOX_API}/male/MaleMiddleSizeModel2/grid.json`,
+    gender: 'male',
   },
   male_big_1: {
     label: 'MaleBigSizeModel1 (1.969m)',
     manifest: `${VOX_API}/male/MaleBigSizeModel1/parts.json`,
     gridJson: `${VOX_API}/male/MaleBigSizeModel1/grid.json`,
+    gender: 'male',
   },
   male_big_2: {
     label: 'MaleBigSizeModel2 (2.009m)',
     manifest: `${VOX_API}/male/MaleBigSizeModel2/parts.json`,
     gridJson: `${VOX_API}/male/MaleBigSizeModel2/grid.json`,
+    gender: 'male',
   },
   dido: {
     label: 'Dido (MaleSmall2)',
     manifest: `${VOX_API}/male/realistic-dido/parts.json`,
     gridJson: `${VOX_API}/male/realistic-dido/grid.json`,
+    gender: 'male',
   },
 };
 
@@ -365,6 +433,14 @@ function RealisticViewerPage() {
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Hair swap state
+  const [hairOptions, setHairOptions] = useState<HairOption[]>([]);
+  const [selectedHair, setSelectedHair] = useState<string>(''); // "charKey::partKey" or '' for default
+  const [hairLoading, setHairLoading] = useState(false);
+  const [hairSizeDiff, setHairSizeDiff] = useState<string>('');
+  const voxelScaleRef = useRef<number>(SCALE);
+  const bodyAnchorsRef = useRef<AnchorPoints | null>(null);
 
   // Toggle individual part
   const togglePart = useCallback((key: string) => {
@@ -403,6 +479,183 @@ function RealisticViewerPage() {
       return next;
     });
   }, [parts]);
+
+  // Collect hair options from all same-gender characters
+  useEffect(() => {
+    const currentGender = CHARACTERS[charKey]?.gender;
+    if (!currentGender) return;
+    let cancelled = false;
+
+    (async () => {
+      const sameGenderChars = Object.entries(CHARACTERS).filter(
+        ([, cfg]) => cfg.gender === currentGender
+      );
+
+      const options: HairOption[] = [];
+      await Promise.all(
+        sameGenderChars.map(async ([ck, cfg]) => {
+          try {
+            const resp = await fetch(cfg.manifest + CACHE_BUST);
+            if (!resp.ok) return;
+            const allParts: PartEntry[] = await resp.json();
+            const manifestPath = cfg.manifest.replace(VOX_API + '/', '');
+            const genderPrefix = manifestPath.split('/')[0];
+            const hairParts = allParts.filter(
+              p => p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body)
+            );
+            // Build anchors URL from manifest path
+            const charFolder = manifestPath.split('/').slice(0, -1).join('/');
+            const anchorsUrl = `${VOX_API}/${charFolder}/hair_anchors.json`;
+            for (const hp of hairParts) {
+              const fullFile = hp.file.startsWith(VOX_API)
+                ? hp.file
+                : `${VOX_API}/${genderPrefix}${hp.file}`;
+              options.push({
+                label: `${cfg.label} - ${hp.meshes[0] || hp.key}`,
+                charKey: ck,
+                file: fullFile,
+                partKey: hp.key,
+                voxels: hp.voxels,
+                anchorsUrl,
+              });
+            }
+          } catch {
+            // skip characters whose manifest can't be loaded
+          }
+        })
+      );
+
+      if (!cancelled) {
+        options.sort((a, b) => a.label.localeCompare(b.label));
+        setHairOptions(options);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [charKey]);
+
+  // Swap hair: dispose current hair meshes, load selected one, align via anchors
+  const swapHair = useCallback(async (hairId: string) => {
+    const scene = sceneRef.current;
+    const partMat = partMatRef.current;
+    if (!scene || !partMat) return;
+
+    setSelectedHair(hairId);
+    setHairSizeDiff('');
+
+    // Find all current hair part keys and dispose
+    const hairPartKeys = parts
+      .filter(p => p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body))
+      .map(p => p.key);
+    for (const hk of hairPartKeys) {
+      const mesh = meshesRef.current[hk];
+      if (mesh) { mesh.dispose(); delete meshesRef.current[hk]; }
+    }
+
+    if (hairId === '') {
+      // Reload original hair from current character
+      const config = CHARACTERS[charKey];
+      if (!config) return;
+      setHairLoading(true);
+      try {
+        const resp = await fetch(config.manifest + CACHE_BUST);
+        if (!resp.ok) return;
+        const allParts: PartEntry[] = await resp.json();
+        const manifestPath = config.manifest.replace(VOX_API + '/', '');
+        const genderPrefix = manifestPath.split('/')[0];
+        for (const hp of allParts) {
+          if (!(hp.category === 'hair' || (hp.key.includes('hair') && hp.key !== 'body_hair' && !hp.is_body))) continue;
+          const fullFile = hp.file.startsWith(VOX_API) ? hp.file : `${VOX_API}/${genderPrefix}${hp.file}`;
+          try {
+            const mesh = await loadVoxMesh(scene, fullFile, `part_${hp.key}`, voxelScaleRef.current);
+            mesh.material = partMat;
+            mesh.setEnabled(true);
+            meshesRef.current[hp.key] = mesh;
+            setPartVisibility(prev => ({ ...prev, [hp.key]: true }));
+          } catch (e) {
+            console.error(`Failed to reload hair ${fullFile}:`, e);
+          }
+        }
+      } finally {
+        setHairLoading(false);
+      }
+      return;
+    }
+
+    // Load the selected hair with anchor-based alignment
+    const option = hairOptions.find(o => `${o.charKey}::${o.partKey}` === hairId);
+    if (!option) return;
+
+    setHairLoading(true);
+    try {
+      // Load source character's anchors (single fetch)
+      let sourceHairAnchors: AnchorPoints | null = null;
+      let sourceBodyAnchors: AnchorPoints | null = null;
+      let sourceVoxelSize = voxelScaleRef.current;
+      try {
+        const anchResp = await fetch(option.anchorsUrl + CACHE_BUST);
+        if (anchResp.ok) {
+          const anchData: HairAnchorsData = await anchResp.json();
+          sourceHairAnchors = anchData.hairs?.[option.partKey] ?? null;
+          sourceBodyAnchors = anchData.body_head ?? null;
+          sourceVoxelSize = anchData.voxel_size;
+        }
+      } catch { /* no anchors available, fall back to current char's scale */ }
+
+      const targetBodyAnchors = bodyAnchorsRef.current;
+      const swapKey = `swapped_hair_${option.partKey}`;
+
+      const mesh = await loadVoxMesh(scene, option.file, `part_${swapKey}`, sourceVoxelSize);
+      mesh.material = partMat;
+
+      // Apply anchor-based alignment
+      if (targetBodyAnchors && sourceHairAnchors && sourceBodyAnchors) {
+        // Scale: based on target body head size vs source body head size
+        // This is the correct ratio — how much bigger/smaller the target head is
+        const scaleW = targetBodyAnchors.width / sourceBodyAnchors.width;
+        const scaleD = targetBodyAnchors.depth / sourceBodyAnchors.depth;
+        const uniformScale = (scaleW + scaleD) / 2;
+
+        mesh.scaling = new Vector3(uniformScale, uniformScale, uniformScale);
+
+        // Position offset: align hair contact top to target body head top
+        const offsetX = targetBodyAnchors.top[0] - sourceHairAnchors.top[0] * uniformScale;
+        const offsetY = targetBodyAnchors.top[1] - sourceHairAnchors.top[1] * uniformScale + 2 * sourceVoxelSize;
+        const offsetZ = targetBodyAnchors.top[2] - sourceHairAnchors.top[2] * uniformScale - 2 * sourceVoxelSize;
+        mesh.position = new Vector3(offsetX, offsetY, offsetZ);
+
+        // Show size difference info
+        const pctDiff = Math.round((uniformScale - 1) * 100);
+        setHairSizeDiff(pctDiff === 0 ? '' : `${pctDiff > 0 ? '+' : ''}${pctDiff}%`);
+      } else {
+        // No anchors: no transform
+        mesh.position = Vector3.Zero();
+      }
+
+      mesh.setEnabled(true);
+      meshesRef.current[swapKey] = mesh;
+      setPartVisibility(prev => ({ ...prev, [swapKey]: true }));
+
+      setParts(prev => {
+        const nonHair = prev.filter(
+          p => !(p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body))
+        );
+        return [...nonHair, {
+          key: swapKey,
+          file: option.file,
+          voxels: option.voxels,
+          default_on: true,
+          meshes: [option.label],
+          is_body: false,
+          category: 'hair',
+        }];
+      });
+    } catch (e) {
+      console.error(`Failed to load swapped hair:`, e);
+    } finally {
+      setHairLoading(false);
+    }
+  }, [parts, charKey, hairOptions]);
 
   // Initialize scene
   useEffect(() => {
@@ -473,6 +726,9 @@ function RealisticViewerPage() {
     (async () => {
       setLoading(true);
       setError(null);
+      setSelectedHair('');
+      setHairSizeDiff('');
+      bodyAnchorsRef.current = null;
 
       // Dispose old meshes
       for (const mesh of Object.values(meshesRef.current)) {
@@ -496,6 +752,7 @@ function RealisticViewerPage() {
           // Use voxel_size directly so characters render at correct relative sizes
           voxelScale = grid.voxel_size;
         }
+        voxelScaleRef.current = voxelScale;
 
         const resp = await fetch(config.manifest + CACHE_BUST);
         if (!resp.ok) {
@@ -515,6 +772,17 @@ function RealisticViewerPage() {
           }
         }
         setParts(allParts);
+
+        // Load body head anchors for hair swapping
+        const charFolder = manifestPath.split('/').slice(0, -1).join('/');
+        const anchorsUrl = `${VOX_API}/${charFolder}/hair_anchors.json`;
+        try {
+          const anchResp = await fetch(anchorsUrl + CACHE_BUST);
+          if (anchResp.ok) {
+            const anchData: HairAnchorsData = await anchResp.json();
+            bodyAnchorsRef.current = anchData.body_head ?? null;
+          }
+        } catch { /* no anchors for this character */ }
 
         const vis: Record<string, boolean> = {};
         for (const part of allParts) {
@@ -569,20 +837,26 @@ function RealisticViewerPage() {
         </p>
 
         {/* Character selector */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
-          {Object.entries(CHARACTERS).map(([key, config]) => (
-            <button key={key} onClick={() => setCharKey(key)} style={{
-              flex: 1, padding: '6px 4px', fontSize: 10, fontWeight: charKey === key ? 'bold' : 'normal',
-              border: charKey === key ? '2px solid #fa0' : '1px solid #555',
-              borderRadius: 4,
-              background: charKey === key ? 'rgba(180,120,0,0.25)' : 'rgba(40,40,60,0.4)',
-              color: charKey === key ? '#fda' : '#999',
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>
-              {config.label}
-            </button>
-          ))}
-        </div>
+        <select
+          value={charKey}
+          onChange={(e) => setCharKey(e.target.value)}
+          style={{
+            width: '100%', padding: '6px 8px', fontSize: 12, marginBottom: 14,
+            background: '#1a1a2e', color: '#fda', border: '1px solid #fa0',
+            borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace',
+          }}
+        >
+          <optgroup label="Female">
+            {Object.entries(CHARACTERS).filter(([, c]) => c.gender === 'female').map(([key, config]) => (
+              <option key={key} value={key}>{config.label}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Male">
+            {Object.entries(CHARACTERS).filter(([, c]) => c.gender === 'male').map(([key, config]) => (
+              <option key={key} value={key}>{config.label}</option>
+            ))}
+          </optgroup>
+        </select>
 
         {loading && (
           <div style={{ color: '#8af', fontSize: 13, padding: '20px 0' }}>
@@ -615,6 +889,40 @@ function RealisticViewerPage() {
                 All OFF
               </button>
             </div>
+
+            {/* Hair Swap */}
+            {hairOptions.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 'bold', color: '#f8c', fontSize: 13, marginBottom: 6 }}>
+                  Hair Swap {hairLoading && <span style={{ fontSize: 10, color: '#8af' }}>(loading...)</span>}
+                  {hairSizeDiff && (
+                    <span style={{
+                      fontSize: 10, marginLeft: 6,
+                      color: Math.abs(parseInt(hairSizeDiff)) > 30 ? '#f88' : '#8f8',
+                    }}>
+                      size: {hairSizeDiff}
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedHair}
+                  onChange={(e) => swapHair(e.target.value)}
+                  disabled={hairLoading}
+                  style={{
+                    width: '100%', padding: '6px 8px', fontSize: 11,
+                    background: '#1a1a2e', color: '#ddd', border: '1px solid #555',
+                    borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace',
+                  }}
+                >
+                  <option value="">-- Default (own hair) --</option>
+                  {hairOptions.map(opt => (
+                    <option key={`${opt.charKey}::${opt.partKey}`} value={`${opt.charKey}::${opt.partKey}`}>
+                      {opt.label} ({opt.voxels.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Body section */}
             {bodyParts.length > 0 && (
