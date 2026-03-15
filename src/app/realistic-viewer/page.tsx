@@ -187,6 +187,20 @@ const CHARACTERS: Record<string, CharacterConfig> = {
   basic_body_male_vagrant: { label: 'BasicBody Male (Vagrant)', manifest: `${VOX_API}/male/BasicBodyMale-Vagrant/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Vagrant/grid.json`, gender: 'male', category: 'base' },
   basic_body_male_radagon: { label: 'BasicBody Male (Radagon)', manifest: `${VOX_API}/male/BasicBodyMale-Radagon/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Radagon/grid.json`, gender: 'male', category: 'base' },
   basic_body_male_spartan: { label: 'BasicBody Male (Spartan)', manifest: `${VOX_API}/male/BasicBodyMale-Spartan/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Spartan/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains: { label: 'Hair: Curtains (thr=3.0)', manifest: `${VOX_API}/male/hair-curtains/parts.json`, gridJson: `${VOX_API}/male/hair-curtains/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t12: { label: 'Hair: Curtains (thr=1.2)', manifest: `${VOX_API}/male/hair-curtains-t12/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t12/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t15: { label: 'Hair: Curtains (thr=1.5)', manifest: `${VOX_API}/male/hair-curtains-t15/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t15/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t20: { label: 'Hair: Curtains (thr=2.0)', manifest: `${VOX_API}/male/hair-curtains-t20/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t20/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t10: { label: 'Hair: Curtains (thr=1.0)', manifest: `${VOX_API}/male/hair-curtains-t10/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t10/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t08: { label: 'Hair: Curtains (thr=0.8)', manifest: `${VOX_API}/male/hair-curtains-t08/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t08/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t05: { label: 'Hair: Curtains (thr=0.5)', manifest: `${VOX_API}/male/hair-curtains-t05/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t05/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t03: { label: 'Hair: Curtains (thr=0.3)', manifest: `${VOX_API}/male/hair-curtains-t03/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t03/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t02: { label: 'Hair: Curtains (thr=0.2)', manifest: `${VOX_API}/male/hair-curtains-t02/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t02/grid.json`, gender: 'male', category: 'base' },
+  hair_curtains_t01: { label: 'Hair: Curtains (thr=0.1)', manifest: `${VOX_API}/male/hair-curtains-t01/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t01/grid.json`, gender: 'male', category: 'base' },
+  shieldmaiden: { label: 'ShieldMaiden', manifest: `${VOX_API}/female/shieldmaiden/parts.json`, gridJson: `${VOX_API}/female/shieldmaiden/grid.json`, gender: 'female', category: 'base' },
+  basic_body_female_small: { label: 'BasicBody Female (SmallBust)', manifest: `${VOX_API}/female/BasicBodyFemale-SmallBust5/parts.json`, gridJson: `${VOX_API}/female/BasicBodyFemale-SmallBust5/grid.json`, gender: 'female', category: 'base' },
+  female_164cm: { label: 'Female 164cm', manifest: `${VOX_API}/female/female_164cm/parts.json`, gridJson: `${VOX_API}/female/female_164cm/grid.json`, gender: 'female', category: 'base' },
+  female_181cm: { label: 'Female 181cm', manifest: `${VOX_API}/female/female_181cm/parts.json`, gridJson: `${VOX_API}/female/female_181cm/grid.json`, gender: 'female', category: 'base' },
   // ---- Female ----
   cyberpunkelf: { label: 'CyberpunkElf', manifest: `${VOX_API}/female/realistic/parts.json`, gridJson: `${VOX_API}/female/realistic/grid.json`, gender: 'female', category: 'female' },
   darkelfblader: { label: 'DarkElfBlader', manifest: `${VOX_API}/female/realistic-darkelf/parts.json`, gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`, gender: 'female', category: 'female' },
@@ -438,11 +452,12 @@ function RealisticViewerPage() {
       mesh.material = partMat;
 
       // Apply anchor-based alignment
-      if (targetBodyAnchors && sourceHairAnchors && sourceBodyAnchors) {
+      if (targetBodyAnchors && sourceHairAnchors) {
         // Scale: based on target body head size vs source body head size
-        // This is the correct ratio — how much bigger/smaller the target head is
-        const scaleW = targetBodyAnchors.width / sourceBodyAnchors.width;
-        const scaleD = targetBodyAnchors.depth / sourceBodyAnchors.depth;
+        // If source has no body_head (standalone hair), use target as reference (scale=1.0)
+        const srcBody = sourceBodyAnchors || targetBodyAnchors;
+        const scaleW = targetBodyAnchors.width / srcBody.width;
+        const scaleD = targetBodyAnchors.depth / srcBody.depth;
         const uniformScale = (scaleW + scaleD) / 2;
 
         mesh.scaling = new Vector3(uniformScale, uniformScale, uniformScale);
@@ -621,9 +636,14 @@ function RealisticViewerPage() {
             if (cancelled) { mesh.dispose(); return; }
             // Eyes need partMat (zOffset) to render in front of body
             mesh.material = (part.is_body && part.key !== 'eyes') ? bodyMat : partMat;
-            // Apply head offset for split head segments
+            // Apply position offset (head segments, separate hair, etc.)
             const partAny = part as unknown as Record<string, unknown>;
-            if (partAny.category === 'head_segment' || (part.key === 'head' && typeof partAny.head_offset_y === 'number')) {
+            const posOffset = partAny.position_offset as Record<string, number> | undefined;
+            if (posOffset) {
+              if (typeof posOffset.x === 'number') mesh.position.x = posOffset.x;
+              if (typeof posOffset.y === 'number') mesh.position.y = posOffset.y;
+              if (typeof posOffset.z === 'number') mesh.position.z = posOffset.z;
+            } else if (partAny.category === 'head_segment' || (part.key === 'head' && typeof partAny.head_offset_y === 'number')) {
               if (typeof partAny.head_offset_x === 'number') mesh.position.x = partAny.head_offset_x as number;
               if (typeof partAny.head_offset_y === 'number') mesh.position.y = partAny.head_offset_y as number;
               if (typeof partAny.head_offset_z === 'number') mesh.position.z = partAny.head_offset_z as number;
@@ -651,7 +671,7 @@ function RealisticViewerPage() {
 
   // Load animation data for BasicBody / Split characters
   useEffect(() => {
-    if (!charKey.startsWith('basic_body_') && !charKey.startsWith('split_')) return;
+    if (CHARACTERS[charKey]?.category !== 'base') return;
     const config = CHARACTERS[charKey];
     if (!config) return;
     // Extract folder name from manifest path: /api/vox/<gender>/<folderName>/...
@@ -666,16 +686,14 @@ function RealisticViewerPage() {
       'BasicBodyMale-Vagrant': 'walk_cycle_vagrant.motion.json',
       'BasicBodyMale-Radagon': 'walk_cycle_radagon.motion.json',
       'BasicBodyMale-Spartan': 'walk_cycle_spartan.motion.json',
+      'BasicBodyFemale-SmallBust5': 'walk_cycle_smallbust2.motion.json',
     };
     const motionFile = motionFiles[folderName] || 'walk_cycle_arp.motion.json';
 
     (async () => {
       try {
-        // Load segments.json (bone positions) - check segments-split first, then segments
-        const segPath = charKey.startsWith('split_')
-          ? `${VOX_API}/${gender}/${folderName}/segments-split/segments.json`
-          : `${VOX_API}/${gender}/${folderName}/segments.json`;
-        const segResp = await fetch(`${segPath}${CACHE_BUST}`);
+        // Load segments.json (bone positions)
+        const segResp = await fetch(`${VOX_API}/${gender}/${folderName}/segments.json${CACHE_BUST}`);
         if (segResp.ok) {
           segmentsDataRef.current = await segResp.json();
         }
@@ -700,7 +718,7 @@ function RealisticViewerPage() {
 
   // Store rest pose vertex data when meshes are loaded
   useEffect(() => {
-    if (!charKey.startsWith('basic_body_')) return;
+    if (CHARACTERS[charKey]?.category !== 'base') return;
     // Wait a tick for meshes to be ready
     const timer = setTimeout(() => {
       const rest: Record<string, { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }> = {};
@@ -841,7 +859,7 @@ function RealisticViewerPage() {
         </select>
 
         {/* Animation controls (BasicBody only) */}
-        {(charKey.startsWith('basic_body_') || charKey.startsWith('split_')) && !loading && animReady && (
+        {CHARACTERS[charKey]?.category === 'base' && !loading && animReady && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 'bold', color: '#fa0', fontSize: 13, marginBottom: 6 }}>
               Animation
