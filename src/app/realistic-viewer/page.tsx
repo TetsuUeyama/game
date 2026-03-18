@@ -95,6 +95,58 @@ function buildVoxMesh(model: VoxModel, scene: Scene, name: string, scale: number
   return mesh;
 }
 
+interface SegmentBundleData {
+  grid: { gx: number; gy: number; gz: number };
+  palette: number[][]; // [[r,g,b], ...] normalized 0-1
+  segments: Record<string, number[]>; // boneName -> flat [x,y,z,ci, ...]
+}
+
+/** Build per-bone meshes from a single bundled segments file. No per-vertex animation needed — use mesh world matrix. */
+function buildBundleMeshes(
+  bundle: SegmentBundleData, scene: Scene, mat: StandardMaterial, scale: number
+): Record<string, Mesh> {
+  const cx = bundle.grid.gx / 2, cy = bundle.grid.gy / 2;
+  const meshes: Record<string, Mesh> = {};
+
+  for (const [boneName, flat] of Object.entries(bundle.segments)) {
+    const numVoxels = flat.length / 4;
+    if (numVoxels === 0) continue;
+
+    // Build occupied set for face culling
+    const occupied = new Set<string>();
+    for (let i = 0; i < numVoxels; i++) {
+      occupied.add(`${flat[i*4]},${flat[i*4+1]},${flat[i*4+2]}`);
+    }
+
+    const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+    for (let i = 0; i < numVoxels; i++) {
+      const vx = flat[i*4], vy = flat[i*4+1], vz = flat[i*4+2], ci = flat[i*4+3];
+      const col = bundle.palette[ci] ?? [0.8, 0.8, 0.8];
+      for (let f = 0; f < 6; f++) {
+        const [dx, dy, dz] = FACE_DIRS[f];
+        if (occupied.has(`${vx+dx},${vy+dy},${vz+dz}`)) continue;
+        const bi = positions.length / 3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
+        for (let vi = 0; vi < 4; vi++) {
+          positions.push((vx + fv[vi][0] - cx) * scale, (vz + fv[vi][2]) * scale, -(vy + fv[vi][1] - cy) * scale);
+          normals.push(fn[0], fn[2], -fn[1]);
+          colors.push(col[0], col[1], col[2], 1);
+        }
+        indices.push(bi, bi+1, bi+2, bi, bi+2, bi+3);
+      }
+    }
+
+    if (positions.length === 0) continue;
+    const vd = new VertexData();
+    vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
+    const mesh = new Mesh(`seg_${boneName}`, scene);
+    vd.applyToMesh(mesh, false); // not updatable — we use world matrix for animation
+    mesh.material = mat;
+    meshes[boneName] = mesh;
+  }
+
+  return meshes;
+}
+
 const CACHE_BUST = `?v=${Date.now()}`;
 
 async function loadVoxMesh(scene: Scene, url: string, name: string, scale: number = SCALE): Promise<Mesh> {
@@ -168,6 +220,14 @@ interface MotionData {
   }>;
 }
 
+interface JointSphereConfig {
+  position_voxel: number[];
+  bone: string;
+  radius_voxels: number | number[];
+  shape: 'sphere' | 'ellipsoid';
+  color: { r: number; g: number; b: number };
+}
+
 interface SegmentsData {
   voxel_size: number;
   grid: { gx: number; gy: number; gz: number };
@@ -176,31 +236,15 @@ interface SegmentsData {
     tail_voxel: number[];
   }>;
   segments: Record<string, { file: string; voxels: number }>;
+  joint_spheres?: Record<string, JointSphereConfig>;
 }
 
 const GAME_ASSETS_API = '/api/game-assets';
 const VOX_API = '/api/vox';
 
 const CHARACTERS: Record<string, CharacterConfig> = {
-  // ---- Base Bodies (segmented, with walk animation) ----
-  basic_body_female: { label: 'BasicBody Female (CyberpunkElf)', manifest: `${VOX_API}/female/BasicBodyFemale/parts.json`, gridJson: `${VOX_API}/female/BasicBodyFemale/grid.json`, gender: 'female', category: 'base' },
-  basic_body_male_vagrant: { label: 'BasicBody Male (Vagrant)', manifest: `${VOX_API}/male/BasicBodyMale-Vagrant/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Vagrant/grid.json`, gender: 'male', category: 'base' },
-  basic_body_male_radagon: { label: 'BasicBody Male (Radagon)', manifest: `${VOX_API}/male/BasicBodyMale-Radagon/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Radagon/grid.json`, gender: 'male', category: 'base' },
-  basic_body_male_spartan: { label: 'BasicBody Male (Spartan)', manifest: `${VOX_API}/male/BasicBodyMale-Spartan/parts.json`, gridJson: `${VOX_API}/male/BasicBodyMale-Spartan/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains: { label: 'Hair: Curtains (thr=3.0)', manifest: `${VOX_API}/male/hair-curtains/parts.json`, gridJson: `${VOX_API}/male/hair-curtains/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t12: { label: 'Hair: Curtains (thr=1.2)', manifest: `${VOX_API}/male/hair-curtains-t12/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t12/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t15: { label: 'Hair: Curtains (thr=1.5)', manifest: `${VOX_API}/male/hair-curtains-t15/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t15/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t20: { label: 'Hair: Curtains (thr=2.0)', manifest: `${VOX_API}/male/hair-curtains-t20/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t20/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t10: { label: 'Hair: Curtains (thr=1.0)', manifest: `${VOX_API}/male/hair-curtains-t10/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t10/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t08: { label: 'Hair: Curtains (thr=0.8)', manifest: `${VOX_API}/male/hair-curtains-t08/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t08/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t05: { label: 'Hair: Curtains (thr=0.5)', manifest: `${VOX_API}/male/hair-curtains-t05/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t05/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t03: { label: 'Hair: Curtains (thr=0.3)', manifest: `${VOX_API}/male/hair-curtains-t03/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t03/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t02: { label: 'Hair: Curtains (thr=0.2)', manifest: `${VOX_API}/male/hair-curtains-t02/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t02/grid.json`, gender: 'male', category: 'base' },
-  hair_curtains_t01: { label: 'Hair: Curtains (thr=0.1)', manifest: `${VOX_API}/male/hair-curtains-t01/parts.json`, gridJson: `${VOX_API}/male/hair-curtains-t01/grid.json`, gender: 'male', category: 'base' },
-  shieldmaiden: { label: 'ShieldMaiden', manifest: `${VOX_API}/female/shieldmaiden/parts.json`, gridJson: `${VOX_API}/female/shieldmaiden/grid.json`, gender: 'female', category: 'base' },
-  basic_body_female_small: { label: 'BasicBody Female (SmallBust)', manifest: `${VOX_API}/female/BasicBodyFemale-SmallBust5/parts.json`, gridJson: `${VOX_API}/female/BasicBodyFemale-SmallBust5/grid.json`, gender: 'female', category: 'base' },
-  female_164cm: { label: 'Female 164cm', manifest: `${VOX_API}/female/female_164cm/parts.json`, gridJson: `${VOX_API}/female/female_164cm/grid.json`, gender: 'female', category: 'base' },
-  female_181cm: { label: 'Female 181cm', manifest: `${VOX_API}/female/female_181cm/parts.json`, gridJson: `${VOX_API}/female/female_181cm/grid.json`, gender: 'female', category: 'base' },
+  // ---- Base Body (single model, all motions compatible) ----
+  base_female: { label: 'Base Female (CyberpunkElf)', manifest: `${VOX_API}/female/CyberpunkElf-Detailed/parts.json`, gridJson: `${VOX_API}/female/CyberpunkElf-Detailed/grid.json`, gender: 'female', category: 'base' },
   // ---- Female ----
   cyberpunkelf: { label: 'CyberpunkElf', manifest: `${VOX_API}/female/realistic/parts.json`, gridJson: `${VOX_API}/female/realistic/grid.json`, gender: 'female', category: 'female' },
   darkelfblader: { label: 'DarkElfBlader', manifest: `${VOX_API}/female/realistic-darkelf/parts.json`, gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`, gender: 'female', category: 'female' },
@@ -262,7 +306,7 @@ function RealisticViewerPage() {
   const meshesRef = useRef<Record<string, Mesh>>({});
 
   const [selectedCategory, setSelectedCategory] = useState<CharCategory>('base');
-  const [charKey, setCharKey] = useState('basic_body_female');
+  const [charKey, setCharKey] = useState('base_female');
   const [parts, setParts] = useState<PartEntry[]>([]);
   const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -275,14 +319,16 @@ function RealisticViewerPage() {
 
   // Animation state
   const [animPlaying, setAnimPlaying] = useState(false);
-  const [animFrame, setAnimFrame] = useState(0);
   const [animReady, setAnimReady] = useState(false);
+  const [selectedMotion, setSelectedMotion] = useState('');
   const motionDataRef = useRef<MotionData | null>(null);
   const segmentsDataRef = useRef<SegmentsData | null>(null);
   const animFrameRef = useRef(0);
-  const restVoxelsRef = useRef<Record<string, { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }>>({});
+  const frameDisplayRef = useRef<HTMLSpanElement>(null);
+  // restVoxelsRef removed — using freezeWorldMatrix for animation
   const [hairSizeDiff, setHairSizeDiff] = useState<string>('');
   const voxelScaleRef = useRef<number>(SCALE);
+  const jointBonesRef = useRef<Record<string, [string, string]>>({}); // jointKey -> [boneA, boneB]
   const bodyAnchorsRef = useRef<AnchorPoints | null>(null);
 
   // Toggle individual part
@@ -506,7 +552,7 @@ function RealisticViewerPage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const engine = new Engine(canvas, true, { preserveDrawingBuffer: true });
+    const engine = new Engine(canvas, false, { preserveDrawingBuffer: false });
     const scene = new Scene(engine);
     sceneRef.current = scene;
     scene.clearColor = new Color4(0.06, 0.06, 0.10, 1);
@@ -524,18 +570,21 @@ function RealisticViewerPage() {
     const dir = new DirectionalLight('dir', new Vector3(-0.5, -1, -0.8), scene);
     dir.intensity = 0.45;
 
-    const ground = MeshBuilder.CreateGround('ground', { width: 10, height: 10, subdivisions: 50 }, scene);
+    const ground = MeshBuilder.CreateGround('ground', { width: 10, height: 10, subdivisions: 10 }, scene);
     const gm = new StandardMaterial('gm', scene);
     gm.diffuseColor = new Color3(0.12, 0.12, 0.16);
     gm.specularColor = Color3.Black();
     gm.wireframe = true;
+    gm.freeze();
     ground.material = gm;
+    ground.freezeWorldMatrix();
 
     // Body material
     const bodyMat = new StandardMaterial('bodyMat', scene);
     bodyMat.emissiveColor = Color3.White();
     bodyMat.disableLighting = true;
     bodyMat.backFaceCulling = false;
+    bodyMat.freeze();
     bodyMatRef.current = bodyMat;
 
     // Part material (renders on top of body)
@@ -544,6 +593,7 @@ function RealisticViewerPage() {
     partMat.disableLighting = true;
     partMat.backFaceCulling = false;
     partMat.zOffset = -2;
+    partMat.freeze();
     partMatRef.current = partMat;
 
     engine.runRenderLoop(() => scene.render());
@@ -593,68 +643,80 @@ function RealisticViewerPage() {
         let voxelScale = SCALE;
         if (gridResp.ok) {
           const grid: GridInfo = await gridResp.json();
-          // Use voxel_size directly so characters render at correct relative sizes
           voxelScale = grid.voxel_size;
         }
         voxelScaleRef.current = voxelScale;
 
-        const resp = await fetch(config.manifest + CACHE_BUST);
-        if (!resp.ok) {
-          setError(`${config.label}: parts.json not found. Run the voxelization pipeline first.`);
-          setLoading(false);
-          return;
-        }
-        const allParts: PartEntry[] = await resp.json();
-        if (cancelled) return;
-        // Prefix part file paths with VOX API route + gender folder
-        // Extract gender prefix from manifest path (e.g., "/api/vox/female/realistic-..." -> "female")
         const manifestPath = config.manifest.replace(VOX_API + '/', '');
-        const genderPrefix = manifestPath.split('/')[0]; // "female" or "male"
-        for (const p of allParts) {
-          if (!p.file.startsWith(VOX_API)) {
-            p.file = `${VOX_API}/${genderPrefix}${p.file}`;
-          }
-        }
-        setParts(allParts);
-
-        // Load body head anchors for hair swapping
+        const genderPrefix = manifestPath.split('/')[0];
         const charFolder = manifestPath.split('/').slice(0, -1).join('/');
-        const anchorsUrl = `${VOX_API}/${charFolder}/hair_anchors.json`;
-        try {
-          const anchResp = await fetch(anchorsUrl + CACHE_BUST);
-          if (anchResp.ok) {
-            const anchData: HairAnchorsData = await anchResp.json();
-            bodyAnchorsRef.current = anchData.body_head ?? null;
-          }
-        } catch { /* no anchors for this character */ }
 
-        const vis: Record<string, boolean> = {};
-        for (const part of allParts) {
-          vis[part.key] = part.default_on;
-          try {
-            const mesh = await loadVoxMesh(scene, part.file, `part_${part.key}`, voxelScale);
-            if (cancelled) { mesh.dispose(); return; }
-            // Eyes need partMat (zOffset) to render in front of body
-            mesh.material = (part.is_body && part.key !== 'eyes') ? bodyMat : partMat;
-            // Apply position offset (head segments, separate hair, etc.)
-            const partAny = part as unknown as Record<string, unknown>;
-            const posOffset = partAny.position_offset as Record<string, number> | undefined;
-            if (posOffset) {
-              if (typeof posOffset.x === 'number') mesh.position.x = posOffset.x;
-              if (typeof posOffset.y === 'number') mesh.position.y = posOffset.y;
-              if (typeof posOffset.z === 'number') mesh.position.z = posOffset.z;
-            } else if (partAny.category === 'head_segment' || (part.key === 'head' && typeof partAny.head_offset_y === 'number')) {
-              if (typeof partAny.head_offset_x === 'number') mesh.position.x = partAny.head_offset_x as number;
-              if (typeof partAny.head_offset_y === 'number') mesh.position.y = partAny.head_offset_y as number;
-              if (typeof partAny.head_offset_z === 'number') mesh.position.z = partAny.head_offset_z as number;
-            }
-            mesh.setEnabled(part.default_on);
-            meshesRef.current[part.key] = mesh;
-          } catch (e) {
-            console.error(`Failed to load ${part.file}:`, e);
+        // Try bundle-based loading first (single file, much faster)
+        const bundleUrl = `${VOX_API}/${charFolder}/segments_bundle.json`;
+        const bundleResp = await fetch(bundleUrl + CACHE_BUST);
+
+        if (bundleResp.ok && config.category === 'base') {
+          // Fast path: single bundled file
+          const bundle: SegmentBundleData = await bundleResp.json();
+          if (cancelled) return;
+
+          const builtMeshes = buildBundleMeshes(bundle, scene, bodyMat, voxelScale);
+          const vis: Record<string, boolean> = {};
+          const partEntries: PartEntry[] = [];
+          for (const boneName of Object.keys(builtMeshes)) {
+            meshesRef.current[boneName] = builtMeshes[boneName];
+            vis[boneName] = true;
+            partEntries.push({ key: boneName, file: '', voxels: 0, default_on: true, meshes: [boneName], is_body: true });
           }
+          setParts(partEntries);
+          setPartVisibility(vis);
+          jointBonesRef.current = {};
+        } else {
+          // Fallback: individual .vox file loading (non-base characters)
+          const resp = await fetch(config.manifest + CACHE_BUST);
+          if (!resp.ok) {
+            setError(`${config.label}: parts.json not found.`);
+            setLoading(false);
+            return;
+          }
+          const allParts: PartEntry[] = await resp.json();
+          if (cancelled) return;
+          for (const p of allParts) {
+            if (!p.file.startsWith(VOX_API)) {
+              p.file = `${VOX_API}/${genderPrefix}${p.file}`;
+            }
+          }
+          setParts(allParts);
+
+          const vis: Record<string, boolean> = {};
+          const jointBonesMap: Record<string, [string, string]> = {};
+          for (const part of allParts) {
+            vis[part.key] = part.default_on;
+            const partAnyJ = part as unknown as Record<string, unknown>;
+            if (partAnyJ.joint_bones && Array.isArray(partAnyJ.joint_bones)) {
+              jointBonesMap[part.key] = partAnyJ.joint_bones as [string, string];
+            }
+          }
+
+          const meshResults = await Promise.all(
+            allParts.map(async (part) => {
+              try {
+                return { part, mesh: await loadVoxMesh(scene, part.file, `part_${part.key}`, voxelScale) };
+              } catch { return null; }
+            })
+          );
+          if (cancelled) { for (const r of meshResults) if (r) r.mesh.dispose(); return; }
+          for (const r of meshResults) {
+            if (!r) continue;
+            r.mesh.material = (r.part.is_body && r.part.key !== 'eyes') ? bodyMat : partMat;
+            r.mesh.setEnabled(vis[r.part.key] ?? true);
+            meshesRef.current[r.part.key] = r.mesh;
+          }
+          setPartVisibility(vis);
+          jointBonesRef.current = jointBonesMap;
         }
-        setPartVisibility(vis);
+        // Freeze active meshes to skip per-frame frustum culling recalculation
+        scene.freezeActiveMeshes();
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -680,15 +742,11 @@ function RealisticViewerPage() {
     const gender = pathParts[0];
     const folderName = pathParts[1]; // BasicBodyFemale, BasicBodyMale-Vagrant, etc.
 
-    // Motion file mapping per model
-    const motionFiles: Record<string, string> = {
-      'BasicBodyFemale': 'walk_cycle_arp.motion.json',
-      'BasicBodyMale-Vagrant': 'walk_cycle_vagrant.motion.json',
-      'BasicBodyMale-Radagon': 'walk_cycle_radagon.motion.json',
-      'BasicBodyMale-Spartan': 'walk_cycle_spartan.motion.json',
-      'BasicBodyFemale-SmallBust5': 'walk_cycle_smallbust2.motion.json',
+    // Default motion per model
+    const defaultMotion: Record<string, string> = {
+      'CyberpunkElf-Detailed': 'walk_cycle_arp.motion.json',
     };
-    const motionFile = motionFiles[folderName] || 'walk_cycle_arp.motion.json';
+    const motionFile = selectedMotion || defaultMotion[folderName] || 'walk_cycle_arp.motion.json';
 
     (async () => {
       try {
@@ -697,7 +755,7 @@ function RealisticViewerPage() {
         if (segResp.ok) {
           segmentsDataRef.current = await segResp.json();
         }
-        // Load walk cycle motion
+        // Load selected motion
         const motionResp = await fetch(`${GAME_ASSETS_API}/motion/${motionFile}${CACHE_BUST}`);
         if (motionResp.ok) {
           motionDataRef.current = await motionResp.json();
@@ -714,89 +772,79 @@ function RealisticViewerPage() {
       setAnimPlaying(false);
       setAnimReady(false);
     };
-  }, [charKey]);
+  }, [charKey, selectedMotion]);
 
-  // Store rest pose vertex data when meshes are loaded
-  useEffect(() => {
-    if (CHARACTERS[charKey]?.category !== 'base') return;
-    // Wait a tick for meshes to be ready
-    const timer = setTimeout(() => {
-      const rest: Record<string, { positions: Float32Array; normals: Float32Array; colors: Float32Array; indices: Uint32Array }> = {};
-      for (const [key, mesh] of Object.entries(meshesRef.current)) {
-        const positions = mesh.getVerticesData('position');
-        const normals = mesh.getVerticesData('normal');
-        const colors = mesh.getVerticesData('color');
-        const indices = mesh.getIndices();
-        if (positions && normals && colors && indices) {
-          rest[key] = {
-            positions: new Float32Array(positions),
-            normals: new Float32Array(normals),
-            colors: new Float32Array(colors),
-            indices: new Uint32Array(indices),
-          };
-        }
-      }
-      restVoxelsRef.current = rest;
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [charKey, loading]);
+  // Note: rest pose vertex storage removed — using freezeWorldMatrix for animation (no per-vertex transform)
 
-  // Animation loop
+  // Animation loop — uses requestAnimationFrame with frame-rate throttle, no React state updates
   useEffect(() => {
     if (!animPlaying) return;
     const motion = motionDataRef.current;
     if (!motion) return;
 
     let frameCounter = animFrameRef.current;
-    const interval = setInterval(() => {
+    const frameDuration = 1000 / (motion.fps || 30);
+    let lastTime = 0;
+    let rafId = 0;
+
+    const toSkinMat = (m: number[]) => Matrix.FromArray([
+      m[0], m[4], m[8],  m[12],
+      m[1], m[5], m[9],  m[13],
+      m[2], m[6], m[10], m[14],
+      m[3], m[7], m[11], m[15],
+    ]);
+
+    const tick = (now: number) => {
+      rafId = requestAnimationFrame(tick);
+      const elapsed = now - lastTime;
+      if (elapsed < frameDuration) return;
+      lastTime = now - (elapsed % frameDuration);
+
       frameCounter = (frameCounter + 1) % motion.frame_count;
       animFrameRef.current = frameCounter;
-      setAnimFrame(frameCounter);
+
+      // Update frame display directly via DOM (no React re-render)
+      if (frameDisplayRef.current) {
+        frameDisplayRef.current.textContent = `Frame: ${frameCounter}/${motion.frame_count}`;
+      }
 
       // Apply skinning matrices to each segment mesh
       for (const [segKey, mesh] of Object.entries(meshesRef.current)) {
-        const boneData = motion.bones[segKey];
-        const restData = restVoxelsRef.current[segKey];
-        if (!boneData || !restData) continue;
+        let skinMat: Matrix | null = null;
 
-        const mat = boneData.matrices[frameCounter];
-        if (!mat) continue;
-
-        // Transpose row-major (Blender) to column-major (Babylon.js)
-        const skinMat = Matrix.FromArray([
-          mat[0], mat[4], mat[8],  mat[12],
-          mat[1], mat[5], mat[9],  mat[13],
-          mat[2], mat[6], mat[10], mat[14],
-          mat[3], mat[7], mat[11], mat[15],
-        ]);
-
-        const newPositions = new Float32Array(restData.positions.length);
-        const newNormals = new Float32Array(restData.normals.length);
-
-        for (let i = 0; i < restData.positions.length; i += 3) {
-          const rp = Vector3.TransformCoordinates(
-            new Vector3(restData.positions[i], restData.positions[i + 1], restData.positions[i + 2]),
-            skinMat
-          );
-          newPositions[i] = rp.x;
-          newPositions[i + 1] = rp.y;
-          newPositions[i + 2] = rp.z;
-
-          const rn = Vector3.TransformNormal(
-            new Vector3(restData.normals[i], restData.normals[i + 1], restData.normals[i + 2]),
-            skinMat
-          );
-          newNormals[i] = rn.x;
-          newNormals[i + 1] = rn.y;
-          newNormals[i + 2] = rn.z;
+        // Check if this is a joint segment (blend two bones)
+        const jointBones = jointBonesRef.current[segKey];
+        if (jointBones) {
+          const [boneA, boneB] = jointBones;
+          const dataA = motion.bones[boneA];
+          const dataB = motion.bones[boneB];
+          const matA = dataA?.matrices[frameCounter];
+          const matB = dataB?.matrices[frameCounter];
+          if (matA && matB) {
+            const blended = matA.map((v: number, i: number) => (v + matB[i]) / 2);
+            skinMat = toSkinMat(blended);
+          } else if (matA) {
+            skinMat = toSkinMat(matA);
+          } else if (matB) {
+            skinMat = toSkinMat(matB);
+          }
+        } else {
+          const boneData = motion.bones[segKey];
+          if (!boneData) continue;
+          const mat = boneData.matrices[frameCounter];
+          if (!mat) continue;
+          skinMat = toSkinMat(mat);
         }
 
-        mesh.updateVerticesData('position', newPositions);
-        mesh.updateVerticesData('normal', newNormals);
-      }
-    }, 1000 / (motion.fps || 30));
+        if (!skinMat) continue;
 
-    return () => clearInterval(interval);
+        // Fast path: set mesh world matrix directly (rigid body per bone, no per-vertex transform)
+        mesh.freezeWorldMatrix(skinMat);
+      }
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [animPlaying]);
 
   const partLabel = (key: string) => {
@@ -864,6 +912,34 @@ function RealisticViewerPage() {
             <div style={{ fontWeight: 'bold', color: '#fa0', fontSize: 13, marginBottom: 6 }}>
               Animation
             </div>
+            <select
+              value={selectedMotion}
+              onChange={(e) => { setAnimPlaying(false); setSelectedMotion(e.target.value); }}
+              style={{
+                width: '100%', padding: '4px 6px', fontSize: 11, marginBottom: 6,
+                background: '#1a1a2e', color: '#ddd', border: '1px solid #555',
+                borderRadius: 4, fontFamily: 'monospace',
+              }}
+            >
+              <option value="">Walk Cycle (default)</option>
+              <option value="ero_pose_01.motion.json">Ero Pose 01</option>
+              <option value="ero_pose_02.motion.json">Ero Pose 02</option>
+              <option value="ero_pose_03.motion.json">Ero Pose 03</option>
+              <option value="nursing_handjob.motion.json">Nursing Handjob (CE)</option>
+              <option value="nursing_handjob_qm.motion.json">Nursing Handjob (QM)</option>
+              <option value="doggy_qm.motion.json">Doggy (QM)</option>
+              <option value="blowjob_qm.motion.json">Blowjob (QM)</option>
+              <option value="reverse_cowgirl_qm.motion.json">Reverse Cowgirl (QM)</option>
+              <option value="amazon_qm.motion.json">Amazon (QM)</option>
+              <option value="missionary_qm.motion.json">Missionary (QM)</option>
+              <option value="tall_qm.motion.json">Tall (QM)</option>
+              <option value="tallqueenspooning_qm_detailed.motion.json">TallQueen Spooning (QM Detailed)</option>
+              <option value="spin_qm_detailed.motion.json">Spin (QM Detailed)</option>
+              <option value="riding_default.motion.json">Riding Default</option>
+              <option value="riding_full_start.motion.json">Riding Full Start</option>
+              <option value="riding_mid.motion.json">Riding Mid</option>
+              <option value="riding_loop_extended.motion.json">Riding Loop Extended</option>
+            </select>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button
                 onClick={() => setAnimPlaying(!animPlaying)}
@@ -875,10 +951,10 @@ function RealisticViewerPage() {
                   color: animPlaying ? '#faa' : '#afa',
                 }}
               >
-                {animPlaying ? 'Stop' : 'Play Walk'}
+                {animPlaying ? 'Stop' : 'Play'}
               </button>
-              <span style={{ fontSize: 10, color: '#888' }}>
-                Frame: {animFrame}/{motionDataRef.current?.frame_count || 0}
+              <span ref={frameDisplayRef} style={{ fontSize: 10, color: '#888' }}>
+                Frame: {animFrameRef.current}/{motionDataRef.current?.frame_count || 0}
               </span>
             </div>
           </div>
@@ -941,8 +1017,8 @@ function RealisticViewerPage() {
                   }}
                 >
                   <option value="">-- Default (own hair) --</option>
-                  {hairOptions.map(opt => (
-                    <option key={`${opt.charKey}::${opt.partKey}`} value={`${opt.charKey}::${opt.partKey}`}>
+                  {hairOptions.map((opt, idx) => (
+                    <option key={`${opt.charKey}::${opt.partKey}::${idx}`} value={`${opt.charKey}::${opt.partKey}`}>
                       {opt.label} ({opt.voxels.toLocaleString()})
                     </option>
                   ))}
