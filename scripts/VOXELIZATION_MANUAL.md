@@ -441,6 +441,7 @@ CE Bodyとのグリッド位置差分を計算する:
 | `fix_clothing_de.js` | 衣装のBody干渉修正（DE用） |
 | `generateVoxParts.js` | パーツ生成ユーティリティ |
 | `generateVoxHQ.js` | 高品質パーツ生成 |
+| `generate_joint_spheres.js` | 関節球データ生成（アニメーション時の隙間対策） |
 
 ### 作業フロー別スクリプト使用順
 ```
@@ -451,7 +452,8 @@ CE Bodyとのグリッド位置差分を計算する:
   4. shift_mask_XX.js等（個別パーツ位置調整）
   5. fix_suit_bra_XX.js等（突起干渉解消）
   6. fix_hair_shape_XX.js（髪の形状・色修正）
-  7. ビューアで確認 → 問題あれば該当Stepに戻る
+  7. generate_joint_spheres.js（関節球データ生成）
+  8. ビューアで確認 → 問題あれば該当Stepに戻る
 
 耳の追加:
   split_body_parts.js（耳のみ抽出） → subdivide（x2） → ビューア登録
@@ -738,6 +740,92 @@ suit_bra: 突起干渉解消処理あり
 
 ---
 
+### Step 7: ジョイントスフィア生成（関節隙間対策）
+
+アニメーション時、膝・肘・股関節・肩など可動域の大きい関節で、ボーンセグメント間に隙間が発生する。
+これを防ぐために、**関節位置にモデルの皮膚の内側に隠れる肌色の球体**を配置する。
+
+#### 概念
+
+```
+レストポーズ:   球体は皮膚の中に隠れている（見えない）
+関節を曲げる:   セグメント間に隙間が発生 → 球体が露出して隙間を埋める
+```
+
+- **位置**: `bone_positions` の `parent.tail_voxel`（= `child.head_voxel`）= 解剖学的な関節中心
+- **半径**: 関節付近のセグメント断面 × 0.85（皮膚の内側に収まるよう縮小）
+- **追従**: 子ボーンのスキニング行列に追従（曲げの凹側で球体が露出）
+- **色**: 関節付近のボクセルの中央値（肌色）
+
+#### zOffset戦略
+
+| レイヤー | zOffset | 用途 |
+|---------|---------|------|
+| Body（ボクセル） | 0 | 体の基本メッシュ |
+| Joint Sphere | -1 | 関節球（Bodyより手前、衣装より奥） |
+| Clothing（衣装） | -2 | 衣装パーツ（最前面） |
+
+→ 衣装がある部位では球体は衣装に隠れる。裸の関節では球体がBodyより手前に描画され隙間を埋める。
+
+#### 対象関節
+
+| 関節名 | 親セグメント | 子セグメント | 追従ボーン | 形状 |
+|--------|------------|------------|----------|------|
+| knee.l/r | c_thigh_stretch | c_leg_stretch | c_leg_stretch | sphere |
+| elbow.l/r | c_arm_stretch | c_forearm_stretch | c_forearm_stretch | sphere |
+| hip.l/r | c_root_bend.x | c_thigh_stretch | c_thigh_stretch | ellipsoid |
+| shoulder.l/r | c_spine_03_bend.x | c_arm_stretch | c_arm_stretch | ellipsoid |
+
+#### 実行コマンド
+
+```bash
+node scripts/generate_joint_spheres.js <model_dir>
+# 例:
+node scripts/generate_joint_spheres.js C:/Users/user/developsecond/game-assets/vox/female/BasicBodyFemale
+```
+
+#### 出力
+
+`segments.json` に `joint_spheres` キーが追加される:
+
+```json
+{
+  "joint_spheres": {
+    "knee.l": {
+      "position_voxel": [134, 31, 83],
+      "bone": "c_leg_stretch.l",
+      "radius_voxels": 8.3,
+      "shape": "sphere",
+      "color": { "r": 106, "g": 97, "b": 99 }
+    },
+    "hip.l": {
+      "position_voxel": [102, 25, 152],
+      "bone": "c_thigh_stretch.l",
+      "radius_voxels": [6.5, 3.8],
+      "shape": "ellipsoid",
+      "color": { "r": 105, "g": 95, "b": 98 }
+    }
+  }
+}
+```
+
+#### ビューア側の処理（自動）
+
+`realistic-viewer` が `segments.json` の `joint_spheres` を読み込み、自動的に:
+1. 各関節にBabylon.js球体メッシュを生成
+2. レストポーズの位置に配置
+3. アニメーション時に子ボーンのスキニング行列で位置・回転を更新
+
+#### 確認手順
+
+1. スクリプト実行後、ブラウザで realistic-viewer を開く
+2. レストポーズで球体が見えないことを確認（皮膚の内側に隠れている）
+3. 歩行アニメーション再生 → 膝・肘の曲げ時に隙間が球体で埋まることを目視確認
+4. 衣装パーツON時に球体が衣装の下に隠れることを確認
+5. 半径が大きすぎる/小さすぎる場合は `RADIUS_FACTOR`（デフォルト0.85）を調整
+
+---
+
 ### 新キャラ追加時のチェックリスト
 
 後処理で以下を必ず確認すること:
@@ -751,6 +839,8 @@ suit_bra: 突起干渉解消処理あり
 - [ ] 髪の垂れ部分が太すぎないか（erosion）
 - [ ] 髪の色がモデルの雰囲気に合っているか（パレット調整）
 - [ ] マスク等の個別パーツの位置が正しいか
+- [ ] ジョイントスフィア生成済みか（`generate_joint_spheres.js` 実行）
+- [ ] アニメーション時に関節の隙間が球体で埋まっているか
 
 ---
 
