@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const pages = [
   { href: '/realistic-viewer', label: 'Realistic Viewer' },
+  { href: '/motion-lab', label: 'Motion Lab' },
   { href: '/equip-config', label: 'Equipment Behavior Config' },
   { href: '/model-import', label: 'Model Import' },
   { href: '/template-editor', label: 'Template Editor' },
