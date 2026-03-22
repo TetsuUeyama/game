@@ -215,9 +215,121 @@ interface HairAnchorsData {
 interface MotionData {
   fps: number;
   frame_count: number;
+  babylonFormat?: boolean; // true if matrices are already in Babylon.js format (no transpose needed)
   bones: Record<string, {
     matrices: number[][];  // flat 16-element skinning matrices per frame
   }>;
+}
+
+/** Raw motion data from Blender (no coordinate conversion applied) */
+interface RawMotionData {
+  format: 'blender_raw';
+  fps: number;
+  frame_count: number;
+  bind_pose_rest: Record<string, number[]>;  // bone.matrix_local world-space, row-major
+  bind_pose_eval: Record<string, number[]>;  // evaluated pose, row-major
+  animated: Record<string, { matrices: number[][] }>; // per-frame world-space, row-major
+}
+
+/**
+ * Convert Blender row-major (column-vector convention) 16-element array
+ * to Babylon.js Matrix (row-vector convention).
+ * Blender: M*v, translation at m[3],m[7],m[11]
+ * Babylon: v*M, translation at m[12],m[13],m[14]
+ * → Transpose is needed.
+ */
+function blenderToBabylonMatrix(m: number[]): Matrix {
+  return Matrix.FromArray([
+    m[0], m[4], m[8],  m[12],
+    m[1], m[5], m[9],  m[13],
+    m[2], m[6], m[10], m[14],
+    m[3], m[7], m[11], m[15],
+  ]);
+}
+
+/**
+ * Coordinate conversion: Blender Z-up right-hand → Babylon Y-up left-hand
+ * Blender (x,y,z) → Babylon (x,z,-y)
+ * As a Babylon.js Matrix (already in Babylon convention).
+ */
+const COORD_BLENDER_TO_VIEWER = Matrix.FromArray([
+  1,  0,  0,  0,
+  0,  0, -1,  0,
+  0,  1,  0,  0,
+  0,  0,  0,  1,
+]);
+
+/**
+ * Process raw Blender motion data into Babylon.js-ready matrices.
+ * For each bone per frame:
+ *   skinMat = animated_world × bind_rest_inverse  (in Blender space)
+ *   viewerMat = C × skinMat × C_inv               (convert to viewer space)
+ * All computed using Babylon.js Matrix API for consistent convention handling.
+ */
+function processRawMotionData(raw: RawMotionData): MotionData {
+  const coordInv = COORD_BLENDER_TO_VIEWER.clone();
+  coordInv.invert();
+
+  // Per-bone bind pose selection: use evaluated pose (IK/FK applied) when it differs
+  // significantly from rest pose, indicating IK was active for that bone.
+  // Voxel meshes are extracted from the evaluated pose, so affected bones must use eval.
+  const hasEval = raw.bind_pose_eval && Object.keys(raw.bind_pose_eval).length > 0;
+  const bindInvCache: Record<string, Matrix> = {};
+  for (const [name, restMat] of Object.entries(raw.bind_pose_rest)) {
+    let useMat = restMat;
+    if (hasEval && raw.bind_pose_eval[name]) {
+      const evalMat = raw.bind_pose_eval[name];
+      // Check if eval differs from rest (IK active for this bone)
+      let diff = 0;
+      for (let i = 0; i < 16; i++) diff += Math.abs(restMat[i] - evalMat[i]);
+      if (diff > 0.01) useMat = evalMat;
+    }
+    const bjsMat = blenderToBabylonMatrix(useMat);
+    const inv = new Matrix();
+    bjsMat.invertToRef(inv);
+    bindInvCache[name] = inv;
+  }
+
+  const bones: MotionData['bones'] = {};
+
+  for (const [boneName, animData] of Object.entries(raw.animated)) {
+    const bindInv = bindInvCache[boneName];
+    if (!bindInv) continue;
+
+    const matrices: number[][] = [];
+    for (const frameMat of animData.matrices) {
+      const animBjs = blenderToBabylonMatrix(frameMat);
+
+      // Babylon row-vector: v * bindInv * anim = v * (bindInv * anim) ???
+      // NO. We want: skinMat = anim × bind_inv (Blender column-vector convention)
+      // In Babylon row-vector: this is bind_inv.multiply(anim)
+      // Because Blender A*B = Babylon B.multiply(A)
+      const skinBjs = bindInv.multiply(animBjs);
+
+      // Convert to viewer space: C × skin × C_inv
+      // Blender: C * skin * C_inv
+      // Babylon: C_inv.multiply(skin).multiply(C)
+      // Wait... let me think step by step.
+      // Blender column-vector: v_viewer = C * skin * C_inv * v_viewer_input
+      // Babylon row-vector: v_viewer_input * M = v_viewer
+      // M = transpose(C * skin * C_inv)
+      // But we already have skin in Babylon format (transposed from Blender).
+      // C is also in Babylon format. So:
+      // M_bjs = C_inv_bjs * skin_bjs * C_bjs
+      // Let me verify: Blender C*skin*C_inv → transpose → (C*skin*C_inv)^T = C_inv^T * skin^T * C^T
+      // Since we already transposed skin to get skin_bjs, and C/C_inv are also transposed...
+      // Actually C_inv_bjs = transpose(C_inv_blender). But COORD_BLENDER_TO_VIEWER was defined directly
+      // in Babylon format. So it's already correct.
+
+      const viewerMat = coordInv.multiply(skinBjs).multiply(COORD_BLENDER_TO_VIEWER);
+
+      // Store as flat array for the animation loop
+      matrices.push(Array.from(viewerMat.asArray()));
+    }
+    bones[boneName] = { matrices };
+  }
+
+  return { fps: raw.fps, frame_count: raw.frame_count, babylonFormat: true, bones };
 }
 
 interface JointSphereConfig {
@@ -231,6 +343,8 @@ interface JointSphereConfig {
 interface SegmentsData {
   voxel_size: number;
   grid: { gx: number; gy: number; gz: number };
+  bb_min?: number[];
+  bb_max?: number[];
   bone_positions: Record<string, {
     head_voxel: number[];
     tail_voxel: number[];
@@ -239,12 +353,145 @@ interface SegmentsData {
   joint_spheres?: Record<string, JointSphereConfig>;
 }
 
+// ========================================================================
+// Bone hierarchy for joint correction
+// ========================================================================
+
+interface BoneHierarchyEntry {
+  bone: string;
+  parent: string | null;
+  jointPoint: number[]; // head point in viewer space [x, y, z]
+}
+
+/** Build bone processing order (root→leaf) with parent info and joint points.
+ *  Only considers bones that have actual segments (voxel meshes).
+ *  Uses exact tail→head matching first, then proximity matching for orphans. */
+function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
+  const bp = segData.bone_positions;
+  const grid = segData.grid;
+  const cx = grid.gx / 2, cy = grid.gy / 2;
+  const scale = segData.voxel_size;
+  const segmentBones = new Set(Object.keys(segData.segments));
+
+  // Build segment name → bone_positions key mapping
+  // Segment names may be normalized (c_thigh_stretch.l) while bone_positions uses raw names (thigh_stretch.l)
+  const bpKeys = new Set(Object.keys(bp));
+  const segToBpName: Record<string, string> = {};
+  for (const seg of segmentBones) {
+    if (bpKeys.has(seg)) { segToBpName[seg] = seg; continue; }
+    // Try dropping c_ prefix
+    let alt = seg.replace(/^c_/, '');
+    if (bpKeys.has(alt)) { segToBpName[seg] = alt; continue; }
+    // Try dropping c_ prefix and _bend suffix
+    alt = seg.replace(/^c_/, '').replace(/_bend/, '');
+    if (bpKeys.has(alt)) { segToBpName[seg] = alt; continue; }
+  }
+  // Helper to get bone position by segment name
+  const getBp = (seg: string) => bp[segToBpName[seg]];
+
+  const tailMap = new Map<string, string>();
+  for (const name of segmentBones) {
+    const pos = getBp(name);
+    if (!pos) continue;
+    const t = pos.tail_voxel;
+    tailMap.set(`${t[0]},${t[1]},${t[2]}`, name);
+  }
+
+  const parentOf: Record<string, string | null> = {};
+  const children: Record<string, string[]> = {};
+  for (const name of segmentBones) { parentOf[name] = null; children[name] = []; }
+  for (const name of segmentBones) {
+    const pos = getBp(name); if (!pos) continue;
+    const h = pos.head_voxel;
+    const parentName = tailMap.get(`${h[0]},${h[1]},${h[2]}`);
+    if (parentName && parentName !== name) { parentOf[name] = parentName; children[parentName].push(name); }
+  }
+
+  // Proximity match for orphans
+  const THRESHOLD = 20;
+  const isAncestor = (bone: string, ancestor: string): boolean => {
+    let cur = bone; const visited = new Set<string>();
+    while (cur) { if (visited.has(cur)) return false; if (cur === ancestor) return true; visited.add(cur); cur = parentOf[cur]!; }
+    return false;
+  };
+  for (let round = 0; round < 10; round++) {
+    const orphanSet = new Set([...segmentBones].filter(n => !parentOf[n] && getBp(n)));
+    if (orphanSet.size === 0) break;
+    const inTree = new Set<string>();
+    for (const n of segmentBones) { if (parentOf[n] || children[n].length > 0) inTree.add(n); }
+    let attached = 0;
+    for (const name of orphanSet) {
+      const h = getBp(name)!.head_voxel;
+      let bestParent: string | null = null, bestDist = THRESHOLD;
+      for (const candidate of segmentBones) {
+        if (candidate === name || !inTree.has(candidate) || isAncestor(candidate, name)) continue;
+        const cPos = getBp(candidate);
+        if (!cPos) continue;
+        const t = cPos.tail_voxel;
+        const d = Math.sqrt((t[0] - h[0]) ** 2 + (t[1] - h[1]) ** 2 + (t[2] - h[2]) ** 2);
+        if (d < bestDist) { bestDist = d; bestParent = candidate; }
+      }
+      if (bestParent) { parentOf[name] = bestParent; children[bestParent].push(name); attached++; }
+    }
+    if (attached === 0) break;
+  }
+
+  const roots = [...segmentBones].filter(n => !parentOf[n]);
+  const order: BoneHierarchyEntry[] = [];
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const bone = queue.shift()!;
+    const pos = getBp(bone); if (!pos) continue;
+    const h = pos.head_voxel;
+    order.push({ bone, parent: parentOf[bone], jointPoint: [(h[0] - cx) * scale, h[2] * scale, -(h[1] - cy) * scale] });
+    for (const child of children[bone]) queue.push(child);
+  }
+  return order;
+}
+
+/**
+ * Resolve segment bone name to motion bone name.
+ * ARP rigs use different naming between control bones (segments) and deform bones (motion):
+ *   c_arm_stretch.l → arm_stretch.l  (drop c_ prefix)
+ *   c_spine_01_bend.x → spine_01.x   (drop c_ prefix and _bend suffix)
+ */
+function resolveMotionBoneName(segName: string, motionBones: Set<string>): string | null {
+  if (motionBones.has(segName)) return segName;
+  // Drop c_ prefix
+  let alt = segName.replace(/^c_/, '');
+  if (motionBones.has(alt)) return alt;
+  // Drop c_ prefix and _bend suffix
+  alt = segName.replace(/^c_/, '').replace(/_bend/, '');
+  if (motionBones.has(alt)) return alt;
+  return null;
+}
+
+/** Apply a row-major column-vector 4x4 matrix to a 3D point (Blender convention) */
+function applyMatPointBlender(m: number[], p: number[]): number[] {
+  return [
+    p[0] * m[0] + p[1] * m[1] + p[2] * m[2] + m[3],
+    p[0] * m[4] + p[1] * m[5] + p[2] * m[6] + m[7],
+    p[0] * m[8] + p[1] * m[9] + p[2] * m[10] + m[11],
+  ];
+}
+
+/** Apply a Babylon.js format (row-vector) 4x4 matrix to a 3D point */
+function applyMatPointBabylon(m: number[], p: number[]): number[] {
+  return [
+    p[0] * m[0] + p[1] * m[4] + p[2] * m[8] + m[12],
+    p[0] * m[1] + p[1] * m[5] + p[2] * m[9] + m[13],
+    p[0] * m[2] + p[1] * m[6] + p[2] * m[10] + m[14],
+  ];
+}
+
 const GAME_ASSETS_API = '/api/game-assets';
 const VOX_API = '/api/vox';
 
 const CHARACTERS: Record<string, CharacterConfig> = {
   // ---- Base Body (single model, all motions compatible) ----
   base_female: { label: 'Base Female (CyberpunkElf)', manifest: `${VOX_API}/female/CyberpunkElf-Detailed/parts.json`, gridJson: `${VOX_API}/female/CyberpunkElf-Detailed/grid.json`, gender: 'female', category: 'base' },
+  base_bunnyakali: { label: 'Base Female (BunnyAkali)', manifest: `${VOX_API}/female/BunnyAkali-Base/parts.json`, gridJson: `${VOX_API}/female/BunnyAkali-Base/grid.json`, gender: 'female', category: 'base' },
+  base_darkelfblader: { label: 'Base Female (DarkElfBlader)', manifest: `${VOX_API}/female/DarkElfBlader-Base/parts.json`, gridJson: `${VOX_API}/female/DarkElfBlader-Base/grid.json`, gender: 'female', category: 'base' },
   // ---- Female ----
   cyberpunkelf: { label: 'CyberpunkElf', manifest: `${VOX_API}/female/realistic/parts.json`, gridJson: `${VOX_API}/female/realistic/grid.json`, gender: 'female', category: 'female' },
   darkelfblader: { label: 'DarkElfBlader', manifest: `${VOX_API}/female/realistic-darkelf/parts.json`, gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`, gender: 'female', category: 'female' },
@@ -321,8 +568,12 @@ function RealisticViewerPage() {
   const [animPlaying, setAnimPlaying] = useState(false);
   const [animReady, setAnimReady] = useState(false);
   const [selectedMotion, setSelectedMotion] = useState('');
+  const [selectedMotionB, setSelectedMotionB] = useState('');
+  const [blendDuration, setBlendDuration] = useState(30); // frames for crossfade
   const motionDataRef = useRef<MotionData | null>(null);
+  const motionDataBRef = useRef<MotionData | null>(null);
   const segmentsDataRef = useRef<SegmentsData | null>(null);
+  const boneHierarchyRef = useRef<BoneHierarchyEntry[]>([]);
   const animFrameRef = useRef(0);
   const frameDisplayRef = useRef<HTMLSpanElement>(null);
   // restVoxelsRef removed — using freezeWorldMatrix for animation
@@ -715,8 +966,6 @@ function RealisticViewerPage() {
           setPartVisibility(vis);
           jointBonesRef.current = jointBonesMap;
         }
-        // Freeze active meshes to skip per-frame frustum culling recalculation
-        scene.freezeActiveMeshes();
         setLoading(false);
       } catch (e) {
         if (!cancelled) {
@@ -745,6 +994,8 @@ function RealisticViewerPage() {
     // Default motion per model
     const defaultMotion: Record<string, string> = {
       'CyberpunkElf-Detailed': 'walk_cycle_arp.motion.json',
+      'BunnyAkali-Base': 'bunnyakali_cozywinter.motion.json',
+      'DarkElfBlader-Base': 'darkelfblader_titsuck.motion.json',
     };
     const motionFile = selectedMotion || defaultMotion[folderName] || 'walk_cycle_arp.motion.json';
 
@@ -753,12 +1004,19 @@ function RealisticViewerPage() {
         // Load segments.json (bone positions)
         const segResp = await fetch(`${VOX_API}/${gender}/${folderName}/segments.json${CACHE_BUST}`);
         if (segResp.ok) {
-          segmentsDataRef.current = await segResp.json();
+          const segData: SegmentsData = await segResp.json();
+          segmentsDataRef.current = segData;
+          boneHierarchyRef.current = buildBoneHierarchy(segData);
         }
         // Load selected motion
         const motionResp = await fetch(`${GAME_ASSETS_API}/motion/${motionFile}${CACHE_BUST}`);
         if (motionResp.ok) {
-          motionDataRef.current = await motionResp.json();
+          const motionJson = await motionResp.json();
+          if (motionJson.format === 'blender_raw') {
+            motionDataRef.current = processRawMotionData(motionJson as RawMotionData);
+          } else {
+            motionDataRef.current = motionJson;
+          }
           setAnimReady(true);
         }
       } catch (e) {
@@ -769,10 +1027,32 @@ function RealisticViewerPage() {
     return () => {
       motionDataRef.current = null;
       segmentsDataRef.current = null;
+      boneHierarchyRef.current = [];
       setAnimPlaying(false);
       setAnimReady(false);
     };
   }, [charKey, selectedMotion]);
+
+  // Load Motion B for blending
+  useEffect(() => {
+    if (!selectedMotionB || CHARACTERS[charKey]?.category !== 'base') {
+      motionDataBRef.current = null;
+      return;
+    }
+    (async () => {
+      try {
+        const resp = await fetch(`${GAME_ASSETS_API}/motion/${selectedMotionB}${CACHE_BUST}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          motionDataBRef.current = json.format === 'blender_raw'
+            ? processRawMotionData(json as RawMotionData) : json;
+        }
+      } catch (e) {
+        console.error('Failed to load Motion B:', e);
+      }
+    })();
+    return () => { motionDataBRef.current = null; };
+  }, [charKey, selectedMotionB]);
 
   // Note: rest pose vertex storage removed — using freezeWorldMatrix for animation (no per-vertex transform)
 
@@ -783,16 +1063,48 @@ function RealisticViewerPage() {
     if (!motion) return;
 
     let frameCounter = animFrameRef.current;
+    const motionB = motionDataBRef.current;
     const frameDuration = 1000 / (motion.fps || 30);
+    const blendFrames = blendDuration;
+    // Total frames: motionA full + blend transition + motionB full (if B exists)
+    const totalFramesA = motion.frame_count;
+    const totalFrames = motionB
+      ? totalFramesA + motionB.frame_count
+      : totalFramesA;
+
+    // Build bone name mapping (segment name → motion bone name) once
+    const allBoneSets = [new Set(Object.keys(motion.bones))];
+    if (motionB) allBoneSets.push(new Set(Object.keys(motionB.bones)));
+    const boneNameMap: Record<string, string> = {};
+    for (const segKey of Object.keys(meshesRef.current)) {
+      for (const boneSet of allBoneSets) {
+        const resolved = resolveMotionBoneName(segKey, boneSet);
+        if (resolved) { boneNameMap[segKey] = resolved; break; }
+      }
+    }
+    for (const entry of boneHierarchyRef.current) {
+      if (!boneNameMap[entry.bone]) {
+        for (const boneSet of allBoneSets) {
+          const resolved = resolveMotionBoneName(entry.bone, boneSet);
+          if (resolved) { boneNameMap[entry.bone] = resolved; break; }
+        }
+      }
+    }
     let lastTime = 0;
     let rafId = 0;
 
-    const toSkinMat = (m: number[]) => Matrix.FromArray([
-      m[0], m[4], m[8],  m[12],
-      m[1], m[5], m[9],  m[13],
-      m[2], m[6], m[10], m[14],
-      m[3], m[7], m[11], m[15],
-    ]);
+    // Convert matrix array to Babylon.js Matrix
+    // babylonFormat: already in Babylon convention, use directly
+    // legacy format: Blender row-major, needs transpose
+    const isBabylon = motion.babylonFormat === true;
+    const toMatrix = (m: number[]) => isBabylon
+      ? Matrix.FromArray(m)
+      : Matrix.FromArray([
+          m[0], m[4], m[8],  m[12],
+          m[1], m[5], m[9],  m[13],
+          m[2], m[6], m[10], m[14],
+          m[3], m[7], m[11], m[15],
+        ]);
 
     const tick = (now: number) => {
       rafId = requestAnimationFrame(tick);
@@ -800,45 +1112,126 @@ function RealisticViewerPage() {
       if (elapsed < frameDuration) return;
       lastTime = now - (elapsed % frameDuration);
 
-      frameCounter = (frameCounter + 1) % motion.frame_count;
+      frameCounter = (frameCounter + 1) % totalFrames;
       animFrameRef.current = frameCounter;
+
+      // Determine which motion(s) to sample and blend ratio
+      let frameA = -1, frameB = -1, blendT = 0;
+      if (!motionB) {
+        // Single motion: loop A
+        frameA = frameCounter;
+      } else if (frameCounter < totalFramesA - blendFrames) {
+        // Pure Motion A
+        frameA = frameCounter;
+      } else if (frameCounter < totalFramesA) {
+        // Crossfade A→B
+        frameA = frameCounter;
+        frameB = frameCounter - (totalFramesA - blendFrames);
+        blendT = (frameCounter - (totalFramesA - blendFrames)) / blendFrames;
+      } else {
+        // Pure Motion B
+        frameB = frameCounter - totalFramesA + blendFrames;
+      }
 
       // Update frame display directly via DOM (no React re-render)
       if (frameDisplayRef.current) {
-        frameDisplayRef.current.textContent = `Frame: ${frameCounter}/${motion.frame_count}`;
+        const phase = blendT > 0 ? ` [blend ${Math.round(blendT*100)}%]` : (frameB >= 0 && frameA < 0 ? ' [B]' : '');
+        frameDisplayRef.current.textContent = `Frame: ${frameCounter}/${totalFrames}${phase}`;
       }
 
-      // Apply skinning matrices to each segment mesh
+      // Voxel-to-bind-pose offset correction (only for babylonFormat/blender_raw processed matrices)
+      const segData = segmentsDataRef.current;
+      let ox = 0, oy = 0, oz = 0;
+      if (isBabylon && segData?.bb_min) {
+        const g = segData.grid, sc = segData.voxel_size;
+        ox = -(g.gx / 2) * sc - segData.bb_min[0];
+        oy = -segData.bb_min[2];
+        oz = (g.gy / 2) * sc + segData.bb_min[1];
+      }
+      const hasOffset = isBabylon && (Math.abs(ox) > 0.001 || Math.abs(oy) > 0.001 || Math.abs(oz) > 0.001);
+
+      // Correct a Babylon-format skin matrix for the voxel-bind offset
+      const correctMatrix = (m: number[]): number[] => {
+        if (!hasOffset) return m;
+        const c = m.slice();
+        c[12] = m[12] - (ox * m[0] + oy * m[4] + oz * m[8]) + ox;
+        c[13] = m[13] - (ox * m[1] + oy * m[5] + oz * m[9]) + oy;
+        c[14] = m[14] - (ox * m[2] + oy * m[6] + oz * m[10]) + oz;
+        return c;
+      };
+
+      // Get blended matrix for a bone at current frame
+      const getBlendedRaw = (boneName: string): number[] | undefined => {
+        const motionName = boneNameMap[boneName] || boneName;
+        let matA: number[] | undefined;
+        let matBm: number[] | undefined;
+        if (frameA >= 0) {
+          const d = motion.bones[motionName];
+          if (d) matA = d.matrices[Math.min(frameA, d.matrices.length - 1)];
+        }
+        if (frameB >= 0 && motionB) {
+          const d = motionB.bones[motionName];
+          if (d) matBm = d.matrices[Math.min(frameB, d.matrices.length - 1)];
+        }
+        if (matA && matBm && blendT > 0) {
+          // Lerp matrices
+          return matA.map((v, i) => v * (1 - blendT) + matBm[i] * blendT);
+        }
+        return matA || matBm;
+      };
+
+      // Joint correction cascade (root→leaf) with offset-corrected matrices
+      const hierarchy = boneHierarchyRef.current;
+      const applyPoint = isBabylon ? applyMatPointBabylon : applyMatPointBlender;
+      const correctedMats: Record<string, number[]> = {};
+      if (hierarchy.length > 0) {
+        for (const entry of hierarchy) {
+          const blendedRaw = getBlendedRaw(entry.bone);
+          let raw: number[] | undefined;
+          if (blendedRaw) {
+            raw = correctMatrix(blendedRaw);
+          } else if (entry.parent && correctedMats[entry.parent]) {
+            raw = correctedMats[entry.parent];
+          }
+          if (!raw) continue;
+          if (!entry.parent || !correctedMats[entry.parent]) {
+            correctedMats[entry.bone] = raw;
+          } else {
+            const parentMat = correctedMats[entry.parent];
+            const jp = entry.jointPoint;
+            const pByParent = applyPoint(parentMat, jp);
+            const pByChild = applyPoint(raw, jp);
+            const corrected = raw.slice();
+            corrected[12] += pByParent[0] - pByChild[0];
+            corrected[13] += pByParent[1] - pByChild[1];
+            corrected[14] += pByParent[2] - pByChild[2];
+            correctedMats[entry.bone] = corrected;
+          }
+        }
+      }
+
+      // Apply matrices to meshes
       for (const [segKey, mesh] of Object.entries(meshesRef.current)) {
         let skinMat: Matrix | null = null;
-
-        // Check if this is a joint segment (blend two bones)
         const jointBones = jointBonesRef.current[segKey];
         if (jointBones) {
-          const [boneA, boneB] = jointBones;
-          const dataA = motion.bones[boneA];
-          const dataB = motion.bones[boneB];
-          const matA = dataA?.matrices[frameCounter];
-          const matB = dataB?.matrices[frameCounter];
-          if (matA && matB) {
-            const blended = matA.map((v: number, i: number) => (v + matB[i]) / 2);
-            skinMat = toSkinMat(blended);
-          } else if (matA) {
-            skinMat = toSkinMat(matA);
-          } else if (matB) {
-            skinMat = toSkinMat(matB);
+          const [boneJA, boneJB] = jointBones;
+          const matJA = correctedMats[boneJA] || getBlendedRaw(boneJA);
+          const matJB = correctedMats[boneJB] || getBlendedRaw(boneJB);
+          if (matJA && matJB) {
+            const blended = matJA.map((v: number, i: number) => (v + matJB[i]) / 2);
+            skinMat = toMatrix(blended);
+          } else if (matJA) {
+            skinMat = toMatrix(matJA);
+          } else if (matJB) {
+            skinMat = toMatrix(matJB);
           }
         } else {
-          const boneData = motion.bones[segKey];
-          if (!boneData) continue;
-          const mat = boneData.matrices[frameCounter];
+          const mat = correctedMats[segKey] || getBlendedRaw(segKey);
           if (!mat) continue;
-          skinMat = toSkinMat(mat);
+          skinMat = toMatrix(mat);
         }
-
         if (!skinMat) continue;
-
-        // Fast path: set mesh world matrix directly (rigid body per bone, no per-vertex transform)
         mesh.freezeWorldMatrix(skinMat);
       }
     };
@@ -939,7 +1332,40 @@ function RealisticViewerPage() {
               <option value="riding_full_start.motion.json">Riding Full Start</option>
               <option value="riding_mid.motion.json">Riding Mid</option>
               <option value="riding_loop_extended.motion.json">Riding Loop Extended</option>
+              <option value="riding_loop_extended_raw.motion.json">Riding Loop Extended (RAW/New)</option>
+              <option value="bunnyakali_cozywinter.motion.json">BunnyAkali CozyWinter</option>
+              <option value="bunnyakali_reversecowgirl.motion.json">BunnyAkali ReverseCowgirl</option>
+              <option value="darkelfblader_titsuck.motion.json">DarkElfBlader TitSuck</option>
             </select>
+            {/* Motion B for blending */}
+            <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Motion B (blend to)</div>
+            <select
+              value={selectedMotionB}
+              onChange={(e) => { setAnimPlaying(false); setSelectedMotionB(e.target.value); }}
+              style={{
+                width: '100%', padding: '4px 6px', fontSize: 11, marginBottom: 4,
+                background: '#1a1a2e', color: '#adf', border: '1px solid #446',
+                borderRadius: 4, fontFamily: 'monospace',
+              }}
+            >
+              <option value="">(none - loop A)</option>
+              <option value="walk_cycle_arp.motion.json">Walk Cycle</option>
+              <option value="bunnyakali_cozywinter.motion.json">BunnyAkali CozyWinter</option>
+              <option value="bunnyakali_reversecowgirl.motion.json">BunnyAkali ReverseCowgirl</option>
+              <option value="darkelfblader_titsuck.motion.json">DarkElfBlader TitSuck</option>
+              <option value="riding_loop_extended_raw.motion.json">Riding Loop Extended (RAW)</option>
+            </select>
+            {selectedMotionB && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: '#888' }}>Blend:</span>
+                <input
+                  type="range" min={5} max={120} value={blendDuration}
+                  onChange={(e) => setBlendDuration(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: 10, color: '#adf', minWidth: 35 }}>{blendDuration}f</span>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button
                 onClick={() => setAnimPlaying(!animPlaying)}

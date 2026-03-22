@@ -119,9 +119,23 @@ for mod in body_obj.modifiers:
 bone_hierarchy = {}
 bone_rest_positions = {}
 
+# Use EVALUATED pose bone positions (matching the evaluated mesh)
+# so joint points align with the voxelized mesh geometry.
+eval_depsgraph = bpy.context.evaluated_depsgraph_get()
+bpy.context.scene.frame_set(0)
+eval_depsgraph.update()
+armature_eval = armature.evaluated_get(eval_depsgraph)
+
 for bone in armature.data.bones:
-    head_world = armature.matrix_world @ bone.head_local
-    tail_world = armature.matrix_world @ bone.tail_local
+    # Try evaluated pose bone first (matches mesh at frame 0)
+    pb = armature_eval.pose.bones.get(bone.name)
+    if pb:
+        head_world = armature_eval.matrix_world @ pb.head
+        tail_world = armature_eval.matrix_world @ pb.tail
+    else:
+        # Fallback to rest pose
+        head_world = armature.matrix_world @ bone.head_local
+        tail_world = armature.matrix_world @ bone.tail_local
     bone_rest_positions[bone.name] = {
         "head": [head_world.x, head_world.y, head_world.z],
         "tail": [tail_world.x, tail_world.y, tail_world.z],
