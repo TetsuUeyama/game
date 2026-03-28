@@ -1,31 +1,32 @@
 /**
- * Fix cap voxels that are inside the body.
- * For each cap voxel that overlaps the body, push it outward
- * along the surface normal direction.
- * Then re-merge with body for MagicaVoxel editing.
+ * fix_cap_outside.js
+ *
+ * ボディ内部にあるキャップボクセルを修正するスクリプト。
+ * ボディと重複するキャップボクセルを表面法線方向に外側へ押し出す。
+ * その後、MagicaVoxel編集用にボディと再統合する。
  *
  * Usage: node scripts/fix_cap_outside.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
 
-const BODY_PATH = 'public/box2/cyberpunk_elf_body_base_hires_sym.vox';
-const CAP_PATH  = 'public/box2/knit_cap.vox';
-const OUT_MERGED = 'public/box2/body_with_cap.vox';
-const OUT_CAP    = 'public/box2/knit_cap_fixed.vox';
+// 入出力ファイルパス
+const BODY_PATH = 'public/box2/cyberpunk_elf_body_base_hires_sym.vox';  // ボディ
+const CAP_PATH  = 'public/box2/knit_cap.vox';                            // キャップ
+const OUT_MERGED = 'public/box2/body_with_cap.vox';                      // 統合出力
+const OUT_CAP    = 'public/box2/knit_cap_fixed.vox';                     // 修正済みキャップ出力
 
-// ── Parse VOX ───────────────────────────────────────────────────────
+// ── VOXパーサー ──────────────────────────────────────────────────────
 function parseVox(buffer) {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let off = 0;
   const r32 = () => { const v = view.getUint32(off, true); off += 4; return v; };
   const r8 = () => view.getUint8(off++);
   const rStr = n => { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(view.getUint8(off + i)); off += n; return s; };
-
   rStr(4); r32();
   let sx = 0, sy = 0, sz = 0;
   const voxels = [];
   let palette = null;
-
   function readChunks(end) {
     while (off < end) {
       const id = rStr(4), cs = r32(), ccs = r32(), ce = off + cs;
@@ -39,6 +40,7 @@ function parseVox(buffer) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXライター
 function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   function makeChunk(id, data) {
     const header = Buffer.alloc(12);
@@ -71,17 +73,17 @@ function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   console.log(`Written: ${filepath} (${voxels.length} voxels, ${sizeX}x${sizeY}x${sizeZ})`);
 }
 
-// ── Main ────────────────────────────────────────────────────────────
+// ── メイン処理 ──────────────────────────────────────────────────────
 const body = parseVox(fs.readFileSync(BODY_PATH));
 const cap = parseVox(fs.readFileSync(CAP_PATH));
 console.log(`Body: ${body.voxels.length} voxels`);
 console.log(`Cap: ${cap.voxels.length} voxels`);
 
-// Build body occupied set
+// ボディの占有セットを構築
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
-// Analyze cap voxels
+// キャップボクセルのボディ内外の分析
 let inside = 0, outside = 0;
 for (const v of cap.voxels) {
   if (bodySet.has(`${v.x},${v.y},${v.z}`)) inside++;
@@ -89,30 +91,30 @@ for (const v of cap.voxels) {
 }
 console.log(`Cap inside body: ${inside}, outside: ${outside}`);
 
-// Head center for computing outward direction
+// 外側への押し出し方向を計算するための頭部中心座標
 const HEAD_CX = 92;
 const HEAD_CY = 27;
-const HEAD_CZ = 195; // approximate head center Z
+const HEAD_CZ = 195;  // 頭部中心の概算Z座標
 
+// 6方向の隣接オフセット
 const DIRS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 
-// Strategy: for each cap voxel, if it's inside the body,
-// find the nearest surface point and place it just outside.
-// We do this by raycasting outward from head center through the voxel.
-
+// ボディ内部のボクセルを外側に押し出す関数
+// 頭部中心からの放射方向にレイキャストして空きスポットを探す
 function findOutwardPosition(x, y, z) {
-  // Direction from head center
+  // 頭部中心からの方向ベクトル
   const dx = x - HEAD_CX;
   const dy = y - HEAD_CY;
   const dz = z - HEAD_CZ;
   const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
   if (len < 0.001) return null;
 
+  // 正規化した方向ベクトル
   const ndx = dx / len;
   const ndy = dy / len;
   const ndz = dz / len;
 
-  // March outward from the voxel position until we find empty space
+  // ボクセル位置から外側にマーチして空きスペースを見つける（最大10ステップ）
   for (let step = 1; step <= 10; step++) {
     const nx = Math.round(x + ndx * step);
     const ny = Math.round(y + ndy * step);
@@ -124,11 +126,11 @@ function findOutwardPosition(x, y, z) {
   return null;
 }
 
-// Rebuild cap: keep outside voxels, push inside voxels outward
+// キャップを再構築: 外側のボクセルはそのまま保持、内側のボクセルは外側に押し出す
 const newCapSet = new Set();
 const newCapVoxels = [];
 
-// First, keep all cap voxels that are already outside
+// まず既に外側にあるキャップボクセルを保持
 for (const v of cap.voxels) {
   if (!bodySet.has(`${v.x},${v.y},${v.z}`)) {
     const key = `${v.x},${v.y},${v.z}`;
@@ -140,7 +142,7 @@ for (const v of cap.voxels) {
 }
 console.log(`Kept ${newCapVoxels.length} outside cap voxels`);
 
-// Push inside voxels outward
+// 内側のボクセルを外側に押し出す
 let pushed = 0, failed = 0;
 for (const v of cap.voxels) {
   if (bodySet.has(`${v.x},${v.y},${v.z}`)) {
@@ -160,27 +162,27 @@ for (const v of cap.voxels) {
 console.log(`Pushed outward: ${pushed}, failed: ${failed}`);
 console.log(`New cap total: ${newCapVoxels.length} voxels`);
 
-// Also: re-generate surface cap for the back of head to ensure full coverage
-// Find all body surface voxels in the head/back region and place cap outside
-const backCapZ = 168; // back goes down to here
-const HEAD_TOP_Z = 207;
+// 後頭部の表面キャップを追加して完全なカバレッジを確保
+const backCapZ = 168;      // 後頭部のZ下限
+const HEAD_TOP_Z = 207;   // 頭頂のZ座標
 
 let surfaceAdded = 0;
 for (const v of body.voxels) {
+  // 頭部のZ範囲外はスキップ
   if (v.z < backCapZ || v.z > HEAD_TOP_Z) continue;
 
-  // Check if in head region (not ears)
+  // 頭部領域に限定（耳は除外）
   const dx = Math.abs(v.x - HEAD_CX);
   const dy = v.y - HEAD_CY;
-  if (dx > 20) continue; // too far to the side
+  if (dx > 20) continue;  // 横方向に離れすぎ
 
-  // Focus on back region (high Y = back)
-  if (dy < 5) continue; // only back half
+  // 後頭部のみ（Y > 5 = 後ろ半分）
+  if (dy < 5) continue;
 
-  // Skip ear area
+  // 耳領域をスキップ
   if (v.z >= 186 && v.z <= 197 && (v.x < 70 || v.x > 113)) continue;
 
-  // Check if surface voxel
+  // 表面ボクセルか確認（空き隣接あり）
   let isSurface = false;
   for (const [ddx, ddy, ddz] of DIRS) {
     if (!bodySet.has(`${v.x+ddx},${v.y+ddy},${v.z+ddz}`)) {
@@ -190,32 +192,33 @@ for (const v of body.voxels) {
   }
   if (!isSurface) continue;
 
-  // Place cap voxel in each empty neighbor
+  // 空き隣接にキャップボクセルを配置
   for (const [ddx, ddy, ddz] of DIRS) {
     const nx = v.x + ddx, ny = v.y + ddy, nz = v.z + ddz;
     if (nz < backCapZ) continue;
+    // 耳領域のZ範囲で横方向にはみ出す場合はスキップ
     if (nx < 70 || nx > 113) { if (nz >= 186 && nz <= 197) continue; }
 
     const key = `${nx},${ny},${nz}`;
     if (bodySet.has(key)) continue;
     if (newCapSet.has(key)) continue;
     newCapSet.add(key);
-    newCapVoxels.push({ x: nx, y: ny, z: nz, ci: 1 }); // main cap color
+    newCapVoxels.push({ x: nx, y: ny, z: nz, ci: 1 }); // キャップ本体色
     surfaceAdded++;
   }
 }
 console.log(`Back surface cap voxels added: ${surfaceAdded}`);
 console.log(`Final cap total: ${newCapVoxels.length} voxels`);
 
-// Save fixed cap
+// 修正済みキャップを保存
 const capPalette = [
-  { r: 200, g: 50, b: 50 },
-  { r: 150, g: 35, b: 40 },
+  { r: 200, g: 50, b: 50 },   // キャップ本体
+  { r: 150, g: 35, b: 40 },   // ツバ
 ];
 while (capPalette.length < 256) capPalette.push({ r: 0, g: 0, b: 0 });
 writeVox(OUT_CAP, body.sx, body.sy, body.sz, newCapVoxels, capPalette);
 
-// Save merged file for MagicaVoxel
+// MagicaVoxel編集用の統合ファイルを保存
 const mergedPalette = [];
 for (let i = 0; i < 256; i++) {
   mergedPalette.push(body.palette ? body.palette[i] : { r: 0, g: 0, b: 0 });
@@ -224,7 +227,9 @@ mergedPalette[253] = { r: 200, g: 50, b: 50 };
 mergedPalette[254] = { r: 150, g: 35, b: 40 };
 
 const merged = [];
+// ボディを追加
 for (const v of body.voxels) merged.push(v);
+// キャップを追加（ボディと重ならないもの）
 for (const v of newCapVoxels) {
   const key = `${v.x},${v.y},${v.z}`;
   if (bodySet.has(key)) continue;

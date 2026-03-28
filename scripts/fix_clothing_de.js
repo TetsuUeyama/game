@@ -1,19 +1,26 @@
 /**
- * Fix clothing for DarkElfBlader: remove body-interior voxels, generate shell on body surface.
- * Based on fix_leotard.js logic (proven approach).
+ * fix_clothing_de.js
+ *
+ * DarkElfBladerの衣装を修正するスクリプト:
+ * ボディ内部のボクセルを除去し、ボディ表面にシェルを生成。
+ * fix_leotard.jsのロジックを基に（実証済みアプローチ）。
  *
  * Usage: node scripts/fix_clothing_de.js <part_key>
- * Example: node scripts/fix_clothing_de.js armor_-_suit
+ * 例: node scripts/fix_clothing_de.js armor_-_suit
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// コマンドライン引数からパーツキーを取得
 const PART = process.argv[2];
 if (!PART) {
   console.error('Usage: node scripts/fix_clothing_de.js <part_key>');
   process.exit(1);
 }
 
+// VOXファイルを読み込んでパースする関数
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -37,6 +44,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// ボクセルデータをVOXファイルとして書き出す関数
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -64,12 +72,12 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
-// --- Main ---
+// --- メイン処理 ---
 const BASE = path.join(__dirname, '..');
 const DIR = 'public/box4';
 const PREFIX = 'darkelfblader_arp';
 
-// Read body (CE Body remapped to DE grid) and clothing part
+// ボディ（CEボディをDEグリッドにリマップ済み）と衣装パーツを読み込み
 const body = readVox(path.join(BASE, DIR, `${PREFIX}_body.vox`));
 const part = readVox(path.join(BASE, DIR, `${PREFIX}_${PART}.vox`));
 const SX = body.sx, SY = body.sy, SZ = body.sz;
@@ -77,20 +85,20 @@ const SX = body.sx, SY = body.sy, SZ = body.sz;
 console.log(`Body: ${body.voxels.length} voxels, grid: ${SX}x${SY}x${SZ}`);
 console.log(`${PART} (original): ${part.voxels.length} voxels`);
 
-// Build body set
+// ボディボクセルの座標セットを構築
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
-// Separate inside/outside body
-const outsideVoxels = [];
-const insideVoxels = [];
+// 衣装ボクセルをボディ内側/外側に分離
+const outsideVoxels = [];  // ボディ外側の衣装ボクセル
+const insideVoxels = [];   // ボディ内側（重複）の衣装ボクセル
 for (const v of part.voxels) {
   if (bodySet.has(`${v.x},${v.y},${v.z}`)) insideVoxels.push(v);
   else outsideVoxels.push(v);
 }
 console.log(`  Outside body: ${outsideVoxels.length}, Inside body: ${insideVoxels.length}`);
 
-// Step 1: Keep outside-body voxels
+// ステップ1: ボディ外側の衣装ボクセルを保持
 const result = [];
 const placed = new Set();
 for (const v of outsideVoxels) {
@@ -99,10 +107,10 @@ for (const v of outsideVoxels) {
 }
 console.log(`Step 1 - kept outside: ${result.length}`);
 
-// Step 2: Generate shell on body surface within clothing Z/X range
+// ステップ2: 衣装のZ/X範囲内でボディ表面にシェルを生成
 const DIRS = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
 
-// Clothing Z/X range per Z
+// Z値ごとの衣装X範囲を計算
 const partRangeByZ = {};
 for (const v of part.voxels) {
   if (!partRangeByZ[v.z]) partRangeByZ[v.z] = { xmin: v.x, xmax: v.x };
@@ -111,15 +119,17 @@ for (const v of part.voxels) {
     partRangeByZ[v.z].xmax = Math.max(partRangeByZ[v.z].xmax, v.x);
   }
 }
+// 衣装のZ範囲
 const partZmin = Math.min(...part.voxels.map(v => v.z));
 const partZmax = Math.max(...part.voxels.map(v => v.z));
 
-// Color lookup from original clothing
+// 元の衣装からの色検索マップ構築
 const colorByZ = {};
 for (const v of part.voxels) {
   if (!colorByZ[v.z]) colorByZ[v.z] = [];
   colorByZ[v.z].push(v);
 }
+// 最寄り衣装色を検索する関数
 function getNearestColor(x, y, z) {
   let bestDist = Infinity, bestC = part.voxels[0].c;
   for (let dz = 0; dz <= 5; dz++) {
@@ -136,18 +146,18 @@ function getNearestColor(x, y, z) {
   return bestC;
 }
 
-// Body surface voxels within clothing range
+// 衣装範囲内のボディ表面ボクセルにシェルを追加
 let shellCount = 0;
 for (const bv of body.voxels) {
-  // Check if this body voxel is in the clothing Z range
+  // 衣装のZ範囲外ならスキップ
   if (bv.z < partZmin || bv.z > partZmax) continue;
 
-  // Check X range for this Z level (with margin)
+  // このZ断面での衣装X範囲を確認（マージン±1）
   const xRange = partRangeByZ[bv.z];
   if (!xRange) continue;
   if (bv.x < xRange.xmin - 1 || bv.x > xRange.xmax + 1) continue;
 
-  // Check if surface voxel (has at least one empty neighbor)
+  // 表面ボクセル判定（少なくとも1つの空き隣接があるか）
   let isSurface = false;
   for (const [dx, dy, dz] of DIRS) {
     if (!bodySet.has(`${bv.x+dx},${bv.y+dy},${bv.z+dz}`)) {
@@ -157,7 +167,7 @@ for (const bv of body.voxels) {
   }
   if (!isSurface) continue;
 
-  // Place shell voxels in empty neighbors
+  // 空き隣接にシェルボクセルを配置
   for (const [dx, dy, dz] of DIRS) {
     const nx = bv.x + dx, ny = bv.y + dy, nz = bv.z + dz;
     if (nx < 0 || nx >= SX || ny < 0 || ny >= SY || nz < 0 || nz >= SZ) continue;
@@ -171,12 +181,12 @@ for (const bv of body.voxels) {
 console.log(`Step 2 - shell: ${shellCount}`);
 console.log(`Total: ${result.length} voxels`);
 
-// Write output
+// 結果をVOXファイルとして書き出し
 const outPath = path.join(BASE, DIR, `${PREFIX}_${PART}.vox`);
 writeVox(outPath, SX, SY, SZ, result, part.palette);
 console.log(`Written: ${outPath}`);
 
-// Update manifest
+// パーツマニフェストのボクセル数を更新
 const manifestPath = path.join(BASE, DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === PART);

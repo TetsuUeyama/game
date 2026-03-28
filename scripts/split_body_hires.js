@@ -1,13 +1,18 @@
 /**
- * Extract high-resolution face parts from 2x voxelized CE body.
- * Same logic as split_body_parts.js but with scaled thresholds.
- * Face parts are overlays — skin fill replaces extracted positions in base.
+ * split_body_hires.js
+ *
+ * 2倍ボクセル化されたCEボディから高解像度の顔パーツを抽出するスクリプト。
+ * split_body_parts.jsと同じロジックだが、スケールされた閾値を使用。
+ * 顔パーツはオーバーレイ — 抽出位置はベースでスキンフィルに置換される。
  *
  * Usage: node scripts/split_body_hires.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// VOXファイルパーサー
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -31,6 +36,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXファイルライター
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -58,32 +64,33 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
-// --- Main ---
+// --- メイン処理 ---
 const BASE = path.join(__dirname, '..');
+// 高解像度ボディを読み込み
 const body = readVox(path.join(BASE, 'public/box2-hires/cyberpunkelf_body.vox'));
 const { sx, sy, sz, palette } = body;
 const OUT_DIR = path.join(BASE, 'public/box2');
 
 console.log(`Hi-res body: ${sx}x${sy}x${sz}, ${body.voxels.length} voxels`);
 
-// Scale ratio: lo-res was 85x34x102, hi-res is 189x63x208
-const R = sz / 102;  // ~2.04
+// スケール比率: 低解像度は85x34x102、高解像度は189x63x208
+const R = sz / 102;  // ≒2.04
 console.log(`Scale ratio: ${R.toFixed(3)}`);
 
-// --- Skin color (CE has blue/purple skin) ---
+// --- スキンカラー判定（CEは青/紫の肌色） ---
 function isSkinColor(c) {
   const col = palette[c - 1];
   if (!col) return true;
   const { r, g, b } = col;
-  // CE blue skin: B >= 230, R and G in 100-150 range, similar to each other
+  // CE青肌: B>=230, R,Gが100-150の範囲、R-Gの差が30以内
   if (b >= 230 && r >= 100 && r <= 150 && g >= 100 && g <= 150 && Math.abs(r - g) <= 30) return true;
   return false;
 }
 function isFeatureColor(c) { return !isSkinColor(c); }
 
-// Find bright skin color
+// 最も明るいスキンカラーを検出
 const faceSkinCounts = {};
-const headZstart = Math.round(80 * R);
+const headZstart = Math.round(80 * R);  // 頭部開始Z（スケール済み）
 for (const v of body.voxels) {
   if (v.z >= headZstart && v.y <= Math.round(12 * R) && v.x >= Math.round(33 * R) && v.x <= Math.round(47 * R)) {
     if (isSkinColor(v.c)) faceSkinCounts[v.c] = (faceSkinCounts[v.c] || 0) + 1;
@@ -98,8 +105,8 @@ for (const [c, n] of Object.entries(faceSkinCounts)) {
 }
 console.log(`Bright skin: idx${brightSkin} RGB(${palette[brightSkin-1].r},${palette[brightSkin-1].g},${palette[brightSkin-1].b})`);
 
-// --- Scaled region thresholds ---
-// Lo-res thresholds → hi-res (multiply by R)
+// --- スケール済み領域閾値 ---
+// 低解像度閾値 × R = 高解像度閾値
 const EAR_Z_MIN = Math.round(85 * R), EAR_Z_MAX = Math.round(93 * R);
 const EAR_INNER_LEFT = Math.round(33 * R);
 const EAR_INNER_RIGHT = Math.round(47 * R);
@@ -121,7 +128,7 @@ console.log(`Eyes: z=${EYE_Z_MIN}-${EYE_Z_MAX}, y<=${EYE_Y_MAX}, x=${EYE_X_MIN}-
 console.log(`Nose: z=${NOSE_Z_MIN}-${NOSE_Z_MAX}, y<=${NOSE_Y_MAX}, x=${NOSE_X_MIN}-${NOSE_X_MAX}`);
 console.log(`Mouth: z=${MOUTH_Z_MIN}-${MOUTH_Z_MAX}, y<=${MOUTH_Y_MAX}, x=${MOUTH_X_MIN}-${MOUTH_X_MAX}`);
 
-// Nose front detection
+// 鼻前面検出（各X,Zでの最小Y値）
 const noseMinY = {};
 for (const v of body.voxels) {
   if (v.z >= NOSE_Z_MIN && v.z <= NOSE_Z_MAX &&
@@ -131,7 +138,7 @@ for (const v of body.voxels) {
   }
 }
 
-// Mouth front detection (geometric, since hi-res has no distinct mouth colors)
+// 口前面検出（幾何学的、高解像度では口色が不明瞭なため）
 const mouthMinY = {};
 for (const v of body.voxels) {
   if (v.z >= MOUTH_Z_MIN && v.z < MOUTH_Z_MAX &&
@@ -141,24 +148,27 @@ for (const v of body.voxels) {
   }
 }
 
-// --- Classify ---
+// --- 分類 ---
 const parts = { ears: [], eyes: [], nose: [], mouth: [] };
 const featurePositions = new Set();
 
 for (const v of body.voxels) {
   const key = `${v.x},${v.y},${v.z}`;
 
+  // 耳
   if (v.z >= EAR_Z_MIN && v.z <= EAR_Z_MAX &&
       (v.x < EAR_INNER_LEFT || v.x > EAR_INNER_RIGHT)) {
     parts.ears.push(v); featurePositions.add(key); continue;
   }
 
+  // 目
   if (v.z >= EYE_Z_MIN && v.z <= EYE_Z_MAX &&
       v.y <= EYE_Y_MAX && v.x >= EYE_X_MIN && v.x <= EYE_X_MAX &&
       isFeatureColor(v.c)) {
     parts.eyes.push(v); featurePositions.add(key); continue;
   }
 
+  // 鼻
   if (v.z >= NOSE_Z_MIN && v.z <= NOSE_Z_MAX &&
       v.x >= NOSE_X_MIN && v.x <= NOSE_X_MAX && v.y <= NOSE_Y_MAX) {
     const nKey = `${v.x},${v.z}`;
@@ -167,6 +177,7 @@ for (const v of body.voxels) {
     }
   }
 
+  // 口
   if (v.z >= MOUTH_Z_MIN && v.z < MOUTH_Z_MAX &&
       v.x >= MOUTH_X_MIN && v.x <= MOUTH_X_MAX && v.y <= MOUTH_Y_MAX) {
     const mKey = `${v.x},${v.z}`;
@@ -176,7 +187,7 @@ for (const v of body.voxels) {
   }
 }
 
-// --- Brighten zones + base ---
+// --- 明るくするゾーン + ベース ---
 const BRIGHTEN_ZONES = [
   { zMin: EYE_Z_MIN - 2, zMax: EYE_Z_MAX + 2, yMax: EYE_Y_MAX + 4, xMin: EYE_X_MIN - 2, xMax: EYE_X_MAX + 2 },
   { zMin: MOUTH_Z_MIN - 2, zMax: MOUTH_Z_MAX + 2, yMax: MOUTH_Y_MAX + 4, xMin: MOUTH_X_MIN - 2, xMax: MOUTH_X_MAX + 2 },
@@ -195,6 +206,7 @@ function isDarkSkin(c) {
   return (col.r * 0.299 + col.g * 0.587 + col.b * 0.114) < BRIGHT_LUM - 2;
 }
 
+// ベースボディを構築
 const baseVoxels = [];
 let brightenedCount = 0;
 for (const v of body.voxels) {
@@ -206,6 +218,7 @@ for (const v of body.voxels) {
     baseVoxels.push(v);
   }
 }
+// 特徴位置を明るいスキン色でベースに追加
 for (const v of [...parts.eyes, ...parts.mouth, ...parts.nose]) {
   baseVoxels.push({ x: v.x, y: v.y, z: v.z, c: brightSkin });
 }
@@ -213,23 +226,21 @@ parts.base = baseVoxels;
 
 console.log(`\nBrightened: ${brightenedCount} surrounding skin voxels`);
 
-// --- Write ---
+// --- 各パーツを書き出し ---
 for (const [name, voxels] of Object.entries(parts)) {
   const outPath = path.join(OUT_DIR, `cyberpunk_elf_body_${name}_hires.vox`);
   writeVox(outPath, sx, sy, sz, voxels, palette);
   console.log(`  ${name}: ${voxels.length} voxels`);
 }
 
-// --- Compute viewer offset ---
-// Lo-res: SCALE=0.010, center=(85/2, 34/2)=(42.5, 17)
-// Hi-res: SCALE=0.005, center=(189/2, 63/2)=(94.5, 31.5)
-// Viewer coords: x=(vx-cx)*scale, y=vz*scale, z=-(vy-cy)*scale
-// For body centroids to align, compute offset
+// --- ビューアオフセットを計算 ---
+// 低解像度: SCALE=0.010, center=(42.5, 17)
+// 高解像度: SCALE=0.005, center=(94.5, 31.5)
 const SCALE_LO = 0.010, SCALE_HI = 0.005;
 const loCx = 85/2, loCy = 34/2;
 const hiCx = sx/2, hiCy = sy/2;
 
-// Compute centroid of lo-res body
+// 低解像度ボディの重心を計算
 const loBody = readVox(path.join(BASE, 'public/box2/cyberpunk_elf_body.vox'));
 let loSum = [0,0,0];
 for (const v of loBody.voxels) {
@@ -239,6 +250,7 @@ for (const v of loBody.voxels) {
 }
 const loCenter = loSum.map(s => s / loBody.voxels.length);
 
+// 高解像度ボディの重心を計算
 let hiSum = [0,0,0];
 for (const v of body.voxels) {
   hiSum[0] += (v.x - hiCx) * SCALE_HI;
@@ -247,6 +259,7 @@ for (const v of body.voxels) {
 }
 const hiCenter = hiSum.map(s => s / body.voxels.length);
 
+// 高解像度パーツのビューアオフセット
 const offset = [loCenter[0]-hiCenter[0], loCenter[1]-hiCenter[1], loCenter[2]-hiCenter[2]];
 console.log(`\nLo centroid: [${loCenter.map(v=>v.toFixed(4))}]`);
 console.log(`Hi centroid: [${hiCenter.map(v=>v.toFixed(4))}]`);

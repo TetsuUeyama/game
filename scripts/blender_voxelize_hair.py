@@ -1,45 +1,54 @@
 """
-Blender Python: Voxelize ONLY hair meshes from a 3D model.
-Uses the same grid parameters as the hires body for perfect alignment.
+Blender Python: 3Dモデルから髪メッシュのみをボクセル化するスクリプト。
+高解像度ボディと同じグリッドパラメータを使用して完全な位置合わせを実現。
 
 Usage:
   blender --background --python scripts/blender_voxelize_hair.py -- <input.blend> <output.vox>
 """
+# Blenderメインモジュール
 import bpy
+# BMesh操作モジュール
 import bmesh
+# システムモジュール
 import sys
+# OS操作モジュール
 import os
+# バイナリパックモジュール
 import struct
+# 数学モジュール
 import math
+# JSON操作モジュール
 import json
+# mathutilsからVector型
 from mathutils import Vector
+# BVHツリー
 from mathutils.bvhtree import BVHTree
 
+# コマンドライン引数
 argv = sys.argv
 idx = argv.index("--") if "--" in argv else len(argv)
 args = argv[idx + 1:]
-INPUT_PATH = args[0] if len(args) > 0 else ""
-OUTPUT_PATH = args[1] if len(args) > 1 else ""
+INPUT_PATH = args[0] if len(args) > 0 else ""    # 入力モデルファイル
+OUTPUT_PATH = args[1] if len(args) > 1 else ""    # 出力VOXパス
 
 if not INPUT_PATH or not OUTPUT_PATH:
     print("Usage: blender --background --python blender_voxelize_hair.py -- <input.blend> <output.vox>")
     sys.exit(1)
 
-# Grid parameters from hires body (must match exactly for alignment)
+# 高解像度ボディのグリッドパラメータを読み込み（位置合わせに必須）
 GRID_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          '..', 'public', 'box2', 'cyberpunk_elf_body_base_hires_grid.json')
 with open(GRID_JSON) as f:
     grid_info = json.load(f)
 
-body_gx = grid_info['gx']
-body_gy = grid_info['gy']
-body_gz = grid_info['gz']
-voxel_size = grid_info['voxel_size']
-body_def_min = Vector(grid_info['def_min'])
-body_def_max = Vector(grid_info['def_max'])
+body_gx = grid_info['gx']                        # ボディグリッドX
+body_gy = grid_info['gy']                        # ボディグリッドY
+body_gz = grid_info['gz']                        # ボディグリッドZ
+voxel_size = grid_info['voxel_size']             # ボクセルサイズ
+body_def_min = Vector(grid_info['def_min'])       # ボディ変形空間最小値
+body_def_max = Vector(grid_info['def_max'])       # ボディ変形空間最大値
 
-# Grid will be expanded after computing hair bounding box
-# def_min is kept the same as body so coordinates align
+# グリッドは髪のバウンディングボックス計算後に拡張される
 def_min = Vector(body_def_min)
 
 print(f"\n=== Hair Voxelizer (Expanded Grid) ===")
@@ -47,7 +56,7 @@ print(f"  Input: {INPUT_PATH}")
 print(f"  Output: {OUTPUT_PATH}")
 print(f"  Body grid: {body_gx}x{body_gy}x{body_gz}, voxel_size: {voxel_size:.6f}")
 
-# Load model
+# モデル読み込み
 ext = os.path.splitext(INPUT_PATH)[1].lower()
 if ext == '.fbx':
     bpy.ops.object.select_all(action='SELECT')
@@ -56,14 +65,14 @@ if ext == '.fbx':
 else:
     bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
 
-# Disable MASK modifiers
+# MASKモディファイアを無効化
 for obj in bpy.context.scene.objects:
     if obj.type == 'MESH':
         for mod in obj.modifiers:
             if mod.type == 'MASK' and mod.show_viewport:
                 mod.show_viewport = False
 
-# Find hair meshes
+# 髪メッシュを検索
 mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
 hair_objects = [o for o in mesh_objects if 'hair' in o.name.lower()]
 
@@ -74,7 +83,7 @@ if not hair_objects:
 
 print(f"  Hair meshes: {[o.name for o in hair_objects]}")
 
-# Body bbox for chibi deformation (same as hires body)
+# チビ変形用のボディバウンディングボックスを計算
 body_objects = [o for o in mesh_objects if 'body' in o.name.lower()
                 and 'hair' not in o.name.lower()
                 and 'eye' not in o.name.lower()]
@@ -95,13 +104,14 @@ for obj in body_objects:
             max_co[i] = max(max_co[i], v.co[i])
     eo.to_mesh_clear()
 
-center = (min_co + max_co) / 2
-model_h = max_co.z - min_co.z
+center = (min_co + max_co) / 2    # ボディ中心
+model_h = max_co.z - min_co.z     # モデル高さ
 print(f"  Body bbox: {max_co.x - min_co.x:.3f} x {max_co.y - min_co.y:.3f} x {model_h:.3f}")
 print(f"  Center: ({center.x:.4f}, {center.y:.4f}, {center.z:.4f})")
 
-# ── Chibi deformation (same as main script) ──
+# ── チビ変形関数（メインスクリプトと同一） ──
 def deform_point(co):
+    """ワールド座標→チビ変形座標。"""
     x, y, z = co.x, co.y, co.z
     t = max(0, min(1, (z - min_co.z) / model_h)) if model_h > 0 else 0.5
     if t > 0.85:
@@ -127,12 +137,13 @@ def deform_point(co):
     return Vector((x, y, z))
 
 def inv_deform(co, head_scale_override=None):
+    """チビ変形座標→ワールド座標。head_scale_overrideで頭部拡大率を上書き可能。"""
     x, y, z = co.x, co.y, co.z
     t = max(0, min(1, (z - min_co.z) / model_h)) if model_h > 0 else 0.5
     if t > 0.85:
         ht = min(1, (t - 0.85) / 0.15)
         if head_scale_override is not None:
-            s = head_scale_override
+            s = head_scale_override  # 髪用: 1.0で頭部拡大なし
         else:
             s = 1.5 + ht * 0.3
         x = center.x + (x - center.x) / s
@@ -156,10 +167,11 @@ def inv_deform(co, head_scale_override=None):
         y = center.y + (y - center.y) / 1.1
     return Vector((x, y, z))
 
-# ── Texture handling ──
+# ── テクスチャハンドリング ──
 texture_cache = {}
 
 def cache_texture(image):
+    """テクスチャをRGBバイト配列としてキャッシュ。"""
     if image.name in texture_cache:
         return
     w, h = image.size
@@ -178,6 +190,7 @@ def cache_texture(image):
     del raw
 
 def sample_texture(img_name, u, v):
+    """UV座標でテクスチャの色をサンプリング。"""
     if img_name not in texture_cache:
         return None
     w, h, pix = texture_cache[img_name]
@@ -189,9 +202,11 @@ def sample_texture(img_name, u, v):
     return None
 
 def score_image(name):
+    """テクスチャ名からスコアを算出（ベースカラー優先）。"""
     n = name.lower()
     if 'basecolor' in n or 'base_color' in n or 'diffuse' in n:
         s = 10
+        # バリアントテクスチャは減点
         if any(v in n for v in ['dark', 'white', 'blue', 'red', 'turquoise', 'wet', 'blush']):
             s -= 8
         return s
@@ -204,6 +219,7 @@ def score_image(name):
     return 0
 
 def find_texture_for_mat(mat):
+    """マテリアルのベースカラーテクスチャを検索（スコアリング方式）。"""
     if not mat:
         return None
     best = None
@@ -214,12 +230,14 @@ def find_texture_for_mat(mat):
                 s = score_image(node.image.name)
                 if s > best_score:
                     best_score = s; best = node.image
+            # グループノード内も検索
             if node.type == 'GROUP' and node.node_tree:
                 for inner in node.node_tree.nodes:
                     if inner.type == 'TEX_IMAGE' and inner.image:
                         s = score_image(inner.image.name)
                         if s > best_score:
                             best_score = s; best = inner.image
+    # マテリアル名で画像を検索
     for img in bpy.data.images:
         n = img.name.lower()
         key = mat.name.lower().replace(' ', '_')
@@ -229,14 +247,14 @@ def find_texture_for_mat(mat):
                 best_score = s; best = img
     return best if best_score >= 0 else None
 
-# Build material info for hair
+# 髪メッシュのマテリアル情報を構築
 mat_info = {}
 for obj in hair_objects:
     for slot in obj.material_slots:
         mat = slot.material
         if not mat or mat.name in mat_info:
             continue
-        info = {'image': None, 'color': (80, 60, 40)}  # default dark brown for hair
+        info = {'image': None, 'color': (80, 60, 40)}  # デフォルト: ダークブラウン
         img = find_texture_for_mat(mat)
         if img:
             cache_texture(img)
@@ -254,10 +272,11 @@ for obj in hair_objects:
         tag = info['image'] or f"flat{info['color']}"
         print(f"    Mat '{mat.name}' -> {tag}")
 
-# ── Build BVH for hair meshes ──
+# ── 髪メッシュのBVHツリーを構築 ──
 print("\n  Building BVH for hair...")
 
 class MeshData:
+    """メッシュデータを保持するクラス。"""
     __slots__ = ['bvh', 'bm', 'uv_layer', 'face_mat', 'face_tex', 'obj_name']
 
 hair_mesh_data = []
@@ -275,6 +294,7 @@ for obj in hair_objects:
     md.bvh = BVHTree.FromBMesh(bm)
     md.bm = bm
     md.uv_layer = bm.loops.layers.uv.active
+    # 面ごとのマテリアルとテクスチャを記録
     md.face_mat = {}
     md.face_tex = {}
     for face in bm.faces:
@@ -287,13 +307,15 @@ for obj in hair_objects:
     hair_mesh_data.append(md)
     eo.to_mesh_clear()
 
-# ── Color sampling ──
+# ── カラーサンプリング ──
 def get_color_at(md, fi, hit):
+    """面上のヒット位置の色を取得（テクスチャサンプリング→フラットカラー）。"""
     tex = md.face_tex.get(fi)
     if tex and md.uv_layer and fi < len(md.bm.faces):
         face = md.bm.faces[fi]
         loops = face.loops
         if len(loops) == 3:
+            # 重心座標でUVを補間
             v0, v1, v2 = [l.vert.co for l in loops]
             uv0, uv1, uv2 = [l[md.uv_layer].uv for l in loops]
             e0, e1 = v1 - v0, v2 - v0
@@ -313,13 +335,14 @@ def get_color_at(md, fi, hit):
                 c = sample_texture(tex, uvu, uvv)
                 if c:
                     return c
+    # フォールバック: マテリアルのフラットカラー
     mn = md.face_mat.get(fi)
     if mn and mn in mat_info:
         return mat_info[mn]['color']
-    return (80, 60, 40)
+    return (80, 60, 40)  # デフォルトダークブラウン
 
-# ── Compute expanded grid to fit hair ──
-# Deform all hair vertices to find the full deformed bounding box
+# ── 髪を含む拡張グリッドを計算 ──
+# 全髪頂点を変形して完全な変形バウンディングボックスを求める
 hair_def_min = Vector((1e9, 1e9, 1e9))
 hair_def_max = Vector((-1e9, -1e9, -1e9))
 for obj in hair_objects:
@@ -334,21 +357,21 @@ for obj in hair_objects:
             hair_def_max[i] = max(hair_def_max[i], dc[i])
     eo.to_mesh_clear()
 
-# Expand grid: keep def_min same as body (for coordinate alignment),
-# but extend max to fit hair with margin
+# グリッドを拡張: def_minはボディと同じ（座標合わせ）、maxは髪を含むように拡張
 margin = voxel_size * 5
 def_max = Vector((
     max(body_def_max.x, hair_def_max.x + margin),
     max(body_def_max.y, hair_def_max.y + margin),
     max(body_def_max.z, hair_def_max.z + margin),
 ))
-# Also extend min if hair goes below body
+# 髪がボディより下に伸びる場合はminも拡張
 def_min = Vector((
     min(body_def_min.x, hair_def_min.x - margin),
     min(body_def_min.y, hair_def_min.y - margin),
     min(body_def_min.z, hair_def_min.z - margin),
 ))
 
+# 拡張グリッドサイズ（256上限）
 gx = min(256, int(math.ceil((def_max.x - def_min.x) / voxel_size)) + 2)
 gy = min(256, int(math.ceil((def_max.y - def_min.y) / voxel_size)) + 2)
 gz = min(256, int(math.ceil((def_max.z - def_min.z) / voxel_size)) + 2)
@@ -356,21 +379,17 @@ print(f"  Expanded grid: {gx}x{gy}x{gz}")
 print(f"  def_min: ({def_min.x:.4f}, {def_min.y:.4f}, {def_min.z:.4f})")
 print(f"  def_max: ({def_max.x:.4f}, {def_max.y:.4f}, {def_max.z:.4f})")
 
-# Compute offset so body voxel coordinates still align
-# Body voxel (bvx, bvy, bvz) in body grid → position body_def_min + (bvx+0.5)*vs
-# Same position in new grid → (pos - def_min) / vs - 0.5
-# offset = (body_def_min - def_min) / voxel_size
+# ボディボクセル座標が新グリッドで一致するようにオフセットを計算
 body_offset_x = round((body_def_min.x - def_min.x) / voxel_size)
 body_offset_y = round((body_def_min.y - def_min.y) / voxel_size)
 body_offset_z = round((body_def_min.z - def_min.z) / voxel_size)
 print(f"  Body offset in new grid: ({body_offset_x}, {body_offset_y}, {body_offset_z})")
 
-# ── Voxelize hair ──
+# ── 髪のボクセル化 ──
 print("\n  Voxelizing hair...")
-# Hair uses head_scale_override=1.0 (no chibi enlargement for hair)
-# and higher threshold to catch flowing strands
-THRESHOLD = voxel_size * 3.0
-HEAD_SCALE = 1.0
+# 髪はhead_scale_override=1.0（チビ頭拡大なし）と大きめの閾値を使用
+THRESHOLD = voxel_size * 3.0  # 流れる髪をキャッチするため大きめ
+HEAD_SCALE = 1.0              # 髪は元サイズでサンプリング
 
 result = {}
 for vz in range(gz):
@@ -378,12 +397,15 @@ for vz in range(gz):
         print(f"    z={vz}/{gz} hits={len(result)}")
     for vx in range(gx):
         for vy in range(gy):
+            # 変形空間の位置を計算
             dp = Vector((
                 def_min.x + (vx + 0.5) * voxel_size,
                 def_min.y + (vy + 0.5) * voxel_size,
                 def_min.z + (vz + 0.5) * voxel_size,
             ))
+            # 逆変形（髪は頭部拡大なし）
             op = inv_deform(dp, head_scale_override=HEAD_SCALE)
+            # 全髪メッシュのBVHで最近点を検索
             best_dist = THRESHOLD
             best_color = None
             for md in hair_mesh_data:
@@ -396,7 +418,7 @@ for vz in range(gz):
 
 print(f"  Hair voxels: {len(result)}")
 
-# Save grid info for post-processing alignment
+# 後処理用のグリッド情報を保存
 import json as _json
 grid_out = {
     'gx': gx, 'gy': gy, 'gz': gz,
@@ -410,8 +432,9 @@ with open(grid_path, 'w') as gf:
     _json.dump(grid_out, gf, indent=2)
 print(f"  Grid info: {grid_path}")
 
-# ── Write .vox ──
+# ── VOXファイルとして書き出し ──
 def build_palette_and_voxels(voxel_dict):
+    """ボクセル辞書からパレットとボクセルリストを構築（色を8刻みに量子化）。"""
     color_map = {}
     pal = []
     out = []
@@ -435,6 +458,7 @@ def build_palette_and_voxels(voxel_dict):
     return out, pal
 
 def write_vox(fp, sx, sy, sz, voxels, pal):
+    """VOXファイルを書き出す。"""
     xyzi = 4 + len(voxels) * 4
     children = (12+12) + (12+xyzi) + (12+1024)
     os.makedirs(os.path.dirname(os.path.abspath(fp)), exist_ok=True)
@@ -455,11 +479,10 @@ def write_vox(fp, sx, sy, sz, voxels, pal):
                 f.write(struct.pack('BBBB', 0, 0, 0, 0))
     print(f"  -> {fp}: {sx}x{sy}x{sz}, {len(voxels)} voxels, {len(pal)} colors")
 
+# パレット構築とVOX書き出し
 vlist, pal = build_palette_and_voxels(result)
 write_vox(OUTPUT_PATH, gx, gy, gz, vlist, pal)
 
-# Cleanup
+# リソース解放
 for md in hair_mesh_data:
     md.bm.free()
-
-print("\n=== Done ===\n")

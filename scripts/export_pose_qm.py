@@ -1,46 +1,50 @@
 """
-Export pose motion data from QM blend file with ARP name normalization.
+QM BlendファイルからARP名正規化付きでポーズモーションデータをエクスポートするスクリプト。
 
 Usage:
   blender --background --python export_pose_qm.py -- <pose.blend> <orig.blend> <out_dir> [out_name]
 """
+# Blender Python、システム、JSON、OS、数学モジュールをインポート
 import bpy, sys, json, os, math
+# mathutilsからMatrix型をインポート
 from mathutils import Matrix
 
+# コマンドライン引数を取得
 argv = sys.argv
 idx = argv.index("--") if "--" in argv else len(argv)
 args = argv[idx + 1:]
-POSE_PATH = args[0]
-ORIG_PATH = args[1]
-OUT_DIR = args[2]
-OUT_NAME = args[3] if len(args) > 3 else "pose_qm.motion.json"
+POSE_PATH = args[0]     # ポーズ付きBlendファイル
+ORIG_PATH = args[1]     # 元モデル（バインドポーズソース）
+OUT_DIR = args[2]        # 出力ディレクトリ
+OUT_NAME = args[3] if len(args) > 3 else "pose_qm.motion.json"  # 出力ファイル名
 
-# ARP naming normalization (same as blender_extract_bone_segments.py)
+# ARPボーン名の正規化マップ（blender_extract_bone_segments.pyと同じ）
 ARP_NORMALIZE = {
-    'thigh_stretch': 'c_thigh_stretch',
-    'thigh_twist': 'c_thigh_twist',
-    'thigh_twist_2': 'c_thigh_twist_2',
-    'leg_stretch': 'c_leg_stretch',
-    'leg_twist': 'c_leg_twist',
-    'leg_twist_2': 'c_leg_twist_2',
-    'arm_stretch': 'c_arm_stretch',
-    'arm_twist_2': 'c_arm_twist_2',
-    'c_arm_twist_offset': 'c_arm_twist',
-    'forearm_stretch': 'c_forearm_stretch',
-    'forearm_twist': 'c_forearm_twist',
-    'forearm_twist_2': 'c_forearm_twist_2',
-    'spine_01': 'c_spine_01_bend',
-    'spine_02': 'c_spine_02_bend',
-    'spine_03': 'c_spine_03_bend',
-    'root': 'c_root_bend',
-    'cc_balls': 'c_root_bend',
+    'thigh_stretch': 'c_thigh_stretch',       # 太ももストレッチ
+    'thigh_twist': 'c_thigh_twist',           # 太ももツイスト
+    'thigh_twist_2': 'c_thigh_twist_2',       # 太ももツイスト2
+    'leg_stretch': 'c_leg_stretch',           # 脛ストレッチ
+    'leg_twist': 'c_leg_twist',               # 脛ツイスト
+    'leg_twist_2': 'c_leg_twist_2',           # 脛ツイスト2
+    'arm_stretch': 'c_arm_stretch',           # 腕ストレッチ
+    'arm_twist_2': 'c_arm_twist_2',           # 腕ツイスト2
+    'c_arm_twist_offset': 'c_arm_twist',      # 腕ツイストオフセット
+    'forearm_stretch': 'c_forearm_stretch',   # 前腕ストレッチ
+    'forearm_twist': 'c_forearm_twist',       # 前腕ツイスト
+    'forearm_twist_2': 'c_forearm_twist_2',   # 前腕ツイスト2
+    'spine_01': 'c_spine_01_bend',            # 脊椎01
+    'spine_02': 'c_spine_02_bend',            # 脊椎02
+    'spine_03': 'c_spine_03_bend',            # 脊椎03
+    'root': 'c_root_bend',                    # ルート
+    'cc_balls': 'c_root_bend',                # CC balls → ルートに統合
 }
 
-# Face/finger merge mapping (same as blender_extract_bone_segments.py)
+# 顔ボーンのプレフィックス（headに統合）
 FACE_MERGE_PREFIXES = ('c_lips_', 'c_teeth_', 'c_nose_', 'c_chin_', 'c_cheek_',
                        'c_eyebrow_', 'c_eyelid_', 'c_eye_ref_track', 'c_eye_offset',
                        'tong_')
 
+# ARPボーン名を正規化する関数
 def normalize_arp_name(name):
     suffix = ''
     for s in ['.l', '.r', '.x']:
@@ -54,52 +58,57 @@ def normalize_arp_name(name):
         return ARP_NORMALIZE[base] + suffix
     return name
 
+# ボーン名を解決する関数（セグメント名にマッピング）
 def resolve_bone_name(name):
     name = normalize_arp_name(name)
+    # 顔ボーン → head
     if any(name.startswith(p) for p in FACE_MERGE_PREFIXES):
         return 'head.x'
+    # 足指 → foot
     if name.startswith('toes_') or name.startswith('c_toes_'):
         if '.l' in name: return 'foot.l'
         elif '.r' in name: return 'foot.r'
         return 'foot.l'
+    # 手指 → hand
     finger_prefixes = ('c_pinky', 'c_ring', 'c_middle', 'c_index', 'c_thumb',
                        'pinky', 'ring1', 'middle1', 'index1', 'thumb1',
                        'c_pinky1_base', 'c_ring1_base', 'c_middle1_base', 'c_index1_base')
     if any(name.startswith(p) for p in finger_prefixes):
         if '.l' in name: return 'hand.l'
         elif '.r' in name: return 'hand.r'
+    # 性器/臀部 → ルート
     if name.startswith('vagina') or name == 'genital':
         return 'c_root_bend.x'
     if name.startswith('butt'):
         return 'c_root_bend.x'
+    # 乳首 → 胸（QMはアンダースコアスタイル）
     if name.startswith('nipple'):
-        # Map to QM underscore style: breast_l, breast_r
         if '.l' in name or '_l' in name: return 'breast_l'
         if '.r' in name or '_r' in name: return 'breast_r'
         return 'breast_l'
+    # 口角/目 → head
     if name.startswith('c_lips_smile'):
         return 'head.x'
     if name.startswith('c_eye.'):
         return 'head.x'
-    # Accessory bones -> skip
+    # アクセサリー → スキップ
     if name.startswith('Necklace_') or name.startswith('belt_tail'):
         return None
     if name.startswith('lowerarm_elbow'):
         return None
-    # Normalize dot vs underscore for QM-specific bones (knee, breast)
-    # QM BaseBody segments use underscore: knee_l, breast_l
+    # QM固有のドット→アンダースコア変換（knee, breast）
     if name in ('knee.l', 'knee.r'):
         return name.replace('.', '_')
     if name in ('breast.l', 'breast.r'):
         return name.replace('.', '_')
     return name
 
-# Coordinate conversion
-C = Matrix([[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]])
-C_inv = Matrix([[1,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]])
+# 座標変換行列
+C = Matrix([[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]])       # Blender→ビューア
+C_inv = Matrix([[1,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]])   # ビューア→Blender
 
 # ========================================================================
-# Step 1: Bind pose from original
+# ステップ1: 元モデルからバインドポーズを取得
 # ========================================================================
 print("=== Step 1: Bind pose ===")
 bpy.ops.wm.open_mainfile(filepath=ORIG_PATH)
@@ -115,6 +124,7 @@ bpy.context.scene.frame_set(0)
 depsgraph.update()
 orig_eval = orig_rig.evaluated_get(depsgraph)
 
+# 評価済みバインドポーズを保存
 eval_bind = {}
 for bone in orig_rig.data.bones:
     if bone.use_deform:
@@ -125,12 +135,12 @@ for bone in orig_rig.data.bones:
 print(f"  Bind pose: {len(eval_bind)} deform bones")
 
 # ========================================================================
-# Step 2: Open pose file
+# ステップ2: ポーズファイルを開く
 # ========================================================================
 print(f"\n=== Step 2: Open pose ===")
 bpy.ops.wm.open_mainfile(filepath=POSE_PATH)
 
-# Find QM rig by name (prefer QueenMarika_rig specifically)
+# QMリグを探す（名前にqueenmarikaを含むアーマチュア優先）
 rig = None
 for o in bpy.data.objects:
     if o.type == 'ARMATURE' and 'queenmarika' in o.name.lower().replace(' ', '').replace('_', ''):
@@ -138,7 +148,7 @@ for o in bpy.data.objects:
         break
 
 if not rig:
-    # Fallback: exclude known non-QM rigs, pick by bone count
+    # フォールバック: 既知の非QMリグを除外して最大ボーン数で選択
     exclude = ['radagon', 'spartan', 'pillarwoman']
     candidates = [o for o in bpy.data.objects
                   if o.type == 'ARMATURE' and len(o.data.bones) > 100
@@ -158,7 +168,7 @@ print(f"  Scene: frames {fs}-{fe}, {fps} fps")
 
 deform_bones = [b.name for b in arm.bones if b.use_deform]
 
-# Build bind inverse
+# バインド逆行列を構築
 bind_inv = {}
 fallback = 0
 for bname in deform_bones:
@@ -171,7 +181,7 @@ for bname in deform_bones:
             fallback += 1
 print(f"  Bind inv: {len(eval_bind)} eval, {fallback} fallback")
 
-# Show bone name mapping
+# ボーン名マッピングを表示
 print(f"\n  Bone name normalization:")
 for bname in sorted(deform_bones):
     resolved = resolve_bone_name(bname)
@@ -179,12 +189,12 @@ for bname in sorted(deform_bones):
         print(f"    {bname} -> {resolved}")
 
 # ========================================================================
-# Step 3: Export with normalized names
+# ステップ3: 正規化名でエクスポート
 # ========================================================================
 print(f"\n=== Step 3: Export ===")
 
 frame_count = fe - fs + 1
-# Collect per-original-bone matrices
+# 元のボーンごとの行列を収集
 raw_matrices = {b: [] for b in deform_bones}
 
 depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -205,11 +215,10 @@ for frame in range(fs, fe + 1):
     if (frame - fs) % 20 == 0:
         print(f"  Frame {frame}/{fe}")
 
-# Merge bones by resolved name (pick the primary bone's matrices)
-# For merged groups (fingers->hand, face->head), use the primary bone
+# 解決済みボーン名でグループ化（指→hand、顔→headなど）
 ident = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
 
-resolved_groups = {}  # resolved_name -> list of (original_name, matrices)
+resolved_groups = {}  # 解決済み名 → [(元の名前, 行列), ...]
 for bname, mats in raw_matrices.items():
     resolved = resolve_bone_name(bname)
     if resolved is None:
@@ -218,15 +227,17 @@ for bname, mats in raw_matrices.items():
         resolved_groups[resolved] = []
     resolved_groups[resolved].append((bname, mats))
 
+# 各グループから代表ボーンの行列を出力
 bones_out = {}
 for resolved_name, group in resolved_groups.items():
     if len(group) == 1:
+        # 1対1マッピング
         bname, mats = group[0]
         if any(any(abs(m[i]-ident[i])>0.001 for i in range(16)) for m in mats):
             bones_out[resolved_name] = {"matrices": mats}
     else:
-        # Multiple bones merged into one segment
-        # Use the primary bone (the one matching the resolved name, or first one)
+        # 複数ボーンが1つのセグメントに統合
+        # 代表ボーン（解決済み名と一致するもの、または最初のもの）を使用
         primary = None
         for bname, mats in group:
             if bname == resolved_name:
@@ -238,13 +249,14 @@ for resolved_name, group in resolved_groups.items():
         if any(any(abs(m[i]-ident[i])>0.001 for i in range(16)) for m in mats):
             bones_out[resolved_name] = {"matrices": mats}
 
+# JSONとして出力
 out_path = os.path.join(OUT_DIR, OUT_NAME)
 with open(out_path, 'w') as f:
     json.dump({"fps": fps, "frame_count": frame_count, "bones": bones_out}, f)
 
 print(f"\nWritten: {out_path} ({os.path.getsize(out_path)/1024/1024:.1f} MB, {len(bones_out)} bones, {frame_count} frames)")
 
-# Show final bone list
+# 最終ボーンリストを表示
 print(f"\nFinal bones ({len(bones_out)}):")
 for b in sorted(bones_out.keys()):
     print(f"  {b}")

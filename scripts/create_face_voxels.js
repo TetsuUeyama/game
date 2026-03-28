@@ -1,20 +1,26 @@
 /**
- * Create 3D voxel art face features on the CE body surface.
- * Features are placed at the actual body surface positions (following face curvature).
- * Uses x2 grid (170x68x204) — same coordinate system as CE ears.
+ * create_face_voxels.js
+ *
+ * CEボディ表面に3Dボクセルアートの顔パーツを作成するスクリプト。
+ * パーツは実際のボディ表面位置（顔の曲率に従う）に配置される。
+ * x2グリッド（170x68x204）を使用 — CE耳と同じ座標系。
  *
  * Usage: node scripts/create_face_voxels.js <name> <output.vox>
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// コマンドライン引数
 const args = process.argv.slice(2);
-const NAME = args[0] || 'qm';
-const OUTPUT = args[1] || 'public/box4/queenmarika_face.vox';
+const NAME = args[0] || 'qm';       // パレット名（デフォルト: qm）
+const OUTPUT = args[1] || 'public/box4/queenmarika_face.vox';  // 出力パス
 
 // ========================================================================
-// Read CE base body to find face surface
+// CEベースボディを読み込んで顔表面を検出
 // ========================================================================
+// VOXファイルパーサー
 function readVox(fp) {
   const buf = fs.readFileSync(fp);
   let off = 0;
@@ -36,10 +42,11 @@ function readVox(fp) {
 }
 
 const BASE = path.join(__dirname, '..');
+// CEベースボディを読み込み
 const body = readVox(path.join(BASE, 'public/box2/cyberpunk_elf_body_base.vox'));
 console.log(`CE body: ${body.sx}x${body.sy}x${body.sz}`);
 
-// Build surface map: for each (x,z), find minimum Y (front surface)
+// 表面マップを構築: 各(x,z)での最小Y（前面表面）
 const surfaceY = {};
 for (const v of body.voxels) {
   const key = `${v.x},${v.z}`;
@@ -48,8 +55,7 @@ for (const v of body.voxels) {
   }
 }
 
-// Face center X — find from actual face surface (x range at face z=85-92)
-// CE body face spans x=33-47, center=40 (NOT body grid center 42.5)
+// 顔中心Xを実際の顔表面から検出（z=85-92の前面ボクセルのX範囲）
 let faceMinX = body.sx, faceMaxX = 0;
 for (const v of body.voxels) {
   if (v.z >= 85 && v.z <= 92 && v.y <= 10) {
@@ -57,56 +63,54 @@ for (const v of body.voxels) {
     if (v.x > faceMaxX) faceMaxX = v.x;
   }
 }
-const bodyCenterX = (faceMinX + faceMaxX) / 2 + 0.5; // 40.5 for CE (fine-tuned)
+// CE顔中心（微調整済み）
+const bodyCenterX = (faceMinX + faceMaxX) / 2 + 0.5;
 console.log(`Face X range: ${faceMinX}-${faceMaxX}, center: ${bodyCenterX}`);
 
 // ========================================================================
-// Color palette (from QM reference photo)
+// カラーパレット（QM参照写真から）
 // ========================================================================
 const PALETTES = {
   qm: {
-    eye_white:   [220, 210, 205],
-    iris_outer:  [180, 140, 55],
-    iris_inner:  [140, 100, 35],
-    pupil:       [30, 18, 15],
-    eyelid:      [185, 135, 118],
-    eyelash:     [45, 28, 22],
-    eyebrow:     [150, 115, 100],
-    nose_shadow: [150, 115, 110],
-    nostril:     [125, 88, 82],
-    lip_upper:   [200, 125, 118],
-    lip_lower:   [185, 115, 108],
-    lip_dark:    [170, 105, 98],
-    lip_line:    [165, 80, 75],
+    eye_white:   [220, 210, 205],  // 白目
+    iris_outer:  [180, 140, 55],   // 虹彩外側
+    iris_inner:  [140, 100, 35],   // 虹彩内側
+    pupil:       [30, 18, 15],     // 瞳孔
+    eyelid:      [185, 135, 118],  // まぶた
+    eyelash:     [45, 28, 22],     // まつげ
+    eyebrow:     [150, 115, 100],  // 眉毛
+    nose_shadow: [150, 115, 110],  // 鼻の影
+    nostril:     [125, 88, 82],    // 鼻孔
+    lip_upper:   [200, 125, 118],  // 上唇
+    lip_lower:   [185, 115, 108],  // 下唇
+    lip_dark:    [170, 105, 98],   // 唇の暗い部分
+    lip_line:    [165, 80, 75],    // 唇のライン
   }
 };
 const colors = PALETTES[NAME] || PALETTES.qm;
 
 // ========================================================================
-// x2 grid (170x68x204) — same as CE ears
+// x2グリッド（170x68x204）— CE耳と同じ
 // ========================================================================
-const MULT = 2;
-const GX = body.sx * MULT; // 170
-const GY = body.sy * MULT; // 68
-const GZ = body.sz * MULT; // 204
+const MULT = 2;                    // 解像度倍率
+const GX = body.sx * MULT;        // 170
+const GY = body.sy * MULT;        // 68
+const GZ = body.sz * MULT;        // 204
 
-// Get surface Y at x2 coords by interpolating body surface
+// x2座標でのボディ表面Yを取得する関数（ボディ表面を補間）
 function getSurfaceY2(x2, z2) {
   const bx = Math.floor(x2 / MULT);
   const bz = Math.floor(z2 / MULT);
   const sy = surfaceY[`${bx},${bz}`];
   if (sy === undefined) return -1;
-  return sy * MULT; // front surface in x2 coords
+  return sy * MULT;  // x2座標での前面表面
 }
 
-// Feature voxels: array of {x2, z2, colorName}
-// All patterns defined relative to body center, symmetric
+// パーツボクセルの配列: {x2, z2, colorName}
 const featureVoxels = [];
 
-// Helper: add symmetric feature (mirrors around bodyCenterX)
+// 左右対称にパーツを追加するヘルパー（bodyCenterXを軸にミラー）
 function addSymmetric(offsetFromCenter, z_body, colorName) {
-  // offsetFromCenter: positive = right of center
-  // Converts to x2 coords
   const x2_right = Math.round(bodyCenterX * MULT + offsetFromCenter);
   const x2_left = Math.round(bodyCenterX * MULT - offsetFromCenter - 1);
   const z2 = z_body * MULT;
@@ -116,12 +120,11 @@ function addSymmetric(offsetFromCenter, z_body, colorName) {
   }
 }
 
-// Helper: draw a symmetric pixel art row
-// pattern: string from center outward, e.g. "PPIIIWW" means pupil-pupil-iris-iris-iris-white-white
-// Each char is mirrored. Center column(s) are not duplicated.
+// 対称なピクセルアート行を描画するヘルパー
+// pattern: 中心から外側への文字列（各文字はミラーされる）
 function drawSymRow(z_body, z_sub, pattern, charMap) {
   const z2 = z_body * MULT + z_sub;
-  const cx2 = Math.round(bodyCenterX * MULT); // center in x2 = 85
+  const cx2 = Math.round(bodyCenterX * MULT);  // x2での中心 = 85
 
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
@@ -129,20 +132,18 @@ function drawSymRow(z_body, z_sub, pattern, charMap) {
     const colorName = charMap[ch];
     if (!colorName) continue;
 
-    // Right side: cx2 + i
-    const xR = cx2 + i;
-    // Left side: cx2 - 1 - i
-    const xL = cx2 - 1 - i;
+    const xR = cx2 + i;         // 右側
+    const xL = cx2 - 1 - i;     // 左側（ミラー）
 
     if (xR < GX) featureVoxels.push({ x2: xR, z2, color: colorName });
     if (xL >= 0 && xL !== xR) featureVoxels.push({ x2: xL, z2, color: colorName });
   }
 }
 
-// Helper: draw symmetric row with offset from center (for eyes that aren't at center)
+// 目用の対称行描画ヘルパー（中心からオフセットした位置に目を配置）
 function drawEyeRow(z_body, z_sub, eyeCenterOffset, pattern, charMap) {
   const z2 = z_body * MULT + z_sub;
-  const cx2 = Math.round(bodyCenterX * MULT); // 85
+  const cx2 = Math.round(bodyCenterX * MULT);
 
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
@@ -150,107 +151,103 @@ function drawEyeRow(z_body, z_sub, eyeCenterOffset, pattern, charMap) {
     const colorName = charMap[ch];
     if (!colorName) continue;
 
-    // Right eye: center + eyeCenterOffset + i (and mirror within eye)
-    // Left eye: center - eyeCenterOffset - i (mirrored)
+    // 右目中心と左目中心
     const rEyeCenter = cx2 + eyeCenterOffset;
     const lEyeCenter = cx2 - 1 - eyeCenterOffset;
 
-    // Right eye, right half
+    // 右目: 右半分
     featureVoxels.push({ x2: rEyeCenter + i, z2, color: colorName });
-    // Right eye, left half (mirror within eye)
+    // 右目: 左半分（目内でのミラー）
     if (i > 0) featureVoxels.push({ x2: rEyeCenter - i, z2, color: colorName });
-    // Left eye, left half
+    // 左目: 左半分
     featureVoxels.push({ x2: lEyeCenter - i, z2, color: colorName });
-    // Left eye, right half (mirror within eye)
+    // 左目: 右半分（目内でのミラー）
     if (i > 0) featureVoxels.push({ x2: lEyeCenter + i, z2, color: colorName });
   }
 }
 
+// 目のカラーマップ
 const eyeMap = {
   'W': 'eye_white', 'o': 'iris_outer', 'i': 'iris_inner',
   'P': 'pupil', 'L': 'eyelid', 'l': 'eyelash',
 };
 
 // ========================================================================
-// EYES — centered at body z≈89-90, offset ±5 from center
-// Each eye is ~5 wide at x1, 10 at x2
+// 目 — body z≈89-90中心、中心から±5オフセット
+// 各目は x1で約5幅、x2で10幅
 // ========================================================================
-const EYE_OFF = 5; // offset from center in x2 coords
+const EYE_OFF = 5;  // 中心からのオフセット（x2座標）
 
-// Eye pattern: each char is center-outward (i=0=center of eye, mirrored to both sides)
-// Pattern 'PioWL' → L,W,o,i,P,i,o,W,L  (9px per eye, pupil at center)
-// z=88 (body) = z2=176
-drawEyeRow(85, 1, EYE_OFF, 'LLLL.',  eyeMap); // lower lid:   .,L,L,L,L,L,L,L,.
-drawEyeRow(86, 0, EYE_OFF, 'ooWL.',  eyeMap); // iris lower:   .,L,W,o,o,o,W,L,.
-drawEyeRow(86, 1, EYE_OFF, 'PioWL',  eyeMap); // pupil row:    L,W,o,i,P,i,o,W,L
-drawEyeRow(87, 0, EYE_OFF, 'ooW..',  eyeMap); // iris upper:   ..,.,W,o,o,o,W,.,.
+// 目のパターン: 各文字は目の中心から外側（i=0=目の中心、両側にミラー）
+drawEyeRow(85, 1, EYE_OFF, 'LLLL.',  eyeMap); // 下まぶた
+drawEyeRow(86, 0, EYE_OFF, 'ooWL.',  eyeMap); // 虹彩下部
+drawEyeRow(86, 1, EYE_OFF, 'PioWL',  eyeMap); // 瞳孔の行
+drawEyeRow(87, 0, EYE_OFF, 'ooW..',  eyeMap); // 虹彩上部
 
-// Outer-only black accents (manually placed, no inner mirror)
+// 外側の黒アクセント（手動配置、目内ミラーなし）
 {
   const cx2 = Math.round(bodyCenterX * MULT);
-  const rEye = cx2 + EYE_OFF;     // right eye center
-  const lEye = cx2 - 1 - EYE_OFF; // left eye center
-  const z2 = 87 * MULT;           // same row as iris upper
-  // Outer black at outermost edge of each eye
-  featureVoxels.push({ x2: rEye + 4, z2, color: 'pupil' });    // right eye outer
-  featureVoxels.push({ x2: lEye - 4, z2, color: 'pupil' });    // left eye outer
-  // Diagonally above-outside
-  featureVoxels.push({ x2: rEye + 5, z2: z2 + 1, color: 'pupil' }); // right eye upper-outer
-  featureVoxels.push({ x2: lEye - 5, z2: z2 + 1, color: 'pupil' }); // left eye upper-outer
+  const rEye = cx2 + EYE_OFF;       // 右目中心
+  const lEye = cx2 - 1 - EYE_OFF;   // 左目中心
+  const z2 = 87 * MULT;
+  // 各目の最外端に黒点
+  featureVoxels.push({ x2: rEye + 4, z2, color: 'pupil' });
+  featureVoxels.push({ x2: lEye - 4, z2, color: 'pupil' });
+  // 斜め上外側にも黒点
+  featureVoxels.push({ x2: rEye + 5, z2: z2 + 1, color: 'pupil' });
+  featureVoxels.push({ x2: lEye - 5, z2: z2 + 1, color: 'pupil' });
 }
 
 // ========================================================================
-// EYEBROWS — z≈93-94, offset ±4-8 from center
+// 眉毛 — z≈93-94、中心から±4-8オフセット
 // ========================================================================
-// Angled eyebrows: 1 row thick, rising ~10° from inner to outer
+// 角度付き眉毛: 1行厚、内側から外側に約10°上昇
 {
   const cx2 = Math.round(bodyCenterX * MULT);
   const rEye = cx2 + EYE_OFF;
   const lEye = cx2 - 1 - EYE_OFF;
-  const baseZ2 = 88 * MULT; // lowered position
-  const browHalf = 4; // half-width (9px total per brow)
-  const angleRise = 2; // total z2 rise from inner to outer (~10°)
+  const baseZ2 = 88 * MULT;         // 下げた位置
+  const browHalf = 4;               // 半幅（合計9px/眉）
+  const angleRise = 2;              // 内→外のZ上昇量（約10°）
 
   for (let i = -browHalf; i <= browHalf; i++) {
-    const t = (i + browHalf) / (2 * browHalf); // 0=inner, 1=outer
+    const t = (i + browHalf) / (2 * browHalf);  // 0=内側, 1=外側
     let dz = Math.round(t * angleRise);
-    // Outermost pixel: drop 1px
+    // 最外ピクセル: 1px下げる
     if (i === browHalf) dz -= 1;
-    // Right brow: inner(-) to outer(+)
+    // 右眉: 内側(-)→外側(+)
     featureVoxels.push({ x2: rEye + i, z2: baseZ2 + dz, color: 'eyebrow' });
-    // Left brow: mirrored
+    // 左眉: ミラー
     featureVoxels.push({ x2: lEye - i, z2: baseZ2 + dz, color: 'eyebrow' });
   }
 }
 
 // ========================================================================
-// NOSE — centered, z≈84-87
+// 鼻 — 中心、z≈84-87（現在は削除済み）
 // ========================================================================
 const noseMap = { 's': 'nose_shadow', 'N': 'nostril' };
-// Nose removed
 
 // ========================================================================
-// MOUTH — centered, z≈81-83
+// 口 — 中心、z≈81-83
 // ========================================================================
 const mouthMap = {
   'U': 'lip_upper', 'L': 'lip_lower', 'D': 'lip_dark',
   'l': 'lip_line', 'c': 'lip_dark',
 };
-// Mouth: center-outward. drawSymRow i=0 maps to center PAIR (cx2 and cx2-1).
-// Pattern 'LLc' → c,L,L,L,L,c (6px), 'LLLLc' → c,L,L,L,L,L,L,L,L,c (10px)
-drawSymRow(81, 1, 'Lc',      mouthMap);  // bottom:     c,L,L,c  (4px)
-drawSymRow(82, 0, 'LLc',     mouthMap);  // lower lip:  c,L,L,L,L,c  (6px)
-drawSymRow(82, 1, 'llll',    mouthMap);  // lip line:   l,l,l,l,l,l,l,l  (8px)
-// Upper lip with slight downward angle at outer edges
+// 口: 中心から外側。drawSymRowのi=0は中心ペア（cx2とcx2-1）にマップ。
+drawSymRow(81, 1, 'Lc',      mouthMap);  // 下部:      c,L,L,c (4px)
+drawSymRow(82, 0, 'LLc',     mouthMap);  // 下唇:      c,L,L,L,L,c (6px)
+drawSymRow(82, 1, 'llll',    mouthMap);  // 唇ライン:  l,l,l,l,l,l,l,l (8px)
+// 上唇: 外端がわずかに下がる角度付き
 {
   const cx2 = Math.round(bodyCenterX * MULT);
-  const baseZ2 = 83 * MULT; // z2=166
-  const pattern = 'UUUUD'; // 5 chars = 10px total
+  const baseZ2 = 83 * MULT;
+  const pattern = 'UUUUD';  // 5文字 = 合計10px
   for (let i = 0; i < pattern.length; i++) {
     const ch = pattern[i];
     const colorName = mouthMap[ch];
     if (!colorName) continue;
-    // Outer 2 pixels drop by 1
+    // 外側2ピクセルは1px下げる
     const dz = (i >= 3) ? -1 : 0;
     const xR = cx2 + i;
     const xL = cx2 - 1 - i;
@@ -260,12 +257,13 @@ drawSymRow(82, 1, 'llll',    mouthMap);  // lip line:   l,l,l,l,l,l,l,l  (8px)
 }
 
 // ========================================================================
-// Build final voxels on body surface
+// ボディ表面上に最終ボクセルを構築
 // ========================================================================
-const colorIndexMap = {};
-const palette = [];
-const voxels = [];
+const colorIndexMap = {};  // カラー名 → パレットインデックス
+const palette = [];        // カラーパレット
+const voxels = [];         // 出力ボクセル
 
+// カラー名からパレットインデックスを取得（新色なら追加）
 function getColorIdx(name) {
   if (colorIndexMap[name] !== undefined) return colorIndexMap[name];
   const c = colors[name];
@@ -275,23 +273,26 @@ function getColorIdx(name) {
   return palette.length;
 }
 
-// Deduplicate by position
+// 位置の重複排除セット
 const posSet = new Set();
 
+// 各パーツボクセルをボディ表面に配置
 for (const fv of featureVoxels) {
   const { x2, z2, color } = fv;
+  // グリッド範囲チェック
   if (x2 < 0 || x2 >= GX || z2 < 0 || z2 >= GZ) continue;
 
+  // この位置のボディ表面Yを取得
   const surfY = getSurfaceY2(x2, z2);
-  if (surfY < 0) continue; // no body surface here
+  if (surfY < 0) continue;  // ボディ表面なし
 
   const ci = getColorIdx(color);
 
-  // Place 1 in front of surface only (1 voxel thick)
+  // 表面の1つ手前（前面）にのみ配置（1ボクセル厚）
   const vy = surfY - 1;
   if (vy < 0 || vy >= GY) continue;
   const posKey = `${x2},${vy},${z2}`;
-  if (posSet.has(posKey)) continue;
+  if (posSet.has(posKey)) continue;  // 重複チェック
   posSet.add(posKey);
   voxels.push({ x: x2, y: vy, z: z2, c: ci });
 }
@@ -300,7 +301,7 @@ console.log(`Face voxels: ${voxels.length}, Palette: ${palette.length} colors`);
 console.log(`Grid: ${GX}x${GY}x${GZ} (same as CE x2)`);
 
 // ========================================================================
-// Write .vox
+// VOXファイルとして書き出し
 // ========================================================================
 function writeVox(filePath, sx, sy, sz, voxels, pal) {
   const sizeData = Buffer.alloc(12);
@@ -329,6 +330,8 @@ function writeVox(filePath, sx, sy, sz, voxels, pal) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// 出力
 writeVox(OUTPUT, GX, GY, GZ, voxels, palette);
 console.log(`Written: ${OUTPUT}`);
+// ビューア設定情報
 console.log(`\nViewer: scale=SCALE/2, offset=FACE_FLOAT [0, 0, 0.004]`);

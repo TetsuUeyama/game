@@ -1,131 +1,158 @@
-'use client';
+'use client'; // クライアントサイドコンポーネントとして宣言
 
+// React フックのインポート（状態管理・副作用・参照・メモ化コールバック・サスペンス）
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+// Babylon.js コアモジュール群のインポート
 import {
-  Engine,
-  Scene,
-  ArcRotateCamera,
-  HemisphericLight,
-  DirectionalLight,
-  Vector3,
-  Color3,
-  Color4,
-  Mesh,
-  VertexData,
-  StandardMaterial,
-  MeshBuilder,
-  Matrix,
+  Engine,           // 描画エンジン
+  Scene,            // 3Dシーン
+  ArcRotateCamera,  // アークロテートカメラ
+  HemisphericLight, // 半球ライト
+  DirectionalLight, // ディレクショナルライト
+  Vector3,          // 3Dベクトル
+  Color3,           // RGB色
+  Color4,           // RGBA色
+  Mesh,             // メッシュ
+  VertexData,       // 頂点データ
+  StandardMaterial, // 標準マテリアル
+  MeshBuilder,      // メッシュビルダー
+  Matrix,           // 4x4行列
 } from '@babylonjs/core';
 
 // ========================================================================
-// VOX parser + mesh builder (same as vox-viewer2)
+// VOX parser + mesh builder（VOXパーサー + メッシュビルダー）
+// vox-viewer2と同じ実装
 // ========================================================================
 
+// VOXモデルデータの型定義（サイズ・ボクセル・パレット）
 interface VoxModel {
-  sizeX: number; sizeY: number; sizeZ: number;
-  voxels: { x: number; y: number; z: number; colorIndex: number }[];
-  palette: { r: number; g: number; b: number }[];
+  sizeX: number; sizeY: number; sizeZ: number;  // グリッドサイズ
+  voxels: { x: number; y: number; z: number; colorIndex: number }[];  // ボクセル配列
+  palette: { r: number; g: number; b: number }[];  // カラーパレット（0-1正規化）
 }
 
+// MagicaVoxel形式のバイナリデータを解析する関数
 function parseVox(buf: ArrayBuffer): VoxModel {
-  const view = new DataView(buf);
-  let offset = 0;
+  const view = new DataView(buf);  // バイナリデータビュー
+  let offset = 0;  // 読み取りオフセット
+  // 4バイト符号なし整数読み取りヘルパー（リトルエンディアン）
   const readU32 = () => { const v = view.getUint32(offset, true); offset += 4; return v; };
+  // 1バイト符号なし整数読み取りヘルパー
   const readU8 = () => { const v = view.getUint8(offset); offset += 1; return v; };
+  // n文字のASCII文字列読み取りヘルパー
   const readStr = (n: number) => {
     let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(view.getUint8(offset + i));
     offset += n; return s;
   };
+  // マジックナンバー "VOX " を検証
   if (readStr(4) !== 'VOX ') throw new Error('Not a VOX file');
-  readU32();
-  let sizeX = 0, sizeY = 0, sizeZ = 0;
-  const voxels: VoxModel['voxels'] = [];
-  let palette: VoxModel['palette'] | null = null;
+  readU32();  // バージョン番号をスキップ
+  let sizeX = 0, sizeY = 0, sizeZ = 0;  // グリッドサイズ
+  const voxels: VoxModel['voxels'] = [];  // ボクセルデータ配列
+  let palette: VoxModel['palette'] | null = null;  // パレット（未読み込み時はnull）
+  // チャンクを再帰的に読み取る内部関数
   const readChunks = (end: number) => {
     while (offset < end) {
-      const id = readStr(4); const cs = readU32(); const ccs = readU32(); const ce = offset + cs;
-      if (id === 'SIZE') { sizeX = readU32(); sizeY = readU32(); sizeZ = readU32(); }
-      else if (id === 'XYZI') { const n = readU32(); for (let i = 0; i < n; i++) voxels.push({ x: readU8(), y: readU8(), z: readU8(), colorIndex: readU8() }); }
-      else if (id === 'RGBA') { palette = []; for (let i = 0; i < 256; i++) { const r = readU8(), g = readU8(), b = readU8(); readU8(); palette.push({ r: r / 255, g: g / 255, b: b / 255 }); } }
-      offset = ce; if (ccs > 0) readChunks(offset + ccs);
+      const id = readStr(4); const cs = readU32(); const ccs = readU32(); const ce = offset + cs;  // チャンクID・サイズ・子サイズ・データ終端
+      if (id === 'SIZE') { sizeX = readU32(); sizeY = readU32(); sizeZ = readU32(); }  // SIZEチャンク: グリッド寸法
+      else if (id === 'XYZI') { const n = readU32(); for (let i = 0; i < n; i++) voxels.push({ x: readU8(), y: readU8(), z: readU8(), colorIndex: readU8() }); }  // XYZIチャンク: ボクセルデータ
+      else if (id === 'RGBA') { palette = []; for (let i = 0; i < 256; i++) { const r = readU8(), g = readU8(), b = readU8(); readU8(); palette.push({ r: r / 255, g: g / 255, b: b / 255 }); } }  // RGBAチャンク: パレット
+      offset = ce; if (ccs > 0) readChunks(offset + ccs);  // 子チャンクがあれば再帰処理
     }
   };
-  if (readStr(4) !== 'MAIN') throw new Error('Expected MAIN');
-  const mc = readU32(); const mcc = readU32(); offset += mc;
-  readChunks(offset + mcc);
+  if (readStr(4) !== 'MAIN') throw new Error('Expected MAIN');  // MAINチャンクの検証
+  const mc = readU32(); const mcc = readU32(); offset += mc;  // MAINのコンテンツサイズと子チャンクサイズ
+  readChunks(offset + mcc);  // 子チャンクを処理
+  // パレットがない場合はデフォルトの灰色パレットを生成
   if (!palette) { palette = []; for (let i = 0; i < 256; i++) palette.push({ r: 0.8, g: 0.8, b: 0.8 }); }
-  return { sizeX, sizeY, sizeZ, voxels, palette };
+  return { sizeX, sizeY, sizeZ, voxels, palette };  // 解析結果を返却
 }
 
+// 6方向の面オフセット（+X, -X, +Y, -Y, +Z, -Z）
 const FACE_DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+// 各面の4頂点のローカル座標（四角形面を構成）
 const FACE_VERTS = [
-  [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
-  [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]],
-  [[0, 0, 1], [0, 1, 1], [1, 1, 1], [1, 0, 1]], [[1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 0]],
+  [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],  // +X面, -X面
+  [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]],  // +Y面, -Y面
+  [[0, 0, 1], [0, 1, 1], [1, 1, 1], [1, 0, 1]], [[1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 0]],  // +Z面, -Z面
 ];
+// 各面の法線ベクトル
 const FACE_NORMALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-const SCALE = 0.010;
+const SCALE = 0.010;  // デフォルトのボクセルスケール（1ボクセル = 0.01ワールド単位）
 
+// VOXモデルからBabylon.jsメッシュを構築する関数（隣接面カリング付き）
 function buildVoxMesh(model: VoxModel, scene: Scene, name: string, scale: number = SCALE): Mesh {
+  // 占有セットを構築（隣接ボクセルの存在チェック用）
   const occupied = new Set<string>();
   for (const v of model.voxels) occupied.add(`${v.x},${v.y},${v.z}`);
-  const cx = model.sizeX / 2, cy = model.sizeY / 2;
-  const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+  const cx = model.sizeX / 2, cy = model.sizeY / 2;  // グリッド中心座標
+  const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];  // 頂点データ配列
+  // 全ボクセルをループ
   for (const voxel of model.voxels) {
-    const col = model.palette[voxel.colorIndex - 1] ?? { r: 0.8, g: 0.8, b: 0.8 };
+    const col = model.palette[voxel.colorIndex - 1] ?? { r: 0.8, g: 0.8, b: 0.8 };  // パレットから色取得（1始まりインデックス）
+    // 6方向の面をチェック
     for (let f = 0; f < 6; f++) {
       const [dx, dy, dz] = FACE_DIRS[f];
-      if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;
-      const bi = positions.length / 3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
+      if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;  // 隣接ボクセルがあればスキップ
+      const bi = positions.length / 3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];  // 頂点インデックスベース
+      // 四角形の4頂点を追加（VOX→Babylon座標系変換）
       for (let vi = 0; vi < 4; vi++) {
-        const rx = (voxel.x + fv[vi][0] - cx) * scale;
-        const ry = (voxel.y + fv[vi][1] - cy) * scale;
-        const rz = (voxel.z + fv[vi][2]) * scale;
-        positions.push(rx, rz, -ry);
-        normals.push(fn[0], fn[2], -fn[1]);
-        colors.push(col.r, col.g, col.b, 1);
+        const rx = (voxel.x + fv[vi][0] - cx) * scale;   // X座標（中心基準）
+        const ry = (voxel.y + fv[vi][1] - cy) * scale;   // Y座標（中心基準）
+        const rz = (voxel.z + fv[vi][2]) * scale;         // Z座標（底面基準）
+        positions.push(rx, rz, -ry);                       // VOX(x,y,z)→Babylon(x,z,-y)
+        normals.push(fn[0], fn[2], -fn[1]);                // 法線も座標変換
+        colors.push(col.r, col.g, col.b, 1);              // RGBA頂点カラー
       }
+      // 四角形を2つの三角形に分割してインデックス追加
       indices.push(bi, bi + 1, bi + 2, bi, bi + 2, bi + 3);
     }
   }
+  // VertexDataを作成してメッシュに適用
   const vd = new VertexData();
   vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
   const mesh = new Mesh(name, scene);
-  vd.applyToMesh(mesh, true); // updatable = true for animation
+  vd.applyToMesh(mesh, true);  // updatable=true（アニメーション用）
   return mesh;
 }
 
+// セグメントバンドルデータの型定義（全ボーンのボクセルを1ファイルに格納）
 interface SegmentBundleData {
-  grid: { gx: number; gy: number; gz: number };
-  palette: number[][]; // [[r,g,b], ...] normalized 0-1
-  segments: Record<string, number[]>; // boneName -> flat [x,y,z,ci, ...]
+  grid: { gx: number; gy: number; gz: number };  // グリッドサイズ
+  palette: number[][];    // [[r,g,b], ...] 正規化0-1
+  segments: Record<string, number[]>;  // ボーン名 -> フラット配列 [x,y,z,ci, ...]
 }
 
-/** Build per-bone meshes from a single bundled segments file. No per-vertex animation needed — use mesh world matrix. */
+/** バンドルされたセグメントファイルからボーンごとのメッシュを構築する関数。
+ *  頂点単位のアニメーションは不要 — メッシュのワールド行列で制御。 */
 function buildBundleMeshes(
   bundle: SegmentBundleData, scene: Scene, mat: StandardMaterial, scale: number
 ): Record<string, Mesh> {
-  const cx = bundle.grid.gx / 2, cy = bundle.grid.gy / 2;
-  const meshes: Record<string, Mesh> = {};
+  const cx = bundle.grid.gx / 2, cy = bundle.grid.gy / 2;  // グリッド中心座標
+  const meshes: Record<string, Mesh> = {};  // ボーン名→メッシュのマップ
 
+  // 各ボーンのセグメントを処理
   for (const [boneName, flat] of Object.entries(bundle.segments)) {
-    const numVoxels = flat.length / 4;
-    if (numVoxels === 0) continue;
+    const numVoxels = flat.length / 4;  // ボクセル数（4要素ずつ: x,y,z,ci）
+    if (numVoxels === 0) continue;      // ボクセルがなければスキップ
 
-    // Build occupied set for face culling
+    // 面カリング用の占有セットを構築
     const occupied = new Set<string>();
     for (let i = 0; i < numVoxels; i++) {
       occupied.add(`${flat[i*4]},${flat[i*4+1]},${flat[i*4+2]}`);
     }
 
     const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+    // 全ボクセルをループ
     for (let i = 0; i < numVoxels; i++) {
-      const vx = flat[i*4], vy = flat[i*4+1], vz = flat[i*4+2], ci = flat[i*4+3];
-      const col = bundle.palette[ci] ?? [0.8, 0.8, 0.8];
+      const vx = flat[i*4], vy = flat[i*4+1], vz = flat[i*4+2], ci = flat[i*4+3];  // 座標とカラーインデックス
+      const col = bundle.palette[ci] ?? [0.8, 0.8, 0.8];  // パレットから色取得
+      // 6方向の面をチェック
       for (let f = 0; f < 6; f++) {
         const [dx, dy, dz] = FACE_DIRS[f];
-        if (occupied.has(`${vx+dx},${vy+dy},${vz+dz}`)) continue;
+        if (occupied.has(`${vx+dx},${vy+dy},${vz+dz}`)) continue;  // 隣接面はスキップ
         const bi = positions.length / 3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
+        // 4頂点を追加（VOX→Babylon座標変換）
         for (let vi = 0; vi < 4; vi++) {
           positions.push((vx + fv[vi][0] - cx) * scale, (vz + fv[vi][2]) * scale, -(vy + fv[vi][1] - cy) * scale);
           normals.push(fn[0], fn[2], -fn[1]);
@@ -135,11 +162,11 @@ function buildBundleMeshes(
       }
     }
 
-    if (positions.length === 0) continue;
+    if (positions.length === 0) continue;  // 面が生成されなければスキップ
     const vd = new VertexData();
     vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
     const mesh = new Mesh(`seg_${boneName}`, scene);
-    vd.applyToMesh(mesh, false); // not updatable — we use world matrix for animation
+    vd.applyToMesh(mesh, false);  // updatable=false（ワールド行列でアニメーション）
     mesh.material = mat;
     meshes[boneName] = mesh;
   }
@@ -147,183 +174,184 @@ function buildBundleMeshes(
   return meshes;
 }
 
+// キャッシュバスター（リクエストURLにタイムスタンプを付与してキャッシュ回避）
 const CACHE_BUST = `?v=${Date.now()}`;
 
+// VOXファイルをURLからロードしてメッシュを構築する非同期関数
 async function loadVoxMesh(scene: Scene, url: string, name: string, scale: number = SCALE): Promise<Mesh> {
-  const resp = await fetch(url + CACHE_BUST);
+  const resp = await fetch(url + CACHE_BUST);  // VOXファイルをフェッチ
   if (!resp.ok) throw new Error(`Failed: ${url}`);
-  const model = parseVox(await resp.arrayBuffer());
-  return buildVoxMesh(model, scene, name, scale);
+  const model = parseVox(await resp.arrayBuffer());  // バイナリを解析
+  return buildVoxMesh(model, scene, name, scale);    // メッシュを構築して返却
 }
 
 // ========================================================================
-// Part manifest type & character config
+// Part manifest type & character config（パーツマニフェスト型とキャラクター設定）
 // ========================================================================
 
+// パーツエントリの型定義（マニフェストJSONの1要素）
 interface PartEntry {
-  key: string;
-  file: string;
-  voxels: number;
-  default_on: boolean;
-  meshes: string[];
-  is_body: boolean;
-  category?: string;
+  key: string;         // パーツキー（一意識別子）
+  file: string;        // VOXファイルのパス
+  voxels: number;      // ボクセル数
+  default_on: boolean; // デフォルト表示フラグ
+  meshes: string[];    // 元メッシュ名のリスト
+  is_body: boolean;    // ボディパーツかどうか
+  category?: string;   // カテゴリ（body/hair/clothing等）
 }
 
+// グリッド情報の型定義
 interface GridInfo {
-  voxel_size: number;
-  gx: number;
-  gy: number;
-  gz: number;
+  voxel_size: number;  // ボクセルサイズ（メートル）
+  gx: number;          // X方向グリッド数
+  gy: number;          // Y方向グリッド数
+  gz: number;          // Z方向グリッド数
 }
 
+// キャラクターカテゴリ型
 type CharCategory = 'female' | 'male' | 'base' | 'weapons';
 
+// キャラクター設定の型定義
 interface CharacterConfig {
-  label: string;
-  manifest: string;
-  gridJson: string;
-  gender: 'female' | 'male';
-  category: CharCategory;
+  label: string;          // 表示ラベル
+  manifest: string;       // パーツマニフェストJSONのURL
+  gridJson: string;       // グリッド情報JSONのURL
+  gender: 'female' | 'male';  // 性別
+  category: CharCategory; // カテゴリ
 }
 
+// 髪スワップオプションの型定義
 interface HairOption {
-  label: string;
-  charKey: string;
-  file: string;        // full API path to .vox
-  partKey: string;      // original part key in parts.json
-  voxels: number;
-  anchorsUrl: string;   // URL to hair_anchors.json
+  label: string;       // 表示ラベル
+  charKey: string;     // キャラクターキー
+  file: string;        // VOXファイルのフルAPIパス
+  partKey: string;     // parts.json内のパーツキー
+  voxels: number;      // ボクセル数
+  anchorsUrl: string;  // hair_anchors.jsonのURL
 }
 
+// アンカーポイントの型定義（髪のアライメント用）
 interface AnchorPoints {
-  top: number[];
-  front: number[];
-  back: number[];
-  left: number[];
-  right: number[];
-  width: number;
-  depth: number;
+  top: number[];    // 頭頂部のアンカー座標
+  front: number[];  // 前面のアンカー座標
+  back: number[];   // 背面のアンカー座標
+  left: number[];   // 左側のアンカー座標
+  right: number[];  // 右側のアンカー座標
+  width: number;    // 頭部の幅
+  depth: number;    // 頭部の奥行
 }
 
+// 髪アンカーデータの型定義
 interface HairAnchorsData {
-  voxel_size: number;
-  body_head?: AnchorPoints;
-  hairs?: Record<string, AnchorPoints>;
+  voxel_size: number;                        // ボクセルサイズ
+  body_head?: AnchorPoints;                  // ボディの頭部アンカー
+  hairs?: Record<string, AnchorPoints>;      // 髪パーツごとのアンカー
 }
 
+// モーションデータの型定義（アニメーション用）
 interface MotionData {
-  fps: number;
-  frame_count: number;
-  babylonFormat?: boolean; // true if matrices are already in Babylon.js format (no transpose needed)
+  fps: number;            // フレームレート
+  frame_count: number;    // フレーム数
+  babylonFormat?: boolean; // true: 行列がBabylon.js形式（転置不要）
   bones: Record<string, {
-    matrices: number[][];  // flat 16-element skinning matrices per frame
+    matrices: number[][];  // フレームごとのフラット16要素スキニング行列
   }>;
 }
 
-/** Raw motion data from Blender (no coordinate conversion applied) */
+/** Blenderからの生モーションデータ（座標変換未適用）の型定義 */
 interface RawMotionData {
-  format: 'blender_raw';
-  fps: number;
-  frame_count: number;
-  bind_pose_rest: Record<string, number[]>;  // bone.matrix_local world-space, row-major
-  bind_pose_eval: Record<string, number[]>;  // evaluated pose, row-major
-  animated: Record<string, { matrices: number[][] }>; // per-frame world-space, row-major
+  format: 'blender_raw';                             // フォーマット識別子
+  fps: number;                                        // フレームレート
+  frame_count: number;                                // フレーム数
+  bind_pose_rest: Record<string, number[]>;           // bone.matrix_localワールド空間、行優先
+  bind_pose_eval: Record<string, number[]>;           // 評価済みポーズ、行優先
+  animated: Record<string, { matrices: number[][] }>; // フレームごとのワールド空間行列、行優先
 }
 
 /**
- * Convert Blender row-major (column-vector convention) 16-element array
- * to Babylon.js Matrix (row-vector convention).
- * Blender: M*v, translation at m[3],m[7],m[11]
- * Babylon: v*M, translation at m[12],m[13],m[14]
- * → Transpose is needed.
+ * Blender行優先（列ベクトル規約）の16要素配列を
+ * Babylon.js Matrix（行ベクトル規約）に変換する関数。
+ * Blender: M*v, 平行移動はm[3],m[7],m[11]
+ * Babylon: v*M, 平行移動はm[12],m[13],m[14]
+ * → 転置が必要
  */
 function blenderToBabylonMatrix(m: number[]): Matrix {
   return Matrix.FromArray([
-    m[0], m[4], m[8],  m[12],
-    m[1], m[5], m[9],  m[13],
-    m[2], m[6], m[10], m[14],
-    m[3], m[7], m[11], m[15],
+    m[0], m[4], m[8],  m[12],  // 転置された行列の第1行
+    m[1], m[5], m[9],  m[13],  // 第2行
+    m[2], m[6], m[10], m[14],  // 第3行
+    m[3], m[7], m[11], m[15],  // 第4行（平行移動成分）
   ]);
 }
 
 /**
- * Coordinate conversion: Blender Z-up right-hand → Babylon Y-up left-hand
+ * 座標変換: Blender Z-up右手系 → Babylon Y-up左手系
  * Blender (x,y,z) → Babylon (x,z,-y)
- * As a Babylon.js Matrix (already in Babylon convention).
+ * Babylon.js行列（Babylon規約）として定義
  */
 const COORD_BLENDER_TO_VIEWER = Matrix.FromArray([
-  1,  0,  0,  0,
-  0,  0, -1,  0,
-  0,  1,  0,  0,
-  0,  0,  0,  1,
+  1,  0,  0,  0,  // X軸: そのまま
+  0,  0, -1,  0,  // Y軸: -Z方向に（Blender Zが手前→Babylon Zが奥）
+  0,  1,  0,  0,  // Z軸: Y方向に（Blender Yが奥→Babylon Yが上）
+  0,  0,  0,  1,  // 平行移動なし
 ]);
 
 /**
- * Process raw Blender motion data into Babylon.js-ready matrices.
- * For each bone per frame:
- *   skinMat = animated_world × bind_rest_inverse  (in Blender space)
- *   viewerMat = C × skinMat × C_inv               (convert to viewer space)
- * All computed using Babylon.js Matrix API for consistent convention handling.
+ * Blenderの生モーションデータをBabylon.js対応の行列に変換する関数。
+ * 各ボーン×各フレーム:
+ *   skinMat = animated_world × bind_rest_inverse  (Blender空間)
+ *   viewerMat = C × skinMat × C_inv               (ビューア空間に変換)
+ * 全てBabylon.js Matrix APIで計算（規約の一貫性のため）
  */
 function processRawMotionData(raw: RawMotionData): MotionData {
-  const coordInv = COORD_BLENDER_TO_VIEWER.clone();
-  coordInv.invert();
+  const coordInv = COORD_BLENDER_TO_VIEWER.clone();  // 座標変換行列のコピー
+  coordInv.invert();  // 逆行列を計算
 
-  // Per-bone bind pose selection: use evaluated pose (IK/FK applied) when it differs
-  // significantly from rest pose, indicating IK was active for that bone.
-  // Voxel meshes are extracted from the evaluated pose, so affected bones must use eval.
+  // ボーンごとのバインドポーズ選択: 評価済みポーズ（IK/FK適用）がレストポーズと
+  // 大きく異なる場合、IKがそのボーンに適用されていたことを示す。
+  // ボクセルメッシュは評価済みポーズから抽出されるため、該当ボーンはevalを使用する必要がある
   const hasEval = raw.bind_pose_eval && Object.keys(raw.bind_pose_eval).length > 0;
-  const bindInvCache: Record<string, Matrix> = {};
+  const bindInvCache: Record<string, Matrix> = {};  // バインドポーズ逆行列のキャッシュ
   for (const [name, restMat] of Object.entries(raw.bind_pose_rest)) {
-    let useMat = restMat;
+    let useMat = restMat;  // デフォルトはレストポーズ
     if (hasEval && raw.bind_pose_eval[name]) {
       const evalMat = raw.bind_pose_eval[name];
-      // Check if eval differs from rest (IK active for this bone)
+      // evalがrestと異なるかチェック（IKがこのボーンに作用しているか）
       let diff = 0;
       for (let i = 0; i < 16; i++) diff += Math.abs(restMat[i] - evalMat[i]);
-      if (diff > 0.01) useMat = evalMat;
+      if (diff > 0.01) useMat = evalMat;  // 差異があればevalを使用
     }
-    const bjsMat = blenderToBabylonMatrix(useMat);
+    const bjsMat = blenderToBabylonMatrix(useMat);  // Babylon形式に変換
     const inv = new Matrix();
-    bjsMat.invertToRef(inv);
-    bindInvCache[name] = inv;
+    bjsMat.invertToRef(inv);  // 逆行列を計算
+    bindInvCache[name] = inv;  // キャッシュに保存
   }
 
-  const bones: MotionData['bones'] = {};
+  const bones: MotionData['bones'] = {};  // 変換済みモーションデータ
 
+  // 各ボーンのアニメーションデータを処理
   for (const [boneName, animData] of Object.entries(raw.animated)) {
     const bindInv = bindInvCache[boneName];
-    if (!bindInv) continue;
+    if (!bindInv) continue;  // バインドポーズがないボーンはスキップ
 
     const matrices: number[][] = [];
     for (const frameMat of animData.matrices) {
-      const animBjs = blenderToBabylonMatrix(frameMat);
+      const animBjs = blenderToBabylonMatrix(frameMat);  // フレーム行列をBabylon形式に変換
 
-      // Babylon row-vector: v * bindInv * anim = v * (bindInv * anim) ???
-      // NO. We want: skinMat = anim × bind_inv (Blender column-vector convention)
-      // In Babylon row-vector: this is bind_inv.multiply(anim)
-      // Because Blender A*B = Babylon B.multiply(A)
+      // スキニング行列 = anim × bind_inv（Blender列ベクトル規約）
+      // Babylon行ベクトル規約では: bind_inv.multiply(anim)
+      // なぜなら Blender A*B = Babylon B.multiply(A)
       const skinBjs = bindInv.multiply(animBjs);
 
-      // Convert to viewer space: C × skin × C_inv
-      // Blender: C * skin * C_inv
-      // Babylon: C_inv.multiply(skin).multiply(C)
-      // Wait... let me think step by step.
-      // Blender column-vector: v_viewer = C * skin * C_inv * v_viewer_input
-      // Babylon row-vector: v_viewer_input * M = v_viewer
+      // ビューア空間への変換: C × skin × C_inv
+      // Blender列ベクトル: v_viewer = C * skin * C_inv * v_viewer_input
+      // Babylon行ベクトル: v_viewer_input * M = v_viewer
       // M = transpose(C * skin * C_inv)
-      // But we already have skin in Babylon format (transposed from Blender).
-      // C is also in Babylon format. So:
-      // M_bjs = C_inv_bjs * skin_bjs * C_bjs
-      // Let me verify: Blender C*skin*C_inv → transpose → (C*skin*C_inv)^T = C_inv^T * skin^T * C^T
-      // Since we already transposed skin to get skin_bjs, and C/C_inv are also transposed...
-      // Actually C_inv_bjs = transpose(C_inv_blender). But COORD_BLENDER_TO_VIEWER was defined directly
-      // in Babylon format. So it's already correct.
-
+      // ただしskinは既にBabylon形式（Blenderから転置済み）。Cも同様。
+      // したがって: M_bjs = C_inv_bjs * skin_bjs * C_bjs
       const viewerMat = coordInv.multiply(skinBjs).multiply(COORD_BLENDER_TO_VIEWER);
 
-      // Store as flat array for the animation loop
+      // アニメーションループ用にフラット配列として格納
       matrices.push(Array.from(viewerMat.asArray()));
     }
     bones[boneName] = { matrices };
@@ -332,63 +360,65 @@ function processRawMotionData(raw: RawMotionData): MotionData {
   return { fps: raw.fps, frame_count: raw.frame_count, babylonFormat: true, bones };
 }
 
+// ジョイントスフィア設定の型定義（関節の球体表示用）
 interface JointSphereConfig {
-  position_voxel: number[];
-  bone: string;
-  radius_voxels: number | number[];
-  shape: 'sphere' | 'ellipsoid';
-  color: { r: number; g: number; b: number };
+  position_voxel: number[];   // ボクセル空間での位置
+  bone: string;               // 所属ボーン名
+  radius_voxels: number | number[];  // 半径（ボクセル単位）
+  shape: 'sphere' | 'ellipsoid';    // 形状
+  color: { r: number; g: number; b: number };  // 表示色
 }
 
+// セグメントデータの型定義（ボーン分割ボクセル情報）
 interface SegmentsData {
-  voxel_size: number;
-  grid: { gx: number; gy: number; gz: number };
-  bb_min?: number[];
-  bb_max?: number[];
+  voxel_size: number;  // ボクセルサイズ
+  grid: { gx: number; gy: number; gz: number };  // グリッドサイズ
+  bb_min?: number[];   // バウンディングボックス最小座標
+  bb_max?: number[];   // バウンディングボックス最大座標
   bone_positions: Record<string, {
-    head_voxel: number[];
-    tail_voxel: number[];
+    head_voxel: number[];  // ボーンのヘッド位置（ボクセル座標）
+    tail_voxel: number[];  // ボーンのテール位置（ボクセル座標）
   }>;
-  segments: Record<string, { file: string; voxels: number }>;
-  joint_spheres?: Record<string, JointSphereConfig>;
+  segments: Record<string, { file: string; voxels: number }>;  // ボーン名→ファイル・ボクセル数
+  joint_spheres?: Record<string, JointSphereConfig>;  // ジョイントスフィア設定
 }
 
 // ========================================================================
-// Bone hierarchy for joint correction
+// Bone hierarchy for joint correction（ジョイント補正用のボーン階層）
 // ========================================================================
 
+// ボーン階層エントリの型定義
 interface BoneHierarchyEntry {
-  bone: string;
-  parent: string | null;
-  jointPoint: number[]; // head point in viewer space [x, y, z]
+  bone: string;           // ボーン名
+  parent: string | null;  // 親ボーン名（ルートはnull）
+  jointPoint: number[];   // ビューア空間でのジョイントポイント [x, y, z]
 }
 
-/** Build bone processing order (root→leaf) with parent info and joint points.
- *  Only considers bones that have actual segments (voxel meshes).
- *  Uses exact tail→head matching first, then proximity matching for orphans. */
+/** ボーン処理順序（ルート→リーフ）を親情報とジョイントポイント付きで構築する関数。
+ *  実際のセグメント（ボクセルメッシュ）を持つボーンのみ対象。
+ *  最初にテール→ヘッドの完全一致を試み、次に孤立ボーンの近接マッチングを行う。 */
 function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
   const bp = segData.bone_positions;
   const grid = segData.grid;
-  const cx = grid.gx / 2, cy = grid.gy / 2;
+  const cx = grid.gx / 2, cy = grid.gy / 2;  // グリッド中心
   const scale = segData.voxel_size;
-  const segmentBones = new Set(Object.keys(segData.segments));
+  const segmentBones = new Set(Object.keys(segData.segments));  // セグメントを持つボーン名
 
-  // Build segment name → bone_positions key mapping
-  // Segment names may be normalized (c_thigh_stretch.l) while bone_positions uses raw names (thigh_stretch.l)
+  // セグメント名→bone_positionsキーのマッピング構築
+  // セグメント名が正規化されている場合がある（例: c_thigh_stretch.l → thigh_stretch.l）
   const bpKeys = new Set(Object.keys(bp));
   const segToBpName: Record<string, string> = {};
   for (const seg of segmentBones) {
-    if (bpKeys.has(seg)) { segToBpName[seg] = seg; continue; }
-    // Try dropping c_ prefix
-    let alt = seg.replace(/^c_/, '');
+    if (bpKeys.has(seg)) { segToBpName[seg] = seg; continue; }  // 完全一致
+    let alt = seg.replace(/^c_/, '');  // c_プレフィックスを除去して試行
     if (bpKeys.has(alt)) { segToBpName[seg] = alt; continue; }
-    // Try dropping c_ prefix and _bend suffix
-    alt = seg.replace(/^c_/, '').replace(/_bend/, '');
+    alt = seg.replace(/^c_/, '').replace(/_bend/, '');  // c_プレフィックスと_bendサフィックスを除去
     if (bpKeys.has(alt)) { segToBpName[seg] = alt; continue; }
   }
-  // Helper to get bone position by segment name
+  // セグメント名からbone_positionsを取得するヘルパー
   const getBp = (seg: string) => bp[segToBpName[seg]];
 
+  // テール位置→ボーン名のマップを構築（親子関係の特定用）
   const tailMap = new Map<string, string>();
   for (const name of segmentBones) {
     const pos = getBp(name);
@@ -397,6 +427,7 @@ function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
     tailMap.set(`${t[0]},${t[1]},${t[2]}`, name);
   }
 
+  // 親子関係の構築（ヘッド位置がテール位置に一致するボーンが親）
   const parentOf: Record<string, string | null> = {};
   const children: Record<string, string[]> = {};
   for (const name of segmentBones) { parentOf[name] = null; children[name] = []; }
@@ -407,22 +438,25 @@ function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
     if (parentName && parentName !== name) { parentOf[name] = parentName; children[parentName].push(name); }
   }
 
-  // Proximity match for orphans
-  const THRESHOLD = 20;
+  // 孤立ボーンの近接マッチング（テール→ヘッドの完全一致がなかったボーン）
+  const THRESHOLD = 20;  // 近接マッチングの閾値（ボクセル距離）
+  // 祖先チェック関数（循環参照防止）
   const isAncestor = (bone: string, ancestor: string): boolean => {
     let cur = bone; const visited = new Set<string>();
     while (cur) { if (visited.has(cur)) return false; if (cur === ancestor) return true; visited.add(cur); cur = parentOf[cur]!; }
     return false;
   };
+  // 最大10ラウンドの近接マッチング
   for (let round = 0; round < 10; round++) {
-    const orphanSet = new Set([...segmentBones].filter(n => !parentOf[n] && getBp(n)));
+    const orphanSet = new Set([...segmentBones].filter(n => !parentOf[n] && getBp(n)));  // 孤立ボーン
     if (orphanSet.size === 0) break;
-    const inTree = new Set<string>();
+    const inTree = new Set<string>();  // 既にツリーに含まれるボーン
     for (const n of segmentBones) { if (parentOf[n] || children[n].length > 0) inTree.add(n); }
     let attached = 0;
     for (const name of orphanSet) {
       const h = getBp(name)!.head_voxel;
       let bestParent: string | null = null, bestDist = THRESHOLD;
+      // ツリー内の全ボーンのテールとの距離を計算
       for (const candidate of segmentBones) {
         if (candidate === name || !inTree.has(candidate) || isAncestor(candidate, name)) continue;
         const cPos = getBp(candidate);
@@ -433,16 +467,18 @@ function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
       }
       if (bestParent) { parentOf[name] = bestParent; children[bestParent].push(name); attached++; }
     }
-    if (attached === 0) break;
+    if (attached === 0) break;  // 追加接続がなければ終了
   }
 
-  const roots = [...segmentBones].filter(n => !parentOf[n]);
+  // ルートからリーフへの処理順序を構築（BFS）
+  const roots = [...segmentBones].filter(n => !parentOf[n]);  // ルートボーン
   const order: BoneHierarchyEntry[] = [];
   const queue = [...roots];
   while (queue.length > 0) {
     const bone = queue.shift()!;
     const pos = getBp(bone); if (!pos) continue;
     const h = pos.head_voxel;
+    // ジョイントポイントをビューア空間に変換（VOX→Babylon座標系）
     order.push({ bone, parent: parentOf[bone], jointPoint: [(h[0] - cx) * scale, h[2] * scale, -(h[1] - cy) * scale] });
     for (const child of children[bone]) queue.push(child);
   }
@@ -450,49 +486,49 @@ function buildBoneHierarchy(segData: SegmentsData): BoneHierarchyEntry[] {
 }
 
 /**
- * Resolve segment bone name to motion bone name.
- * ARP rigs use different naming between control bones (segments) and deform bones (motion):
- *   c_arm_stretch.l → arm_stretch.l  (drop c_ prefix)
- *   c_spine_01_bend.x → spine_01.x   (drop c_ prefix and _bend suffix)
+ * セグメントのボーン名をモーションのボーン名に解決する関数。
+ * ARPリグではコントロールボーン（セグメント）とデフォームボーン（モーション）で命名が異なる:
+ *   c_arm_stretch.l → arm_stretch.l  (c_プレフィックスを除去)
+ *   c_spine_01_bend.x → spine_01.x   (c_プレフィックスと_bendサフィックスを除去)
  */
 function resolveMotionBoneName(segName: string, motionBones: Set<string>): string | null {
-  if (motionBones.has(segName)) return segName;
-  // Drop c_ prefix
-  let alt = segName.replace(/^c_/, '');
+  if (motionBones.has(segName)) return segName;  // 完全一致
+  let alt = segName.replace(/^c_/, '');  // c_プレフィックスを除去
   if (motionBones.has(alt)) return alt;
-  // Drop c_ prefix and _bend suffix
-  alt = segName.replace(/^c_/, '').replace(/_bend/, '');
+  alt = segName.replace(/^c_/, '').replace(/_bend/, '');  // c_プレフィックスと_bendを除去
   if (motionBones.has(alt)) return alt;
-  return null;
+  return null;  // 解決できず
 }
 
-/** Apply a row-major column-vector 4x4 matrix to a 3D point (Blender convention) */
+/** 行優先列ベクトル規約の4x4行列を3D点に適用する関数（Blender規約） */
 function applyMatPointBlender(m: number[], p: number[]): number[] {
   return [
-    p[0] * m[0] + p[1] * m[1] + p[2] * m[2] + m[3],
-    p[0] * m[4] + p[1] * m[5] + p[2] * m[6] + m[7],
-    p[0] * m[8] + p[1] * m[9] + p[2] * m[10] + m[11],
+    p[0] * m[0] + p[1] * m[1] + p[2] * m[2] + m[3],   // X成分
+    p[0] * m[4] + p[1] * m[5] + p[2] * m[6] + m[7],   // Y成分
+    p[0] * m[8] + p[1] * m[9] + p[2] * m[10] + m[11], // Z成分
   ];
 }
 
-/** Apply a Babylon.js format (row-vector) 4x4 matrix to a 3D point */
+/** Babylon.js形式（行ベクトル規約）の4x4行列を3D点に適用する関数 */
 function applyMatPointBabylon(m: number[], p: number[]): number[] {
   return [
-    p[0] * m[0] + p[1] * m[4] + p[2] * m[8] + m[12],
-    p[0] * m[1] + p[1] * m[5] + p[2] * m[9] + m[13],
-    p[0] * m[2] + p[1] * m[6] + p[2] * m[10] + m[14],
+    p[0] * m[0] + p[1] * m[4] + p[2] * m[8] + m[12],  // X成分
+    p[0] * m[1] + p[1] * m[5] + p[2] * m[9] + m[13],  // Y成分
+    p[0] * m[2] + p[1] * m[6] + p[2] * m[10] + m[14], // Z成分
   ];
 }
 
-const GAME_ASSETS_API = '/api/game-assets';
-const VOX_API = '/api/vox';
+// API エンドポイント定数
+const GAME_ASSETS_API = '/api/game-assets';  // ゲームアセットAPI
+const VOX_API = '/api/vox';                  // VOXファイルAPI
 
+// キャラクター設定の定義（全キャラクター）
 const CHARACTERS: Record<string, CharacterConfig> = {
-  // ---- Base Body (single model, all motions compatible) ----
+  // ---- ベースボディ（単一モデル、全モーション互換） ----
   base_female: { label: 'Base Female (CyberpunkElf)', manifest: `${VOX_API}/female/CyberpunkElf-Detailed/parts.json`, gridJson: `${VOX_API}/female/CyberpunkElf-Detailed/grid.json`, gender: 'female', category: 'base' },
   base_bunnyakali: { label: 'Base Female (BunnyAkali)', manifest: `${VOX_API}/female/BunnyAkali-Base/parts.json`, gridJson: `${VOX_API}/female/BunnyAkali-Base/grid.json`, gender: 'female', category: 'base' },
   base_darkelfblader: { label: 'Base Female (DarkElfBlader)', manifest: `${VOX_API}/female/DarkElfBlader-Base/parts.json`, gridJson: `${VOX_API}/female/DarkElfBlader-Base/grid.json`, gender: 'female', category: 'base' },
-  // ---- Female ----
+  // ---- 女性キャラクター ----
   cyberpunkelf: { label: 'CyberpunkElf', manifest: `${VOX_API}/female/realistic/parts.json`, gridJson: `${VOX_API}/female/realistic/grid.json`, gender: 'female', category: 'female' },
   darkelfblader: { label: 'DarkElfBlader', manifest: `${VOX_API}/female/realistic-darkelf/parts.json`, gridJson: `${VOX_API}/female/realistic-darkelf/grid.json`, gender: 'female', category: 'female' },
   highpriestess: { label: 'HighPriestess', manifest: `${VOX_API}/female/realistic-highpriestess/parts.json`, gridJson: `${VOX_API}/female/realistic-highpriestess/grid.json`, gender: 'female', category: 'female' },
@@ -515,7 +551,7 @@ const CHARACTERS: Record<string, CharacterConfig> = {
   artorialancer_alter: { label: 'ArtoriaLancer Alter', manifest: `${VOX_API}/female/realistic-artorialancer-alter/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-alter/grid.json`, gender: 'female', category: 'female' },
   artorialancer_bunnysuit: { label: 'ArtoriaLancer BunnySuit', manifest: `${VOX_API}/female/realistic-artorialancer-bunnysuit/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-bunnysuit/grid.json`, gender: 'female', category: 'female' },
   elfpaladin: { label: 'ElfPaladin', manifest: `${VOX_API}/female/realistic-elfpaladin/parts.json`, gridJson: `${VOX_API}/female/realistic-elfpaladin/grid.json`, gender: 'female', category: 'female' },
-  // ---- Male ----
+  // ---- 男性キャラクター ----
   radagon: { label: 'Radagon', manifest: `${VOX_API}/male/realistic-radagon/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon/grid.json`, gender: 'male', category: 'male' },
   vagrant: { label: 'Vagrant', manifest: `${VOX_API}/male/realistic-vagrant/parts.json`, gridJson: `${VOX_API}/male/realistic-vagrant/grid.json`, gender: 'male', category: 'male' },
   spartanhoplite: { label: 'SpartanHoplite', manifest: `${VOX_API}/male/realistic-spartanhoplite/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite/grid.json`, gender: 'male', category: 'male' },
@@ -523,7 +559,7 @@ const CHARACTERS: Record<string, CharacterConfig> = {
   spartanhoplite_tall: { label: 'SpartanHoplite (Tall)', manifest: `${VOX_API}/male/realistic-spartanhoplite-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-tall/grid.json`, gender: 'male', category: 'male' },
   vagrant_tall: { label: 'Vagrant (Tall)', manifest: `${VOX_API}/male/realistic-vagrant-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-vagrant-tall/grid.json`, gender: 'male', category: 'male' },
   dido: { label: 'Dido (MaleSmall2)', manifest: `${VOX_API}/male/realistic-dido/parts.json`, gridJson: `${VOX_API}/male/realistic-dido/grid.json`, gender: 'male', category: 'male' },
-  // ---- Weapons ----
+  // ---- 武器 ----
   artorialancer_weapons: { label: 'ArtoriaLancer Weapons', manifest: `${VOX_API}/female/realistic-artorialancer-weapons/parts.json`, gridJson: `${VOX_API}/female/realistic-artorialancer-weapons/grid.json`, gender: 'female', category: 'weapons' },
   elfpaladin_weapons: { label: 'ElfPaladin Weapons', manifest: `${VOX_API}/female/realistic-elfpaladin-weapons/parts.json`, gridJson: `${VOX_API}/female/realistic-elfpaladin-weapons/grid.json`, gender: 'female', category: 'weapons' },
   radagon_weapons: { label: 'Radagon Weapons', manifest: `${VOX_API}/male/realistic-radagon-weapons/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon-weapons/grid.json`, gender: 'male', category: 'weapons' },
@@ -533,9 +569,10 @@ const CHARACTERS: Record<string, CharacterConfig> = {
 };
 
 // ========================================================================
-// Component
+// Component（コンポーネント）
 // ========================================================================
 
+// ラッパーコンポーネント（Suspenseでローディングフォールバックを提供）
 export default function RealisticViewerWrapper() {
   return (
     <Suspense fallback={<div style={{ background: '#12121f', width: '100vw', height: '100vh' }} />}>
@@ -544,55 +581,56 @@ export default function RealisticViewerWrapper() {
   );
 }
 
+// リアリスティックビューアのメインページコンポーネント
 function RealisticViewerPage() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<Scene | null>(null);
-  const bodyMatRef = useRef<StandardMaterial | null>(null);
-  const partMatRef = useRef<StandardMaterial | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);          // 3D描画用キャンバスの参照
+  const sceneRef = useRef<Scene | null>(null);               // Babylon.jsシーンの参照
+  const bodyMatRef = useRef<StandardMaterial | null>(null);   // ボディ用マテリアルの参照
+  const partMatRef = useRef<StandardMaterial | null>(null);   // パーツ用マテリアルの参照（zOffset付き）
 
-  const meshesRef = useRef<Record<string, Mesh>>({});
+  const meshesRef = useRef<Record<string, Mesh>>({});        // パーツキー→メッシュのマップ
 
-  const [selectedCategory, setSelectedCategory] = useState<CharCategory>('base');
-  const [charKey, setCharKey] = useState('base_female');
-  const [parts, setParts] = useState<PartEntry[]>([]);
-  const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CharCategory>('base');  // 選択中のカテゴリ
+  const [charKey, setCharKey] = useState('base_female');      // 選択中のキャラクターキー
+  const [parts, setParts] = useState<PartEntry[]>([]);        // パーツ一覧
+  const [partVisibility, setPartVisibility] = useState<Record<string, boolean>>({});  // パーツ表示状態
+  const [loading, setLoading] = useState(true);              // 読み込み中フラグ
+  const [error, setError] = useState<string | null>(null);   // エラーメッセージ
 
-  // Hair swap state
-  const [hairOptions, setHairOptions] = useState<HairOption[]>([]);
-  const [selectedHair, setSelectedHair] = useState<string>(''); // "charKey::partKey" or '' for default
-  const [hairLoading, setHairLoading] = useState(false);
+  // 髪スワップ関連の状態
+  const [hairOptions, setHairOptions] = useState<HairOption[]>([]);  // 利用可能な髪オプション
+  const [selectedHair, setSelectedHair] = useState<string>('');      // 選択中の髪（"charKey::partKey" または空文字）
+  const [hairLoading, setHairLoading] = useState(false);             // 髪読み込み中フラグ
 
-  // Animation state
-  const [animPlaying, setAnimPlaying] = useState(false);
-  const [animReady, setAnimReady] = useState(false);
-  const [selectedMotion, setSelectedMotion] = useState('');
-  const [selectedMotionB, setSelectedMotionB] = useState('');
-  const [blendDuration, setBlendDuration] = useState(30); // frames for crossfade
-  const motionDataRef = useRef<MotionData | null>(null);
-  const motionDataBRef = useRef<MotionData | null>(null);
-  const segmentsDataRef = useRef<SegmentsData | null>(null);
-  const boneHierarchyRef = useRef<BoneHierarchyEntry[]>([]);
-  const animFrameRef = useRef(0);
-  const frameDisplayRef = useRef<HTMLSpanElement>(null);
-  // restVoxelsRef removed — using freezeWorldMatrix for animation
-  const [hairSizeDiff, setHairSizeDiff] = useState<string>('');
-  const voxelScaleRef = useRef<number>(SCALE);
-  const jointBonesRef = useRef<Record<string, [string, string]>>({}); // jointKey -> [boneA, boneB]
-  const bodyAnchorsRef = useRef<AnchorPoints | null>(null);
+  // アニメーション関連の状態
+  const [animPlaying, setAnimPlaying] = useState(false);      // アニメーション再生中フラグ
+  const [animReady, setAnimReady] = useState(false);          // アニメーションデータ読み込み完了フラグ
+  const [selectedMotion, setSelectedMotion] = useState('');    // 選択中のモーションA
+  const [selectedMotionB, setSelectedMotionB] = useState(''); // 選択中のモーションB（ブレンド用）
+  const [blendDuration, setBlendDuration] = useState(30);     // クロスフェードのフレーム数
+  const motionDataRef = useRef<MotionData | null>(null);      // モーションAデータの参照
+  const motionDataBRef = useRef<MotionData | null>(null);     // モーションBデータの参照
+  const segmentsDataRef = useRef<SegmentsData | null>(null);  // セグメントデータの参照
+  const boneHierarchyRef = useRef<BoneHierarchyEntry[]>([]);  // ボーン階層の参照
+  const animFrameRef = useRef(0);                             // 現在のアニメーションフレーム
+  const frameDisplayRef = useRef<HTMLSpanElement>(null);       // フレーム表示用DOM要素の参照
+  // restVoxelsRef削除済み — アニメーションにはfreezeWorldMatrixを使用
+  const [hairSizeDiff, setHairSizeDiff] = useState<string>('');  // 髪スワップ時のサイズ差表示
+  const voxelScaleRef = useRef<number>(SCALE);                // 現在のボクセルスケール
+  const jointBonesRef = useRef<Record<string, [string, string]>>({}); // ジョイントキー→[ボーンA, ボーンB]
+  const bodyAnchorsRef = useRef<AnchorPoints | null>(null);   // ボディの頭部アンカーポイント
 
-  // Toggle individual part
+  // 個別パーツの表示/非表示トグル関数
   const togglePart = useCallback((key: string) => {
     setPartVisibility(prev => {
       const next = { ...prev, [key]: !prev[key] };
       const mesh = meshesRef.current[key];
-      if (mesh) mesh.setEnabled(next[key]);
+      if (mesh) mesh.setEnabled(next[key]);  // メッシュの有効/無効を切り替え
       return next;
     });
   }, []);
 
-  // Toggle all parts
+  // 全パーツの一括表示/非表示トグル関数
   const toggleAll = useCallback((on: boolean) => {
     setPartVisibility(prev => {
       const next: Record<string, boolean> = {};
@@ -605,7 +643,7 @@ function RealisticViewerPage() {
     });
   }, []);
 
-  // Toggle body only / parts only
+  // カテゴリ別（ボディ/パーツ）の一括表示/非表示トグル関数
   const toggleCategory = useCallback((isBody: boolean, on: boolean) => {
     setPartVisibility(prev => {
       const next = { ...prev };
@@ -620,18 +658,20 @@ function RealisticViewerPage() {
     });
   }, [parts]);
 
-  // Collect hair options from all same-gender characters
+  // 同性別の全キャラクターから髪オプションを収集する副作用
   useEffect(() => {
     const currentGender = CHARACTERS[charKey]?.gender;
     if (!currentGender) return;
-    let cancelled = false;
+    let cancelled = false;  // キャンセルフラグ
 
     (async () => {
+      // 同性別のキャラクターをフィルタ
       const sameGenderChars = Object.entries(CHARACTERS).filter(
         ([, cfg]) => cfg.gender === currentGender
       );
 
       const options: HairOption[] = [];
+      // 全キャラクターのマニフェストを並行読み込み
       await Promise.all(
         sameGenderChars.map(async ([ck, cfg]) => {
           try {
@@ -640,12 +680,14 @@ function RealisticViewerPage() {
             const allParts: PartEntry[] = await resp.json();
             const manifestPath = cfg.manifest.replace(VOX_API + '/', '');
             const genderPrefix = manifestPath.split('/')[0];
+            // 髪カテゴリのパーツを抽出
             const hairParts = allParts.filter(
               p => p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body)
             );
-            // Build anchors URL from manifest path
+            // マニフェストパスからアンカーURLを構築
             const charFolder = manifestPath.split('/').slice(0, -1).join('/');
             const anchorsUrl = `${VOX_API}/${charFolder}/hair_anchors.json`;
+            // 各髪パーツをオプションに追加
             for (const hp of hairParts) {
               const fullFile = hp.file.startsWith(VOX_API)
                 ? hp.file
@@ -660,21 +702,21 @@ function RealisticViewerPage() {
               });
             }
           } catch {
-            // skip characters whose manifest can't be loaded
+            // マニフェストが読み込めないキャラクターはスキップ
           }
         })
       );
 
       if (!cancelled) {
-        options.sort((a, b) => a.label.localeCompare(b.label));
+        options.sort((a, b) => a.label.localeCompare(b.label));  // ラベル順にソート
         setHairOptions(options);
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; };  // クリーンアップ
   }, [charKey]);
 
-  // Swap hair: dispose current hair meshes, load selected one, align via anchors
+  // 髪スワップ: 現在の髪メッシュを破棄し、選択された髪をロードしてアンカーベースでアライメント
   const swapHair = useCallback(async (hairId: string) => {
     const scene = sceneRef.current;
     const partMat = partMatRef.current;
@@ -683,7 +725,7 @@ function RealisticViewerPage() {
     setSelectedHair(hairId);
     setHairSizeDiff('');
 
-    // Find all current hair part keys and dispose
+    // 現在の髪パーツキーを全て検索して破棄
     const hairPartKeys = parts
       .filter(p => p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body))
       .map(p => p.key);
@@ -693,7 +735,7 @@ function RealisticViewerPage() {
     }
 
     if (hairId === '') {
-      // Reload original hair from current character
+      // デフォルト髪に戻す: 現在のキャラクターの元の髪をリロード
       const config = CHARACTERS[charKey];
       if (!config) return;
       setHairLoading(true);
@@ -703,6 +745,7 @@ function RealisticViewerPage() {
         const allParts: PartEntry[] = await resp.json();
         const manifestPath = config.manifest.replace(VOX_API + '/', '');
         const genderPrefix = manifestPath.split('/')[0];
+        // 髪パーツを再読み込み
         for (const hp of allParts) {
           if (!(hp.category === 'hair' || (hp.key.includes('hair') && hp.key !== 'body_hair' && !hp.is_body))) continue;
           const fullFile = hp.file.startsWith(VOX_API) ? hp.file : `${VOX_API}/${genderPrefix}${hp.file}`;
@@ -722,13 +765,13 @@ function RealisticViewerPage() {
       return;
     }
 
-    // Load the selected hair with anchor-based alignment
+    // 選択された髪をアンカーベースのアライメントでロード
     const option = hairOptions.find(o => `${o.charKey}::${o.partKey}` === hairId);
     if (!option) return;
 
     setHairLoading(true);
     try {
-      // Load source character's anchors (single fetch)
+      // ソースキャラクターのアンカーを読み込み
       let sourceHairAnchors: AnchorPoints | null = null;
       let sourceBodyAnchors: AnchorPoints | null = null;
       let sourceVoxelSize = voxelScaleRef.current;
@@ -740,36 +783,36 @@ function RealisticViewerPage() {
           sourceBodyAnchors = anchData.body_head ?? null;
           sourceVoxelSize = anchData.voxel_size;
         }
-      } catch { /* no anchors available, fall back to current char's scale */ }
+      } catch { /* アンカーが利用できない場合、現在のキャラクターのスケールにフォールバック */ }
 
       const targetBodyAnchors = bodyAnchorsRef.current;
-      const swapKey = `swapped_hair_${option.partKey}`;
+      const swapKey = `swapped_hair_${option.partKey}`;  // スワップ後のパーツキー
 
+      // 髪のVOXメッシュをロード
       const mesh = await loadVoxMesh(scene, option.file, `part_${swapKey}`, sourceVoxelSize);
       mesh.material = partMat;
 
-      // Apply anchor-based alignment
+      // アンカーベースのアライメントを適用
       if (targetBodyAnchors && sourceHairAnchors) {
-        // Scale: based on target body head size vs source body head size
-        // If source has no body_head (standalone hair), use target as reference (scale=1.0)
+        // スケール: ターゲットボディの頭部サイズ vs ソースボディの頭部サイズ
         const srcBody = sourceBodyAnchors || targetBodyAnchors;
-        const scaleW = targetBodyAnchors.width / srcBody.width;
-        const scaleD = targetBodyAnchors.depth / srcBody.depth;
-        const uniformScale = (scaleW + scaleD) / 2;
+        const scaleW = targetBodyAnchors.width / srcBody.width;   // 幅のスケール比
+        const scaleD = targetBodyAnchors.depth / srcBody.depth;   // 奥行のスケール比
+        const uniformScale = (scaleW + scaleD) / 2;               // 均一スケール（平均）
 
-        mesh.scaling = new Vector3(uniformScale, uniformScale, uniformScale);
+        mesh.scaling = new Vector3(uniformScale, uniformScale, uniformScale);  // スケーリング適用
 
-        // Position offset: align hair contact top to target body head top
+        // 位置オフセット: 髪の接触頭頂部をターゲットボディの頭頂部に合わせる
         const offsetX = targetBodyAnchors.top[0] - sourceHairAnchors.top[0] * uniformScale;
         const offsetY = targetBodyAnchors.top[1] - sourceHairAnchors.top[1] * uniformScale + 2 * sourceVoxelSize;
         const offsetZ = targetBodyAnchors.top[2] - sourceHairAnchors.top[2] * uniformScale - 2 * sourceVoxelSize;
         mesh.position = new Vector3(offsetX, offsetY, offsetZ);
 
-        // Show size difference info
+        // サイズ差をパーセンテージで表示
         const pctDiff = Math.round((uniformScale - 1) * 100);
         setHairSizeDiff(pctDiff === 0 ? '' : `${pctDiff > 0 ? '+' : ''}${pctDiff}%`);
       } else {
-        // No anchors: no transform
+        // アンカーなし: 変換なし
         mesh.position = Vector3.Zero();
       }
 
@@ -777,6 +820,7 @@ function RealisticViewerPage() {
       meshesRef.current[swapKey] = mesh;
       setPartVisibility(prev => ({ ...prev, [swapKey]: true }));
 
+      // パーツリストを更新（既存の髪を除去し、スワップした髪を追加）
       setParts(prev => {
         const nonHair = prev.filter(
           p => !(p.category === 'hair' || (p.key.includes('hair') && p.key !== 'body_hair' && !p.is_body))
@@ -798,59 +842,65 @@ function RealisticViewerPage() {
     }
   }, [parts, charKey, hairOptions]);
 
-  // Initialize scene
+  // シーン初期化の副作用（マウント時に1回実行）
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Babylon.jsエンジンを作成（アンチエイリアスなし、パフォーマンス重視）
     const engine = new Engine(canvas, false, { preserveDrawingBuffer: false });
     const scene = new Scene(engine);
     sceneRef.current = scene;
-    scene.clearColor = new Color4(0.06, 0.06, 0.10, 1);
+    scene.clearColor = new Color4(0.06, 0.06, 0.10, 1);  // 暗い背景色
 
+    // アークロテートカメラの作成と設定
     const camera = new ArcRotateCamera('cam', -Math.PI / 4, Math.PI / 3, 3.0, new Vector3(0, 0.8, 0), scene);
     camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 0.3;
-    camera.upperRadiusLimit = 15;
-    camera.wheelPrecision = 80;
+    camera.lowerRadiusLimit = 0.3;   // 最小ズーム距離
+    camera.upperRadiusLimit = 15;    // 最大ズーム距離
+    camera.wheelPrecision = 80;      // ズーム感度
 
+    // 半球ライト（環境光）
     const hemi = new HemisphericLight('hemi', new Vector3(0.3, 1, 0.5), scene);
     hemi.intensity = 0.85;
-    hemi.groundColor = new Color3(0.2, 0.2, 0.25);
+    hemi.groundColor = new Color3(0.2, 0.2, 0.25);  // 地面反射色
 
+    // ディレクショナルライト
     const dir = new DirectionalLight('dir', new Vector3(-0.5, -1, -0.8), scene);
     dir.intensity = 0.45;
 
+    // グラウンドメッシュ（ワイヤーフレームグリッド）
     const ground = MeshBuilder.CreateGround('ground', { width: 10, height: 10, subdivisions: 10 }, scene);
     const gm = new StandardMaterial('gm', scene);
     gm.diffuseColor = new Color3(0.12, 0.12, 0.16);
     gm.specularColor = Color3.Black();
     gm.wireframe = true;
-    gm.freeze();
+    gm.freeze();  // マテリアルをフリーズ（パフォーマンス最適化）
     ground.material = gm;
-    ground.freezeWorldMatrix();
+    ground.freezeWorldMatrix();  // ワールド行列をフリーズ
 
-    // Body material
+    // ボディ用マテリアル（照明無効、頂点カラーで表示）
     const bodyMat = new StandardMaterial('bodyMat', scene);
-    bodyMat.emissiveColor = Color3.White();
-    bodyMat.disableLighting = true;
-    bodyMat.backFaceCulling = false;
+    bodyMat.emissiveColor = Color3.White();   // エミッシブを白に（照明の影響なし）
+    bodyMat.disableLighting = true;           // ライティング無効
+    bodyMat.backFaceCulling = false;          // 両面描画
     bodyMat.freeze();
     bodyMatRef.current = bodyMat;
 
-    // Part material (renders on top of body)
+    // パーツ用マテリアル（ボディの上に描画するためzOffset付き）
     const partMat = new StandardMaterial('partMat', scene);
     partMat.emissiveColor = Color3.White();
     partMat.disableLighting = true;
     partMat.backFaceCulling = false;
-    partMat.zOffset = -2;
+    partMat.zOffset = -2;  // Zオフセットでボディの手前に描画
     partMat.freeze();
     partMatRef.current = partMat;
 
-    engine.runRenderLoop(() => scene.render());
+    engine.runRenderLoop(() => scene.render());  // レンダリングループ開始
     const onResize = () => engine.resize();
     window.addEventListener('resize', onResize);
 
+    // クリーンアップ
     return () => {
       window.removeEventListener('resize', onResize);
       engine.dispose();
@@ -859,7 +909,7 @@ function RealisticViewerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load character parts when charKey changes
+  // キャラクター変更時にパーツを読み込む副作用
   useEffect(() => {
     const scene = sceneRef.current;
     const bodyMat = bodyMatRef.current;
@@ -875,7 +925,7 @@ function RealisticViewerPage() {
       setHairSizeDiff('');
       bodyAnchorsRef.current = null;
 
-      // Dispose old meshes
+      // 既存メッシュを破棄
       for (const mesh of Object.values(meshesRef.current)) {
         mesh.dispose();
       }
@@ -889,7 +939,7 @@ function RealisticViewerPage() {
       }
 
       try {
-        // Load grid.json to get voxel_size for correct physical scale
+        // grid.jsonを読み込んでボクセルサイズを取得（正しい物理スケール）
         const gridResp = await fetch(config.gridJson + CACHE_BUST);
         let voxelScale = SCALE;
         if (gridResp.ok) {
@@ -902,12 +952,12 @@ function RealisticViewerPage() {
         const genderPrefix = manifestPath.split('/')[0];
         const charFolder = manifestPath.split('/').slice(0, -1).join('/');
 
-        // Try bundle-based loading first (single file, much faster)
+        // バンドルベースの高速ロードを最初に試行（単一ファイル）
         const bundleUrl = `${VOX_API}/${charFolder}/segments_bundle.json`;
         const bundleResp = await fetch(bundleUrl + CACHE_BUST);
 
         if (bundleResp.ok && config.category === 'base') {
-          // Fast path: single bundled file
+          // 高速パス: バンドルファイルから全ボーンメッシュを一括構築
           const bundle: SegmentBundleData = await bundleResp.json();
           if (cancelled) return;
 
@@ -923,7 +973,7 @@ function RealisticViewerPage() {
           setPartVisibility(vis);
           jointBonesRef.current = {};
         } else {
-          // Fallback: individual .vox file loading (non-base characters)
+          // フォールバック: 個別VOXファイルの読み込み（非ベースキャラクター）
           const resp = await fetch(config.manifest + CACHE_BUST);
           if (!resp.ok) {
             setError(`${config.label}: parts.json not found.`);
@@ -932,6 +982,7 @@ function RealisticViewerPage() {
           }
           const allParts: PartEntry[] = await resp.json();
           if (cancelled) return;
+          // ファイルパスにAPIプレフィックスを付与
           for (const p of allParts) {
             if (!p.file.startsWith(VOX_API)) {
               p.file = `${VOX_API}/${genderPrefix}${p.file}`;
@@ -939,6 +990,7 @@ function RealisticViewerPage() {
           }
           setParts(allParts);
 
+          // パーツの表示状態とジョイントボーンマッピングを構築
           const vis: Record<string, boolean> = {};
           const jointBonesMap: Record<string, [string, string]> = {};
           for (const part of allParts) {
@@ -949,6 +1001,7 @@ function RealisticViewerPage() {
             }
           }
 
+          // 全パーツのVOXメッシュを並行読み込み
           const meshResults = await Promise.all(
             allParts.map(async (part) => {
               try {
@@ -957,6 +1010,7 @@ function RealisticViewerPage() {
             })
           );
           if (cancelled) { for (const r of meshResults) if (r) r.mesh.dispose(); return; }
+          // メッシュにマテリアルを設定して登録
           for (const r of meshResults) {
             if (!r) continue;
             r.mesh.material = (r.part.is_body && r.part.key !== 'eyes') ? bodyMat : partMat;
@@ -980,18 +1034,18 @@ function RealisticViewerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [charKey]);
 
-  // Load animation data for BasicBody / Split characters
+  // ベースボディ/分割キャラクター用のアニメーションデータ読み込み
   useEffect(() => {
-    if (CHARACTERS[charKey]?.category !== 'base') return;
+    if (CHARACTERS[charKey]?.category !== 'base') return;  // ベースカテゴリ以外はスキップ
     const config = CHARACTERS[charKey];
     if (!config) return;
-    // Extract folder name from manifest path: /api/vox/<gender>/<folderName>/...
+    // マニフェストパスからフォルダ名を抽出
     const manifestPath = config.manifest.replace(VOX_API + '/', '');
     const pathParts = manifestPath.split('/');
     const gender = pathParts[0];
-    const folderName = pathParts[1]; // BasicBodyFemale, BasicBodyMale-Vagrant, etc.
+    const folderName = pathParts[1];
 
-    // Default motion per model
+    // モデルごとのデフォルトモーション
     const defaultMotion: Record<string, string> = {
       'CyberpunkElf-Detailed': 'walk_cycle_arp.motion.json',
       'BunnyAkali-Base': 'bunnyakali_cozywinter.motion.json',
@@ -1001,17 +1055,18 @@ function RealisticViewerPage() {
 
     (async () => {
       try {
-        // Load segments.json (bone positions)
+        // segments.json（ボーン位置情報）を読み込み
         const segResp = await fetch(`${VOX_API}/${gender}/${folderName}/segments.json${CACHE_BUST}`);
         if (segResp.ok) {
           const segData: SegmentsData = await segResp.json();
           segmentsDataRef.current = segData;
-          boneHierarchyRef.current = buildBoneHierarchy(segData);
+          boneHierarchyRef.current = buildBoneHierarchy(segData);  // ボーン階層を構築
         }
-        // Load selected motion
+        // 選択されたモーションファイルを読み込み
         const motionResp = await fetch(`${GAME_ASSETS_API}/motion/${motionFile}${CACHE_BUST}`);
         if (motionResp.ok) {
           const motionJson = await motionResp.json();
+          // 生フォーマットの場合はBabylon.js形式に変換
           if (motionJson.format === 'blender_raw') {
             motionDataRef.current = processRawMotionData(motionJson as RawMotionData);
           } else {
@@ -1024,6 +1079,7 @@ function RealisticViewerPage() {
       }
     })();
 
+    // クリーンアップ
     return () => {
       motionDataRef.current = null;
       segmentsDataRef.current = null;
@@ -1033,7 +1089,7 @@ function RealisticViewerPage() {
     };
   }, [charKey, selectedMotion]);
 
-  // Load Motion B for blending
+  // ブレンド用モーションBの読み込み
   useEffect(() => {
     if (!selectedMotionB || CHARACTERS[charKey]?.category !== 'base') {
       motionDataBRef.current = null;
@@ -1044,6 +1100,7 @@ function RealisticViewerPage() {
         const resp = await fetch(`${GAME_ASSETS_API}/motion/${selectedMotionB}${CACHE_BUST}`);
         if (resp.ok) {
           const json = await resp.json();
+          // 生フォーマットの場合は変換
           motionDataBRef.current = json.format === 'blender_raw'
             ? processRawMotionData(json as RawMotionData) : json;
         }
@@ -1054,34 +1111,36 @@ function RealisticViewerPage() {
     return () => { motionDataBRef.current = null; };
   }, [charKey, selectedMotionB]);
 
-  // Note: rest pose vertex storage removed — using freezeWorldMatrix for animation (no per-vertex transform)
+  // Note: レストポーズ頂点の保存は削除済み — アニメーションにはfreezeWorldMatrixを使用（頂点単位の変換なし）
 
-  // Animation loop — uses requestAnimationFrame with frame-rate throttle, no React state updates
+  // アニメーションループ — requestAnimationFrameとフレームレート制限、React状態更新なし
   useEffect(() => {
-    if (!animPlaying) return;
+    if (!animPlaying) return;  // 再生中でなければスキップ
     const motion = motionDataRef.current;
     if (!motion) return;
 
-    let frameCounter = animFrameRef.current;
+    let frameCounter = animFrameRef.current;  // フレームカウンター
     const motionB = motionDataBRef.current;
-    const frameDuration = 1000 / (motion.fps || 30);
+    const frameDuration = 1000 / (motion.fps || 30);  // 1フレームの時間（ミリ秒）
     const blendFrames = blendDuration;
-    // Total frames: motionA full + blend transition + motionB full (if B exists)
+    // 合計フレーム: モーションA全体 + ブレンド遷移 + モーションB全体（B存在時）
     const totalFramesA = motion.frame_count;
     const totalFrames = motionB
       ? totalFramesA + motionB.frame_count
       : totalFramesA;
 
-    // Build bone name mapping (segment name → motion bone name) once
+    // ボーン名マッピングの構築（セグメント名→モーションボーン名）
     const allBoneSets = [new Set(Object.keys(motion.bones))];
     if (motionB) allBoneSets.push(new Set(Object.keys(motionB.bones)));
     const boneNameMap: Record<string, string> = {};
+    // メッシュキーからモーションボーン名を解決
     for (const segKey of Object.keys(meshesRef.current)) {
       for (const boneSet of allBoneSets) {
         const resolved = resolveMotionBoneName(segKey, boneSet);
         if (resolved) { boneNameMap[segKey] = resolved; break; }
       }
     }
+    // ボーン階層エントリからもモーションボーン名を解決
     for (const entry of boneHierarchyRef.current) {
       if (!boneNameMap[entry.bone]) {
         for (const boneSet of allBoneSets) {
@@ -1093,9 +1152,9 @@ function RealisticViewerPage() {
     let lastTime = 0;
     let rafId = 0;
 
-    // Convert matrix array to Babylon.js Matrix
-    // babylonFormat: already in Babylon convention, use directly
-    // legacy format: Blender row-major, needs transpose
+    // 行列配列→Babylon.js Matrixへの変換関数
+    // babylonFormat: 既にBabylon規約、直接使用
+    // レガシーフォーマット: Blender行優先、転置が必要
     const isBabylon = motion.babylonFormat === true;
     const toMatrix = (m: number[]) => isBabylon
       ? Matrix.FromArray(m)
@@ -1106,81 +1165,82 @@ function RealisticViewerPage() {
           m[3], m[7], m[11], m[15],
         ]);
 
+    // アニメーションティック関数（requestAnimationFrameコールバック）
     const tick = (now: number) => {
       rafId = requestAnimationFrame(tick);
       const elapsed = now - lastTime;
-      if (elapsed < frameDuration) return;
+      if (elapsed < frameDuration) return;  // フレーム時間未満なら描画をスキップ
       lastTime = now - (elapsed % frameDuration);
 
-      frameCounter = (frameCounter + 1) % totalFrames;
+      frameCounter = (frameCounter + 1) % totalFrames;  // フレームカウンターを進める（ループ）
       animFrameRef.current = frameCounter;
 
-      // Determine which motion(s) to sample and blend ratio
+      // サンプルするモーションとブレンド比率の決定
       let frameA = -1, frameB = -1, blendT = 0;
       if (!motionB) {
-        // Single motion: loop A
-        frameA = frameCounter;
+        frameA = frameCounter;  // 単一モーション: Aをループ
       } else if (frameCounter < totalFramesA - blendFrames) {
-        // Pure Motion A
-        frameA = frameCounter;
+        frameA = frameCounter;  // 純粋なモーションA
       } else if (frameCounter < totalFramesA) {
-        // Crossfade A→B
+        // A→Bのクロスフェード区間
         frameA = frameCounter;
         frameB = frameCounter - (totalFramesA - blendFrames);
         blendT = (frameCounter - (totalFramesA - blendFrames)) / blendFrames;
       } else {
-        // Pure Motion B
-        frameB = frameCounter - totalFramesA + blendFrames;
+        frameB = frameCounter - totalFramesA + blendFrames;  // 純粋なモーションB
       }
 
-      // Update frame display directly via DOM (no React re-render)
+      // フレーム表示をDOM直接操作で更新（React再レンダリングを回避）
       if (frameDisplayRef.current) {
         const phase = blendT > 0 ? ` [blend ${Math.round(blendT*100)}%]` : (frameB >= 0 && frameA < 0 ? ' [B]' : '');
         frameDisplayRef.current.textContent = `Frame: ${frameCounter}/${totalFrames}${phase}`;
       }
 
-      // Voxel-to-bind-pose offset correction (only for babylonFormat/blender_raw processed matrices)
+      // ボクセル→バインドポーズのオフセット補正（babylonFormat/blender_raw処理済み行列のみ）
       const segData = segmentsDataRef.current;
       let ox = 0, oy = 0, oz = 0;
       if (isBabylon && segData?.bb_min) {
         const g = segData.grid, sc = segData.voxel_size;
-        ox = -(g.gx / 2) * sc - segData.bb_min[0];
-        oy = -segData.bb_min[2];
-        oz = (g.gy / 2) * sc + segData.bb_min[1];
+        ox = -(g.gx / 2) * sc - segData.bb_min[0];  // Xオフセット
+        oy = -segData.bb_min[2];                       // Yオフセット
+        oz = (g.gy / 2) * sc + segData.bb_min[1];     // Zオフセット
       }
       const hasOffset = isBabylon && (Math.abs(ox) > 0.001 || Math.abs(oy) > 0.001 || Math.abs(oz) > 0.001);
 
-      // Correct a Babylon-format skin matrix for the voxel-bind offset
+      // Babylon形式のスキン行列にボクセル-バインドオフセット補正を適用する関数
       const correctMatrix = (m: number[]): number[] => {
         if (!hasOffset) return m;
-        const c = m.slice();
+        const c = m.slice();  // コピーを作成
+        // 平行移動成分を補正
         c[12] = m[12] - (ox * m[0] + oy * m[4] + oz * m[8]) + ox;
         c[13] = m[13] - (ox * m[1] + oy * m[5] + oz * m[9]) + oy;
         c[14] = m[14] - (ox * m[2] + oy * m[6] + oz * m[10]) + oz;
         return c;
       };
 
-      // Get blended matrix for a bone at current frame
+      // 現在のフレームでのブレンド済み行列を取得する関数
       const getBlendedRaw = (boneName: string): number[] | undefined => {
         const motionName = boneNameMap[boneName] || boneName;
         let matA: number[] | undefined;
         let matBm: number[] | undefined;
+        // モーションAのフレーム行列を取得
         if (frameA >= 0) {
           const d = motion.bones[motionName];
           if (d) matA = d.matrices[Math.min(frameA, d.matrices.length - 1)];
         }
+        // モーションBのフレーム行列を取得
         if (frameB >= 0 && motionB) {
           const d = motionB.bones[motionName];
           if (d) matBm = d.matrices[Math.min(frameB, d.matrices.length - 1)];
         }
+        // 両方存在しブレンド中なら線形補間
         if (matA && matBm && blendT > 0) {
-          // Lerp matrices
           return matA.map((v, i) => v * (1 - blendT) + matBm[i] * blendT);
         }
-        return matA || matBm;
+        return matA || matBm;  // 片方のみならそちらを返す
       };
 
-      // Joint correction cascade (root→leaf) with offset-corrected matrices
+      // ジョイント補正カスケード（ルート→リーフ順にオフセット補正済み行列を適用）
       const hierarchy = boneHierarchyRef.current;
       const applyPoint = isBabylon ? applyMatPointBabylon : applyMatPointBlender;
       const correctedMats: Record<string, number[]> = {};
@@ -1189,19 +1249,21 @@ function RealisticViewerPage() {
           const blendedRaw = getBlendedRaw(entry.bone);
           let raw: number[] | undefined;
           if (blendedRaw) {
-            raw = correctMatrix(blendedRaw);
+            raw = correctMatrix(blendedRaw);  // オフセット補正を適用
           } else if (entry.parent && correctedMats[entry.parent]) {
-            raw = correctedMats[entry.parent];
+            raw = correctedMats[entry.parent];  // 親の行列を継承
           }
           if (!raw) continue;
           if (!entry.parent || !correctedMats[entry.parent]) {
-            correctedMats[entry.bone] = raw;
+            correctedMats[entry.bone] = raw;  // ルートボーンはそのまま
           } else {
+            // 親子間のジョイント補正: ジョイントポイントでの位置ずれを解消
             const parentMat = correctedMats[entry.parent];
             const jp = entry.jointPoint;
-            const pByParent = applyPoint(parentMat, jp);
-            const pByChild = applyPoint(raw, jp);
+            const pByParent = applyPoint(parentMat, jp);  // 親行列でジョイントポイントを変換
+            const pByChild = applyPoint(raw, jp);          // 子行列でジョイントポイントを変換
             const corrected = raw.slice();
+            // 平行移動成分を補正して位置ずれを解消
             corrected[12] += pByParent[0] - pByChild[0];
             corrected[13] += pByParent[1] - pByChild[1];
             corrected[14] += pByParent[2] - pByChild[2];
@@ -1210,11 +1272,12 @@ function RealisticViewerPage() {
         }
       }
 
-      // Apply matrices to meshes
+      // 行列をメッシュに適用
       for (const [segKey, mesh] of Object.entries(meshesRef.current)) {
         let skinMat: Matrix | null = null;
         const jointBones = jointBonesRef.current[segKey];
         if (jointBones) {
+          // ジョイントボーンの場合: 2つのボーン行列を平均
           const [boneJA, boneJB] = jointBones;
           const matJA = correctedMats[boneJA] || getBlendedRaw(boneJA);
           const matJB = correctedMats[boneJB] || getBlendedRaw(boneJB);
@@ -1227,35 +1290,41 @@ function RealisticViewerPage() {
             skinMat = toMatrix(matJB);
           }
         } else {
+          // 通常のボーン: 補正済みまたはブレンド済み行列を使用
           const mat = correctedMats[segKey] || getBlendedRaw(segKey);
           if (!mat) continue;
           skinMat = toMatrix(mat);
         }
         if (!skinMat) continue;
-        mesh.freezeWorldMatrix(skinMat);
+        mesh.freezeWorldMatrix(skinMat);  // ワールド行列をフリーズ（パフォーマンス最適化）
       }
     };
 
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);  // アニメーションループ開始
+    return () => cancelAnimationFrame(rafId);  // クリーンアップ
   }, [animPlaying]);
 
+  // パーツキーを表示用ラベルに変換する関数（アンダースコア→スペース、先頭大文字化）
   const partLabel = (key: string) => {
     return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       .replace('  ', ' ').trim();
   };
 
+  // ボディパーツとそれ以外（衣装・アクセサリ）を分類
   const bodyParts = parts.filter(p => p.is_body);
   const clothingParts = parts.filter(p => !p.is_body);
 
+  // JSXレンダリング
   return (
+    // 全画面フレックスレイアウト（サイドパネル＋3Dキャンバス）
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#101018', display: 'flex' }}>
-      {/* Side panel */}
+      {/* サイドパネル */}
       <div style={{
         width: 280, minWidth: 280, padding: '14px 16px', overflowY: 'auto',
         background: 'rgba(0,0,0,0.55)', color: '#ddd', fontFamily: 'monospace', fontSize: 12,
         borderRight: '1px solid rgba(255,255,255,0.08)',
       }}>
+        {/* タイトル */}
         <h2 style={{ margin: '0 0 6px', fontSize: 16, color: '#fff' }}>
           Realistic Viewer
         </h2>
@@ -1263,11 +1332,12 @@ function RealisticViewerPage() {
           Original proportions - no deformation
         </p>
 
-        {/* Category selector */}
+        {/* カテゴリセレクター（base/female/male/weapons） */}
         <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
           {(['base', 'female', 'male', 'weapons'] as CharCategory[]).map(cat => (
             <button key={cat} onClick={() => {
               setSelectedCategory(cat);
+              // カテゴリ内の最初のキャラクターを自動選択
               const first = Object.entries(CHARACTERS).find(([, c]) => c.category === cat);
               if (first) setCharKey(first[0]);
             }} style={{
@@ -1282,7 +1352,7 @@ function RealisticViewerPage() {
             </button>
           ))}
         </div>
-        {/* Character selector */}
+        {/* キャラクターセレクター（ドロップダウン） */}
         <select
           value={charKey}
           onChange={(e) => setCharKey(e.target.value)}
@@ -1292,6 +1362,7 @@ function RealisticViewerPage() {
             borderRadius: 4, cursor: 'pointer', fontFamily: 'monospace',
           }}
         >
+          {/* 選択中のカテゴリのキャラクターのみ表示 */}
           {Object.entries(CHARACTERS)
             .filter(([, c]) => c.category === selectedCategory)
             .map(([key, config]) => (
@@ -1299,12 +1370,13 @@ function RealisticViewerPage() {
             ))}
         </select>
 
-        {/* Animation controls (BasicBody only) */}
+        {/* アニメーションコントロール（ベースボディのみ表示） */}
         {CHARACTERS[charKey]?.category === 'base' && !loading && animReady && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 'bold', color: '#fa0', fontSize: 13, marginBottom: 6 }}>
               Animation
             </div>
+            {/* モーションAセレクター */}
             <select
               value={selectedMotion}
               onChange={(e) => { setAnimPlaying(false); setSelectedMotion(e.target.value); }}
@@ -1337,7 +1409,7 @@ function RealisticViewerPage() {
               <option value="bunnyakali_reversecowgirl.motion.json">BunnyAkali ReverseCowgirl</option>
               <option value="darkelfblader_titsuck.motion.json">DarkElfBlader TitSuck</option>
             </select>
-            {/* Motion B for blending */}
+            {/* モーションBセレクター（ブレンド先） */}
             <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>Motion B (blend to)</div>
             <select
               value={selectedMotionB}
@@ -1355,6 +1427,7 @@ function RealisticViewerPage() {
               <option value="darkelfblader_titsuck.motion.json">DarkElfBlader TitSuck</option>
               <option value="riding_loop_extended_raw.motion.json">Riding Loop Extended (RAW)</option>
             </select>
+            {/* ブレンド持続時間スライダー（モーションB選択時のみ表示） */}
             {selectedMotionB && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 10, color: '#888' }}>Blend:</span>
@@ -1366,6 +1439,7 @@ function RealisticViewerPage() {
                 <span style={{ fontSize: 10, color: '#adf', minWidth: 35 }}>{blendDuration}f</span>
               </div>
             )}
+            {/* 再生/停止ボタンとフレーム表示 */}
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button
                 onClick={() => setAnimPlaying(!animPlaying)}
@@ -1379,6 +1453,7 @@ function RealisticViewerPage() {
               >
                 {animPlaying ? 'Stop' : 'Play'}
               </button>
+              {/* フレーム表示（DOM直接更新用ref） */}
               <span ref={frameDisplayRef} style={{ fontSize: 10, color: '#888' }}>
                 Frame: {animFrameRef.current}/{motionDataRef.current?.frame_count || 0}
               </span>
@@ -1386,21 +1461,24 @@ function RealisticViewerPage() {
           </div>
         )}
 
+        {/* ローディング表示 */}
         {loading && (
           <div style={{ color: '#8af', fontSize: 13, padding: '20px 0' }}>
             Loading parts...
           </div>
         )}
 
+        {/* エラー表示 */}
         {error && (
           <div style={{ color: '#f88', fontSize: 12, padding: '10px', background: 'rgba(200,50,50,0.15)', borderRadius: 4 }}>
             {error}
           </div>
         )}
 
+        {/* 読み込み完了後の操作パネル */}
         {!loading && !error && (
           <>
-            {/* Master toggle */}
+            {/* 全パーツ一括ON/OFFボタン */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
               <button onClick={() => toggleAll(true)} style={{
                 flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 'bold',
@@ -1418,11 +1496,12 @@ function RealisticViewerPage() {
               </button>
             </div>
 
-            {/* Hair Swap */}
+            {/* 髪スワップセクション */}
             {hairOptions.length > 0 && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontWeight: 'bold', color: '#f8c', fontSize: 13, marginBottom: 6 }}>
                   Hair Swap {hairLoading && <span style={{ fontSize: 10, color: '#8af' }}>(loading...)</span>}
+                  {/* サイズ差表示（30%以上で赤、それ以下で緑） */}
                   {hairSizeDiff && (
                     <span style={{
                       fontSize: 10, marginLeft: 6,
@@ -1432,6 +1511,7 @@ function RealisticViewerPage() {
                     </span>
                   )}
                 </div>
+                {/* 髪選択ドロップダウン */}
                 <select
                   value={selectedHair}
                   onChange={(e) => swapHair(e.target.value)}
@@ -1452,13 +1532,14 @@ function RealisticViewerPage() {
               </div>
             )}
 
-            {/* Body section */}
+            {/* ボディセクション */}
             {bodyParts.length > 0 && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontWeight: 'bold', color: '#8c8', fontSize: 13 }}>
                     Body ({bodyParts.length})
                   </span>
+                  {/* ボディ一括ON/OFFボタン */}
                   <div style={{ display: 'flex', gap: 3 }}>
                     <button onClick={() => toggleCategory(true, true)} style={{
                       padding: '2px 6px', fontSize: 9, border: '1px solid #4a4', borderRadius: 3,
@@ -1470,6 +1551,7 @@ function RealisticViewerPage() {
                     }}>OFF</button>
                   </div>
                 </div>
+                {/* ボディパーツ一覧（クリックでトグル） */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 14 }}>
                   {bodyParts.map(part => (
                     <button key={part.key} onClick={() => togglePart(part.key)} style={{
@@ -1489,13 +1571,14 @@ function RealisticViewerPage() {
               </>
             )}
 
-            {/* Clothing/Accessories section */}
+            {/* 衣装・アクセサリセクション */}
             {clothingParts.length > 0 && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontWeight: 'bold', color: '#8af', fontSize: 13 }}>
                     Parts ({clothingParts.length})
                   </span>
+                  {/* パーツ一括ON/OFFボタン */}
                   <div style={{ display: 'flex', gap: 3 }}>
                     <button onClick={() => toggleCategory(false, true)} style={{
                       padding: '2px 6px', fontSize: 9, border: '1px solid #48f', borderRadius: 3,
@@ -1507,6 +1590,7 @@ function RealisticViewerPage() {
                     }}>OFF</button>
                   </div>
                 </div>
+                {/* パーツ一覧（クリックでトグル） */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {clothingParts.map(part => (
                     <button key={part.key} onClick={() => togglePart(part.key)} style={{
@@ -1520,6 +1604,7 @@ function RealisticViewerPage() {
                     }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <span>{partLabel(part.key)}</span>
+                        {/* 複数メッシュがある場合はメッシュ名を表示 */}
                         {part.meshes.length > 1 && (
                           <span style={{ fontSize: 9, opacity: 0.4 }}>
                             {part.meshes.join(', ')}
@@ -1533,6 +1618,7 @@ function RealisticViewerPage() {
               </>
             )}
 
+            {/* フッター: 合計ボクセル数と操作説明 */}
             <div style={{
               marginTop: 16, paddingTop: 10,
               borderTop: '1px solid rgba(255,255,255,0.08)',
@@ -1545,6 +1631,7 @@ function RealisticViewerPage() {
           </>
         )}
 
+        {/* 操作ガイド */}
         <div style={{
           marginTop: 20, paddingTop: 12,
           borderTop: '1px solid rgba(255,255,255,0.08)',
@@ -1554,7 +1641,7 @@ function RealisticViewerPage() {
         </div>
       </div>
 
-      {/* Canvas */}
+      {/* 3Dキャンバス（フレックスで残り全幅を使用） */}
       <canvas ref={canvasRef} style={{ flex: 1, height: '100%' }} />
     </div>
   );

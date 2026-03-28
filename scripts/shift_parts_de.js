@@ -1,36 +1,44 @@
 /**
- * Shift DarkElfBlader clothing part voxels.
+ * shift_parts_de.js
+ *
+ * DarkElfBladerの衣装パーツボクセルをシフトするスクリプト。
  *
  * Usage: node scripts/shift_parts_de.js <dz> [dy]
- *   dz: Z shift (negative = down, positive = up)
- *   dy: Y shift (positive = backward, negative = forward) [optional, default 0]
+ *   dz: Zシフト量（負=下方向、正=上方向）
+ *   dy: Yシフト量（正=後方、負=前方）[省略時: 0]
  *
- * Example: node scripts/shift_parts_de.js -2      → all body parts down by 2
- *          node scripts/shift_parts_de.js -2 1    → down 2, backward 1
+ * 例: node scripts/shift_parts_de.js -2      → 全ボディパーツを2下げる
+ *     node scripts/shift_parts_de.js -2 1    → 2下げて1後方へ
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// コマンドライン引数からZシフト量を取得
 const DZ = parseInt(process.argv[2]);
+// コマンドライン引数からYシフト量を取得（省略時は0）
 const DY = parseInt(process.argv[3] || '0');
+// DZが数値でなければUsageを表示して終了
 if (isNaN(DZ)) { console.error('Usage: node scripts/shift_parts_de.js <dz> [dy]'); process.exit(1); }
 
-// Body-region parts to shift
+// シフト対象のボディ領域パーツキーリスト
 const PARTS = [
-  'armor_-_suit',
-  'armor_-_suit_bra',
-  'armor_-_suit_plates',
-  'armor_-_arms',
-  'armor_-_legs',
-  'armor_-_shoulders',
-  'armor_-_shoulders_clavice',
-  'armor_-_belt_inner',
-  'armor_-_belt_outer',
-  'armor_-_belt_cape',
-  'armor_-_belt_scabbards',
-  'armor_-_cape',
+  'armor_-_suit',                // スーツ
+  'armor_-_suit_bra',            // スーツブラ
+  'armor_-_suit_plates',         // スーツプレート
+  'armor_-_arms',                // 腕防具
+  'armor_-_legs',                // 脚防具
+  'armor_-_shoulders',           // 肩防具
+  'armor_-_shoulders_clavice',   // 鎖骨部分の肩防具
+  'armor_-_belt_inner',          // ベルト（内側）
+  'armor_-_belt_outer',          // ベルト（外側）
+  'armor_-_belt_cape',           // ベルトケープ
+  'armor_-_belt_scabbards',      // ベルト鞘
+  'armor_-_cape',                // ケープ
 ];
 
+// VOXファイルを読み込んでパースする関数
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -54,6 +62,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// ボクセルデータをVOXファイルとして書き出す関数
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -81,47 +90,63 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// パスの設定
 const BASE = path.join(__dirname, '..');
 const DIR = path.join(BASE, 'public/box4');
 const PREFIX = 'darkelfblader_arp';
 
+// シフト方向の説明を表示
 console.log(`Shifting body-region parts: Z${DZ >= 0 ? '+' : ''}${DZ}, Y${DY >= 0 ? '+' : ''}${DY}`);
 console.log(`(Z: - = down, + = up | Y: + = backward, - = forward)\n`);
 
+// パーツマニフェストを読み込み
 const manifestPath = path.join(DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
+// 各パーツを処理
 for (const partKey of PARTS) {
+  // 元ファイルのパス（originals/ディレクトリ）
   const srcPath = path.join(DIR, 'originals', `${PREFIX}_${partKey}.vox`);
+  // 出力先のパス
   const dstPath = path.join(DIR, `${PREFIX}_${partKey}.vox`);
 
+  // バックアップが存在しない場合
   if (!fs.existsSync(srcPath)) {
-    // No backup yet, create one from current file
+    // 現在のファイルがあればバックアップとしてコピー
     if (fs.existsSync(dstPath)) {
       fs.copyFileSync(dstPath, srcPath);
       console.log(`  Backed up: ${partKey}`);
     } else {
+      // ファイルが見つからない場合はスキップ
       console.log(`  SKIP (not found): ${partKey}`);
       continue;
     }
   }
 
+  // 元ファイルを読み込み
   const vox = readVox(srcPath);
+  // シフト処理
   const shifted = [];
   let clipped = 0;
   for (const v of vox.voxels) {
+    // Y, Z座標をシフト
     const ny = v.y + DY, nz = v.z + DZ;
+    // グリッド範囲内なら結果に追加
     if (ny >= 0 && ny < vox.sy && nz >= 0 && nz < vox.sz) {
       shifted.push({ x: v.x, y: ny, z: nz, c: v.c });
     } else { clipped++; }
   }
+  // シフト結果を書き出し
   writeVox(dstPath, vox.sx, vox.sy, vox.sz, shifted, vox.palette);
 
+  // マニフェストのボクセル数を更新
   const entry = manifest.find(p => p.key === partKey);
   if (entry) entry.voxels = shifted.length;
 
+  // 結果を表示
   console.log(`  ${partKey}: ${vox.voxels.length} → ${shifted.length} (clipped: ${clipped})`);
 }
 
+// マニフェストを保存
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 console.log('\nDone! Reload browser (Ctrl+Shift+R) to see changes.');

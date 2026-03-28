@@ -1,40 +1,49 @@
-"""Voxelize a 3D model at its original proportions (no deformation).
+"""3Dモデルを元のプロポーションのままボクセル化するスクリプト（変形なし）。
 
 Usage:
   blender --background --python voxelize.py -- <input> <output.vox> [options]
 
-Options:
-  --resolution N   Max voxel count along longest axis (default: 200)
-  --part NAME      Only voxelize a specific mesh object by name
-  --grid FILE      Write grid info JSON (for clothing alignment)
-  --exclude KEYWORD  Exclude meshes containing this keyword (repeatable)
+オプション:
+  --resolution N   最長軸の最大ボクセル数（デフォルト: 200）
+  --part NAME      指定名のメッシュのみボクセル化
+  --grid FILE      グリッド情報JSONを書き出し（衣装位置合わせ用）
+  --exclude KEYWORD  このキーワードを含むメッシュを除外（繰り返し可）
 
-Examples:
-  # Full body
+例:
+  # 全身
   blender --background --python voxelize.py -- model.blend body.vox --resolution 200 --exclude Clothes --exclude Hair
 
-  # Single clothing part, aligned to body grid
+  # 単一衣装パーツ（ボディグリッドに合わせて）
   blender --background --python voxelize.py -- model.blend bra.vox --part "PillarWoman Clothes - Bra" --grid body_grid.json
 """
+# Blenderメインモジュール
 import bpy
+# BMesh操作モジュール
 import bmesh
+# システムモジュール
 import sys
+# OS操作モジュール
 import os
+# バイナリパックモジュール
 import struct
+# JSON操作モジュール
 import json
+# NumPy（テクスチャ処理用）
 import numpy as np
+# mathutilsからVector型
 from mathutils import Vector
+# BVHツリー
 from mathutils.bvhtree import BVHTree
 
 # ========================================================================
-# Argument parsing
+# 引数パース
 # ========================================================================
 argv = sys.argv
 sep = argv.index("--") if "--" in argv else len(argv)
 script_args = argv[sep + 1:]
 
 def get_arg(name, default=None):
-    """Get a named argument value (e.g. --resolution 200)."""
+    """名前付き引数の値を取得（例: --resolution 200）。"""
     flag = f'--{name}'
     if flag in script_args:
         idx = script_args.index(flag)
@@ -43,7 +52,7 @@ def get_arg(name, default=None):
     return default
 
 def get_arg_list(name):
-    """Get all values for a repeated argument (e.g. --exclude A --exclude B)."""
+    """繰り返し引数の全値を取得（例: --exclude A --exclude B）。"""
     flag = f'--{name}'
     values = []
     for i, a in enumerate(script_args):
@@ -51,7 +60,7 @@ def get_arg_list(name):
             values.append(script_args[i + 1])
     return values
 
-# Positional args (skip --flag and their values)
+# 位置引数を抽出（--フラグとその値をスキップ）
 positional = []
 skip_next = False
 for i, a in enumerate(script_args):
@@ -63,12 +72,12 @@ for i, a in enumerate(script_args):
         continue
     positional.append(a)
 
-INPUT_PATH = positional[0]
-OUT_PATH = positional[1]
-RESOLUTION = int(get_arg('resolution', '200'))
-PART_NAME = get_arg('part')
-GRID_JSON = get_arg('grid')
-EXCLUDES = [kw.lower() for kw in get_arg_list('exclude')]
+INPUT_PATH = positional[0]                         # 入力ファイル
+OUT_PATH = positional[1]                           # 出力VOXパス
+RESOLUTION = int(get_arg('resolution', '200'))     # グリッド解像度
+PART_NAME = get_arg('part')                        # 対象パーツ名
+GRID_JSON = get_arg('grid')                        # グリッドJSON
+EXCLUDES = [kw.lower() for kw in get_arg_list('exclude')]  # 除外キーワードリスト
 
 print(f"\n=== Realistic Voxelizer ===")
 print(f"  Input:      {INPUT_PATH}")
@@ -82,7 +91,7 @@ if EXCLUDES:
     print(f"  Excludes:   {EXCLUDES}")
 
 # ========================================================================
-# Load file
+# ファイル読み込み
 # ========================================================================
 ext = os.path.splitext(INPUT_PATH)[1].lower()
 if ext == '.fbx':
@@ -96,7 +105,7 @@ elif ext in ('.glb', '.gltf'):
 else:
     bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
 
-# Disable MASK modifiers, remove physics modifiers (can't run in background)
+# MASKモディファイア無効化、物理モディファイア除去
 for obj in bpy.context.scene.objects:
     if obj.type != 'MESH':
         continue
@@ -111,12 +120,13 @@ for obj in bpy.context.scene.objects:
 bpy.context.view_layer.update()
 
 # ========================================================================
-# Select target meshes
+# 対象メッシュを選択
 # ========================================================================
 all_meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
 print(f"  All visible meshes: {[o.name for o in all_meshes]}")
 
 if PART_NAME:
+    # 特定パーツのみ
     targets = [o for o in all_meshes if o.name == PART_NAME]
     if not targets:
         print(f"ERROR: Part '{PART_NAME}' not found.")
@@ -125,6 +135,7 @@ if PART_NAME:
         sys.exit(1)
 else:
     targets = all_meshes
+    # 除外キーワードに一致するメッシュを除外
     if EXCLUDES:
         targets = [o for o in targets if not any(kw in o.name.lower() for kw in EXCLUDES)]
 
@@ -135,10 +146,10 @@ if not targets:
     sys.exit(1)
 
 # ========================================================================
-# Compute bounding box → grid
+# バウンディングボックス → グリッド計算
 # ========================================================================
 if GRID_JSON and os.path.exists(GRID_JSON):
-    # Use existing grid (for clothing alignment with body)
+    # 既存グリッドを使用（衣装のボディとの位置合わせ用）
     with open(GRID_JSON, 'r') as f:
         gi = json.load(f)
     grid_origin = Vector(gi['grid_origin'])
@@ -146,7 +157,7 @@ if GRID_JSON and os.path.exists(GRID_JSON):
     gx, gy, gz = gi['gx'], gi['gy'], gi['gz']
     print(f"  Using existing grid: {gx}x{gy}x{gz}, voxel={voxel_size:.6f}")
 else:
-    # Compute from mesh bounding box
+    # メッシュバウンディングボックスからグリッドを計算
     bb_min = Vector((1e9, 1e9, 1e9))
     bb_max = Vector((-1e9, -1e9, -1e9))
     for obj in targets:
@@ -163,15 +174,16 @@ else:
     size = bb_max - bb_min
     print(f"  BBox: {size.x:.4f} x {size.y:.4f} x {size.z:.4f}")
 
+    # ボクセルサイズ = 最長軸 / 解像度
     voxel_size = max(size) / RESOLUTION
-    margin = 2  # small margin around model
+    margin = 2
     grid_origin = bb_min - Vector((voxel_size * margin,) * 3)
     gx = min(256, int(size.x / voxel_size) + margin * 2 + 2)
     gy = min(256, int(size.y / voxel_size) + margin * 2 + 2)
     gz = min(256, int(size.z / voxel_size) + margin * 2 + 2)
     print(f"  Grid: {gx}x{gy}x{gz}, voxel={voxel_size:.6f}")
 
-    # Save grid JSON
+    # グリッドJSONを保存
     grid_out = GRID_JSON or OUT_PATH.replace('.vox', '_grid.json')
     grid_data = {
         'grid_origin': list(grid_origin),
@@ -185,16 +197,17 @@ else:
         json.dump(grid_data, f, indent=2)
     print(f"  Saved grid: {grid_out}")
 
-# Threshold for BVH hit
+# BVHヒットの距離閾値
 thr = voxel_size * 1.2
 print(f"  Threshold: {thr:.6f}")
 
 # ========================================================================
-# Texture sampling
+# テクスチャサンプリング
 # ========================================================================
 texture_cache = {}
 
 def cache_texture(image):
+    """テクスチャをNumPy配列としてキャッシュ。"""
     if image.name in texture_cache:
         return
     w, h = image.size
@@ -205,6 +218,7 @@ def cache_texture(image):
     print(f"  Cached texture: {image.name} ({w}x{h})")
 
 def sample_texture(tex_name, uv_x, uv_y):
+    """UV座標でテクスチャの色をサンプリング。"""
     tc = texture_cache.get(tex_name)
     if not tc:
         return (0.7, 0.5, 0.4)
@@ -214,17 +228,19 @@ def sample_texture(tex_name, uv_x, uv_y):
     return (float(p[0]), float(p[1]), float(p[2]))
 
 # ========================================================================
-# Node tree evaluator (traces shader graph to find base color)
+# ノードツリー評価（シェーダグラフをトレースしてベースカラーを取得）
 # ========================================================================
 _group_input_map = {}
 
 def find_input_link(node_tree, node, socket_name):
+    """ノードの入力ソケットへのリンクを検索。"""
     for link in node_tree.links:
         if link.to_node == node and link.to_socket.name == socket_name:
             return link
     return None
 
 def trace_input(node_tree, node, socket_name):
+    """ノードの入力をトレースして色情報ツリーを構築。"""
     inp = node.inputs.get(socket_name)
     if inp is None:
         return ('value', 0.0)
@@ -237,6 +253,7 @@ def trace_input(node_tree, node, socket_name):
     return trace_output(node_tree, link.from_node, link.from_socket)
 
 def trace_output(node_tree, node, output_socket):
+    """ノードの出力をトレースして色情報ツリーを構築。"""
     if node.type == 'GROUP_INPUT':
         gt_name = node_tree.name if hasattr(node_tree, 'name') else ''
         inp_map = _group_input_map.get(gt_name, {})
@@ -263,12 +280,10 @@ def trace_output(node_tree, node, output_socket):
             fac = trace_input(node_tree, node, 'Fac')
             a = trace_input(node_tree, node, 'Color1')
             b = trace_input(node_tree, node, 'Color2')
-        # Constant factor shortcuts
         if fac[0] == 'value' and fac[1] <= 0.001:
             return a
         if fac[0] == 'value' and fac[1] >= 0.999 and bt == 'MIX':
             return b
-        # Skip AO multiply
         if bt == 'MULTIPLY':
             def is_ao(t):
                 return t[0] == 'texture' and 'ao' in t[1].lower()
@@ -296,7 +311,6 @@ def trace_output(node_tree, node, output_socket):
                 src_link = inp.links[0]
                 inp_map[i] = trace_output(node_tree, src_link.from_node, src_link.from_socket)
         _group_input_map[gt_name] = inp_map
-
         out_idx = 0
         for i, os in enumerate(node.outputs):
             if os == output_socket:
@@ -307,7 +321,6 @@ def trace_output(node_tree, node, output_socket):
                 if out_idx < len(gn.inputs) and gn.inputs[out_idx].is_linked:
                     glink = gn.inputs[out_idx].links[0]
                     return trace_output(node.node_tree, glink.from_node, glink.from_socket)
-        # Fallback: check group inputs for textures
         for inp in node.inputs:
             if inp.is_linked:
                 src = inp.links[0].from_node
@@ -320,6 +333,7 @@ def trace_output(node_tree, node, output_socket):
         return ('color', (0.7, 0.5, 0.4))
 
 def eval_tree(tree, uv_x, uv_y):
+    """ノードツリーを評価してUV座標の色を計算。"""
     kind = tree[0]
     if kind == 'texture':
         return sample_texture(tree[1], uv_x, uv_y)
@@ -342,7 +356,7 @@ def eval_tree(tree, uv_x, uv_y):
     return (0.7, 0.5, 0.4)
 
 # ========================================================================
-# Build material info for all target meshes
+# 全対象メッシュのマテリアル情報を構築
 # ========================================================================
 mat_info = {}
 for obj in targets:
@@ -366,9 +380,10 @@ for obj in targets:
         mat_info[mat.name] = info
 
 # ========================================================================
-# Build BVH trees
+# BVHツリーを構築
 # ========================================================================
 class MeshInfo:
+    """メッシュ情報を保持するクラス。"""
     pass
 
 mesh_list = []
@@ -376,19 +391,16 @@ for obj in targets:
     dg = bpy.context.evaluated_depsgraph_get()
     eo = obj.evaluated_get(dg)
     me_eval = eo.to_mesh()
-
     bm = bmesh.new()
     bm.from_mesh(me_eval)
     bmesh.ops.transform(bm, matrix=obj.matrix_world, verts=bm.verts)
     bmesh.ops.triangulate(bm, faces=bm.faces)
     bm.verts.ensure_lookup_table()
     bm.faces.ensure_lookup_table()
-
     uv_layer = bm.loops.layers.uv.active
     verts = [v.co.copy() for v in bm.verts]
     faces = [[v.index for v in f.verts] for f in bm.faces]
     bvh = BVHTree.FromPolygons(verts, faces)
-
     mi = MeshInfo()
     mi.bm = bm
     mi.bvh = bvh
@@ -398,6 +410,7 @@ for obj in targets:
     eo.to_mesh_clear()
 
 def get_uv_at(mi, face_idx, loc):
+    """面上のヒット位置のUV座標を重心座標で補間。"""
     face = mi.bm.faces[face_idx]
     if not mi.uv:
         return None
@@ -420,6 +433,7 @@ def get_uv_at(mi, face_idx, loc):
             w * uv0.y + u * uv1.y + v * uv2.y)
 
 def get_color(mi, face_idx, loc):
+    """面上のヒット位置の色を取得。"""
     face = mi.bm.faces[face_idx]
     mat_slot = face.material_index
     mats = mi.obj.data.materials
@@ -435,7 +449,7 @@ def get_color(mi, face_idx, loc):
     return info.get('color', (180, 180, 180)) if info else (180, 180, 180)
 
 # ========================================================================
-# Voxelize
+# ボクセル化
 # ========================================================================
 print(f"  Voxelizing...")
 voxels = {}  # (x, y, z) → (r, g, b)
@@ -467,9 +481,10 @@ if not voxels:
     sys.exit(1)
 
 # ========================================================================
-# Quantize colors → palette (max 255)
+# 色の量子化 → パレット（最大255色）
 # ========================================================================
 def quantize(c, step=4):
+    """色を指定ステップで量子化。"""
     return (min(255, (c[0]//step)*step + step//2),
             min(255, (c[1]//step)*step + step//2),
             min(255, (c[2]//step)*step + step//2))
@@ -489,17 +504,16 @@ voxel_list = [(p[0], p[1], p[2], color_idx[col]) for p, col in quantized.items()
 print(f"  Colors: {len(colors)} (quantize step={step})")
 
 # ========================================================================
-# Write .vox file
+# VOXファイルを書き出し
 # ========================================================================
 def write_vox(path, sx, sy, sz, voxels_data, palette):
+    """ボクセルデータをVOXファイルとして書き出す。"""
     def chunk(tag, data):
         return tag.encode() + struct.pack('<II', len(data), 0) + data
-
     size_data = struct.pack('<III', sx, sy, sz)
     xyzi_data = struct.pack('<I', len(voxels_data))
     for v in voxels_data:
         xyzi_data += struct.pack('<BBBB', v[0], v[1], v[2], v[3])
-
     rgba_data = b''
     for i in range(256):
         if i < len(palette):
@@ -507,10 +521,8 @@ def write_vox(path, sx, sy, sz, voxels_data, palette):
             rgba_data += struct.pack('<BBBB', c[0], c[1], c[2], 255)
         else:
             rgba_data += struct.pack('<BBBB', 0, 0, 0, 255)
-
     children = chunk('SIZE', size_data) + chunk('XYZI', xyzi_data) + chunk('RGBA', rgba_data)
     main = b'MAIN' + struct.pack('<II', 0, len(children)) + children
-
     os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
     with open(path, 'wb') as f:
         f.write(b'VOX ' + struct.pack('<I', 150) + main)
@@ -519,9 +531,7 @@ write_vox(OUT_PATH, gx, gy, gz, voxel_list, colors)
 print(f"  -> {OUT_PATH}: {gx}x{gy}x{gz}, {len(voxel_list)} voxels, {len(colors)} colors")
 
 # ========================================================================
-# Cleanup
+# リソース解放
 # ========================================================================
 for mi in mesh_list:
     mi.bm.free()
-
-print("\n=== Done ===")

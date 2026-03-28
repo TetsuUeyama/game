@@ -1,50 +1,60 @@
-"""Voxelize a single CLOTHING part using the BODY's grid parameters.
-Ensures clothing aligns perfectly with the body voxels.
+"""ボディのグリッドパラメータを使用して単一の衣装パーツをボクセル化するスクリプト。
+衣装がボディボクセルと完全に整合することを保証する。
 
 Usage:
   blender --background --python voxelize_clothing.py -- <input.blend> <body_grid.json> <part_name> <output.vox> [body.vox]
 
-Args:
-  input.blend    : Model file
-  body_grid.json : Grid JSON from voxelize_body_only.py (defines grid origin, voxel size, dimensions)
-  part_name      : Exact Blender object name (e.g. "PillarWoman Clothes - Bra")
-  output.vox     : Output path
-  body.vox       : (optional) Body vox file - if provided, clothing voxels inside body are pushed outward
+引数:
+  input.blend    : モデルファイル
+  body_grid.json : voxelize_body_only.pyのグリッドJSON（グリッド原点、ボクセルサイズ、寸法を定義）
+  part_name      : Blenderオブジェクトの正確な名前（例: "PillarWoman Clothes - Bra"）
+  output.vox     : 出力パス
+  body.vox       : (省略可) ボディVOXファイル - 指定時、ボディ内部の衣装ボクセルを外側に押し出す
 """
+# Blenderメインモジュール
 import bpy
+# BMesh操作モジュール
 import bmesh
+# システムモジュール
 import sys
+# OS操作モジュール
 import os
+# バイナリパックモジュール
 import struct
+# 数学モジュール
 import math
+# JSON操作モジュール
 import json
+# mathutilsからVector型
 from mathutils import Vector
+# BVHツリー
 from mathutils.bvhtree import BVHTree
 
+# コマンドライン引数を取得
 argv = sys.argv
 idx = argv.index("--") if "--" in argv else len(argv)
 args = argv[idx + 1:]
-NO_DEFORM = '--no-deform' in argv
+NO_DEFORM = '--no-deform' in argv  # チビ変形を無効化するフラグ
 pos_args = [a for a in args if not a.startswith('--')]
-INPUT_PATH = pos_args[0]
-GRID_JSON = pos_args[1]
-PART_NAME = pos_args[2]
-OUT_PATH = pos_args[3]
-BODY_VOX = pos_args[4] if len(pos_args) > 4 else None
+INPUT_PATH = pos_args[0]    # 入力モデルファイル
+GRID_JSON = pos_args[1]     # ボディグリッドJSON
+PART_NAME = pos_args[2]     # 対象パーツ名
+OUT_PATH = pos_args[3]      # 出力VOXパス
+BODY_VOX = pos_args[4] if len(pos_args) > 4 else None  # ボディVOX（省略可）
 print(f"  NO_DEFORM: {NO_DEFORM}")
 
-# Load grid parameters from body voxelization
+# ボディボクセル化のグリッドパラメータを読み込み
 with open(GRID_JSON, 'r') as f:
     grid_info = json.load(f)
 
-gx = grid_info['gx']
-gy = grid_info['gy']
-gz = grid_info['gz']
-voxel_size = grid_info['voxel_size']
-grid_origin = Vector(grid_info['grid_origin'])
-raw_center = Vector(grid_info['raw_center'])
-model_h = grid_info['model_h']
-raw_min_z = grid_info['raw_min'][2]
+gx = grid_info['gx']                       # グリッドX寸法
+gy = grid_info['gy']                       # グリッドY寸法
+gz = grid_info['gz']                       # グリッドZ寸法
+voxel_size = grid_info['voxel_size']       # ボクセルサイズ
+grid_origin = Vector(grid_info['grid_origin'])  # グリッド原点
+raw_center = Vector(grid_info['raw_center'])    # ボディ中心座標
+model_h = grid_info['model_h']                  # モデル高さ
+raw_min_z = grid_info['raw_min'][2]             # ボディZ最小値
 
 print(f"\n=== Clothing Voxelizer ===")
 print(f"  Input: {INPUT_PATH}")
@@ -53,7 +63,7 @@ print(f"  Grid: {gx}x{gy}x{gz}, voxel={voxel_size:.4f}")
 print(f"  Body center: ({raw_center.x:.4f}, {raw_center.y:.4f}, {raw_center.z:.4f})")
 print(f"  Body height: {model_h:.4f}")
 
-# Load file
+# ファイル読み込み
 ext = os.path.splitext(INPUT_PATH)[1].lower()
 if ext == '.fbx':
     bpy.ops.object.select_all(action='SELECT')
@@ -68,7 +78,7 @@ else:
 
 bpy.context.view_layer.update()
 
-# Find the target part
+# 対象パーツを検索
 mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
 part_obj = None
 for o in mesh_objects:
@@ -84,33 +94,38 @@ if not part_obj:
 
 print(f"  Found: {part_obj.name} ({len(part_obj.data.vertices)} verts)")
 
-# Use body center/height for chibi deformation (same as body voxelization)
+# チビ変形用のパラメータ
 center = raw_center
 min_co_z = raw_min_z
 
-# Chibi deformation (identical to voxelize_body_only.py, skipped when --no-deform)
+# チビ変形関数（voxelize_body_only.pyと同一、--no-deform時はスキップ）
 def deform_point(co):
+    """ワールド座標→チビ変形座標。"""
     if NO_DEFORM:
         return co.copy()
     x, y, z = co.x, co.y, co.z
     t = max(0, min(1, (z - min_co_z) / model_h)) if model_h > 0 else 0.5
     if t > 0.90:
+        # 頭部: 1.5〜1.8倍拡大
         ht = (t - 0.90) / 0.10
         s = 1.5 + ht * 0.3
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
         z = z + ht * model_h * 0.06
     elif t > 0.85:
+        # 首の遷移ゾーン（スムーズステップ）
         nt = (t - 0.85) / 0.05
         smooth = nt * nt * (3 - 2 * nt)
         s = 1.1 + (1.5 - 1.1) * smooth
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
     elif t > 0.50:
+        # 体幹: 1.1倍
         s = 1.1
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
     else:
+        # 脚: 短縮 + 広がり
         leg_t = t / 0.50
         f = 0.70 * leg_t + 0.30 * leg_t * leg_t
         z = min_co_z + f * 0.50 * model_h
@@ -122,7 +137,9 @@ def deform_point(co):
         x += sign * spread
     return Vector((x, y, z))
 
+# 逆チビ変形関数（変形座標→ワールド座標）
 def inv_deform(co):
+    """チビ変形座標→ワールド座標。"""
     if NO_DEFORM:
         return co.copy()
     x, y, z = co.x, co.y, co.z
@@ -157,11 +174,12 @@ def inv_deform(co):
         y = center.y + (y - center.y) / 1.1
     return Vector((x, y, z))
 
-# Texture helpers
+# テクスチャヘルパー
 import numpy as np
 
 texture_cache = {}
 def cache_texture(image):
+    """テクスチャをNumPy配列としてキャッシュ。"""
     if image.name in texture_cache:
         return
     w, h = image.size
@@ -172,6 +190,7 @@ def cache_texture(image):
     print(f"  Cached texture: {image.name} ({w}x{h})")
 
 def sample_texture(tex_name, uv_x, uv_y):
+    """UV座標でテクスチャの色をサンプリング。"""
     tc = texture_cache.get(tex_name)
     if not tc:
         return (0.7, 0.5, 0.4)
@@ -180,14 +199,16 @@ def sample_texture(tex_name, uv_x, uv_y):
     pixel = tc['px'][px_y, px_x]
     return (float(pixel[0]), float(pixel[1]), float(pixel[2]))
 
-# Node tree evaluator (from voxelize_body_only.py)
+# ノードツリー評価（voxelize_body_only.pyと同じ）
 def find_input_link(node_tree, node, socket_name):
+    """ノードの入力ソケットへのリンクを検索。"""
     for link in node_tree.links:
         if link.to_node == node and link.to_socket.name == socket_name:
             return link
     return None
 
 def trace_input(node_tree, node, socket_name):
+    """ノードの入力をトレースして色情報のツリーを構築。"""
     inp = node.inputs.get(socket_name)
     if inp is None:
         return ('value', 0.0)
@@ -199,11 +220,12 @@ def trace_input(node_tree, node, socket_name):
         return ('value', float(val))
     return trace_output(node_tree, link.from_node, link.from_socket)
 
-_group_input_map = {}  # temporary: group_tree_name → { output_index → eval_tree }
+_group_input_map = {}  # グループノード内部の入力マッピング
 
 def trace_output(node_tree, node, output_socket):
+    """ノードの出力をトレースして色情報のツリーを構築。"""
     if node.type == 'GROUP_INPUT':
-        # Map back to the outer group node's input
+        # 外部グループノードの入力にマップバック
         gt_name = node_tree.name if hasattr(node_tree, 'name') else ''
         inp_map = _group_input_map.get(gt_name, {})
         out_idx = 0
@@ -224,7 +246,7 @@ def trace_output(node_tree, node, output_socket):
         b = trace_input(node_tree, node, 'B')
         if fac[0] == 'value' and fac[1] <= 0.001: return a
         if fac[0] == 'value' and fac[1] >= 0.999 and bt == 'MIX': return b
-        # Skip AO: if MULTIPLY and one input is an AO texture, return the other
+        # AO除外: MULTIPLYで片方がAOテクスチャならもう片方を返す
         if bt == 'MULTIPLY':
             def is_ao(t): return t[0] == 'texture' and 'ao' in t[1].lower()
             if is_ao(b): return a
@@ -248,7 +270,7 @@ def trace_output(node_tree, node, output_socket):
         c = node.outputs[0].default_value
         return ('color', (float(c[0]), float(c[1]), float(c[2])))
     elif node.type == 'GROUP' and node.node_tree:
-        # Build input map: trace each linked input on the outer group node
+        # グループノード内部をトレース
         gt_name = node.node_tree.name if hasattr(node.node_tree, 'name') else ''
         inp_map = {}
         for i, inp in enumerate(node.inputs):
@@ -256,19 +278,16 @@ def trace_output(node_tree, node, output_socket):
                 src_link = inp.links[0]
                 inp_map[i] = trace_output(node_tree, src_link.from_node, src_link.from_socket)
         _group_input_map[gt_name] = inp_map
-        # Find which output socket index we're coming from
         out_idx = 0
         for i, os in enumerate(node.outputs):
             if os == output_socket:
                 out_idx = i
                 break
-        # Find the Group Output node inside the group tree
         for gn in node.node_tree.nodes:
             if gn.type == 'GROUP_OUTPUT':
                 if out_idx < len(gn.inputs) and gn.inputs[out_idx].is_linked:
                     glink = gn.inputs[out_idx].links[0]
                     return trace_output(node.node_tree, glink.from_node, glink.from_socket)
-        # Fallback: check if any input to the group is a texture
         for inp in node.inputs:
             if inp.is_linked:
                 src = inp.links[0].from_node
@@ -280,6 +299,7 @@ def trace_output(node_tree, node, output_socket):
         return ('color', (0.7, 0.5, 0.4))
 
 def eval_tree(tree, uv_x, uv_y):
+    """ノードツリーを評価してUV座標の色を計算。"""
     kind = tree[0]
     if kind == 'texture':
         return sample_texture(tree[1], uv_x, uv_y)
@@ -301,7 +321,7 @@ def eval_tree(tree, uv_x, uv_y):
             return (a[0]*(1-fac)+b[0]*fac, a[1]*(1-fac)+b[1]*fac, a[2]*(1-fac)+b[2]*fac)
     return (0.7, 0.5, 0.4)
 
-# Build material info
+# マテリアル情報を構築
 mat_info = {}
 for mat in part_obj.data.materials:
     if mat is None or mat.name in mat_info:
@@ -313,32 +333,36 @@ for mat in part_obj.data.materials:
                 bc_inp = nd.inputs.get('Base Color')
                 if bc_inp:
                     if bc_inp.is_linked:
+                        # ノードツリーをトレースして評価ツリーを構築
                         info['eval_tree'] = trace_input(mat.node_tree, nd, 'Base Color')
                         print(f"  Material '{mat.name}': has eval_tree")
                     else:
+                        # フラットカラーを使用
                         c = bc_inp.default_value
                         info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
                         print(f"  Material '{mat.name}': color {info['color']}")
                 break
     mat_info[mat.name] = info
 
-# Build BVH
+# BVHツリーを構築
 dg = bpy.context.evaluated_depsgraph_get()
 eo = part_obj.evaluated_get(dg)
 me_eval = eo.to_mesh()
 bm_local = bmesh.new()
 bm_local.from_mesh(me_eval)
-bmesh.ops.transform(bm_local, matrix=part_obj.matrix_world, verts=bm_local.verts)
-bmesh.ops.triangulate(bm_local, faces=bm_local.faces)
+bmesh.ops.transform(bm_local, matrix=part_obj.matrix_world, verts=bm_local.verts)  # ワールド空間に変換
+bmesh.ops.triangulate(bm_local, faces=bm_local.faces)  # 三角形化
 bm_local.verts.ensure_lookup_table()
 bm_local.faces.ensure_lookup_table()
 uv_layer = bm_local.loops.layers.uv.active
 
+# BVHツリー用の頂点と面リスト
 verts_list = [v.co.copy() for v in bm_local.verts]
 faces_list = [[v.index for v in f.verts] for f in bm_local.faces]
 bvh = BVHTree.FromPolygons(verts_list, faces_list)
 
 def get_uv_at(face_idx, loc):
+    """面上のヒット位置のUV座標を重心座標で補間して取得。"""
     face = bm_local.faces[face_idx]
     if not uv_layer:
         return None
@@ -361,6 +385,7 @@ def get_uv_at(face_idx, loc):
             w_b * uv0.y + u_b * uv1.y + v_b * uv2.y)
 
 def get_color(face_idx, loc):
+    """面上のヒット位置の色を取得（テクスチャサンプリングまたはフラットカラー）。"""
     face = bm_local.faces[face_idx]
     mat_slot = face.material_index
     mats = part_obj.data.materials
@@ -375,14 +400,14 @@ def get_color(face_idx, loc):
                     max(0, min(255, int(rgb[2]*255))))
     return mi.get('color', (180, 180, 180)) if mi else (180, 180, 180)
 
-# Compute threshold (same logic as body)
+# BVH距離閾値を計算（ボディと同じロジック）
 base_voxel = max(grid_info['def_max'][0]-grid_info['def_min'][0],
                  grid_info['def_max'][1]-grid_info['def_min'][1],
                  grid_info['def_max'][2]-grid_info['def_min'][2]) / 100
 thr = max(voxel_size * 1.2, base_voxel * 1.2)
 print(f"  Threshold: {thr:.4f}")
 
-# Voxelize clothing using body's grid
+# ボディグリッドを使って衣装をボクセル化
 print(f"  Voxelizing {PART_NAME}...")
 cloth_voxels = {}
 for vz in range(gz):
@@ -390,12 +415,14 @@ for vz in range(gz):
         print(f"    z={vz}/{gz} hits={len(cloth_voxels)}")
     for vx in range(gx):
         for vy in range(gy):
+            # 変形空間のグリッド座標→ワールド空間に逆変換
             dp = Vector((
                 grid_origin.x + (vx + 0.5) * voxel_size,
                 grid_origin.y + (vy + 0.5) * voxel_size,
                 grid_origin.z + (vz + 0.5) * voxel_size,
             ))
             op = inv_deform(dp)
+            # BVHで最近点を検索
             loc, norm, fi, dist = bvh.find_nearest(op)
             if loc is not None and dist < thr:
                 cloth_voxels[(vx, vy, vz)] = get_color(fi, loc)
@@ -406,10 +433,10 @@ if not cloth_voxels:
     print("ERROR: No voxels generated")
     sys.exit(1)
 
-# Note: body overlap is handled by viewer's zOffset=-2 (clothing renders on top)
-# No push-outward needed - keeps clothing at original thickness
+# ビューアのzOffset=-2で衣装がボディの上にレンダリングされるため、
+# 押し出し処理は不要 — 元の厚みを維持
 
-# Quantize colors
+# 色を量子化してパレットサイズを制限
 def quantize_color(c, step=4):
     return (min(255, (c[0]//step)*step + step//2),
             min(255, (c[1]//step)*step + step//2),
@@ -418,16 +445,18 @@ def quantize_color(c, step=4):
 step = 4
 quantized = {pos: quantize_color(col, step) for pos, col in cloth_voxels.items()}
 unique_q = set(quantized.values())
+# 255色以下になるまで量子化ステップを拡大
 while len(unique_q) > 255:
     step *= 2
     quantized = {pos: quantize_color(col, step) for pos, col in cloth_voxels.items()}
     unique_q = set(quantized.values())
 
+# パレットとボクセルリストを構築
 colors = list(unique_q)
 color_idx = {c: i+1 for i, c in enumerate(colors)}
 vlist = [(pos[0], pos[1], pos[2], color_idx[col]) for pos, col in quantized.items()]
 
-# Write .vox
+# VOXファイルとして書き出し
 def write_vox(path, sx, sy, sz, voxels, palette_colors):
     def chunk(tag, data):
         return tag.encode() + struct.pack('<II', len(data), 0) + data
@@ -447,11 +476,11 @@ def write_vox(path, sx, sy, sz, voxels, palette_colors):
     with open(path, 'wb') as f:
         f.write(b'VOX ' + struct.pack('<I', 150) + main)
 
+# 出力ディレクトリを作成してVOXを書き出し
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
 write_vox(OUT_PATH, gx, gy, gz, vlist, colors)
 print(f"  -> {OUT_PATH}: {gx}x{gy}x{gz}, {len(vlist)} voxels, {len(colors)} colors")
 
-# Cleanup
+# リソース解放
 bm_local.free()
 eo.to_mesh_clear()
-print("\n=== Done ===")

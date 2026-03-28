@@ -1,5 +1,5 @@
 /**
- * diff_body_apply.js — CE hires_sym をベースに target の色＋表面形状差分を反映
+ * diff_body_apply.js — CE hires_sym をベースに target の色＋表面形状差分を反映するスクリプト
  *
  * 使い方:
  *   node scripts/diff_body_apply.js <target.vox> <target_grid.json> <output.vox>
@@ -11,18 +11,23 @@
  *   ※ 内部ボクセルは一切触らない → 断面なし
  */
 
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// ベースパスとCEの参照ファイルパス
 const BASE = path.resolve(__dirname, '..');
-const CE_GRID = path.join(BASE, 'public/box2/cyberpunk_elf_body_base_hires_grid.json');
-const CE_SYM = path.join(BASE, 'public/box2/cyberpunk_elf_body_base_hires_sym.vox');
+const CE_GRID = path.join(BASE, 'public/box2/cyberpunk_elf_body_base_hires_grid.json');  // CEグリッド情報
+const CE_SYM = path.join(BASE, 'public/box2/cyberpunk_elf_body_base_hires_sym.vox');     // CE左右対称ボディ
 
+// 6方向の隣接オフセット
 const DIRS6 = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 
 // ========================================================================
-// VOX parser / writer
+// VOXパーサー / ライター
 // ========================================================================
+// VOXファイルをパースする関数
 function parseVox(buf) {
   const magic = buf.toString('ascii', 0, 4);
   if (magic !== 'VOX ') throw new Error('Not a valid .vox file');
@@ -30,6 +35,7 @@ function parseVox(buf) {
   let sizeX = 0, sizeY = 0, sizeZ = 0;
   const voxels = [];
   let palette = null;
+  // チャンクヘッダー読み取り
   function readChunk(off) {
     return {
       id: buf.toString('ascii', off, off + 4),
@@ -62,6 +68,7 @@ function parseVox(buf) {
   return { sizeX, sizeY, sizeZ, voxels, palette };
 }
 
+// VOXファイルを書き出す関数
 function writeVox(outputPath, sizeX, sizeY, sizeZ, voxels, palette) {
   const sizeCS = 12, xyziCS = 4 + voxels.length * 4, palCS = palette ? palette.length : 0;
   let childrenSize = (12+sizeCS) + (12+xyziCS);
@@ -80,14 +87,16 @@ function writeVox(outputPath, sizeX, sizeY, sizeZ, voxels, palette) {
 }
 
 // ========================================================================
-// Helpers
+// ヘルパー関数
 // ========================================================================
+// パレットからカラーインデックスのRGB値を取得する関数
 function getPaletteColor(palette, ci) {
   const idx = (ci - 1) * 4;
   if (!palette || idx < 0 || idx + 3 > palette.length) return [128, 128, 128];
   return [palette[idx], palette[idx+1], palette[idx+2]];
 }
 
+// RGB値に最も近いパレットインデックスを検索する関数
 function findClosestPaletteIndex(palette, r, g, b) {
   let bestDist = Infinity, bestIdx = 1;
   const count = Math.min(255, palette.length / 4);
@@ -98,6 +107,7 @@ function findClosestPaletteIndex(palette, r, g, b) {
   return bestIdx;
 }
 
+// ボクセル群の位置統計（中心座標、Z範囲、高さ）を計算する関数
 function computeAlignment(voxels) {
   let sx = 0, sy = 0, minZ = Infinity, maxZ = -Infinity;
   for (const v of voxels) {
@@ -109,9 +119,10 @@ function computeAlignment(voxels) {
   return { cx: sx / n, cy: sy / n, minZ, maxZ, height: maxZ - minZ };
 }
 
+// 座標を文字列キーに変換するヘルパー
 function k(x, y, z) { return `${x},${y},${z}`; }
 
-/** CE pos → target pos */
+// CE座標 → ターゲット座標に変換する関数
 function ceToTarget(x, y, z, ceAlign, tgAlign, xyScale, zScale) {
   return [
     Math.round(tgAlign.cx + (x - ceAlign.cx) / xyScale),
@@ -120,7 +131,7 @@ function ceToTarget(x, y, z, ceAlign, tgAlign, xyScale, zScale) {
   ];
 }
 
-/** target pos → CE pos */
+// ターゲット座標 → CE座標に変換する関数
 function targetToCe(x, y, z, ceAlign, tgAlign, xyScale, zScale) {
   return [
     Math.round(ceAlign.cx + (x - tgAlign.cx) * xyScale),
@@ -129,7 +140,7 @@ function targetToCe(x, y, z, ceAlign, tgAlign, xyScale, zScale) {
   ];
 }
 
-/** Search target color at (tx,ty,tz), fallback to nearest within R */
+// ターゲットの色を検索する関数（完全一致→半径R以内の最近傍にフォールバック）
 function findTargetColor(tx, ty, tz, targetColorMap, R) {
   const exact = targetColorMap.get(k(tx, ty, tz));
   if (exact) return exact;
@@ -144,7 +155,7 @@ function findTargetColor(tx, ty, tz, targetColorMap, R) {
 }
 
 // ========================================================================
-// Main
+// メイン処理
 // ========================================================================
 function main() {
   const args = process.argv.slice(2);
@@ -153,11 +164,11 @@ function main() {
     process.exit(1);
   }
 
-  const targetVoxPath = args[0];
-  const targetGridPath = args[1];
-  const outputPath = args[2];
+  const targetVoxPath = args[0];   // ターゲットVOXファイル
+  const targetGridPath = args[1];  // ターゲットグリッドJSON
+  const outputPath = args[2];      // 出力VOXファイル
 
-  // Load
+  // ファイル読み込み
   console.log('Loading CE hires_sym...');
   const symVox = parseVox(fs.readFileSync(CE_SYM));
   const ceGrid = JSON.parse(fs.readFileSync(CE_GRID, 'utf8'));
@@ -168,18 +179,18 @@ function main() {
   const tgGrid = JSON.parse(fs.readFileSync(targetGridPath, 'utf8'));
   console.log(`  Target: ${targetVox.sizeX}x${targetVox.sizeY}x${targetVox.sizeZ}, ${targetVox.voxels.length} voxels`);
 
-  // Alignment
+  // アライメント計算（CE↔ターゲット間の位置・スケール対応）
   const ceAlign = computeAlignment(symVox.voxels);
   const tgAlign = computeAlignment(targetVox.voxels);
-  const zScale = ceAlign.height / tgAlign.height;
-  const xyScale = tgGrid.voxel_size / ceGrid.voxel_size;
+  const zScale = ceAlign.height / tgAlign.height;          // Z方向のスケール比
+  const xyScale = tgGrid.voxel_size / ceGrid.voxel_size;   // XY方向のスケール比
 
   console.log(`\nAlignment:`);
   console.log(`  CE:     cx=${ceAlign.cx.toFixed(1)} cy=${ceAlign.cy.toFixed(1)} minZ=${ceAlign.minZ} h=${ceAlign.height}`);
   console.log(`  Target: cx=${tgAlign.cx.toFixed(1)} cy=${tgAlign.cy.toFixed(1)} minZ=${tgAlign.minZ} h=${tgAlign.height}`);
   console.log(`  Z scale: ${zScale.toFixed(4)}, XY scale: ${xyScale.toFixed(4)}`);
 
-  // Build target color map (target grid space)
+  // ターゲットカラーマップを構築（ターゲットグリッド空間）
   const targetColorMap = new Map();
   const targetPosSet = new Set();
   for (const v of targetVox.voxels) {
@@ -188,7 +199,7 @@ function main() {
     targetPosSet.add(key);
   }
 
-  // Build target position set in CE grid space
+  // ターゲット位置をCEグリッド空間に変換したセット
   const targetInCeSpace = new Set();
   for (const v of targetVox.voxels) {
     const [cx, cy, cz] = targetToCe(v.x, v.y, v.z, ceAlign, tgAlign, xyScale, zScale);
@@ -196,25 +207,29 @@ function main() {
   }
 
   // ================================================================
-  // Phase 1: Color remap (all CE voxels keep position, get target color)
+  // Phase 1: 色リマップ（全CEボクセルの位置を保持、ターゲットの色を適用）
   // ================================================================
   console.log('\n--- Phase 1: Color remap ---');
-  const resultMap = new Map(); // key → { x, y, z, colorIndex }
-  const cePositions = new Set();
+  const resultMap = new Map();    // キー → {x, y, z, colorIndex}
+  const cePositions = new Set();  // CE空間の占有セット
   let recolored = 0, keptColor = 0;
 
   for (const v of symVox.voxels) {
     const key = k(v.x, v.y, v.z);
     cePositions.add(key);
 
+    // CEボクセル位置をターゲット空間に変換
     const [tx, ty, tz] = ceToTarget(v.x, v.y, v.z, ceAlign, tgAlign, xyScale, zScale);
+    // ターゲットの色を検索（半径2以内の最近傍）
     const targetColor = findTargetColor(tx, ty, tz, targetColorMap, 2);
 
     if (targetColor) {
+      // ターゲット色が見つかれば、CEパレット内の最近色に変換して適用
       const ci = findClosestPaletteIndex(symVox.palette, targetColor[0], targetColor[1], targetColor[2]);
       resultMap.set(key, { x: v.x, y: v.y, z: v.z, colorIndex: ci });
       recolored++;
     } else {
+      // ターゲット色が見つからなければCEの元の色を維持
       resultMap.set(key, { x: v.x, y: v.y, z: v.z, colorIndex: v.colorIndex });
       keptColor++;
     }
@@ -223,14 +238,14 @@ function main() {
   console.log(`  Kept CE color: ${keptColor}`);
 
   // ================================================================
-  // Phase 2: Surface removal
-  //   CE 表面ボクセルで、target（CE空間）に対応がない → 削除
+  // Phase 2: 表面削除
+  //   CE表面ボクセルでターゲット（CE空間）に対応がないものを削除
   //   表面 = 6方向隣接のうち少なくとも1つが空きセル
   // ================================================================
   console.log('\n--- Phase 2: Surface removal ---');
   let surfaceCount = 0, removedCount = 0;
 
-  // Identify surface voxels
+  // 表面ボクセルを識別
   const surfaceKeys = [];
   for (const key of cePositions) {
     const [x, y, z] = key.split(',').map(Number);
@@ -242,10 +257,10 @@ function main() {
   }
   surfaceCount = surfaceKeys.length;
 
-  // Remove surface voxels that have no target correspondence
+  // ターゲットに対応がない表面ボクセルを削除
   for (const key of surfaceKeys) {
     if (!targetInCeSpace.has(key)) {
-      // Also check neighbors — if ANY neighbor in target space, keep it (tolerance)
+      // 許容範囲チェック: 隣接にターゲットがあれば保持
       const [x, y, z] = key.split(',').map(Number);
       let nearbyTarget = false;
       for (const [dx, dy, dz] of DIRS6) {
@@ -262,13 +277,13 @@ function main() {
   console.log(`  Removed: ${removedCount}`);
 
   // ================================================================
-  // Phase 3: Surface addition
-  //   target（CE空間）にあるが CE にない、かつ CE 表面に隣接 → 追加
+  // Phase 3: 表面追加
+  //   ターゲット（CE空間）にありCEにない、かつCE表面に隣接 → 追加
   // ================================================================
   console.log('\n--- Phase 3: Surface addition ---');
   let addedCount = 0;
 
-  // Re-detect surface after removals
+  // 削除後の表面を再検出
   const currentSurface = new Set();
   for (const key of cePositions) {
     const [x, y, z] = key.split(',').map(Number);
@@ -277,7 +292,7 @@ function main() {
     }
   }
 
-  // Candidate positions: empty cells adjacent to current CE surface
+  // 候補位置: 現在のCE表面に隣接する空セル
   const candidates = new Set();
   for (const skey of currentSurface) {
     const [x, y, z] = skey.split(',').map(Number);
@@ -287,14 +302,14 @@ function main() {
     }
   }
 
-  // Add candidates that exist in target space
+  // ターゲット空間に存在する候補を追加
   for (const cand of candidates) {
     if (targetInCeSpace.has(cand)) {
       const [x, y, z] = cand.split(',').map(Number);
-      // Bounds check
+      // 範囲チェック
       if (x < 0 || x >= symVox.sizeX || y < 0 || y >= symVox.sizeY || z < 0 || z >= symVox.sizeZ) continue;
 
-      // Get color from target
+      // ターゲットから色を取得
       const [tx, ty, tz] = ceToTarget(x, y, z, ceAlign, tgAlign, xyScale, zScale);
       const targetColor = findTargetColor(tx, ty, tz, targetColorMap, 2);
 
@@ -302,7 +317,7 @@ function main() {
       if (targetColor) {
         ci = findClosestPaletteIndex(symVox.palette, targetColor[0], targetColor[1], targetColor[2]);
       } else {
-        // Fallback: use nearest existing voxel's color
+        // フォールバック: 隣接する既存ボクセルの色を使用
         let bestCI = 1, bestDist = Infinity;
         for (const [dx, dy, dz] of DIRS6) {
           const nv = resultMap.get(k(x+dx, y+dy, z+dz));
@@ -320,14 +335,16 @@ function main() {
   console.log(`  Added: ${addedCount}`);
 
   // ================================================================
-  // Summary & Write
+  // サマリー & 書き出し
   // ================================================================
   const resultVoxels = Array.from(resultMap.values());
   const delta = resultVoxels.length - symVox.voxels.length;
   console.log(`\nResult: ${resultVoxels.length} voxels (CE was ${symVox.voxels.length}, delta ${delta >= 0 ? '+' : ''}${delta})`);
 
+  // 結果をVOXファイルとして書き出し
   writeVox(outputPath, symVox.sizeX, symVox.sizeY, symVox.sizeZ, resultVoxels, symVox.palette);
   console.log(`Output: ${outputPath}`);
 }
 
+// メイン関数を実行
 main();

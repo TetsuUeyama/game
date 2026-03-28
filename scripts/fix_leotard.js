@@ -1,13 +1,18 @@
 /**
- * Fix leotard: combine original leotard voxels (outside body) with
- * a body-surface shell in the leotard coverage zone.
- * Colors are taken from nearest original leotard voxel.
+ * fix_leotard.js
+ *
+ * レオタードを修正するスクリプト:
+ * 元のレオタードボクセル（ボディ外側）と、レオタード範囲内のボディ表面シェルを結合。
+ * シェルの色は最寄りの元レオタードボクセルから取得。
  *
  * Usage: node scripts/fix_leotard.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// VOXファイルを読み込んでパースする関数
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -31,6 +36,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// ボクセルデータをVOXファイルとして書き出す関数
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -58,12 +64,12 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
-// --- Main ---
+// --- メイン処理 ---
 const BASE = path.join(__dirname, '..');
 const DIR = 'public/box3-new';
 const PREFIX = 'highpriestess_blender_rigged';
 
-// Read original (freshly re-voxelized) leotard
+// 元の（再ボクセル化済み）レオタードとボディを読み込み
 const leotard = readVox(path.join(BASE, DIR, `${PREFIX}_leotard.vox`));
 const body = readVox(path.join(BASE, DIR, `${PREFIX}_body.vox`));
 const SX = leotard.sx, SY = leotard.sy, SZ = leotard.sz;
@@ -71,13 +77,13 @@ const SX = leotard.sx, SY = leotard.sy, SZ = leotard.sz;
 console.log(`Body: ${body.voxels.length} voxels`);
 console.log(`Leotard (original): ${leotard.voxels.length} voxels`);
 
-// Build body set
+// ボディボクセルの座標セットを構築
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
-// Separate leotard voxels: outside vs inside body
-const outsideVoxels = [];
-const insideVoxels = [];
+// レオタードボクセルをボディの外側と内側に分離
+const outsideVoxels = [];  // ボディ外側のレオタードボクセル
+const insideVoxels = [];   // ボディ内側のレオタードボクセル（重複）
 for (const v of leotard.voxels) {
   if (bodySet.has(`${v.x},${v.y},${v.z}`)) {
     insideVoxels.push(v);
@@ -87,11 +93,11 @@ for (const v of leotard.voxels) {
 }
 console.log(`  Outside body: ${outsideVoxels.length}, Inside body: ${insideVoxels.length}`);
 
-// Determine leotard coverage zone from ALL original leotard voxels
+// 元のレオタード全ボクセルからカバレッジゾーン（Z範囲）を決定
 const leoZmin = Math.min(...leotard.voxels.map(v => v.z));
 const leoZmax = Math.max(...leotard.voxels.map(v => v.z));
 
-// Per-Z: leotard X range (from original voxels, both inside and outside)
+// Z値ごとのレオタードX範囲を計算
 const leoXByZ = {};
 for (const v of leotard.voxels) {
   if (!leoXByZ[v.z]) leoXByZ[v.z] = { xmin: v.x, xmax: v.x };
@@ -101,37 +107,40 @@ for (const v of leotard.voxels) {
   }
 }
 
-// Build color map from original leotard: for each Z, store colors by X fraction
+// Z値ごとのレオタード色マップを構築（最寄り色検索用）
 const leoColorByZ = {};
 for (const v of leotard.voxels) {
   if (!leoColorByZ[v.z]) leoColorByZ[v.z] = [];
   leoColorByZ[v.z].push(v);
 }
 
-// Find nearest leotard color for a position
+// 指定位置に最も近いレオタード色を検索する関数
 function getNearestColor(x, y, z) {
   let bestDist = Infinity;
   let bestC = leotard.voxels[0].c;
-  // Search in nearby Z slices
+  // 近傍のZスライスを探索（±3スライス）
   for (let dz = 0; dz <= 3; dz++) {
     for (const sz of [z + dz, z - dz]) {
       const slice = leoColorByZ[sz];
       if (!slice) continue;
       for (const v of slice) {
+        // マンハッタン距離で最近傍を選択
         const d = Math.abs(v.x - x) + Math.abs(v.y - y) + Math.abs(v.z - z);
         if (d < bestDist) { bestDist = d; bestC = v.c; }
       }
+      // 距離2以内で見つかれば早期リターン
       if (bestDist <= 2) return bestC;
     }
   }
   return bestC;
 }
 
+// 6方向の隣接オフセット
 const DIRS = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
 
-// Step 1: Keep all outside-body leotard voxels
+// ステップ1: ボディ外側のレオタードボクセルを全て保持
 const result = [];
-const placed = new Set();
+const placed = new Set();  // 配置済み座標の追跡
 for (const v of outsideVoxels) {
   const key = `${v.x},${v.y},${v.z}`;
   if (!placed.has(key)) {
@@ -141,25 +150,28 @@ for (const v of outsideVoxels) {
 }
 console.log(`Step 1 - kept outside: ${result.length}`);
 
-// Step 2: For each body surface voxel in the leotard zone,
-// add leotard voxels in empty neighbors (forming a shell)
+// ステップ2: レオタードゾーン内のボディ表面ボクセルの空き隣接にシェルを追加
 let shellAdded = 0;
 for (const bv of body.voxels) {
+  // レオタードのZ範囲外ならスキップ
   if (bv.z < leoZmin || bv.z > leoZmax) continue;
 
-  // Check X coverage at this Z
+  // このZ断面でのレオタードX範囲を確認
   const xRange = leoXByZ[bv.z];
   if (!xRange) continue;
+  // レオタードX範囲外ならスキップ
   if (bv.x < xRange.xmin || bv.x > xRange.xmax) continue;
 
-  // Check if this body voxel is on the surface (has empty neighbor)
+  // ボディ表面（空き隣接あり）の確認とシェル追加
   for (const [dx, dy, dz] of DIRS) {
     const nx = bv.x + dx, ny = bv.y + dy, nz = bv.z + dz;
+    // グリッド範囲外ならスキップ
     if (nx < 0 || nx >= SX || ny < 0 || ny >= SY || nz < 0 || nz >= SZ) continue;
     const nkey = `${nx},${ny},${nz}`;
-    if (bodySet.has(nkey)) continue; // neighbor is inside body
-    if (placed.has(nkey)) continue;  // already have leotard there
+    if (bodySet.has(nkey)) continue;  // 隣接がボディ内部ならスキップ
+    if (placed.has(nkey)) continue;   // 既にレオタードボクセルがあるならスキップ
 
+    // シェルボクセルを追加（最寄りレオタード色を使用）
     placed.add(nkey);
     const c = getNearestColor(nx, ny, nz);
     result.push({ x: nx, y: ny, z: nz, c });
@@ -169,11 +181,12 @@ for (const bv of body.voxels) {
 console.log(`Step 2 - shell added: ${shellAdded}`);
 console.log(`Total: ${result.length} voxels`);
 
+// 結果をVOXファイルとして書き出し
 const dstPath = path.join(BASE, DIR, `${PREFIX}_leotard.vox`);
 writeVox(dstPath, SX, SY, SZ, result, leotard.palette);
 console.log(`Written: ${dstPath}`);
 
-// Update manifest
+// パーツマニフェストのボクセル数を更新
 const manifestPath = path.join(BASE, DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === 'leotard');

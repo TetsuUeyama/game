@@ -1,20 +1,26 @@
 /**
- * Scale hair by chibi head enlargement factor and position at cap top.
+ * scale_hair_to_cap.js
  *
- * The chibi deform scales the head by 1.5x (at base) to 1.8x (at top).
- * The raw hair was voxelized at head_scale_override=1.0 (original size).
- * This script scales the hair up and centers it on the cap.
+ * チビキャラの頭部拡大率で髪をスケーリングしてキャップの上に配置するスクリプト。
+ *
+ * チビ変形は頭部をベースで1.5倍、頭頂で1.8倍にスケーリングする。
+ * 生の髪はhead_scale_override=1.0（元サイズ）でボクセル化されている。
+ * このスクリプトで髪を拡大してキャップの上に中央配置する。
  *
  * Usage: node scripts/scale_hair_to_cap.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
 
-const HAIR_PATH = 'public/box2/cyberpunk_elf_hair_hires.vox'; // raw from Blender
-const CAP_PATH  = 'public/box2/knit_cap.vox';
-const OUT_PATH  = 'public/box2/cyberpunk_elf_hair_hires_processed.vox';
+// 入出力ファイルパス
+const HAIR_PATH = 'public/box2/cyberpunk_elf_hair_hires.vox'; // Blenderからの生データ
+const CAP_PATH  = 'public/box2/knit_cap.vox';                 // ニットキャップ
+const OUT_PATH  = 'public/box2/cyberpunk_elf_hair_hires_processed.vox'; // 処理済み出力
 
-const SCALE_FACTOR = 1.5; // chibi head enlargement (base)
+// チビ頭部拡大率（ベース）
+const SCALE_FACTOR = 1.5;
 
+// VOXパーサー
 function parseVox(buffer) {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let off = 0;
@@ -38,6 +44,7 @@ function parseVox(buffer) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXライター
 function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   function makeChunk(id, data) {
     const header = Buffer.alloc(12);
@@ -70,13 +77,14 @@ function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   console.log(`Written: ${filepath} (${voxels.length} voxels)`);
 }
 
-// ── Main ──
+// ── メイン処理 ──
+// 髪とキャップのVOXを読み込み
 const hair = parseVox(fs.readFileSync(HAIR_PATH));
 const cap = parseVox(fs.readFileSync(CAP_PATH));
 console.log(`Hair: ${hair.voxels.length} voxels`);
 console.log(`Cap: ${cap.voxels.length} voxels`);
 
-// Find hair center (X, Y) and bottom Z
+// 髪の中心座標（X, Y）と範囲を計算
 let hairMinX = 999, hairMaxX = 0, hairMinY = 999, hairMaxY = 0, hairMinZ = 999, hairMaxZ = 0;
 for (const v of hair.voxels) {
   if (v.x < hairMinX) hairMinX = v.x;
@@ -86,12 +94,12 @@ for (const v of hair.voxels) {
   if (v.z < hairMinZ) hairMinZ = v.z;
   if (v.z > hairMaxZ) hairMaxZ = v.z;
 }
-const hairCx = (hairMinX + hairMaxX) / 2;
-const hairCy = (hairMinY + hairMaxY) / 2;
+const hairCx = (hairMinX + hairMaxX) / 2;  // 髪のX中心
+const hairCy = (hairMinY + hairMaxY) / 2;  // 髪のY中心
 console.log(`Hair bounds: X=${hairMinX}-${hairMaxX}, Y=${hairMinY}-${hairMaxY}, Z=${hairMinZ}-${hairMaxZ}`);
 console.log(`Hair center: (${hairCx}, ${hairCy})`);
 
-// Find cap center (X, Y) and top Z
+// キャップの中心座標と頂点Z座標を計算
 let capMinX = 999, capMaxX = 0, capMinY = 999, capMaxY = 0, capMinZ = 999, capMaxZ = 0;
 for (const v of cap.voxels) {
   if (v.x < capMinX) capMinX = v.x;
@@ -101,40 +109,37 @@ for (const v of cap.voxels) {
   if (v.z < capMinZ) capMinZ = v.z;
   if (v.z > capMaxZ) capMaxZ = v.z;
 }
-const capCx = (capMinX + capMaxX) / 2;
-const capCy = (capMinY + capMaxY) / 2;
+const capCx = (capMinX + capMaxX) / 2;  // キャップのX中心
+const capCy = (capMinY + capMaxY) / 2;  // キャップのY中心
 console.log(`Cap bounds: X=${capMinX}-${capMaxX}, Y=${capMinY}-${capMaxY}, Z=${capMinZ}-${capMaxZ}`);
 console.log(`Cap center: (${capCx}, ${capCy}), top Z: ${capMaxZ}`);
 
-// Scale hair around its center by SCALE_FACTOR, then reposition
-// Hair root (where it connects to head) is around the top of the head (high Z in hair)
-// The hair hangs DOWN from the head top → hairMaxZ is the root area
-// Cap top is capMaxZ → align hair root to cap top
+// 髪のスケーリングと再配置
+// 髪の根元（頭との接続部分）は頭頂付近（髪のZ最大値付近）
+// 髪は頭頂から下に垂れる → hairMaxZが根元エリア
+// キャップの頂点はcapMaxZ → 髪の根元をキャップ頂点に合わせる
 
-// Scale XY only (横方向), Z stays 1.0 (長さ方向はそのまま)
-const dx = Math.round(capCx - hairCx);
-const dy = Math.round(capCy - hairCy) + 10;  // 後頭部方向にシフト（Y+ = 後ろ）
-// Align hair top (root/scalp area) to cap top — Z is not scaled
-const dz = capMaxZ - hairMaxZ + 11;  // 少し下げる
+// XYのみスケーリング（横方向）、Zは1.0（長さ方向はそのまま）
+const dx = Math.round(capCx - hairCx);                    // X中心合わせオフセット
+const dy = Math.round(capCy - hairCy) + 10;               // Y中心合わせ + 後頭部方向シフト（Y+ = 後ろ）
+const dz = capMaxZ - hairMaxZ + 11;                        // Z合わせ（キャップ頂点に少し下げて配置）
 
 console.log(`Translation: dx=${dx}, dy=${dy}, dz=${dz}`);
 console.log(`Scale XY=${SCALE_FACTOR}, Z=1.0`);
 
-// Pass 1: scale and collect, filling gaps by iterating sub-voxels
+// パス1: スケーリングして収集、サブボクセルでギャップを埋める
 const seen = new Set();
-const outputMap = new Map(); // key -> ci
+const outputMap = new Map();  // キー → カラーインデックス
 
 for (const v of hair.voxels) {
-  // For each source voxel, fill the scaled region to avoid gaps
-  // A voxel at (x,y) maps to a region of SCALE_FACTOR width
-  // We fill all integer coords in that region
-  const cx = hairCx + (v.x - hairCx) * SCALE_FACTOR + dx;
+  // 各ソースボクセルに対してスケーリング領域を充填（ギャップ防止）
+  const cx = hairCx + (v.x - hairCx) * SCALE_FACTOR + dx;  // スケーリング + 平行移動
   const cy = hairCy + (v.y - hairCy) * SCALE_FACTOR + dy;
   const nz = v.z + dz;
 
   if (nz < 0 || nz >= hair.sz) continue;
 
-  // Fill a SCALE_FACTOR x SCALE_FACTOR area to prevent gaps
+  // SCALE_FACTOR × SCALE_FACTORの領域を充填してギャップを防止
   const half = SCALE_FACTOR / 2;
   const xMin = Math.floor(cx - half + 0.5);
   const xMax = Math.floor(cx + half + 0.5);
@@ -156,7 +161,7 @@ for (const v of hair.voxels) {
 
 console.log(`Before push-out: ${outputMap.size} voxels`);
 
-// Load body to push hair out of body/cap
+// ボディを読み込んで髪がボディ/キャップ内部に入らないよう外側に押し出す
 const BODY_PATH = 'public/box2/cyberpunk_elf_body_base_hires_sym.vox';
 const body = parseVox(fs.readFileSync(BODY_PATH));
 const bodySet = new Set();
@@ -164,27 +169,28 @@ for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 const capSet = new Set();
 for (const v of cap.voxels) capSet.add(`${v.x},${v.y},${v.z}`);
 
-// Head center for push-out direction
+// 押し出し方向の基準点（頭部の中心座標）
 const HEAD_CX = 92;
 const HEAD_CY = 27;
 const HEAD_CZ = 195;
 
-// Push hair voxels inside body/cap outward along radial direction
+// ボディ/キャップ内部の髪ボクセルを放射方向に外側へ押し出す
 const finalMap = new Map();
 for (const [key, ci] of outputMap) {
   const [x, y, z] = key.split(',').map(Number);
+  // ボディ/キャップと重ならなければそのまま
   if (!bodySet.has(key) && !capSet.has(key)) {
     finalMap.set(key, ci);
     continue;
   }
-  // Push outward from head center
+  // 頭部中心からの放射方向を計算
   const ddx = x - HEAD_CX;
   const ddy = y - HEAD_CY;
   const ddz = z - HEAD_CZ;
   const len = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
   if (len < 0.001) continue;
   const nx = ddx / len, ny = ddy / len, nz2 = ddz / len;
-  // March outward until we find a free spot
+  // 放射方向に外側へ空きスポットが見つかるまで移動（最大15ステップ）
   for (let step = 1; step <= 15; step++) {
     const px = Math.round(x + nx * step);
     const py = Math.round(y + ny * step);
@@ -202,7 +208,7 @@ for (const [key, ci] of outputMap) {
 
 console.log(`After push-out: ${finalMap.size} voxels`);
 
-// Compute actual bounds for output grid
+// 出力グリッドサイズを計算（実際の範囲に基づく）
 let maxX = 0, maxY = 0, maxZ = 0;
 const output = [];
 for (const [key, ci] of finalMap) {
@@ -213,11 +219,12 @@ for (const [key, ci] of finalMap) {
   output.push({ x, y, z, ci });
 }
 
-// Grid size: must be at least as big as body grid, and fit all hair
+// グリッドサイズ: ボディグリッド以上で、全ての髪が収まるサイズ
 const outSx = Math.max(hair.sx, maxX + 1);
 const outSy = Math.max(hair.sy, maxY + 1);
 const outSz = Math.max(hair.sz, maxZ + 1);
 console.log(`Output grid: ${outSx}x${outSy}x${outSz}`);
 console.log(`Output: ${output.length} voxels`);
+// 結果をVOXファイルとして書き出し
 writeVox(OUT_PATH, outSx, outSy, outSz, output, hair.palette);
 console.log('Done!');

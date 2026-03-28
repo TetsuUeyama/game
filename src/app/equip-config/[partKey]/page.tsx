@@ -1,51 +1,63 @@
-'use client';
+'use client'; // クライアントサイドレンダリングを有効化
 
+// Reactフック群をインポート
 import { useEffect, useRef, useState, useCallback } from 'react';
+// Next.jsのルートパラメータ取得フック
 import { useParams } from 'next/navigation';
+// Next.jsのLinkコンポーネント
 import Link from 'next/link';
+// Babylon.jsの3D関連クラス群をインポート
 import {
   Engine, Scene, ArcRotateCamera, HemisphericLight,
   Vector3, Color4, Mesh, VertexData, ShaderMaterial, Effect,
   MeshBuilder, StandardMaterial, Color3,
 } from '@babylonjs/core';
+// 共有VOXパーサーとメッシュ定数をインポート
 import { loadVoxFile, SCALE, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import type { VoxelEntry } from '@/lib/vox-parser';
 
 // ========================================================================
-// Types
+// 型定義
 // ========================================================================
+// 装備ビヘイビアの種類
 type EquipBehavior = 'synced' | 'surface' | 'gravity';
 
+// ビヘイビアデータ（APIとの送受信用）
 interface BehaviorData {
-  surface: string[];
-  gravity: string[];
+  surface: string[];   // 表面維持ボクセルの座標キーリスト
+  gravity: string[];   // 重力影響ボクセルの座標キーリスト
 }
 
+// パーツマニフェストのエントリ型
 interface EquipManifestEntry {
-  key: string;
-  file: string;
-  voxels: number;
-  default_on: boolean;
+  key: string;          // パーツキー
+  file: string;         // VOXファイルパス
+  voxels: number;       // ボクセル数
+  default_on: boolean;  // デフォルト表示
 }
 
+// ビヘイビアタイプごとの表示色（3Dビューア用）
 const BEHAVIOR_COLORS: Record<EquipBehavior, { r: number; g: number; b: number }> = {
-  synced:  { r: 0.30, g: 0.70, b: 0.40 },
-  surface: { r: 0.40, g: 0.55, b: 1.00 },
-  gravity: { r: 1.00, g: 0.55, b: 0.25 },
+  synced:  { r: 0.30, g: 0.70, b: 0.40 },  // 緑系
+  surface: { r: 0.40, g: 0.55, b: 1.00 },  // 青系
+  gravity: { r: 1.00, g: 0.55, b: 0.25 },  // オレンジ系
 };
 
+// ビヘイビアタイプの情報（UI表示用）
 const BEHAVIOR_INFO: { value: EquipBehavior; label: string; labelJa: string; cssColor: string; shortcut: string }[] = [
   { value: 'synced',  label: 'Synced',  labelJa: 'body同期',  cssColor: '#4a6', shortcut: '1' },
   { value: 'surface', label: 'Surface', labelJa: '表面維持',  cssColor: '#68f', shortcut: '2' },
   { value: 'gravity', label: 'Gravity', labelJa: '重力影響',  cssColor: '#f84', shortcut: '3' },
 ];
 
+// ツールモードの種類
 type ToolMode = 'navigate' | 'paint' | 'box';
 
 // ========================================================================
-// Unlit material
+// Unlitマテリアル作成（頂点カラーのみで描画）
 // ========================================================================
 function createUnlitMaterial(scene: Scene, name: string): ShaderMaterial {
+  // 頂点シェーダー: 位置と色を受け取り、vColorとしてフラグメントシェーダーに渡す
   Effect.ShadersStore[name + 'VertexShader'] = `
     precision highp float;
     attribute vec3 position;
@@ -54,6 +66,7 @@ function createUnlitMaterial(scene: Scene, name: string): ShaderMaterial {
     varying vec4 vColor;
     void main() { gl_Position = worldViewProjection * vec4(position, 1.0); vColor = color; }
   `;
+  // フラグメントシェーダー: vColorをそのまま出力
   Effect.ShadersStore[name + 'FragmentShader'] = `
     precision highp float;
     varying vec4 vColor;
@@ -67,7 +80,7 @@ function createUnlitMaterial(scene: Scene, name: string): ShaderMaterial {
 }
 
 // ========================================================================
-// Build mesh with faceToVoxelIndex mapping
+// エディタ用メッシュ構築（ビヘイビア色付き + 面→ボクセルインデックスマッピング）
 // ========================================================================
 function buildEditorMesh(
   voxels: VoxelEntry[],
@@ -75,6 +88,7 @@ function buildEditorMesh(
   scene: Scene,
   cx: number, cy: number,
 ): { mesh: Mesh; faceToVoxelIdx: number[] } {
+  // 占有セット（内部面カリング用）
   const occupied = new Set<string>();
   for (const v of voxels) occupied.add(`${v.x},${v.y},${v.z}`);
 
@@ -82,7 +96,7 @@ function buildEditorMesh(
   const normals: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
-  const faceToVoxelIdx: number[] = []; // faceIndex -> voxel array index
+  const faceToVoxelIdx: number[] = []; // 面インデックス → ボクセル配列インデックス
 
   for (let vi = 0; vi < voxels.length; vi++) {
     const voxel = voxels[vi];
@@ -90,11 +104,12 @@ function buildEditorMesh(
     const behavior = behaviorMap.get(key) ?? 'synced';
     const bc = BEHAVIOR_COLORS[behavior];
 
-    // Blend: 50% original color + 50% behavior tint
+    // 色ブレンド: 元の色50% + ビヘイビアティント50%
     const cr = voxel.r * 0.5 + bc.r * 0.5;
     const cg = voxel.g * 0.5 + bc.g * 0.5;
     const cb = voxel.b * 0.5 + bc.b * 0.5;
 
+    // 各面を処理
     for (let f = 0; f < 6; f++) {
       const [dx, dy, dz] = FACE_DIRS[f];
       if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;
@@ -112,17 +127,14 @@ function buildEditorMesh(
         colors.push(cr, cg, cb, 1);
       }
       indices.push(bi, bi + 1, bi + 2, bi, bi + 2, bi + 3);
-      // 2 triangles per face
+      // 1面 = 2三角形、各三角形が同じボクセルインデックスを指す
       faceToVoxelIdx.push(vi);
       faceToVoxelIdx.push(vi);
     }
   }
 
   const vd = new VertexData();
-  vd.positions = positions;
-  vd.normals = normals;
-  vd.colors = colors;
-  vd.indices = indices;
+  vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
   const mesh = new Mesh('editor_part', scene);
   vd.applyToMesh(mesh);
   mesh.material = createUnlitMaterial(scene, 'editor_unlit_' + Date.now());
@@ -130,39 +142,43 @@ function buildEditorMesh(
 }
 
 // ========================================================================
-// Component
+// ボクセルビヘイビアエディタページコンポーネント
 // ========================================================================
 export default function VoxelBehaviorEditorPage() {
+  // URLパラメータからパーツキーを取得
   const params = useParams();
   const partKey = params.partKey as string;
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<Scene | null>(null);
-  const cameraRef = useRef<ArcRotateCamera | null>(null);
-  const meshRef = useRef<Mesh | null>(null);
-  const faceMapRef = useRef<number[]>([]);
+  // Refの定義
+  const canvasRef = useRef<HTMLCanvasElement>(null);      // キャンバス要素
+  const sceneRef = useRef<Scene | null>(null);             // Babylon.jsシーン
+  const cameraRef = useRef<ArcRotateCamera | null>(null);  // カメラ
+  const meshRef = useRef<Mesh | null>(null);               // エディタメッシュ
+  const faceMapRef = useRef<number[]>([]);                 // 面→ボクセルインデックスマップ
 
-  const voxelsRef = useRef<VoxelEntry[]>([]);
-  const behaviorMapRef = useRef<Map<string, EquipBehavior>>(new Map());
-  const undoStackRef = useRef<Map<string, EquipBehavior>[]>([]);
-  const centerRef = useRef({ cx: 0, cy: 0 });
+  const voxelsRef = useRef<VoxelEntry[]>([]);              // ボクセルデータ
+  const behaviorMapRef = useRef<Map<string, EquipBehavior>>(new Map());  // ビヘイビアマップ
+  const undoStackRef = useRef<Map<string, EquipBehavior>[]>([]);  // Undoスタック
+  const centerRef = useRef({ cx: 0, cy: 0 });             // グリッド中心
 
-  const [partInfo, setPartInfo] = useState<EquipManifestEntry | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [toolMode, setToolMode] = useState<ToolMode>('navigate');
-  const [paintBehavior, setPaintBehavior] = useState<EquipBehavior>('synced');
-  const [stats, setStats] = useState({ synced: 0, surface: 0, gravity: 0 });
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [canUndo, setCanUndo] = useState(false);
-  const [hoverInfo, setHoverInfo] = useState<string | null>(null);
+  // Stateの定義
+  const [partInfo, setPartInfo] = useState<EquipManifestEntry | null>(null);  // パーツ情報
+  const [loading, setLoading] = useState(true);            // ローディング状態
+  const [error, setError] = useState<string | null>(null); // エラーメッセージ
+  const [toolMode, setToolMode] = useState<ToolMode>('navigate');  // 現在のツールモード
+  const [paintBehavior, setPaintBehavior] = useState<EquipBehavior>('synced');  // ペイントビヘイビア
+  const [stats, setStats] = useState({ synced: 0, surface: 0, gravity: 0 });   // 統計
+  const [saving, setSaving] = useState(false);             // 保存中フラグ
+  const [dirty, setDirty] = useState(false);               // 未保存変更フラグ
+  const [canUndo, setCanUndo] = useState(false);           // Undo可能フラグ
+  const [hoverInfo, setHoverInfo] = useState<string | null>(null);  // ホバー情報
 
-  // Box select state
+  // ボックス選択の状態
   const boxStartRef = useRef<{ x: number; y: number } | null>(null);
   const [boxRect, setBoxRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const isPaintingRef = useRef(false);
+  const isPaintingRef = useRef(false);  // ペイント中フラグ
 
+  // ビヘイビア統計を計算
   const computeStats = useCallback(() => {
     const map = behaviorMapRef.current;
     const total = voxelsRef.current.length;
@@ -174,6 +190,7 @@ export default function VoxelBehaviorEditorPage() {
     setStats({ synced: total - surface - gravity, surface, gravity });
   }, []);
 
+  // メッシュを再構築
   const rebuildMesh = useCallback(() => {
     const scene = sceneRef.current;
     if (!scene || voxelsRef.current.length === 0) return;
@@ -187,12 +204,14 @@ export default function VoxelBehaviorEditorPage() {
     computeStats();
   }, [computeStats]);
 
+  // Undoスタックにプッシュ
   const pushUndo = useCallback(() => {
     undoStackRef.current.push(new Map(behaviorMapRef.current));
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     setCanUndo(true);
   }, []);
 
+  // Undo実行
   const performUndo = useCallback(() => {
     const stack = undoStackRef.current;
     if (stack.length === 0) return;
@@ -202,6 +221,7 @@ export default function VoxelBehaviorEditorPage() {
     rebuildMesh();
   }, [rebuildMesh]);
 
+  // ボクセルのビヘイビアを設定
   const setVoxelBehavior = useCallback((voxelIdx: number, behavior: EquipBehavior) => {
     const v = voxelsRef.current[voxelIdx];
     if (!v) return;
@@ -209,14 +229,14 @@ export default function VoxelBehaviorEditorPage() {
     const current = behaviorMapRef.current.get(key) ?? 'synced';
     if (current === behavior) return;
     if (behavior === 'synced') {
-      behaviorMapRef.current.delete(key);
+      behaviorMapRef.current.delete(key);  // syncedはデフォルトなので削除
     } else {
       behaviorMapRef.current.set(key, behavior);
     }
     setDirty(true);
   }, []);
 
-  // Init Babylon.js
+  // Babylon.jsシーン初期化
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -224,6 +244,7 @@ export default function VoxelBehaviorEditorPage() {
     const scene = new Scene(engine);
     scene.clearColor = new Color4(0.10, 0.10, 0.16, 1);
 
+    // グラウンドグリッド
     const ground = MeshBuilder.CreateGround('ground', { width: 4, height: 4 }, scene);
     const gMat = new StandardMaterial('gMat', scene);
     gMat.diffuseColor = new Color3(0.2, 0.2, 0.25);
@@ -231,11 +252,13 @@ export default function VoxelBehaviorEditorPage() {
     ground.material = gMat;
     ground.isPickable = false;
 
+    // カメラ
     const camera = new ArcRotateCamera('cam', Math.PI / 2, Math.PI / 3, 2.0, new Vector3(0, 0.4, 0), scene);
     camera.attachControl(canvas, true);
     camera.lowerRadiusLimit = 0.3; camera.upperRadiusLimit = 8; camera.wheelPrecision = 80;
     cameraRef.current = camera;
 
+    // ライト
     const hemi = new HemisphericLight('hemi', new Vector3(0, 1, 0), scene);
     hemi.intensity = 0.5;
 
@@ -244,18 +267,15 @@ export default function VoxelBehaviorEditorPage() {
     const onResize = () => engine.resize();
     window.addEventListener('resize', onResize);
 
-    return () => {
-      window.removeEventListener('resize', onResize);
-      engine.dispose();
-    };
+    return () => { window.removeEventListener('resize', onResize); engine.dispose(); };
   }, []);
 
-  // Load data
+  // データ読み込み
   useEffect(() => {
     if (!sceneRef.current || !partKey) return;
     (async () => {
       try {
-        // Load manifest to get file path
+        // マニフェストからパーツ情報を取得
         const manifestResp = await fetch(`/box2/cyberpunk_elf_parts.json?v=${Date.now()}`);
         if (!manifestResp.ok) throw new Error('Failed to load manifest');
         const parts: EquipManifestEntry[] = await manifestResp.json();
@@ -263,12 +283,12 @@ export default function VoxelBehaviorEditorPage() {
         if (!part) throw new Error(`Part "${partKey}" not found in manifest`);
         setPartInfo(part);
 
-        // Load voxel data
+        // ボクセルデータを読み込み
         const { model, voxels } = await loadVoxFile(part.file);
         voxelsRef.current = voxels;
         centerRef.current = { cx: model.sizeX / 2, cy: model.sizeY / 2 };
 
-        // Load behavior data
+        // ビヘイビアデータを読み込み
         const behResp = await fetch(`/api/equip-behavior?partKey=${partKey}`);
         if (behResp.ok) {
           const data: BehaviorData = await behResp.json();
@@ -287,7 +307,7 @@ export default function VoxelBehaviorEditorPage() {
     })();
   }, [partKey, rebuildMesh]);
 
-  // Keyboard shortcuts
+  // キーボードショートカット
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === '1') setPaintBehavior('synced');
@@ -302,7 +322,7 @@ export default function VoxelBehaviorEditorPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [performUndo]);
 
-  // Camera control toggle based on tool mode
+  // ツールモードに応じたカメラコントロール切替
   useEffect(() => {
     const camera = cameraRef.current;
     const canvas = canvasRef.current;
@@ -310,11 +330,11 @@ export default function VoxelBehaviorEditorPage() {
     if (toolMode === 'navigate') {
       camera.attachControl(canvas, true);
     } else {
-      camera.detachControl();
+      camera.detachControl();  // ペイント/ボックス選択時はカメラ操作を無効化
     }
   }, [toolMode]);
 
-  // Pick voxel from scene click
+  // シーンクリックからボクセルをピック
   const pickVoxel = useCallback((x: number, y: number): number | null => {
     const scene = sceneRef.current;
     if (!scene) return null;
@@ -323,7 +343,7 @@ export default function VoxelBehaviorEditorPage() {
     return faceMapRef.current[pick.faceId] ?? null;
   }, []);
 
-  // Pointer handlers
+  // ポインターダウンハンドラー
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (toolMode === 'navigate') return;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -335,23 +355,21 @@ export default function VoxelBehaviorEditorPage() {
       pushUndo();
       isPaintingRef.current = true;
       const idx = pickVoxel(x, y);
-      if (idx !== null) {
-        setVoxelBehavior(idx, paintBehavior);
-        rebuildMesh();
-      }
+      if (idx !== null) { setVoxelBehavior(idx, paintBehavior); rebuildMesh(); }
     } else if (toolMode === 'box') {
       boxStartRef.current = { x: e.clientX, y: e.clientY };
       setBoxRect(null);
     }
   }, [toolMode, paintBehavior, pushUndo, pickVoxel, setVoxelBehavior, rebuildMesh]);
 
+  // ポインタームーブハンドラー
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Hover info (any mode)
+    // ホバー情報（全モード共通）
     if (!isPaintingRef.current && !boxStartRef.current) {
       const idx = pickVoxel(x, y);
       if (idx !== null) {
@@ -364,24 +382,22 @@ export default function VoxelBehaviorEditorPage() {
       }
     }
 
+    // ペイントモード: ドラッグ中のボクセルにビヘイビアを適用
     if (toolMode === 'paint' && isPaintingRef.current) {
       const idx = pickVoxel(x, y);
-      if (idx !== null) {
-        setVoxelBehavior(idx, paintBehavior);
-      }
+      if (idx !== null) setVoxelBehavior(idx, paintBehavior);
+    // ボックス選択モード: 選択矩形を更新
     } else if (toolMode === 'box' && boxStartRef.current) {
       const sx = boxStartRef.current.x;
       const sy = boxStartRef.current.y;
       setBoxRect({
-        x: Math.min(sx, e.clientX),
-        y: Math.min(sy, e.clientY),
-        w: Math.abs(e.clientX - sx),
-        h: Math.abs(e.clientY - sy),
+        x: Math.min(sx, e.clientX), y: Math.min(sy, e.clientY),
+        w: Math.abs(e.clientX - sx), h: Math.abs(e.clientY - sy),
       });
     }
   }, [toolMode, paintBehavior, pickVoxel, setVoxelBehavior]);
 
-  // Throttled rebuild during paint
+  // ペイント中のスロットル再構築
   const rebuildTimerRef = useRef<number | null>(null);
   useEffect(() => {
     if (!isPaintingRef.current) return;
@@ -394,12 +410,13 @@ export default function VoxelBehaviorEditorPage() {
     };
   }, [toolMode, rebuildMesh]);
 
+  // ポインターアップハンドラー
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (toolMode === 'paint' && isPaintingRef.current) {
       isPaintingRef.current = false;
       rebuildMesh();
     } else if (toolMode === 'box' && boxStartRef.current) {
-      // Apply box select
+      // ボックス選択を適用
       const scene = sceneRef.current;
       const camera = cameraRef.current;
       const canvas = canvasRef.current;
@@ -412,14 +429,11 @@ export default function VoxelBehaviorEditorPage() {
       const ey = Math.max(boxStartRef.current.y, e.clientY) - rect.top;
 
       if (ex - sx < 5 && ey - sy < 5) {
-        // Too small, treat as single click
+        // 小さすぎる → シングルクリックとして扱う
         const idx = pickVoxel((sx + ex) / 2, (sy + ey) / 2);
-        if (idx !== null) {
-          pushUndo();
-          setVoxelBehavior(idx, paintBehavior);
-          rebuildMesh();
-        }
+        if (idx !== null) { pushUndo(); setVoxelBehavior(idx, paintBehavior); rebuildMesh(); }
       } else {
+        // ボックス選択: 矩形内の全ボクセルにビヘイビアを適用
         pushUndo();
         const { cx, cy } = centerRef.current;
         const engine = scene.getEngine();
@@ -432,11 +446,11 @@ export default function VoxelBehaviorEditorPage() {
         for (let i = 0; i < voxelsRef.current.length; i++) {
           const v = voxelsRef.current[i];
           const worldPos = new Vector3(
-            (v.x + 0.5 - cx) * SCALE,
-            (v.z + 0.5) * SCALE,
-            -(v.y + 0.5 - cy) * SCALE,
+            (v.x + 0.5 - cx) * SCALE, (v.z + 0.5) * SCALE, -(v.y + 0.5 - cy) * SCALE,
           );
+          // ワールド座標→スクリーン座標に投影
           const screenPos = Vector3.Project(worldPos, vm, pm, viewport);
+          // 矩形内ならビヘイビアを適用
           if (screenPos.x >= sx && screenPos.x <= ex && screenPos.y >= sy && screenPos.y <= ey) {
             setVoxelBehavior(i, paintBehavior);
           }
@@ -449,7 +463,7 @@ export default function VoxelBehaviorEditorPage() {
     }
   }, [toolMode, paintBehavior, pushUndo, pickVoxel, setVoxelBehavior, rebuildMesh]);
 
-  // Save
+  // 保存処理
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -473,13 +487,14 @@ export default function VoxelBehaviorEditorPage() {
   }, [partKey]);
 
   return (
+    // ルートコンテナ: 横並びフレックスレイアウト
     <div style={{ width: '100vw', height: '100vh', display: 'flex', background: '#1a1a2e' }}>
-      {/* Sidebar */}
+      {/* サイドバー */}
       <div style={{
         width: 280, minWidth: 280, background: '#0f0f23', color: '#ccc',
         borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', overflow: 'auto',
       }}>
-        {/* Header */}
+        {/* ヘッダー: 戻るリンク、パーツ名、ボクセル数 */}
         <div style={{ padding: '12px', borderBottom: '1px solid #333' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <Link href="/equip-config" style={{ color: '#68f', fontSize: 12, textDecoration: 'none' }}>← Back</Link>
@@ -489,10 +504,11 @@ export default function VoxelBehaviorEditorPage() {
           {partInfo && <div style={{ fontSize: 11, color: '#888' }}>{partInfo.voxels} voxels</div>}
         </div>
 
+        {/* エラー/ローディング表示 */}
         {error && <div style={{ padding: 12, color: '#f88', fontSize: 12 }}>Error: {error}</div>}
         {loading && <div style={{ padding: 12, color: '#88f', fontSize: 12 }}>Loading...</div>}
 
-        {/* Tool mode */}
+        {/* ツールモード選択 */}
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
           <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 8, color: '#aaa' }}>Tool Mode</div>
           {([
@@ -518,7 +534,7 @@ export default function VoxelBehaviorEditorPage() {
           ))}
         </div>
 
-        {/* Paint behavior */}
+        {/* ペイントビヘイビア選択 */}
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
           <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 8, color: '#aaa' }}>Paint Behavior</div>
           {BEHAVIOR_INFO.map(info => (
@@ -543,7 +559,7 @@ export default function VoxelBehaviorEditorPage() {
           ))}
         </div>
 
-        {/* Stats */}
+        {/* ボクセル統計 */}
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #333' }}>
           <div style={{ fontWeight: 'bold', fontSize: 12, marginBottom: 6, color: '#aaa' }}>Voxel Stats</div>
           {BEHAVIOR_INFO.map(info => {
@@ -551,10 +567,7 @@ export default function VoxelBehaviorEditorPage() {
             const pct = voxelsRef.current.length > 0 ? Math.round(count / voxelsRef.current.length * 100) : 0;
             return (
               <div key={info.value} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{
-                  width: 10, height: 10, borderRadius: 2, background: info.cssColor,
-                  display: 'inline-block', flexShrink: 0,
-                }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: info.cssColor, display: 'inline-block', flexShrink: 0 }} />
                 <span style={{ fontSize: 12, minWidth: 60 }}>{info.label}</span>
                 <span style={{ fontSize: 12, fontWeight: 'bold', minWidth: 40, textAlign: 'right' }}>{count}</span>
                 <div style={{ flex: 1, height: 8, background: '#1a1a2e', borderRadius: 4, overflow: 'hidden' }}>
@@ -566,15 +579,16 @@ export default function VoxelBehaviorEditorPage() {
           })}
         </div>
 
-        {/* Hover info */}
+        {/* ホバー情報 */}
         {hoverInfo && (
           <div style={{ padding: '6px 12px', fontSize: 11, color: '#aaa', borderBottom: '1px solid #222' }}>
             Hover: {hoverInfo}
           </div>
         )}
 
-        {/* Actions */}
+        {/* アクションボタン */}
         <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* Undoボタン */}
           <button onClick={performUndo} disabled={!canUndo} style={{
             padding: '8px 0', borderRadius: 4, cursor: canUndo ? 'pointer' : 'default',
             background: canUndo ? '#3a3a5e' : '#1a1a2e', color: canUndo ? '#ccc' : '#444',
@@ -582,6 +596,7 @@ export default function VoxelBehaviorEditorPage() {
           }}>
             Undo (Ctrl+Z)
           </button>
+          {/* 保存ボタン */}
           <button onClick={handleSave} disabled={saving || !dirty} style={{
             padding: '10px 0', borderRadius: 4, cursor: dirty ? 'pointer' : 'default',
             background: dirty ? '#4a6' : '#1a1a2e', color: dirty ? '#fff' : '#444',
@@ -591,7 +606,7 @@ export default function VoxelBehaviorEditorPage() {
           </button>
         </div>
 
-        {/* Keyboard shortcuts legend */}
+        {/* キーボードショートカット凡例 */}
         <div style={{ padding: '10px 12px', marginTop: 'auto', borderTop: '1px solid #222' }}>
           <div style={{ fontSize: 10, color: '#555', lineHeight: 1.6 }}>
             <div><b>Q</b> Navigate / <b>W</b> Paint / <b>E</b> Box Select</div>
@@ -601,20 +616,20 @@ export default function VoxelBehaviorEditorPage() {
         </div>
       </div>
 
-      {/* Canvas area */}
+      {/* キャンバスエリア */}
       <div style={{ flex: 1, position: 'relative' }}>
         <canvas
           ref={canvasRef}
           style={{
             width: '100%', height: '100%', outline: 'none',
-            cursor: toolMode === 'navigate' ? 'grab' : toolMode === 'paint' ? 'crosshair' : 'crosshair',
+            cursor: toolMode === 'navigate' ? 'grab' : 'crosshair',
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
         />
 
-        {/* Box select overlay */}
+        {/* ボックス選択オーバーレイ */}
         {boxRect && (
           <div style={{
             position: 'fixed', left: boxRect.x, top: boxRect.y,
@@ -624,7 +639,7 @@ export default function VoxelBehaviorEditorPage() {
           }} />
         )}
 
-        {/* Mode indicator */}
+        {/* モードインジケーター */}
         <div style={{
           position: 'absolute', top: 12, left: 12, padding: '4px 10px',
           background: 'rgba(0,0,0,0.6)', borderRadius: 4, fontSize: 12, color: '#aaa',

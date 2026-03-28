@@ -1,15 +1,22 @@
 /**
- * Shift DarkElfBlader mask from originals.
- * Mask needs: Z-3 (down), Y-1 (forward)
+ * shift_mask_de.js
+ *
+ * DarkElfBladerのマスクをoriginals/からシフトするスクリプト。
+ * マスクのシフト量: Z-3（下方向）、Y-1（前方向）
  *
  * Usage: node scripts/shift_mask_de.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// Z方向のシフト量（-3 = 下方向）
 const DZ = -3;
+// Y方向のシフト量（-1 = 前方向）
 const DY = -1;
 
+// VOXファイルを読み込んでパースする関数
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -33,6 +40,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// ボクセルデータをVOXファイルとして書き出す関数
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -60,26 +68,35 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// パスの設定
 const BASE = path.join(__dirname, '..');
 const DIR = path.join(BASE, 'public/box4');
 const PREFIX = 'darkelfblader_arp';
 
+// 元のマスクVOXファイルのパス（originals/ディレクトリ）
 const srcPath = path.join(DIR, 'originals', `${PREFIX}_armor_-_mask.vox`);
+// 出力先のパス
 const dstPath = path.join(DIR, `${PREFIX}_armor_-_mask.vox`);
 
+// VOXファイルを読み込み
 const vox = readVox(srcPath);
+// シフト処理: 各ボクセルのY, Z座標をオフセット
 const shifted = [];
-let clipped = 0;
+let clipped = 0; // グリッド外にクリップされたボクセル数
 for (const v of vox.voxels) {
+  // シフト後の座標を計算
   const ny = v.y + DY, nz = v.z + DZ;
+  // グリッド範囲内なら結果に追加
   if (ny >= 0 && ny < vox.sy && nz >= 0 && nz < vox.sz) {
     shifted.push({ x: v.x, y: ny, z: nz, c: v.c });
-  } else { clipped++; }
+  } else { clipped++; } // 範囲外はクリップ
 }
+// シフト結果をVOXファイルとして書き出し
 writeVox(dstPath, vox.sx, vox.sy, vox.sz, shifted, vox.palette);
+// 結果を表示
 console.log(`Mask shift Z${DZ}, Y${DY}: ${vox.voxels.length} → ${shifted.length} (clipped: ${clipped})`);
 
-// Update manifest
+// パーツマニフェストのボクセル数を更新
 const manifestPath = path.join(DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === 'armor_-_mask');

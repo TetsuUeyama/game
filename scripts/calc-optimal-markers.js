@@ -1,102 +1,92 @@
 /**
- * Calculate optimal voxel marker positions that produce bone directions
- * matching the FBX bind pose as closely as possible.
+ * calc-optimal-markers.js
  *
- * Markers: Chin, Groin, LeftWrist, LeftElbow, LeftKnee
- * From these, calculateAllBones derives all 41 bone positions.
+ * FBXバインドポーズにできるだけ一致するボーン方向を生成する
+ * 最適なボクセルマーカー位置を計算するスクリプト。
  *
- * Key relationships:
- * - Hips = Groin position
- * - Neck = Chin with z-4
- * - Spine chain = lerp(Hips, Neck)
- * - LeftUpLeg = Hips + offset from LeftKnee
+ * マーカー: Chin（顎）, Groin（股間）, LeftWrist（左手首）, LeftElbow（左肘）, LeftKnee（左膝）
+ * これらからcalculateAllBonesが全41ボーン位置を導出する。
+ *
+ * 主要な関係:
+ * - Hips = Groin位置
+ * - Neck = Chin の z-4
+ * - Spine チェーン = lerp(Hips, Neck)
+ * - LeftUpLeg = Hips + LeftKneeからのオフセット
  * - LeftLeg = LeftKnee
- * - LeftFoot = LeftKnee with adjusted y, z=2
- * - LeftShoulder = Spine2 + offset from LeftElbow
+ * - LeftFoot = LeftKnee の y調整, z=2
+ * - LeftShoulder = Spine2 + LeftElbowからのオフセット
  * - LeftArm = lerp(LeftShoulder, LeftElbow, 0.3)
  * - LeftForeArm = LeftElbow
  * - LeftHand = LeftWrist
  */
 
+// FBXモーションデータからバインドポーズのワールド位置を読み込み
 const d = require('../public/models/character-motion/Hip Hop Dancing.motion.json');
 const bwp = d.bindWorldPositions;
 
-// FBX bind positions in viewer space, centered on Hips
+// FBXバインド位置（ビューア空間、Hips基準）
 // viewer = (-Three_x, Three_y, Three_z)
 const hips = bwp['Hips'];
-const SCALE = 0.125; // from vox-parser
+// ボクセルのスケール（vox-parserと同じ値）
+const SCALE = 0.125;
 
+// FBXボーン位置をボクセル空間の相対座標に変換する関数
 function fbxToVoxel(boneName, cx, cy) {
   const bp = bwp[boneName];
   if (!bp) return null;
+  // Hipsからの相対座標を計算
   const relX = bp[0] - hips[0];
   const relY = bp[1] - hips[1];
   const relZ = bp[2] - hips[2];
-  // viewer = (-relX, relY, relZ) * scale + voxelHips
-  // voxelHips viewer: ((hipsVoxX - cx)*S, hipsVoxZ*S, -(hipsVoxY-cy)*S)
-  // But we need voxel coords directly.
-  // viewer_x = (vx - cx) * S = voxelHips_viewerX + (-relX)*scaleFactor
-  // We want voxel coords that match FBX bone proportions.
-
-  // FBX body height (Hips→Head Y)
+  // FBXのボディ高さ（Hips→Head Y方向）
   const fbxBodyHeight = bwp['Head'][1] - hips[1];
-
-  // For simplicity, let's compute bone positions relative to Hips in voxel space.
-  // voxel_x maps to viewer_x = (vx - cx) * S → depth/left-right
-  // voxel_z maps to viewer_y = vz * S → up/down (height)
-  // voxel_y maps to viewer_z = -(vy - cy) * S → front/back
-
-  // FBX Three.js → viewer: (-relX, relY, relZ)
-  // viewer → voxel: vx = viewer_x/S + cx, vy = cy - viewer_z/S, vz = viewer_y/S
-
-  // So:
-  // voxel_x_rel = (-relX) * scaleFactor / S  → but scaleFactor = voxelBodyHeight / fbxBodyHeight
-  // We need to know the voxel body height to compute scaleFactor...
-  // Let's just compute relative to Hips voxel position
   return { relX, relY, relZ, fbxBodyHeight };
 }
 
-// We know the current default: centerX=35, Groin z=31, Chin z=82
-// voxelBodyHeight = (headZ - hipsZ) * SCALE = (90 - 31) * 0.125 = 7.375
-// FBX body height ≈ 2.854
-// scaleFactor = 7.375 / 2.854 ≈ 2.584
+// 既知のデフォルト値: centerX=35, Groin z=31, Chin z=82
+// ボクセルボディ高さ = (headZ - hipsZ) * SCALE = (90 - 31) * 0.125 = 7.375
+// FBX ボディ高さ ≈ 2.854
+// スケールファクター = 7.375 / 2.854 ≈ 2.584
 
+// グリッド中心座標とHipsのZ位置
 const cx = 35, cy = 13;
-const groinZ = 31; // Hips Z in voxel
+const groinZ = 31; // HipsのZボクセル座標
+// FBXのボディ高さ
 const fbxBodyHeight = bwp['Head'][1] - hips[1];
+// ボクセル空間でのHeadのZ座標（比例計算）
 const headZ_voxel = groinZ + (bwp['Head'][1] - hips[1]) / fbxBodyHeight * (82 + 8 - groinZ);
-// Actually let's just compute target voxel positions for the key markers
 
-// Approach: keep Groin at z=31, compute marker positions to match FBX proportions
-// scaleFactor relates FBX world units to voxel viewer units
-// We need to find marker positions such that calculateAllBones produces correct bone directions
-
-// Let's compute what calculateAllBones would produce and compare with FBX
-// Then adjust markers
-
+// マーカーからボーン位置を計算する関数（calculateAllBonesのロジックを再現）
 function computeBonesFromMarkers(chin, groin, lWrist, lElbow, lKnee) {
+  // 3D線形補間ヘルパー
   const lerp3 = (a, b, t) => ({
     x: a.x + (b.x - a.x) * t,
     y: a.y + (b.y - a.y) * t,
     z: a.z + (b.z - a.z) * t,
   });
 
+  // Hips = Groin位置
   const hips = { ...groin };
+  // Neck = Chin の z-4
   const neck = { x: chin.x, y: chin.y, z: chin.z - 4 };
+  // Head = Chin の z+8（最大103）
   const head = { x: chin.x, y: chin.y, z: Math.min(chin.z + 8, 103) };
+  // Spine2 = Hips-Neck間の75%位置
   const spine2 = lerp3(hips, neck, 0.75);
 
+  // LeftShoulder = Spine2 + LeftElbowからのオフセット（35%）
   const lShoulderOffset = (lElbow.x - spine2.x) * 0.35;
   const lShoulder = { x: spine2.x + lShoulderOffset, y: spine2.y, z: spine2.z + 2 };
 
+  // LeftUpLeg = Groin + LeftKneeからのXオフセット（80%）
   const lLegOffsetX = (lKnee.x - groin.x) * 0.8;
   const lUpLeg = { x: groin.x + lLegOffsetX, y: groin.y, z: groin.z };
 
   return { hips, neck, head, spine2, lShoulder, lUpLeg };
 }
 
-// FBX bone positions in voxel space (relative to hips, using scaleFactor)
-const voxelBodyHeight = (82 - 4 + 8 - groinZ); // approximate head - hips in voxel z
+// ボクセルボディ高さ（近似値）とスケールファクター
+const voxelBodyHeight = (82 - 4 + 8 - groinZ);
 const scaleFactor_approx = voxelBodyHeight * SCALE / fbxBodyHeight;
 
 console.log('FBX body height:', fbxBodyHeight.toFixed(3));
@@ -104,11 +94,11 @@ console.log('Voxel body height (z units):', voxelBodyHeight);
 console.log('Scale factor approx:', scaleFactor_approx.toFixed(3));
 console.log();
 
-// Convert FBX positions to voxel space
-// viewer = (-relX * sf, relY * sf, relZ * sf) relative to voxelHips
-// voxel_x = viewer_x / S + cx = (-relX * sf) / S + cx
-// voxel_y = cy - viewer_z / S = cy - (relZ * sf) / S
-// voxel_z = viewer_y / S = (relY * sf) / S
+// FBXボーン位置をボクセル空間に変換する関数
+// viewer = (-relX * sf, relY * sf, relZ * sf) Hips相対
+// voxel_x = viewer_x / S + cx
+// voxel_y = cy - viewer_z / S
+// voxel_z = viewer_y / S + groinZ
 function fbxBoneToVoxel(boneName, sf) {
   const bp = bwp[boneName];
   if (!bp) return null;
@@ -116,33 +106,26 @@ function fbxBoneToVoxel(boneName, sf) {
   const relY = bp[1] - hips[1];
   const relZ = bp[2] - hips[2];
   return {
-    x: Math.round((-relX * sf) / SCALE + cx),
-    y: Math.round(cy - (relZ * sf) / SCALE),
-    z: Math.round((relY * sf) / SCALE + groinZ),
+    x: Math.round((-relX * sf) / SCALE + cx),     // X: Three.jsのXを反転
+    y: Math.round(cy - (relZ * sf) / SCALE),       // Y: Three.jsのZを反転
+    z: Math.round((relY * sf) / SCALE + groinZ),   // Z: Three.jsのYを高さに
   };
 }
 
-// Compute actual scaleFactor from the voxel setup
-// voxelBodyHeight in viewer = (headZ - hipsZ) * SCALE
-// But headZ depends on Chin marker... let's iterate
-// Current: Chin z=82 → head z=90 → bodyHeight = (90-31)*0.125 = 7.375
-const actualBodyHeightViewer = (82 - 4 + 8 - groinZ) * SCALE; // (chin.z-4 is neck, but head = chin.z+8)
-// head.z = chin.z + 8, hips.z = groin.z
-// bodyHeight = (chin.z + 8 - groin.z) * SCALE
-// We want this to match FBX: bodyHeight = fbxBodyHeight * scaleFactor... circular
-
-// Let's just pick a scaleFactor that preserves the current body height
+// 実際のスケールファクターを計算
+const actualBodyHeightViewer = (82 - 4 + 8 - groinZ) * SCALE;
 const sf = actualBodyHeightViewer / fbxBodyHeight;
 console.log('Scale factor:', sf.toFixed(4));
 console.log();
 
-// Key bones in voxel space
+// 主要ボーンのリスト
 const keyBones = ['Hips', 'Spine', 'Spine2', 'Neck', 'Head',
   'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand',
   'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand',
   'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase',
   'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase'];
 
+// FBXボーンをボクセル空間に変換して表示
 console.log('=== FBX bones converted to voxel space ===');
 console.log('Bone                | Voxel (x, y, z)');
 console.log('-'.repeat(50));
@@ -151,9 +134,9 @@ for (const name of keyBones) {
   if (v) console.log(name.padEnd(20) + '| x=' + String(v.x).padStart(3) + ' y=' + String(v.y).padStart(3) + ' z=' + String(v.z).padStart(3));
 }
 
-// Now find optimal markers
-// Markers → bones mapping:
-// Groin → Hips (directly)
+// 最適マーカー位置を計算
+// マーカー→ボーンのマッピング:
+// Groin → Hips（直接）
 // Chin.z → Neck.z + 4, Head.z = Chin.z + 8
 // LeftWrist → LeftHand
 // LeftElbow → LeftForeArm
@@ -169,7 +152,7 @@ console.log();
 console.log('=== OPTIMAL MARKER POSITIONS ===');
 console.log('(Derived from FBX bind pose)');
 console.log();
-// Chin: neck.z + 4 = chin.z, so chin.z = fbxNeck.z + 4
+// Chin: neck.z + 4 = chin.z なので chin.z = fbxNeck.z + 4
 const optChin = { x: cx, y: fbxNeck.y, z: fbxNeck.z + 4 };
 const optGroin = { x: cx, y: fbxHips.y, z: fbxHips.z };
 console.log('Chin:      ', JSON.stringify(optChin));
@@ -178,11 +161,12 @@ console.log('LeftWrist: ', JSON.stringify(fbxLeftHand));
 console.log('LeftElbow: ', JSON.stringify(fbxLeftForeArm));
 console.log('LeftKnee:  ', JSON.stringify(fbxLeftLeg));
 
-// Verify: compute bones from these markers and check directions
+// 検証: マーカーからボーンを計算してFBXと方向を比較
 console.log();
 console.log('=== VERIFICATION ===');
 const bones = computeBonesFromMarkers(optChin, optGroin, fbxLeftHand, fbxLeftForeArm, fbxLeftLeg);
 const fbxUpLeg = fbxBoneToVoxel('LeftUpLeg', sf);
 const fbxShoulder = fbxBoneToVoxel('LeftShoulder', sf);
+// マーカーから導出したボーン位置とFBXの位置を比較
 console.log('LeftUpLeg from markers:', JSON.stringify(bones.lUpLeg), '  FBX:', JSON.stringify(fbxUpLeg));
 console.log('LeftShoulder from markers:', JSON.stringify(bones.lShoulder), '  FBX:', JSON.stringify(fbxShoulder));
