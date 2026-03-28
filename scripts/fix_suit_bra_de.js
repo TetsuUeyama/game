@@ -1,12 +1,18 @@
 /**
- * Fix DarkElfBlader suit_bra: where body protrusion overlaps suit_bra,
- * push suit_bra voxels forward (Y-1) to prevent see-through.
+ * fix_suit_bra_de.js
+ *
+ * DarkElfBladerのsuit_braを修正するスクリプト:
+ * ボディが突き出してsuit_braと重なる箇所で、suit_braボクセルを
+ * 前方（Y-1）に押し出して透け防止する。
  *
  * Usage: node scripts/fix_suit_bra_de.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// VOXファイルを読み込んでパースする関数
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -30,6 +36,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// ボクセルデータをVOXファイルとして書き出す関数
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -57,44 +64,47 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// パスの設定
 const BASE = path.join(__dirname, '..');
 const DIR = path.join(BASE, 'public/box4');
 const PREFIX = 'darkelfblader_arp';
 
-// Read body and suit_bra (already dilated+shifted)
+// ボディとsuit_braのVOXファイルを読み込み（suit_braは既に膨張・シフト済み）
 const body = readVox(path.join(DIR, `${PREFIX}_body.vox`));
 const bra = readVox(path.join(DIR, `${PREFIX}_armor_-_suit_bra.vox`));
 
 console.log(`Body: ${body.voxels.length} voxels`);
 console.log(`Suit_bra: ${bra.voxels.length} voxels`);
 
-// Build body set
+// ボディボクセルの座標セットを構築（重複チェック用）
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
-// For each bra voxel that overlaps with body, push it forward (Y-1)
+// 修正処理: ボディと重なるbraボクセルを前方（Y-1）に押し出す
 const result = [];
-const placed = new Set();
-let pushed = 0;
+const placed = new Set(); // 配置済み座標の追跡（重複防止）
+let pushed = 0;           // 押し出されたボクセル数
 
 for (const v of bra.voxels) {
   const key = `${v.x},${v.y},${v.z}`;
   if (bodySet.has(key)) {
-    // Body protrusion overlaps - push bra voxel forward (Y-1)
+    // ボディの突起と重なっている → braボクセルを前方（Y-1）に押し出す
     let ny = v.y - 1;
-    // Keep pushing forward until no overlap (max 3 steps)
+    // 重なりが解消されるまで最大3ステップ前方に押し出す
     for (let step = 0; step < 3; step++) {
-      if (ny < 0) break;
+      if (ny < 0) break; // グリッド外なら中止
       const nkey = `${v.x},${ny},${v.z}`;
+      // ボディとも配置済みとも重ならない位置が見つかれば配置
       if (!bodySet.has(nkey) && !placed.has(nkey)) {
         placed.add(nkey);
         result.push({ x: v.x, y: ny, z: v.z, c: v.c });
         pushed++;
         break;
       }
-      ny--;
+      ny--; // さらに前方へ
     }
   } else {
+    // 重なっていない → そのまま配置
     if (!placed.has(key)) {
       placed.add(key);
       result.push(v);
@@ -102,13 +112,15 @@ for (const v of bra.voxels) {
   }
 }
 
+// 結果を表示
 console.log(`Pushed forward: ${pushed} voxels`);
 console.log(`Result: ${result.length} voxels`);
 
+// 修正結果をVOXファイルとして書き出し
 const outPath = path.join(DIR, `${PREFIX}_armor_-_suit_bra.vox`);
 writeVox(outPath, bra.sx, bra.sy, bra.sz, result, bra.palette);
 
-// Update manifest
+// パーツマニフェストのボクセル数を更新
 const manifestPath = path.join(DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === 'armor_-_suit_bra');

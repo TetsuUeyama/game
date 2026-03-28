@@ -1,16 +1,21 @@
 /**
- * Fix DarkElfBlader hair shape:
- * 1. Crown area (z>=80): expand X by 1.5x from center (match chibi head scale)
- * 2. Hanging strands (z<=65): erode interior to thin them
- * 3. Darken color (65% brightness, preserving variation)
- * 4. Shift Y+1 (backward)
+ * fix_hair_shape_de.js
  *
- * Reads from originals/, writes to active file.
+ * DarkElfBladerの髪の形状を修正するスクリプト:
+ * 1. 頭頂部（z>=80）: X方向を1.5倍拡大（チビ頭のスケールに合わせる）
+ * 2. 垂れ下がり（z<=65）: 内部をエロージョンして細くする
+ * 3. 色を暗くする（65%の明るさ、バリエーション維持）
+ * 4. Y+1シフト（後方）
+ *
+ * originals/から読み込み、アクティブファイルに書き出す。
  * Usage: node scripts/fix_hair_shape_de.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// VOXファイルパーサー
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -34,6 +39,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXファイルライター
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -61,31 +67,35 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// パスの設定
 const BASE = path.join(__dirname, '..');
 const DIR = path.join(BASE, 'public/box4');
 const PREFIX = 'darkelfblader_arp';
 
+// 元の髪VOXを読み込み
 const hair = readVox(path.join(DIR, 'originals', `${PREFIX}_hair.vox`));
 const SX = hair.sx, SY = hair.sy, SZ = hair.sz;
 
 console.log(`Hair original: ${hair.voxels.length} voxels, grid: ${SX}x${SY}x${SZ}`);
 
-// --- Build hair data per Z ---
+// --- Z値ごとの髪データを構築 ---
 const hairByZ = {};
 for (const v of hair.voxels) {
   if (!hairByZ[v.z]) hairByZ[v.z] = [];
   hairByZ[v.z].push(v);
 }
 
-// --- Process voxels ---
-const CROWN_Z_START = 80;    // Crown starts here
-const CROWN_TRANSITION = 78; // Gradual transition 78-80
-const HANGING_Z_END = 65;    // Hanging strands below this
-const CROWN_SCALE_X = 1.5;   // Match chibi head enlargement
+// --- 処理パラメータ ---
+const CROWN_Z_START = 80;       // 頭頂部開始Z
+const CROWN_TRANSITION = 78;    // 遷移ゾーン（78-80で徐々にスケール）
+const HANGING_Z_END = 65;       // 垂れ下がりの上限Z
+const CROWN_SCALE_X = 1.5;      // 頭頂部のX拡大率（チビ頭と一致）
 
+// 結果ボクセルの配列と重複チェック用セット
 const resultVoxels = [];
 const placed = new Set();
 
+// 範囲チェック付きでボクセルを追加するヘルパー関数
 function addVoxel(x, y, z, c) {
   x = Math.round(x);
   if (x < 0 || x >= SX || y < 0 || y >= SY || z < 0 || z >= SZ) return;
@@ -95,36 +105,39 @@ function addVoxel(x, y, z, c) {
   resultVoxels.push({ x, y, z, c });
 }
 
-let crownExpanded = 0;
-let hangingEroded = 0;
+let crownExpanded = 0;    // 頭頂部で処理されたボクセル数
+let hangingEroded = 0;    // 垂れ下がり部で除去されたボクセル数
 
+// 各Z断面を処理
 for (let z = 0; z < SZ; z++) {
   const slice = hairByZ[z];
   if (!slice || slice.length === 0) continue;
 
   if (z >= CROWN_TRANSITION) {
-    // --- Crown area: scale X outward from slice center ---
-    // Gradual scale: transition from 1.0 at z=78 to full scale at z=80+
+    // --- 頭頂部: スライス中心からX方向に外側にスケーリング ---
+    // 遷移ゾーンでは1.0からCROWN_SCALE_Xに徐々にスケール
     let scale;
     if (z >= CROWN_Z_START) {
-      scale = CROWN_SCALE_X;
+      scale = CROWN_SCALE_X;  // フルスケール
     } else {
-      // Linear interpolation in transition zone
+      // 遷移ゾーンでの線形補間
       const t = (z - CROWN_TRANSITION) / (CROWN_Z_START - CROWN_TRANSITION);
       scale = 1.0 + t * (CROWN_SCALE_X - 1.0);
     }
 
+    // このZ断面の髪のX範囲と中心を計算
     const hairXmin = Math.min(...slice.map(v => v.x));
     const hairXmax = Math.max(...slice.map(v => v.x));
     const hairCx = (hairXmin + hairXmax) / 2;
 
+    // 各ボクセルをスケーリングして配置
     for (const v of slice) {
-      const relX = v.x - hairCx;
-      const newX = Math.round(hairCx + relX * scale);
+      const relX = v.x - hairCx;  // 中心からの相対X
+      const newX = Math.round(hairCx + relX * scale);  // スケール適用
       addVoxel(newX, v.y, v.z, v.c);
       crownExpanded++;
 
-      // Fill gaps: add intermediate positions to prevent holes
+      // ギャップ防止: 中間位置にも充填
       if (scale > 1.1) {
         for (let frac = -0.4; frac <= 0.4; frac += 0.2) {
           const fillX = Math.round(hairCx + (relX + frac) * scale);
@@ -133,7 +146,7 @@ for (let z = 0; z < SZ; z++) {
       }
     }
 
-    // Fill horizontal gaps per Y row
+    // Y行ごとの水平ギャップを充填
     const rowsByY = {};
     for (const v of resultVoxels) {
       if (v.z !== z) continue;
@@ -144,6 +157,7 @@ for (let z = 0; z < SZ; z++) {
       const xs = [...new Set(rowsByY[y])].sort((a, b) => a - b);
       for (let i = 0; i < xs.length - 1; i++) {
         const gap = xs[i + 1] - xs[i];
+        // 1-3ボクセルのギャップを充填
         if (gap > 1 && gap <= 3) {
           const nearestV = slice.reduce((best, v2) => {
             const d = Math.abs(v2.y - +y) + Math.abs(v2.x - (xs[i] + xs[i+1]) / 2);
@@ -157,24 +171,24 @@ for (let z = 0; z < SZ; z++) {
     }
 
   } else if (z <= HANGING_Z_END) {
-    // --- Hanging strands: erode interior to thin ---
+    // --- 垂れ下がり部: 内部をエロージョンして細くする ---
     const sliceSet = new Set();
     for (const v of slice) sliceSet.add(`${v.x},${v.y}`);
 
     for (const v of slice) {
-      // Count XY neighbors
+      // XY方向の隣接数をカウント
       let neighbors = 0;
       for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         if (sliceSet.has(`${v.x+dx},${v.y+dy}`)) neighbors++;
       }
 
-      // Remove fully interior voxels (4 neighbors = fully surrounded in XY)
+      // 完全に囲まれたボクセル（4隣接）を除去
       if (neighbors >= 4) {
         hangingEroded++;
         continue;
       }
 
-      // For thick X spans, remove inner voxels
+      // 太いX範囲の内部ボクセルを除去
       let xmin = v.x, xmax = v.x;
       for (let tx = v.x - 1; sliceSet.has(`${tx},${v.y}`); tx--) xmin = tx;
       for (let tx = v.x + 1; sliceSet.has(`${tx},${v.y}`); tx++) xmax = tx;
@@ -182,8 +196,8 @@ for (let z = 0; z < SZ; z++) {
 
       if (xWidth >= 5) {
         const relX = v.x - xmin;
+        // 太い房の深い内部（端2ボクセルを除く）を除去
         if (relX >= 2 && relX < xWidth - 2) {
-          // Deep interior of thick strand
           hangingEroded++;
           continue;
         }
@@ -192,42 +206,39 @@ for (let z = 0; z < SZ; z++) {
       addVoxel(v.x, v.y, v.z, v.c);
     }
   } else {
-    // --- Mid area (z=66-77): thin side strands ---
+    // --- 中間エリア（z=66-77）: 側面の房を細くする ---
     const sliceXs = slice.map(v => v.x);
     const sliceXmin = Math.min(...sliceXs);
     const sliceXmax = Math.max(...sliceXs);
     const sliceCx = Math.round((sliceXmin + sliceXmax) / 2);
-    // Side threshold: beyond 3 voxels from center
-    const SIDE_MARGIN = 3;
+    const SIDE_MARGIN = 3;  // 中心から3ボクセル以上離れた領域
 
     for (const v of slice) {
       const isLeftSide = v.x < sliceCx - SIDE_MARGIN;
       const isRightSide = v.x > sliceCx + SIDE_MARGIN;
 
       if (isLeftSide || isRightSide) {
-        // Thin side strands: keep only outer 2 voxels in X from edge
+        // 側面の房: 端から2ボクセルのみ保持、内部を除去
         if (isLeftSide) {
-          // Find leftmost X at this Y,Z
           let edgeX = v.x;
           for (const sv of slice) {
             if (sv.y === v.y && sv.x < edgeX) edgeX = sv.x;
           }
           if (v.x - edgeX >= 2) {
-            // Interior of left strand - also thin Y
-            // Build Y extent at this X,Z
+            // Y方向も太い場合はY内部も除去
             const sameXZ = slice.filter(sv => sv.x === v.x && sv.z === v.z);
             const yMin = Math.min(...sameXZ.map(sv => sv.y));
             const yMax = Math.max(...sameXZ.map(sv => sv.y));
             const yW = yMax - yMin + 1;
             if (yW >= 4 && v.y > yMin + 1 && v.y < yMax - 1) {
               hangingEroded++;
-              continue; // Remove Y-interior of thick side strand
+              continue;
             }
             hangingEroded++;
-            continue; // Remove X-interior
+            continue;
           }
         } else {
-          // Right side
+          // 右側も同じロジック
           let edgeX = v.x;
           for (const sv of slice) {
             if (sv.y === v.y && sv.x > edgeX) edgeX = sv.x;
@@ -256,18 +267,16 @@ console.log(`Crown expanded: ${crownExpanded} voxels processed`);
 console.log(`Hanging eroded: ${hangingEroded} voxels removed`);
 console.log(`After crown+erosion: ${resultVoxels.length} voxels`);
 
-// --- Step: Generate bangs (前髪) ---
-// Bangs hang down from the hairline in front of the forehead.
-// At the hairline (z=90-95), extend hair forward (lower Y).
-// Bangs droop: at lower Z, they extend further forward.
-const BANGS_Z_TOP = 95;      // Hairline top
-const BANGS_Z_BOTTOM = 82;   // How far bangs droop down
-const BANGS_X_MIN = 63;      // Bangs X range (forehead width, after 1.5x expansion)
+// --- 前髪（バング）を生成 ---
+// ヘアラインから前方（低いY方向）に垂れ下がる前髪を追加
+const BANGS_Z_TOP = 95;       // ヘアライン上端Z
+const BANGS_Z_BOTTOM = 82;    // 前髪の垂れ下がり下端Z
+const BANGS_X_MIN = 63;       // 前髪のX範囲（おでこの幅、1.5倍拡大後）
 const BANGS_X_MAX = 82;
-const BANGS_Y_EXTEND = 7;    // How many voxels forward of current front edge
+const BANGS_Y_EXTEND = 7;     // 現在の前端からの前方延長ボクセル数
 
-// Find current front edge per (x, z)
-const frontEdge = {}; // key: "x,z" → { yMin, color }
+// 各(x,z)での現在の前面エッジ（最小Y）を検出
+const frontEdge = {};
 for (const v of resultVoxels) {
   if (v.z < BANGS_Z_BOTTOM || v.z > BANGS_Z_TOP) continue;
   if (v.x < BANGS_X_MIN || v.x > BANGS_X_MAX) continue;
@@ -277,11 +286,11 @@ for (const v of resultVoxels) {
   }
 }
 
+// 前髪ボクセルを追加
 let bangsAdded = 0;
 for (let z = BANGS_Z_BOTTOM; z <= BANGS_Z_TOP; z++) {
-  // Bangs extend more at mid-forehead level, less at top/bottom
   const zRatio = (z - BANGS_Z_BOTTOM) / (BANGS_Z_TOP - BANGS_Z_BOTTOM);
-  // Bell curve: most extension at z ~ 87-90 (zRatio ~ 0.4-0.6)
+  // ベル曲線: z≈87-90（zRatio≈0.4-0.6）で最も長い
   const extend = Math.round(BANGS_Y_EXTEND * (1.0 - Math.abs(zRatio - 0.5) * 1.5));
   if (extend <= 0) continue;
 
@@ -290,12 +299,13 @@ for (let z = BANGS_Z_BOTTOM; z <= BANGS_Z_TOP; z++) {
     const edge = frontEdge[key];
     if (!edge) continue;
 
-    // Taper bangs at left/right edges
+    // 左右端でのテーパー（先細り）
     const xCenter = (BANGS_X_MIN + BANGS_X_MAX) / 2;
     const xDist = Math.abs(x - xCenter) / ((BANGS_X_MAX - BANGS_X_MIN) / 2);
     const xTaper = Math.max(0, Math.round(extend * (1.0 - xDist * 0.6)));
     if (xTaper <= 0) continue;
 
+    // 前方にボクセルを追加
     for (let dy = 1; dy <= xTaper; dy++) {
       addVoxel(x, edge.yMin - dy, z, edge.c);
       bangsAdded++;
@@ -305,8 +315,7 @@ for (let z = BANGS_Z_BOTTOM; z <= BANGS_Z_TOP; z++) {
 
 console.log(`Bangs added: ${bangsAdded} voxels`);
 
-// --- Step: Dilate entire hair by 1 voxel in Y direction (front and back) ---
-// This expands the whole hair 2 voxels wider in Y (1 front + 1 back)
+// --- 髪全体をY方向に1ボクセル膨張（前後に厚み追加） ---
 const beforeDilate = resultVoxels.length;
 const dilateSource = [...resultVoxels];
 for (const v of dilateSource) {
@@ -317,7 +326,7 @@ for (const v of dilateSource) {
 console.log(`Y-dilate: ${beforeDilate} → ${resultVoxels.length} (+${resultVoxels.length - beforeDilate})`);
 console.log(`Result before shift: ${resultVoxels.length} voxels`);
 
-// --- Darken palette ---
+// --- パレットを暗くする（65%の明るさ） ---
 const usedIndices = new Set();
 for (const v of resultVoxels) usedIndices.add(v.c);
 if (hair.palette) {
@@ -333,7 +342,7 @@ if (hair.palette) {
   console.log(`Darkened ${usedIndices.size} palette entries (factor=${factor})`);
 }
 
-// --- Shift Y+1 (backward) ---
+// --- Y+1シフト（後方へ） ---
 const DY = 1;
 const shifted = [];
 let clipped = 0;
@@ -345,12 +354,12 @@ for (const v of resultVoxels) {
 }
 console.log(`After Y+${DY} shift: ${shifted.length} voxels (clipped: ${clipped})`);
 
-// --- Write ---
+// --- 結果を書き出し ---
 const dstPath = path.join(DIR, `${PREFIX}_hair.vox`);
 writeVox(dstPath, SX, SY, SZ, shifted, hair.palette);
 console.log(`Written: ${dstPath}`);
 
-// Verify dimensions
+// 検証: Z断面ごとの幅を表示
 const byZ = {};
 for (const v of shifted) {
   if (!byZ[v.z]) byZ[v.z] = { xmin: v.x, xmax: v.x, n: 0 };
@@ -358,12 +367,14 @@ for (const v of shifted) {
   byZ[v.z].xmax = Math.max(byZ[v.z].xmax, v.x);
   byZ[v.z].n++;
 }
+// 頭頂部の幅を表示
 console.log('\nCrown width after fix:');
 for (let z = 78; z <= 100; z += 2) {
   const d = byZ[z];
   if (!d) continue;
   console.log(`  z=${z}: w=${d.xmax-d.xmin+1} [${d.xmin},${d.xmax}] n=${d.n}`);
 }
+// 垂れ下がり部のボクセル数を表示
 console.log('Hanging strand count:');
 for (let z = 44; z <= 65; z += 3) {
   const d = byZ[z];
@@ -371,10 +382,9 @@ for (let z = 44; z <= 65; z += 3) {
   console.log(`  z=${z}: w=${d.xmax-d.xmin+1} n=${d.n}`);
 }
 
-// Update manifest
+// パーツマニフェストを更新
 const manifestPath = path.join(DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === 'hair');
 if (entry) entry.voxels = shifted.length;
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
-console.log('\nDone!');

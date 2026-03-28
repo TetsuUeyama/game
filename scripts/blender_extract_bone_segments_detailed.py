@@ -1,32 +1,41 @@
 """
-Blender Python: Extract bone segments with DETAILED finger/toe bones (not merged into hand/foot).
+Blender Python: 詳細な指/足指ボーン付きでボーンセグメントを抽出するスクリプト（hand/footに統合しない）。
 
 Usage:
   blender --background --python blender_extract_bone_segments_detailed.py -- <input.blend> <output_dir> [voxel_size]
 
-This is a variant of blender_extract_bone_segments.py that keeps individual finger
-and toe bones as separate segments instead of merging them into hand/foot.
+blender_extract_bone_segments.pyの変種で、個別の指・足指ボーンを
+hand/footに統合せず独立したセグメントとして保持する。
 """
 
+# Blenderメインモジュール
 import bpy
+# BMesh操作モジュール
 import bmesh
+# システムモジュール
 import sys
+# OS操作モジュール
 import os
+# バイナリパックモジュール
 import struct
+# 数学モジュール
 import math
+# JSON操作モジュール
 import json
+# mathutilsからVector型
 from mathutils import Vector
+# BVHツリー
 from mathutils.bvhtree import BVHTree
 
 # ========================================================================
-# Args
+# 引数パース
 # ========================================================================
 argv = sys.argv
 idx = argv.index("--") if "--" in argv else len(argv)
 args = argv[idx + 1:]
-INPUT_PATH = args[0] if len(args) > 0 else ""
-OUT_DIR = args[1] if len(args) > 1 else ""
-VOXEL_SIZE = float(args[2]) if len(args) > 2 else 0.007
+INPUT_PATH = args[0] if len(args) > 0 else ""       # 入力モデルファイル
+OUT_DIR = args[1] if len(args) > 1 else ""            # 出力ディレクトリ
+VOXEL_SIZE = float(args[2]) if len(args) > 2 else 0.007  # ボクセルサイズ
 
 if not INPUT_PATH or not OUT_DIR:
     print("Usage: blender --background --python blender_extract_bone_segments_detailed.py -- <input.blend> <output_dir> [voxel_size]")
@@ -38,7 +47,7 @@ print(f"  Output: {OUT_DIR}")
 print(f"  Voxel size: {VOXEL_SIZE}")
 
 # ========================================================================
-# Load model
+# モデル読み込み
 # ========================================================================
 ext = os.path.splitext(INPUT_PATH)[1].lower()
 if ext == '.fbx':
@@ -52,23 +61,25 @@ elif ext in ('.glb', '.gltf'):
 else:
     bpy.ops.wm.open_mainfile(filepath=INPUT_PATH)
 
+# 出力ディレクトリを作成
 os.makedirs(OUT_DIR, exist_ok=True)
 seg_dir = os.path.join(OUT_DIR, "segments")
 os.makedirs(seg_dir, exist_ok=True)
 os.makedirs(os.path.join(OUT_DIR, "body"), exist_ok=True)
 
 # ========================================================================
-# Find armature and body mesh
+# アーマチュアとボディメッシュを検索
 # ========================================================================
 armature = None
 body_obj = None
 
+# ボディメッシュから除外するキーワード
 BODY_EXCLUDE_KEYWORDS = ['hair', 'eye', 'collision', 'modular', 'penis', 'pubes',
                          'eyelash', 'mouth', 'armor', 'weapon', 'extras', 'beard',
                          'helmet', 'cape', 'cs_']
 for obj in bpy.context.scene.objects:
     if obj.type == 'ARMATURE':
-        # Prefer QueenMarika rig
+        # QueenMarikaリグを優先
         if 'queenmarika' in obj.name.lower().replace('_', '').replace(' ', ''):
             armature = obj
         elif armature is None and len(obj.data.bones) > 100:
@@ -79,6 +90,7 @@ for obj in bpy.context.scene.objects:
             if body_obj is None or len(obj.data.vertices) > len(body_obj.data.vertices):
                 body_obj = obj
 
+# フォールバック: 頂点グループが多いメッシュ
 if not body_obj:
     meshes = [o for o in bpy.context.scene.objects
               if o.type == 'MESH' and o.visible_get() and len(o.vertex_groups) > 10
@@ -89,6 +101,7 @@ if not body_obj:
     print("ERROR: No body mesh found!")
     sys.exit(1)
 
+# アーマチュアを探す
 if body_obj.parent and body_obj.parent.type == 'ARMATURE':
     armature = body_obj.parent
 else:
@@ -104,6 +117,7 @@ if not armature:
 print(f"  Armature: {armature.name}")
 print(f"  Body mesh: {body_obj.name} ({len(body_obj.data.vertices)} verts)")
 
+# 可視性確保とMASKモディファイア無効化
 if not body_obj.visible_get():
     body_obj.hide_set(False)
     body_obj.hide_viewport = False
@@ -114,26 +128,25 @@ for mod in body_obj.modifiers:
         print(f"  Disabled MASK: {mod.name}")
 
 # ========================================================================
-# Extract bone hierarchy and rest positions
+# ボーン階層とレストポジションを抽出
 # ========================================================================
-bone_hierarchy = {}
-bone_rest_positions = {}
+bone_hierarchy = {}      # ボーン名 → {parent, children}
+bone_rest_positions = {}  # ボーン名 → {head, tail, length}
 
-# Use EVALUATED pose bone positions (matching the evaluated mesh)
-# so joint points align with the voxelized mesh geometry.
+# 評価済みポーズボーン位置を使用（評価済みメッシュとの位置合わせ）
 eval_depsgraph = bpy.context.evaluated_depsgraph_get()
 bpy.context.scene.frame_set(0)
 eval_depsgraph.update()
 armature_eval = armature.evaluated_get(eval_depsgraph)
 
 for bone in armature.data.bones:
-    # Try evaluated pose bone first (matches mesh at frame 0)
+    # 評価済みポーズボーンを優先（フレーム0でのメッシュと一致）
     pb = armature_eval.pose.bones.get(bone.name)
     if pb:
         head_world = armature_eval.matrix_world @ pb.head
         tail_world = armature_eval.matrix_world @ pb.tail
     else:
-        # Fallback to rest pose
+        # フォールバック: レストポーズ
         head_world = armature.matrix_world @ bone.head_local
         tail_world = armature.matrix_world @ bone.tail_local
     bone_rest_positions[bone.name] = {
@@ -149,7 +162,7 @@ for bone in armature.data.bones:
 print(f"  Bones: {len(bone_rest_positions)}")
 
 # ========================================================================
-# Build evaluated mesh
+# 評価済みメッシュを構築
 # ========================================================================
 depsgraph = bpy.context.evaluated_depsgraph_get()
 body_eval = body_obj.evaluated_get(depsgraph)
@@ -157,18 +170,19 @@ mesh_eval = body_eval.to_mesh()
 
 bm = bmesh.new()
 bm.from_mesh(mesh_eval)
-bm.transform(body_obj.matrix_world)
-bmesh.ops.triangulate(bm, faces=bm.faces)
+bm.transform(body_obj.matrix_world)  # ワールド空間に変換
+bmesh.ops.triangulate(bm, faces=bm.faces)  # 三角形化
 bm.faces.ensure_lookup_table()
 bm.verts.ensure_lookup_table()
-bvh = BVHTree.FromBMesh(bm)
+bvh = BVHTree.FromBMesh(bm)  # BVHツリー構築
 
 # ========================================================================
-# Vertex bone weight map
+# 頂点のボーンウェイトマッピング
 # ========================================================================
 vertex_groups = body_obj.vertex_groups
 vg_name_map = {vg.index: vg.name for vg in vertex_groups}
 
+# 除外するボーンプレフィックス
 EXCLUDE_PREFIXES = ('hair_', 'Gloves_', 'Leggings_', 'Breasts_Simpl', 'Butts_Simpl',
                     'tie.', 'hologram', 'hipplate', 'spline_', 'dress_', 'belt_',
                     'braid_', 'cc_Cape_', 'cc_skirt_', 'cc_Armor_', 'SwordHolder',
@@ -179,31 +193,25 @@ for bone in armature.data.bones:
         valid_deform_bones.add(bone.name)
 print(f"  Valid deform bones: {len(valid_deform_bones)}")
 
+# 顔ボーンのプレフィックス（headに統合）
 FACE_MERGE_PREFIXES = ('c_lips_', 'c_teeth_', 'c_nose_', 'c_chin_', 'c_cheek_',
                        'c_eyebrow_', 'c_eyelid_', 'c_eye_ref_track', 'c_eye_offset',
                        'tong_')
 
+# ARPボーン名正規化マップ
 ARP_NORMALIZE = {
-    'thigh_stretch': 'c_thigh_stretch',
-    'thigh_twist': 'c_thigh_twist',
-    'thigh_twist_2': 'c_thigh_twist_2',
-    'leg_stretch': 'c_leg_stretch',
-    'leg_twist': 'c_leg_twist',
-    'leg_twist_2': 'c_leg_twist_2',
-    'arm_stretch': 'c_arm_stretch',
-    'arm_twist_2': 'c_arm_twist_2',
-    'c_arm_twist_offset': 'c_arm_twist',
-    'forearm_stretch': 'c_forearm_stretch',
-    'forearm_twist': 'c_forearm_twist',
-    'forearm_twist_2': 'c_forearm_twist_2',
-    'spine_01': 'c_spine_01_bend',
-    'spine_02': 'c_spine_02_bend',
-    'spine_03': 'c_spine_03_bend',
-    'root': 'c_root_bend',
-    'cc_balls': 'c_root_bend',
+    'thigh_stretch': 'c_thigh_stretch', 'thigh_twist': 'c_thigh_twist',
+    'thigh_twist_2': 'c_thigh_twist_2', 'leg_stretch': 'c_leg_stretch',
+    'leg_twist': 'c_leg_twist', 'leg_twist_2': 'c_leg_twist_2',
+    'arm_stretch': 'c_arm_stretch', 'arm_twist_2': 'c_arm_twist_2',
+    'c_arm_twist_offset': 'c_arm_twist', 'forearm_stretch': 'c_forearm_stretch',
+    'forearm_twist': 'c_forearm_twist', 'forearm_twist_2': 'c_forearm_twist_2',
+    'spine_01': 'c_spine_01_bend', 'spine_02': 'c_spine_02_bend',
+    'spine_03': 'c_spine_03_bend', 'root': 'c_root_bend', 'cc_balls': 'c_root_bend',
 }
 
 def normalize_arp_name(name):
+    """ARPボーン名を正規化。"""
     suffix = ''
     for s in ['.l', '.r', '.x']:
         if name.endswith(s):
@@ -217,29 +225,23 @@ def normalize_arp_name(name):
     return name
 
 def resolve_bone_name(name):
-    """Map bones - keep fingers/toes as individual segments."""
+    """ボーン名を解決 — 指/足指は個別セグメントとして保持。"""
     name = normalize_arp_name(name)
-
-    # Face -> head
+    # 顔 → head
     if any(name.startswith(p) for p in FACE_MERGE_PREFIXES):
         return 'head.x'
-    # Keep individual toe bones (don't merge to foot)
-    # c_toes_thumb1_base.l -> c_toes_thumb1_base.l (keep as-is)
-    # But merge very fine sub-bones: toes_thumb1_def -> c_toes_thumb1_base
+    # 足指の_defボーンは_baseに統合
     if name.startswith('toes_') and '_def' in name:
-        # toes_thumb1_def.l -> c_toes_thumb1_base.l
         base = name.replace('toes_', 'c_toes_').replace('_def', '_base')
-        # toes_index2_def.l -> keep parent bone
         return base if base in valid_deform_bones else name
-    # Keep finger bones as individual segments
-    # (Don't merge to hand.l/hand.r)
-    # Map vagina/genital to lower torso
+    # 指ボーンは個別セグメントとして保持（handに統合しない）
+    # 性器/臀部 → ルート
     if name.startswith('vagina') or name == 'genital':
         return 'c_root_bend.x'
     if name.startswith('butt'):
         return 'c_root_bend.x'
+    # 乳首 → 胸
     if name.startswith('nipple'):
-        # QM uses underscore: breast_l
         if '_l' in name or '.l' in name: return 'breast_l'
         if '_r' in name or '.r' in name: return 'breast_r'
         return 'breast_l'
@@ -249,6 +251,7 @@ def resolve_bone_name(name):
         return 'head.x'
     return name
 
+# 各頂点に最も影響力の大きいボーンを割り当て
 vertex_bone_map = {}
 for vert in mesh_eval.vertices:
     best_bone = None
@@ -266,7 +269,7 @@ resolved_names = sorted(set(vertex_bone_map.values()))
 print(f"  Resolved segment names ({len(resolved_names)}): {resolved_names}")
 
 # ========================================================================
-# Face-to-bone mapping
+# 面→ボーンのマッピング（多数決）
 # ========================================================================
 face_bone_map = {}
 for face in bm.faces:
@@ -279,16 +282,15 @@ for face in bm.faces:
         face_bone_map[face.index] = max(bone_votes, key=bone_votes.get)
 
 # ========================================================================
-# Texture sampling (with barycentric interpolation)
+# テクスチャサンプリング（重心座標補間付き）
 # ========================================================================
 texture_cache = {}
 
 def cache_texture(image):
-    if image.name in texture_cache:
-        return
+    """テクスチャをRGBバイト配列としてキャッシュ。"""
+    if image.name in texture_cache: return
     w, h = image.size
-    if w == 0 or h == 0:
-        return
+    if w == 0 or h == 0: return
     raw = image.pixels[:]
     n = w * h
     rgb = bytearray(n * 3)
@@ -300,43 +302,33 @@ def cache_texture(image):
     texture_cache[image.name] = (w, h, bytes(rgb))
 
 def sample_texture(img_name, u, v):
-    if img_name not in texture_cache:
-        return None
+    """UV座標でテクスチャの色をサンプリング。"""
+    if img_name not in texture_cache: return None
     w, h, pix = texture_cache[img_name]
     px = int(u * w) % w
     py = int(v * h) % h
     pi = (py * w + px) * 3
-    if pi + 2 < len(pix):
-        return (pix[pi], pix[pi+1], pix[pi+2])
+    if pi + 2 < len(pix): return (pix[pi], pix[pi+1], pix[pi+2])
     return None
 
 def find_base_texture(mat):
-    if not mat or not hasattr(mat, 'node_tree') or not mat.node_tree:
-        return None
-    best = None
-    best_score = -999
+    """マテリアルからベースカラーテクスチャを検索。"""
+    if not mat or not hasattr(mat, 'node_tree') or not mat.node_tree: return None
+    best, best_score = None, -999
     for node in mat.node_tree.nodes:
         if node.type == 'TEX_IMAGE' and node.image:
             n = node.image.name.lower()
-            score = 0
-            if 'basecolor' in n or 'base_color' in n or 'diffuse' in n:
-                score = 10
-            elif 'albedo' in n:
-                score = 8
-            elif any(k in n for k in ['normal','roughness','metallic','specular','height','opacity','ao','emissive']):
-                score = -10
-            if score > best_score:
-                best_score = score
-                best = node.image
+            score = 10 if ('basecolor' in n or 'base_color' in n or 'diffuse' in n) else (8 if 'albedo' in n else (-10 if any(k in n for k in ['normal','roughness','metallic','specular','height','opacity','ao','emissive']) else 0))
+            if score > best_score: best_score, best = score, node.image
     return best
 
+# 全マテリアルのテクスチャをキャッシュ
 for mat in bpy.data.materials:
     tex = find_base_texture(mat)
-    if tex:
-        cache_texture(tex)
+    if tex: cache_texture(tex)
 
 # ========================================================================
-# Bounding box and grid
+# バウンディングボックスとグリッド
 # ========================================================================
 world_verts = [body_obj.matrix_world @ v.co for v in mesh_eval.vertices]
 bb_min = Vector((min(v.x for v in world_verts), min(v.y for v in world_verts), min(v.z for v in world_verts)))
@@ -353,32 +345,29 @@ gz = int(math.ceil((bb_max.z - bb_min.z) / VOXEL_SIZE)) + 1
 print(f"\n  Grid: {gx}x{gy}x{gz}")
 
 # ========================================================================
-# Voxelize
+# ボクセル化
 # ========================================================================
 print(f"\n  Voxelizing...")
-voxels = {}
-palette_map = {}
-palette_list = []
+voxels = {}          # (vx,vy,vz) → {ci, bone}
+palette_map = {}     # (r,g,b) → パレットインデックス
+palette_list = []    # パレット色リスト
 
 def get_palette_index(r, g, b):
+    """色からパレットインデックスを取得。"""
     key = (r, g, b)
-    if key in palette_map:
-        return palette_map[key]
+    if key in palette_map: return palette_map[key]
     idx = len(palette_list) + 1
     if idx > 255:
-        best_idx = 1
-        best_dist = 999999
+        best_idx, best_dist = 1, 999999
         for i, (pr, pg, pb) in enumerate(palette_list):
             d = (r-pr)**2 + (g-pg)**2 + (b-pb)**2
-            if d < best_dist:
-                best_dist = d
-                best_idx = i + 1
+            if d < best_dist: best_dist, best_idx = d, i + 1
         return best_idx
     palette_map[key] = idx
     palette_list.append((r, g, b))
     return idx
 
-thr = VOXEL_SIZE * 1.2
+thr = VOXEL_SIZE * 1.2   # BVH距離閾値
 sz_limit = min(gz, 256)
 sx_limit = min(gx, 256)
 sy_limit = min(gy, 256)
@@ -387,6 +376,7 @@ uv_layer = bm.loops.layers.uv.active
 import time
 t0 = time.time()
 
+# 全グリッド座標を走査
 for vz in range(sz_limit):
     if vz % 10 == 0:
         elapsed = time.time() - t0
@@ -402,29 +392,21 @@ for vz in range(sz_limit):
             if nearest is None or dist >= thr:
                 continue
 
+            # 面からボーン名を取得
             bone_name = face_bone_map.get(face_idx, "unknown") if face_idx is not None else "unknown"
-            ci = get_palette_index(200, 180, 160)
+            ci = get_palette_index(200, 180, 160)  # デフォルトスキン色
 
-            # Texture sampling with barycentric interpolation
+            # テクスチャサンプリング（重心座標補間）
             if face_idx is not None and uv_layer:
                 face = bm.faces[face_idx]
                 if face.material_index < len(body_obj.data.materials):
                     mat = body_obj.data.materials[face.material_index]
                     tex = find_base_texture(mat)
                     if tex and tex.name in texture_cache:
-                        # Barycentric interpolation
-                        v0 = face.verts[0].co
-                        v1 = face.verts[1].co
-                        v2 = face.verts[2].co
-                        # Compute barycentric coords
-                        e0 = v1 - v0
-                        e1 = v2 - v0
-                        ep = nearest - v0
-                        d00 = e0.dot(e0)
-                        d01 = e0.dot(e1)
-                        d11 = e1.dot(e1)
-                        dp0 = ep.dot(e0)
-                        dp1 = ep.dot(e1)
+                        v0 = face.verts[0].co; v1 = face.verts[1].co; v2 = face.verts[2].co
+                        e0 = v1 - v0; e1 = v2 - v0; ep = nearest - v0
+                        d00 = e0.dot(e0); d01 = e0.dot(e1); d11 = e1.dot(e1)
+                        dp0 = ep.dot(e0); dp1 = ep.dot(e1)
                         denom = d00 * d11 - d01 * d01
                         if abs(denom) > 1e-12:
                             u_bary = (d11 * dp0 - d01 * dp1) / denom
@@ -436,26 +418,23 @@ for vz in range(sz_limit):
                             uvu = w_bary * uv0.x + u_bary * uv1.x + v_bary * uv2.x
                             uvv = w_bary * uv0.y + u_bary * uv1.y + v_bary * uv2.y
                             sampled = sample_texture(tex.name, uvu, uvv)
-                            if sampled:
-                                ci = get_palette_index(*sampled)
+                            if sampled: ci = get_palette_index(*sampled)
                         else:
                             uv = face.loops[0][uv_layer].uv
                             sampled = sample_texture(tex.name, uv.x, uv.y)
-                            if sampled:
-                                ci = get_palette_index(*sampled)
+                            if sampled: ci = get_palette_index(*sampled)
 
             voxels[(vx, vy, vz)] = {"ci": ci, "bone": bone_name}
 
 print(f"  Total voxels: {len(voxels)}")
 
 # ========================================================================
-# Group by bone
+# ボーンごとにグループ化
 # ========================================================================
 bone_voxels = {}
 for (vx, vy, vz), info in voxels.items():
     bone = info["bone"]
-    if bone not in bone_voxels:
-        bone_voxels[bone] = []
+    if bone not in bone_voxels: bone_voxels[bone] = []
     bone_voxels[bone].append((vx, vy, vz, info["ci"]))
 
 print(f"\n  Bone segments ({len(bone_voxels)}):")
@@ -463,36 +442,25 @@ for bone_name in sorted(bone_voxels.keys()):
     print(f"    {bone_name}: {len(bone_voxels[bone_name])} voxels")
 
 # ========================================================================
-# Write VOX
+# VOXファイル書き出し
 # ========================================================================
 def write_vox(filepath, sx, sy, sz, voxel_list, pal):
+    """ボクセルデータをVOXファイルとして書き出す。"""
     num = len(voxel_list)
     xyzi_size = 4 + num * 4
-    size_size = 12
-    rgba_size = 256 * 4
     chunks = bytearray()
-    chunks += b'SIZE'
-    chunks += struct.pack('<II', size_size, 0)
-    chunks += struct.pack('<III', sx, sy, sz)
-    chunks += b'XYZI'
-    chunks += struct.pack('<II', xyzi_size, 0)
-    chunks += struct.pack('<I', num)
+    chunks += b'SIZE' + struct.pack('<II', 12, 0) + struct.pack('<III', sx, sy, sz)
+    chunks += b'XYZI' + struct.pack('<II', xyzi_size, 0) + struct.pack('<I', num)
     for x, y, z, c in voxel_list:
         chunks += struct.pack('BBBB', x, y, z, c)
-    chunks += b'RGBA'
-    chunks += struct.pack('<II', rgba_size, 0)
+    chunks += b'RGBA' + struct.pack('<II', 256 * 4, 0)
     for i in range(256):
         if i < len(pal):
             r, g, b = pal[i]
             chunks += struct.pack('BBBB', r, g, b, 255)
         else:
             chunks += struct.pack('BBBB', 0, 0, 0, 255)
-    out = bytearray()
-    out += b'VOX '
-    out += struct.pack('<I', 150)
-    out += b'MAIN'
-    out += struct.pack('<II', 0, len(chunks))
-    out += chunks
+    out = bytearray(b'VOX ') + struct.pack('<I', 150) + b'MAIN' + struct.pack('<II', 0, len(chunks)) + chunks
     with open(filepath, 'wb') as f:
         f.write(out)
 
@@ -500,19 +468,22 @@ sx = min(gx, 256)
 sy = min(gy, 256)
 sz = min(gz, 256)
 
+# 各ボーンセグメントを個別VOXファイルとして書き出し
 for bone_name, bvoxels in bone_voxels.items():
     safe_name = bone_name.replace(' ', '_').replace(':', '_').lower()
     filepath = os.path.join(seg_dir, f"{safe_name}.vox")
     write_vox(filepath, sx, sy, sz, bvoxels, palette_list)
 
+# 全ボクセルを結合したボディVOXも書き出し
 all_voxels = []
 for bvoxels in bone_voxels.values():
     all_voxels.extend(bvoxels)
 write_vox(os.path.join(OUT_DIR, "body", "body.vox"), sx, sy, sz, all_voxels, palette_list)
 
 # ========================================================================
-# Metadata
+# メタデータを書き出し
 # ========================================================================
+# ボーン位置をボクセル座標に変換
 bone_voxel_positions = {}
 for bname, bdata in bone_rest_positions.items():
     hx = int((bdata["head"][0] - bb_min.x) / VOXEL_SIZE)
@@ -522,13 +493,12 @@ for bname, bdata in bone_rest_positions.items():
     ty = int((bdata["tail"][1] - bb_min.y) / VOXEL_SIZE)
     tz = int((bdata["tail"][2] - bb_min.z) / VOXEL_SIZE)
     bone_voxel_positions[bname] = {
-        "head_voxel": [hx, hy, hz],
-        "tail_voxel": [tx, ty, tz],
-        "head_world": bdata["head"],
-        "tail_world": bdata["tail"],
+        "head_voxel": [hx, hy, hz], "tail_voxel": [tx, ty, tz],
+        "head_world": bdata["head"], "tail_world": bdata["tail"],
         "length_world": bdata["length"],
     }
 
+# segments.json
 segments_meta = {}
 for bone_name, bvoxels in bone_voxels.items():
     safe_name = bone_name.replace(' ', '_').replace(':', '_').lower()
@@ -548,6 +518,7 @@ meta = {
 with open(os.path.join(OUT_DIR, "segments.json"), 'w') as f:
     json.dump(meta, f, indent=2)
 
+# grid.json
 grid_meta = {
     "voxel_size": VOXEL_SIZE,
     "gx": sx, "gy": sy, "gz": sz,
@@ -558,11 +529,12 @@ grid_meta = {
 with open(os.path.join(OUT_DIR, "grid.json"), 'w') as f:
     json.dump(grid_meta, f, indent=2)
 
+# parts.json
 parts = []
 for bone_name, info in segments_meta.items():
     safe_name = bone_name.replace(' ', '_').replace(':', '_').lower()
     parts.append({
-        "key": bone_name,  # Use original bone name as key (for motion matching)
+        "key": bone_name,  # モーションマッチング用に元のボーン名を使用
         "file": f"/{os.path.basename(OUT_DIR)}/{info['file']}",
         "voxels": info["voxels"],
         "default_on": True,
@@ -573,9 +545,9 @@ for bone_name, info in segments_meta.items():
 with open(os.path.join(OUT_DIR, "parts.json"), 'w') as f:
     json.dump(parts, f, indent=2)
 
+# リソース解放
 bm.free()
 body_eval.to_mesh_clear()
 
 print(f"\n=== Done ===")
 print(f"  Segments: {len(bone_voxels)}")
-print(f"  Output: {OUT_DIR}")

@@ -1,23 +1,33 @@
-"""Voxelize Gold Bikini parts from Queen Marika model.
-The collection is hidden by default, so we enable it first.
+"""Queen Marikaモデルからゴールドビキニパーツをボクセル化するスクリプト。
+コレクションはデフォルトで非表示のため、最初に有効化する。
 
 Usage: blender --background --python scripts/voxelize_gold_bikini.py
 """
+# Blenderメインモジュール
 import bpy
+# BMesh操作モジュール
 import bmesh
+# バイナリデータパックモジュール
 import struct
+# 数学モジュール
 import math
+# OS操作モジュール
 import os
+# JSON操作モジュール
 import json
+# mathutilsからVector型をインポート
 from mathutils import Vector
+# BVHツリー（高速な最近点探索用）
 from mathutils.bvhtree import BVHTree
 
+# Queen Marikaモデルファイルを開く
 bpy.ops.wm.open_mainfile(filepath="E:/QueenMarika_Rigged_MustardUI.blend")
 
-# Enable hidden Golden Bikini collection
+# 非表示のGolden Bikiniコレクションを有効化
 for col in bpy.data.collections:
     if "Golden Bikini" in col.name:
-        col.hide_viewport = False
+        col.hide_viewport = False  # ビューポートでの表示を有効化
+        # レイヤーコレクションの除外を再帰的に解除
         def enable_lc(parent):
             for child in parent.children:
                 if child.name == col.name:
@@ -26,15 +36,16 @@ for col in bpy.data.collections:
         enable_lc(bpy.context.view_layer.layer_collection)
         print(f"Enabled collection: {col.name}")
 
+# ビューレイヤーを更新
 bpy.context.view_layer.update()
 
-# Find bikini meshes
+# ビキニメッシュオブジェクトを検索して表示
 bikini_objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and "Golden Bikini" in o.name]
 for o in bikini_objs:
     o.hide_viewport = False
     print(f"  {o.name}: {len(o.data.vertices)} verts")
 
-# Body bbox (same as main voxelizer)
+# ボディのバウンディングボックスを計算（メインのボクセル化と同じ方式）
 body_objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name == "Queen Marika Body"]
 min_co = Vector((1e9, 1e9, 1e9))
 max_co = Vector((-1e9, -1e9, -1e9))
@@ -49,24 +60,30 @@ for obj in body_objs:
             max_co[i] = max(max_co[i], v.co[i])
     eo.to_mesh_clear()
 
+# モデルサイズと中心を計算
 size = max_co - min_co
 center = (min_co + max_co) / 2
-model_h = size.z
+model_h = size.z  # モデルの高さ
 
+# チビ変形関数: ワールド座標→変形座標
 def deform_point(co):
     x, y, z = co.x, co.y, co.z
+    # 高さ方向の正規化パラメータ
     t = max(0, min(1, (z - min_co.z) / model_h)) if model_h > 0 else 0.5
     if t > 0.85:
+        # 頭部: 1.5〜1.8倍に拡大
         ht = (t - 0.85) / 0.15
         s = 1.5 + ht * 0.3
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
         z = z + ht * model_h * 0.06
     elif t > 0.50:
+        # 体幹: 1.1倍に拡大
         s = 1.1
         x = center.x + (x - center.x) * s
         y = center.y + (y - center.y) * s
     else:
+        # 脚: 短縮 + 広がり
         leg_t = t / 0.50
         f = 0.70 * leg_t + 0.30 * leg_t * leg_t
         z = min_co.z + f * 0.50 * model_h
@@ -78,6 +95,7 @@ def deform_point(co):
         x += sign * spread
     return Vector((x, y, z))
 
+# 逆変形関数: 変形座標→ワールド座標
 def inv_deform(co):
     x, y, z = co.x, co.y, co.z
     t = max(0, min(1, (z - min_co.z) / model_h)) if model_h > 0 else 0.5
@@ -91,6 +109,7 @@ def inv_deform(co):
         x = center.x + (x - center.x) / 1.1
         y = center.y + (y - center.y) / 1.1
     else:
+        # 脚の逆変換（二次方程式の解）
         u = (z - min_co.z) / (0.50 * model_h) if model_h > 0 else 0
         u = max(0, min(1, u))
         disc = 0.49 + 1.20 * u
@@ -105,17 +124,18 @@ def inv_deform(co):
         y = center.y + (y - center.y) / 1.1
     return Vector((x, y, z))
 
-# Grid info from previous run
+# 前回実行時のグリッド情報を読み込み
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 grid = json.load(open(os.path.join(BASE, "public/box4/queenmarika_rigged_mustardui_grid.json")))
-gx, gy, gz = grid["gx"], grid["gy"], grid["gz"]
-voxel_size = grid["voxel_size"]
-def_min = Vector(grid["def_min"])
+gx, gy, gz = grid["gx"], grid["gy"], grid["gz"]  # グリッドサイズ
+voxel_size = grid["voxel_size"]                     # ボクセルサイズ
+def_min = Vector(grid["def_min"])                    # 変形空間の最小座標
 print(f"Grid: {gx}x{gy}x{gz}, voxel_size={voxel_size:.6f}")
 
-# Texture handling
+# テクスチャキャッシュ
 texture_cache = {}
 
+# テクスチャをキャッシュに読み込む関数
 def cache_texture(image):
     if image.name in texture_cache:
         return
@@ -125,6 +145,7 @@ def cache_texture(image):
     texture_cache[image.name] = (w, h, list(image.pixels))
     print(f"  Cache: {image.name} ({w}x{h})")
 
+# テクスチャからUV座標の色をサンプリングする関数
 def sample_texture(img_name, u, v):
     if img_name not in texture_cache:
         return None
@@ -136,7 +157,7 @@ def sample_texture(img_name, u, v):
         return (int(pix[pi] * 255), int(pix[pi + 1] * 255), int(pix[pi + 2] * 255))
     return None
 
-# Material info
+# マテリアル情報を収集（テクスチャまたはフラットカラー）
 mat_info = {}
 for obj in bikini_objs:
     for slot in obj.material_slots:
@@ -145,21 +166,23 @@ for obj in bikini_objs:
             continue
         info = {"image": None, "color": (180, 180, 180)}
         if hasattr(mat, "node_tree") and mat.node_tree:
-            # Find best texture
+            # ベストなテクスチャを探す
             best_img = None
             best_score = -999
             for node in mat.node_tree.nodes:
                 if node.type == "TEX_IMAGE" and node.image:
                     n = node.image.name.lower()
                     s = 0
+                    # basecolor/diffuseテクスチャを優先
                     if "basecolor" in n or "base_color" in n or "diffuse" in n:
                         s = 10
+                    # normal/roughness等は除外
                     if any(k in n for k in ["normal", "roughness", "metallic", "specular", "height", "opacity"]):
                         s = -10
                     if s > best_score:
                         best_score = s
                         best_img = node.image
-                # Check group nodes
+                # グループノード内も検索
                 if node.type == "GROUP" and node.node_tree:
                     for inner in node.node_tree.nodes:
                         if inner.type == "TEX_IMAGE" and inner.image:
@@ -176,6 +199,7 @@ for obj in bikini_objs:
                 cache_texture(best_img)
                 info["image"] = best_img.name
             else:
+                # テクスチャがなければPrincipled BSDFのBase Colorを使用
                 for node in mat.node_tree.nodes:
                     if node.type == "BSDF_PRINCIPLED":
                         inp = node.inputs.get("Base Color")
@@ -187,25 +211,27 @@ for obj in bikini_objs:
         tag = info["image"] or f"flat{info['color']}"
         print(f"  Mat: {mat.name} -> {tag}")
 
-# Build BVH per part
+# 各パーツのBVHツリーを構築（高速な距離検索用）
 class MeshInfo:
     pass
 
 parts = {}
 for obj in bikini_objs:
+    # オブジェクト名からパーツキーを決定
     key = "gold_bikini_bra" if "Bra" in obj.name else "gold_bikini_panties"
     dg = bpy.context.evaluated_depsgraph_get()
     eo = obj.evaluated_get(dg)
     me = eo.to_mesh()
-    me.transform(obj.matrix_world)
+    me.transform(obj.matrix_world)  # ワールド空間に変換
     bm = bmesh.new()
     bm.from_mesh(me)
-    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])  # 三角形化
     bm.faces.ensure_lookup_table()
     mi = MeshInfo()
-    mi.bvh = BVHTree.FromBMesh(bm)
+    mi.bvh = BVHTree.FromBMesh(bm)  # BVHツリーを構築
     mi.bm = bm
-    mi.uv = bm.loops.layers.uv.active
+    mi.uv = bm.loops.layers.uv.active  # UVレイヤー
+    # 面ごとのマテリアルとテクスチャ情報を記録
     mi.face_mat = {}
     mi.face_tex = {}
     for face in bm.faces:
@@ -219,12 +245,14 @@ for obj in bikini_objs:
     eo.to_mesh_clear()
     print(f"  BVH: {key} ({len(bm.faces)} tris)")
 
+# ヒット位置の色を取得する関数（テクスチャサンプリングまたはフラットカラー）
 def get_color_at(md, fi, hit):
     tex = md.face_tex.get(fi)
     if tex and md.uv and fi < len(md.bm.faces):
         face = md.bm.faces[fi]
         loops = face.loops
         if len(loops) == 3:
+            # 重心座標でUVを補間
             v0, v1, v2 = [l.vert.co for l in loops]
             uv0, uv1, uv2 = [l[md.uv].uv for l in loops]
             e0, e1 = v1 - v0, v2 - v0
@@ -241,33 +269,39 @@ def get_color_at(md, fi, hit):
                 c = sample_texture(tex, uvu, uvv)
                 if c:
                     return c
+    # テクスチャがなければマテリアルのフラットカラーを使用
     mn = md.face_mat.get(fi)
     if mn and mn in mat_info:
         return mat_info[mn]["color"]
-    return (180, 180, 180)
+    return (180, 180, 180)  # デフォルトグレー
 
-# Voxelize
-thr = voxel_size * 1.2
+# ボクセル化処理
+thr = voxel_size * 1.2  # BVH距離の閾値（ボクセルサイズの1.2倍）
 for key, md in parts.items():
     print(f"\nVoxelizing {key}...")
     result = {}
+    # 全グリッド座標を走査
     for vz in range(gz):
         if vz % 20 == 0:
             print(f"  z={vz}/{gz} hits={len(result)}")
         for vx in range(gx):
             for vy in range(gy):
+                # 変形空間の座標を計算
                 dp = Vector((
                     def_min.x + (vx + 0.5) * voxel_size,
                     def_min.y + (vy + 0.5) * voxel_size,
                     def_min.z + (vz + 0.5) * voxel_size,
                 ))
+                # 変形空間→元のワールド空間に逆変換
                 op = inv_deform(dp)
+                # BVHで最近点を検索
                 loc, norm, fi, dist = md.bvh.find_nearest(op)
+                # 閾値以内ならボクセルとして記録
                 if loc is not None and dist < thr:
                     result[(vx, vy, vz)] = get_color_at(md, fi, loc)
     print(f"  {key}: {len(result)} voxels")
 
-    # Build palette
+    # パレットを構築（色を8刻みに量子化）
     color_map = {}
     pal = []
     out = []
@@ -276,6 +310,7 @@ for key, md in parts.items():
         k = (qr, qg, qb)
         if k not in color_map:
             if len(pal) >= 255:
+                # パレット上限: 最近色を使用
                 best_i, best_d = 0, 1e9
                 for i, (pr, pg, pb) in enumerate(pal):
                     d = (pr - qr) ** 2 + (pg - qg) ** 2 + (pb - qb) ** 2
@@ -288,7 +323,7 @@ for key, md in parts.items():
                 color_map[k] = len(pal)
         out.append((vx, vy, vz, color_map[k]))
 
-    # Write .vox
+    # VOXファイルとして書き出し
     fp = os.path.join(BASE, f"public/box4/queenmarika_rigged_mustardui_{key}.vox")
     xyzi_size = 4 + len(out) * 4
     children_size = (12 + 12) + (12 + xyzi_size) + (12 + 1024)
@@ -314,26 +349,25 @@ for key, md in parts.items():
                 f.write(struct.pack("BBBB", 0, 0, 0, 0))
     print(f"  -> {fp}: {len(out)} voxels, {len(pal)} colors")
 
-# Cleanup
+# BMeshリソースを解放
 for md in parts.values():
     md.bm.free()
 
-# Update manifest
+# パーツマニフェストを更新
 manifest_path = os.path.join(BASE, "public/box4/queenmarika_rigged_mustardui_parts.json")
 manifest = json.load(open(manifest_path))
 for key, md_unused in parts.items():
     filename = f"queenmarika_rigged_mustardui_{key}.vox"
     vox_count = len([1 for _ in open(os.path.join(BASE, f"public/box4/{filename}"), "rb").read()])
-    # Just use the result count from earlier
+    # 既存エントリがなければ追加
     existing = [p for p in manifest if p["key"] == key]
     if not existing:
         manifest.append({
             "key": key,
             "file": f"/box4/{filename}",
-            "voxels": 0,  # Will be set properly
+            "voxels": 0,
             "default_on": False,
         })
 with open(manifest_path, "w") as f:
     json.dump(manifest, f, indent=2)
 print(f"\nUpdated manifest: {manifest_path}")
-print("\nDone!")

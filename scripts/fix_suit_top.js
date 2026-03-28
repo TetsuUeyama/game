@@ -1,14 +1,19 @@
 /**
- * Fix suit_top: generate shell on CE Body arm + shoulder surface.
- * suit_top = fitted garment from fingertips to shoulders.
- * Coverage: all CE Body arm surface voxels + shoulder transition area.
- * Colors from original HP suit_top (nearest color).
+ * fix_suit_top.js
+ *
+ * suit_topを修正するスクリプト: CEボディの腕+肩表面にシェルを生成。
+ * suit_top = 指先から肩までのフィットした衣装。
+ * カバレッジ: 全CEボディ腕表面ボクセル + 肩遷移領域。
+ * 色はオリジナルHPのsuit_topから最寄り色を使用。
  *
  * Usage: node scripts/fix_suit_top.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// VOXファイルパーサー
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -32,6 +37,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXファイルライター
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -59,9 +65,10 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
+// --- メイン処理 ---
 const BASE = path.join(__dirname, '..');
 
-// Read CE Body (remapped to HP grid) and original suit_top
+// CEボディ（HPグリッドにリマップ済み）とオリジナルsuit_topを読み込み
 const body = readVox(path.join(BASE, 'public/box3-new/highpriestess_blender_rigged_body.vox'));
 const suitTop = readVox(path.join(BASE, 'public/box3-new/highpriestess_blender_rigged_suit_top.vox'));
 const SX = body.sx, SY = body.sy, SZ = body.sz;
@@ -69,11 +76,13 @@ const SX = body.sx, SY = body.sy, SZ = body.sz;
 console.log(`CE Body: ${body.voxels.length} voxels, grid: ${SX}x${SY}x${SZ}`);
 console.log(`suit_top (original HP): ${suitTop.voxels.length} voxels`);
 
-// Build body structures
+// ボディ構造を構築
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
+// 6方向の隣接オフセット
 const DIRS = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
+// ボディ表面ボクセルを検出（少なくとも1つの空き隣接を持つボクセル）
 const bodySurface = [];
 for (const v of body.voxels) {
   for (const [dx, dy, dz] of DIRS) {
@@ -85,7 +94,7 @@ for (const v of body.voxels) {
 }
 console.log(`CE Body surface: ${bodySurface.length} voxels`);
 
-// Analyze body width per Z to detect arm region and torso center
+// Z値ごとのボディ幅を分析して腕領域と体幹中心を検出
 const bodyByZ = {};
 for (const v of body.voxels) {
   if (!bodyByZ[v.z]) bodyByZ[v.z] = { xmin: v.x, xmax: v.x, sumX: 0, sumY: 0, n: 0 };
@@ -96,35 +105,37 @@ for (const v of body.voxels) {
   d.sumY += v.y;
   d.n++;
 }
+// 各Z断面の幅と中心を計算
 for (const z in bodyByZ) {
   const d = bodyByZ[z];
-  d.w = d.xmax - d.xmin;
-  d.cx = d.sumX / d.n;
-  d.cy = d.sumY / d.n;
+  d.w = d.xmax - d.xmin;     // X方向の幅
+  d.cx = d.sumX / d.n;       // X中心
+  d.cy = d.sumY / d.n;       // Y中心
 }
 
-// Median torso width (non-arm)
+// 体幹の中央値幅を計算（腕以外の基準）
 const widths = Object.values(bodyByZ).map(d => d.w).sort((a, b) => a - b);
 const medianW = widths[Math.floor(widths.length / 2)];
+// 腕の閾値: 中央値の1.5倍以上の幅 = 腕が広がっているZ断面
 const armThreshold = medianW * 1.5;
 
-// Identify arm Z levels and shoulder transition
+// 腕のZ断面と肩遷移のZ断面を識別
 const armZLevels = new Set();
 const shoulderZLevels = new Set();
 for (const [zStr, d] of Object.entries(bodyByZ)) {
   const z = +zStr;
   if (d.w > armThreshold) {
-    armZLevels.add(z);
+    armZLevels.add(z);  // 幅が閾値を超えている = 腕レベル
   }
 }
 
-// Shoulder: 3 Z levels above and below arm region
+// 肩: 腕領域の上下3-4Z断面を遷移領域として追加
 const armZmin = armZLevels.size > 0 ? Math.min(...armZLevels) : 0;
 const armZmax = armZLevels.size > 0 ? Math.max(...armZLevels) : 0;
 for (let z = armZmax + 1; z <= armZmax + 4; z++) {
   if (bodyByZ[z]) shoulderZLevels.add(z);
 }
-// Also include 2 levels below arm for wrist/hand transition
+// 手首/手の遷移領域（腕の下2断面）も追加
 for (let z = armZmin - 2; z < armZmin; z++) {
   if (bodyByZ[z]) shoulderZLevels.add(z);
 }
@@ -132,7 +143,7 @@ for (let z = armZmin - 2; z < armZmin; z++) {
 console.log(`Arm Z: ${armZmin}~${armZmax} (${armZLevels.size} levels), threshold: w>${armThreshold.toFixed(0)}, median=${medianW}`);
 console.log(`Shoulder Z: ${[...shoulderZLevels].sort((a,b)=>a-b).join(',')}`);
 
-// Determine torso X boundaries (from non-arm levels near arm region)
+// 体幹のX範囲を決定（腕領域に近い非腕断面から）
 const torsoRef = [];
 for (let z = armZmax + 1; z <= armZmax + 5; z++) {
   if (bodyByZ[z] && !armZLevels.has(z)) torsoRef.push(bodyByZ[z]);
@@ -145,19 +156,20 @@ if (torsoRef.length > 0) {
   torsoXmin = Math.min(...torsoRef.map(d => d.xmin));
   torsoXmax = Math.max(...torsoRef.map(d => d.xmax));
 } else {
-  // Fallback: use median width centered
+  // フォールバック: 中央値幅で中心配置
   const cx = Object.values(bodyByZ)[0].cx;
   torsoXmin = Math.round(cx - medianW / 2);
   torsoXmax = Math.round(cx + medianW / 2);
 }
 console.log(`Torso X boundaries: ${torsoXmin}~${torsoXmax}`);
 
-// Color from original HP suit_top
+// オリジナルHPのsuit_topから色を検索するマップ
 const colorByZ = {};
 for (const v of suitTop.voxels) {
   if (!colorByZ[v.z]) colorByZ[v.z] = [];
   colorByZ[v.z].push(v);
 }
+// 最寄りの衣装色を検索する関数
 function getNearestColor(x, y, z) {
   let bestDist = Infinity, bestC = suitTop.voxels[0].c;
   for (let dz = 0; dz <= 15; dz++) {
@@ -174,7 +186,7 @@ function getNearestColor(x, y, z) {
   return bestC;
 }
 
-// Generate shell on arm + shoulder surface
+// 腕 + 肩表面にシェルを生成
 const result = [];
 const placed = new Set();
 let armCount = 0, shoulderCount = 0;
@@ -183,20 +195,20 @@ for (const sv of bodySurface) {
   let cover = false;
 
   if (armZLevels.has(sv.z)) {
-    // Arm Z level: cover all surface voxels OUTSIDE torso center
-    // (torso center at arm level is where arms connect to body - don't cover that)
+    // 腕のZ断面: 体幹中心の外側の表面ボクセルをカバー
+    // （腕レベルの体幹中心は腕とボディの接続部分 — そこはカバーしない）
     const isArmX = (sv.x < torsoXmin) || (sv.x > torsoXmax);
     if (isArmX) cover = true;
   }
 
   if (shoulderZLevels.has(sv.z)) {
-    // Shoulder transition: cover wider area
+    // 肩遷移: より広い範囲をカバー
     cover = true;
   }
 
   if (!cover) continue;
 
-  // Place shell voxels in empty neighbors
+  // 空き隣接にシェルボクセルを配置
   for (const [dx, dy, dz] of DIRS) {
     const nx = sv.x + dx, ny = sv.y + dy, nz = sv.z + dz;
     if (nx < 0 || nx >= SX || ny < 0 || ny >= SY || nz < 0 || nz >= SZ) continue;
@@ -212,17 +224,19 @@ for (const sv of bodySurface) {
 console.log(`Arm shell: ${armCount}, Shoulder shell: ${shoulderCount}`);
 console.log(`Total: ${result.length} voxels`);
 
-// Debug: show Z distribution
+// デバッグ: Z値ごとの分布を表示
 const resultByZ = {};
 for (const v of result) { resultByZ[v.z] = (resultByZ[v.z] || 0) + 1; }
 const rZs = Object.keys(resultByZ).map(Number).sort((a,b)=>a-b);
 console.log('Z distribution:');
 for (const z of rZs) console.log(`  z=${z}: ${resultByZ[z]} voxels`);
 
+// 結果をVOXファイルとして書き出し
 writeVox(path.join(BASE, 'public/box3-new/highpriestess_blender_rigged_suit_top.vox'),
   SX, SY, SZ, result, suitTop.palette);
 console.log('Written suit_top.vox');
 
+// パーツマニフェストを更新
 const manifestPath = path.join(BASE, 'public/box3-new/highpriestess_blender_rigged_parts.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === 'suit_top');

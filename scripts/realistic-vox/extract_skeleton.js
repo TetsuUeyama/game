@@ -1,27 +1,28 @@
 /**
- * Extract body landmarks from a realistic vox body to create a reference skeleton.
- * Analyzes T-pose body shape to detect joints and measurements.
+ * extract_skeleton.js
+ *
+ * リアリスティックVOXボディからボディランドマークを抽出してリファレンススケルトンを作成するスクリプト。
+ * Tポーズのボディ形状を解析して関節と寸法を検出する。
  *
  * Usage: node extract_skeleton.js [body.vox] [grid.json] [output.json]
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
 // ========================================================================
-// VOX parser
+// VOXパーサー
 // ========================================================================
 function parseVox(buf) {
   let offset = 0;
   const readU32 = () => { const v = buf.readUInt32LE(offset); offset += 4; return v; };
   const readU8 = () => buf[offset++];
   const readStr = (n) => { const s = buf.toString('ascii', offset, offset + n); offset += n; return s; };
-
   if (readStr(4) !== 'VOX ') throw new Error('Not VOX');
-  readU32(); // version
-
+  readU32();
   let sizeX = 0, sizeY = 0, sizeZ = 0;
   const voxels = [];
-
   const readChunks = (end) => {
     while (offset < end) {
       const id = readStr(4), cs = readU32(), ccs = readU32(), ce = offset + cs;
@@ -34,23 +35,23 @@ function parseVox(buf) {
       if (ccs > 0) readChunks(offset + ccs);
     }
   };
-
   if (readStr(4) !== 'MAIN') throw new Error('No MAIN');
   const mc = readU32(), mcc = readU32();
   offset += mc;
   readChunks(offset + mcc);
-
   return { sizeX, sizeY, sizeZ, voxels };
 }
 
 // ========================================================================
-// Main
+// メイン処理
 // ========================================================================
+// コマンドライン引数
 const args = process.argv.slice(2);
 const voxPath = args[0] || 'public/realistic/body/body.vox';
 const gridPath = args[1] || 'public/realistic/grid.json';
 const outPath = args[2] || 'scripts/realistic-vox/reference_skeleton.json';
 
+// ファイル読み込み
 const voxBuf = fs.readFileSync(voxPath);
 const grid = JSON.parse(fs.readFileSync(gridPath, 'utf8'));
 const model = parseVox(voxBuf);
@@ -58,16 +59,17 @@ const model = parseVox(voxBuf);
 console.log(`Loaded: ${model.voxels.length} voxels, grid ${model.sizeX}x${model.sizeY}x${model.sizeZ}`);
 console.log(`Grid: ${grid.gx}x${grid.gy}x${grid.gz}, voxel_size=${grid.voxel_size.toFixed(6)}`);
 
-// Build lookup structures
-const byZ = {};  // z -> [{x, y}]
+// Z値ごとのボクセルをグループ化
+const byZ = {};
 for (const v of model.voxels) {
   if (!byZ[v.z]) byZ[v.z] = [];
   byZ[v.z].push({ x: v.x, y: v.y });
 }
 
 // ========================================================================
-// Helpers
+// ヘルパー関数
 // ========================================================================
+// Z断面の統計情報を取得する関数
 function getSliceStats(z) {
   const pts = byZ[z] || [];
   if (pts.length === 0) return null;
@@ -77,13 +79,12 @@ function getSliceStats(z) {
   return {
     count: pts.length,
     xMin, xMax, yMin, yMax,
-    xCenter: (xMin + xMax) / 2,
-    yCenter: (yMin + yMax) / 2,
-    width: xMax - xMin + 1,
-    depth: yMax - yMin + 1,
+    xCenter: (xMin + xMax) / 2, yCenter: (yMin + yMax) / 2,
+    width: xMax - xMin + 1, depth: yMax - yMin + 1,
   };
 }
 
+// 指定Z範囲の重心を計算する関数
 function centroidRange(zLo, zHi) {
   let sx = 0, sy = 0, sz = 0, n = 0;
   for (const v of model.voxels) {
@@ -92,6 +93,7 @@ function centroidRange(zLo, zHi) {
   return n > 0 ? [sx / n, sy / n, sz / n] : [0, 0, 0];
 }
 
+// ボクセル座標→ワールド座標に変換する関数
 function toWorld(vx, vy, vz) {
   return [
     grid.grid_origin[0] + (vx + 0.5) * grid.voxel_size,
@@ -100,6 +102,7 @@ function toWorld(vx, vy, vz) {
   ];
 }
 
+// Z範囲と高さ
 const allZ = Object.keys(byZ).map(Number).sort((a, b) => a - b);
 const zMin = allZ[0];
 const zMax = allZ[allZ.length - 1];
@@ -108,7 +111,7 @@ const heightVox = zMax - zMin + 1;
 console.log(`\nBody Z range: ${zMin} - ${zMax} (height: ${heightVox} voxels)`);
 
 // ========================================================================
-// 1. Width profile
+// 1. 幅プロファイル
 // ========================================================================
 const widthProfile = [];
 for (let z = zMin; z <= zMax; z++) {
@@ -116,13 +119,13 @@ for (let z = zMin; z <= zMax; z++) {
   widthProfile.push(s ? { z, ...s } : { z, width: 0, count: 0, xMin: 0, xMax: 0, xCenter: 0, yCenter: 0, depth: 0 });
 }
 
-// Global body center X
+// ボディ全体のX中心
 const globalCentroid = centroidRange(zMin, zMax);
 const bodyCenterX = Math.round(globalCentroid[0]);
 console.log(`Body center X: ${bodyCenterX}`);
 
 // ========================================================================
-// 2. Find arm level (T-pose): widest Z slice = arms fully extended
+// 2. 腕レベルの検出（Tポーズ: 最も幅広いZ断面 = 腕が完全に伸びている）
 // ========================================================================
 let armZ = zMin, armWidth = 0;
 for (const w of widthProfile) {
@@ -131,26 +134,20 @@ for (const w of widthProfile) {
 console.log(`\nArm level (widest): z=${armZ} (width=${armWidth})`);
 
 // ========================================================================
-// 3. Find torso width by detecting the arm onset
-//    Strategy: scan width profile from below armZ upward.
-//    Torso width is stable, then jumps when arms appear.
-//    The last stable width = pure torso.
+// 3. 体幹幅の検出（腕の開始点を検出して純粋な体幹幅を特定）
 // ========================================================================
-// Collect widths below arm level (torso/hip region)
 const torsoWidths = widthProfile.filter(w => w.z >= zMin + 20 && w.z <= armZ - 3 && w.width > 0);
-// Sort by proximity to armZ (prefer the closest non-arm Z)
 torsoWidths.sort((a, b) => Math.abs(b.z - armZ) - Math.abs(a.z - armZ));
-// The widest non-arm slice near armZ = shoulder torso width
-// (the torso is widest at shoulder level before arms extend)
 let shoulderRefZ = armZ - 10;
 let torsoLeftX = bodyCenterX - 20, torsoRightX = bodyCenterX + 20;
 
-// Find the Z just below armZ where width hasn't exploded (< 2x the median torso width)
+// 中央値の体幹幅を計算
 const medianTorsoWidth = torsoWidths.length > 0
   ? torsoWidths.map(w => w.width).sort((a, b) => a - b)[Math.floor(torsoWidths.length / 2)]
   : 50;
 const armThreshold = medianTorsoWidth * 1.8;
 
+// 腕開始直前のZ断面を検出
 for (let z = armZ; z >= armZ - 30; z--) {
   const s = getSliceStats(z);
   if (s && s.width > 0 && s.width < armThreshold) {
@@ -165,7 +162,7 @@ console.log(`Torso ref (z=${shoulderRefZ}): width=${torsoWidth} (x: ${torsoLeftX
 console.log(`Arm span at z=${armZ}: ${armWidth} voxels`);
 
 // ========================================================================
-// 4. Shoulder = torso edge at arm Z level
+// 4. 肩 = 腕Zレベルでの体幹エッジ
 // ========================================================================
 const armStats = getSliceStats(armZ);
 const shoulderZ = armZ;
@@ -174,7 +171,7 @@ const shoulderRightVox = [torsoRightX, Math.round(armStats.yCenter), shoulderZ];
 console.log(`Shoulders: left=[${shoulderLeftVox}], right=[${shoulderRightVox}]`);
 
 // ========================================================================
-// 5. Wrist = arm tips (outermost X at arm Z range ±5)
+// 5. 手首 = 腕の先端（腕Zレンジ±5での最外X）
 // ========================================================================
 const armZLo = armZ - 5, armZHi = armZ + 5;
 let wristLeftX = torsoLeftX, wristRightX = torsoRightX;
@@ -185,7 +182,7 @@ for (const v of model.voxels) {
   }
 }
 
-// Wrist Y & Z (average near tips)
+// 手首のY,Z（先端付近の平均）
 const wristMargin = 3;
 const wristLPts = model.voxels.filter(v => v.x <= wristLeftX + wristMargin && v.z >= armZLo && v.z <= armZHi);
 const wristRPts = model.voxels.filter(v => v.x >= wristRightX - wristMargin && v.z >= armZLo && v.z <= armZHi);
@@ -196,7 +193,7 @@ const wristRightVox = [wristRightX, Math.round(avg(wristRPts, 'y')), Math.round(
 console.log(`Wrists: left=[${wristLeftVox}] (x=${wristLeftX}), right=[${wristRightVox}] (x=${wristRightX})`);
 
 // ========================================================================
-// 6. Elbow = midpoint of arm
+// 6. 肘 = 腕の中点
 // ========================================================================
 const elbowLeftVox = [
   Math.round((shoulderLeftVox[0] + wristLeftVox[0]) / 2),
@@ -210,11 +207,10 @@ const elbowRightVox = [
 ];
 
 // ========================================================================
-// 7. Neck: local width minimum between arm level and head top
-//    Search from arm level upward, find first significant narrowing
+// 7. 首: 腕レベルと頭頂の間の最も幅が狭いZ断面
 // ========================================================================
 let neckZ = armZ, neckWidth = 999;
-const headSearchStart = armZ + 5; // a bit above arms
+const headSearchStart = armZ + 5;
 for (const w of widthProfile) {
   if (w.z >= headSearchStart && w.z <= zMax - 5 && w.width > 0 && w.width < neckWidth) {
     neckWidth = w.width;
@@ -226,7 +222,7 @@ const neckVox = [Math.round(neckStats.xCenter), Math.round(neckStats.yCenter), n
 console.log(`Neck: z=${neckZ} (width=${neckWidth})`);
 
 // ========================================================================
-// 8. Head
+// 8. 頭部
 // ========================================================================
 const headCentroid = centroidRange(neckZ, zMax);
 const headCenterVox = headCentroid.map(Math.round);
@@ -234,8 +230,7 @@ const headTopVox = [Math.round(headCentroid[0]), Math.round(headCentroid[1]), zM
 console.log(`Head: center=[${headCenterVox}], top z=${zMax}`);
 
 // ========================================================================
-// 9. Hip: find Z where legs separate (gap in middle)
-//    Scan from bottom up, find highest Z with center gap
+// 9. 股関節: 脚が分離するZ（中央にギャップがある最高Z）
 // ========================================================================
 let hipZ = -1;
 for (let z = zMin; z < armZ; z++) {
@@ -244,26 +239,26 @@ for (let z = zMin; z < armZ; z++) {
   const xs = pts.map(p => p.x);
   const centerCount = xs.filter(x => Math.abs(x - bodyCenterX) <= 2).length;
   const xMin_s = Math.min(...xs), xMax_s = Math.max(...xs);
+  // 中央にボクセルがなく幅が十分 = 脚の分離点
   if (centerCount === 0 && (xMax_s - xMin_s) > 10) {
     hipZ = z;
   }
 }
 if (hipZ < 0) {
-  // Fallback: estimate at 45% height
   hipZ = Math.round(zMin + heightVox * 0.45);
   console.log(`Hip (estimated 45%): z=${hipZ}`);
 } else {
   console.log(`Hip (gap detected): z=${hipZ}`);
 }
 
-// Crotch = the exact separation point; hip joint is slightly above
+// 股間 = 分離点、股関節はその少し上
 const hipJointZ = hipZ + Math.round(heightVox * 0.02);
 
 const hipStats = getSliceStats(hipJointZ);
 const hipCenterY = hipStats ? Math.round(hipStats.yCenter) : Math.round(globalCentroid[1]);
 const hipCenterVox = [bodyCenterX, hipCenterY, hipJointZ];
 
-// Left/right hip centers
+// 左右の股関節中心
 const hipPts = byZ[hipZ] || [];
 const leftPts = hipPts.filter(p => p.x < bodyCenterX);
 const rightPts = hipPts.filter(p => p.x >= bodyCenterX);
@@ -274,16 +269,15 @@ const hipRightVox = [hipRightX, hipCenterY, hipJointZ];
 console.log(`Hip joints: left=[${hipLeftVox}], right=[${hipRightVox}]`);
 
 // ========================================================================
-// 10. Ankle: near foot bottom, for each leg
+// 10. 足首: 各脚の足底付近
 // ========================================================================
-// Find the very bottom of each leg
 let footBottomLeftZ = zMax, footBottomRightZ = zMax;
 for (let z = zMin; z <= hipZ; z++) {
   const pts = byZ[z] || [];
   if (pts.some(p => p.x < bodyCenterX)) footBottomLeftZ = Math.min(footBottomLeftZ, z);
   if (pts.some(p => p.x >= bodyCenterX)) footBottomRightZ = Math.min(footBottomRightZ, z);
 }
-// Ankle ≈ bottom + ~3% of total height (above foot)
+// 足首 ≈ 足底 + 全高の約3%
 const ankleOffset = Math.round(heightVox * 0.03);
 const ankleLeftZ = footBottomLeftZ + ankleOffset;
 const ankleRightZ = footBottomRightZ + ankleOffset;
@@ -291,19 +285,19 @@ const ankleLeftVox = [hipLeftX, hipCenterY, ankleLeftZ];
 const ankleRightVox = [hipRightX, hipCenterY, ankleRightZ];
 
 // ========================================================================
-// 11. Knee: midpoint between hip and ankle
+// 11. 膝: 股関節と足首の中点
 // ========================================================================
 const kneeLeftVox = [hipLeftX, hipCenterY, Math.round((hipJointZ + ankleLeftZ) / 2)];
 const kneeRightVox = [hipRightX, hipCenterY, Math.round((hipJointZ + ankleRightZ) / 2)];
 
 // ========================================================================
-// 12. Torso center
+// 12. 体幹中心
 // ========================================================================
 const torsoCentroid = centroidRange(hipJointZ, shoulderZ);
 const torsoCenterVox = torsoCentroid.map(Math.round);
 
 // ========================================================================
-// Measurements
+// 寸法計算
 // ========================================================================
 const armLengthLeft = torsoLeftX - wristLeftX;
 const armLengthRight = wristRightX - torsoRightX;
@@ -315,34 +309,36 @@ const vs = grid.voxel_size;
 const toCm = (voxels) => (voxels * vs * 100).toFixed(1);
 
 // ========================================================================
-// Build landmarks
+// ランドマークデータを構築
 // ========================================================================
 const landmarks_voxel = {
-  head_top: headTopVox,
-  head_center: headCenterVox,
-  neck: neckVox,
-  shoulder_left: shoulderLeftVox,
-  shoulder_right: shoulderRightVox,
-  elbow_left: elbowLeftVox,
-  elbow_right: elbowRightVox,
-  wrist_left: wristLeftVox,
-  wrist_right: wristRightVox,
-  torso_center: torsoCenterVox,
-  hip_center: hipCenterVox,
-  hip_left: hipLeftVox,
-  hip_right: hipRightVox,
-  knee_left: kneeLeftVox,
-  knee_right: kneeRightVox,
-  ankle_left: ankleLeftVox,
-  ankle_right: ankleRightVox,
-  foot_bottom: [bodyCenterX, Math.round(globalCentroid[1]), zMin],
+  head_top: headTopVox,              // 頭頂
+  head_center: headCenterVox,        // 頭部中心
+  neck: neckVox,                     // 首
+  shoulder_left: shoulderLeftVox,    // 左肩
+  shoulder_right: shoulderRightVox,  // 右肩
+  elbow_left: elbowLeftVox,          // 左肘
+  elbow_right: elbowRightVox,        // 右肘
+  wrist_left: wristLeftVox,          // 左手首
+  wrist_right: wristRightVox,        // 右手首
+  torso_center: torsoCenterVox,      // 体幹中心
+  hip_center: hipCenterVox,          // 股関節中心
+  hip_left: hipLeftVox,              // 左股関節
+  hip_right: hipRightVox,            // 右股関節
+  knee_left: kneeLeftVox,            // 左膝
+  knee_right: kneeRightVox,          // 右膝
+  ankle_left: ankleLeftVox,          // 左足首
+  ankle_right: ankleRightVox,        // 右足首
+  foot_bottom: [bodyCenterX, Math.round(globalCentroid[1]), zMin],  // 足底
 };
 
+// ランドマークをワールド座標に変換
 const landmarks_world = {};
 for (const [key, [vx, vy, vz]] of Object.entries(landmarks_voxel)) {
   landmarks_world[key] = toWorld(vx, vy, vz).map(v => parseFloat(v.toFixed(6)));
 }
 
+// ボクセル単位の寸法
 const measurements_voxel = {
   height: heightVox,
   shoulder_width: torsoWidth,
@@ -355,6 +351,7 @@ const measurements_voxel = {
   hip_width: hipRightX - hipLeftX,
 };
 
+// 実寸法（cm）
 const measurements_world = {
   height: toCm(heightVox) + ' cm',
   shoulder_width: toCm(torsoRightX - torsoLeftX + 1) + ' cm',
@@ -366,6 +363,7 @@ const measurements_world = {
   hip_width: toCm(hipRightX - hipLeftX) + ' cm',
 };
 
+// 結果をJSONとして出力
 const result = {
   source: path.basename(voxPath, '.vox'),
   generated: new Date().toISOString(),
@@ -387,7 +385,7 @@ const result = {
 fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
 console.log(`\nSaved: ${outPath}`);
 
-// Print summary
+// サマリーを表示
 console.log('\n=== LANDMARKS (voxel coordinates) ===');
 for (const [k, v] of Object.entries(landmarks_voxel)) {
   console.log(`  ${k.padEnd(20)} [${v.join(', ')}]`);

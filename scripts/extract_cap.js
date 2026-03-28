@@ -1,22 +1,27 @@
 /**
- * Extract cap voxels from edited body_with_cap.vox
- * Finds voxels with palette colors (200,50,50) and (150,35,40),
- * saves them as knit_cap.vox.
+ * extract_cap.js
+ *
+ * 編集済みbody_with_cap.voxからキャップボクセルを抽出するスクリプト。
+ * パレットカラー(200,50,50)と(150,35,40)に一致するボクセルを見つけ、
+ * knit_cap.voxとして保存する。
  *
  * Usage: node scripts/extract_cap.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
 
+// 入力ファイルパス（ボディ+キャップ統合VOX）
 const INPUT_PATH = 'public/box2/body_with_cap.vox';
+// 出力ファイルパス（抽出したキャップVOX）
 const OUT_PATH   = 'public/box2/knit_cap.vox';
 
-// Cap colors to match
+// キャップの色定義（パレット内で一致する色を検索するための基準）
 const CAP_COLORS = [
-  { r: 200, g: 50, b: 50 },
-  { r: 150, g: 35, b: 40 },
+  { r: 200, g: 50, b: 50 },   // キャップ本体の色（明るい赤）
+  { r: 150, g: 35, b: 40 },   // キャップのツバの色（暗い赤）
 ];
 
-// ── Parse VOX ───────────────────────────────────────────────────────
+// ── VOXファイルパーサー ───────────────────────────────────────────────
 function parseVox(buffer) {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let off = 0;
@@ -42,7 +47,7 @@ function parseVox(buffer) {
   return { sx, sy, sz, voxels, palette };
 }
 
-// ── Write VOX ───────────────────────────────────────────────────────
+// ── VOXファイルライター ──────────────────────────────────────────────
 function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   function makeChunk(id, data) {
     const header = Buffer.alloc(12);
@@ -95,19 +100,21 @@ function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   console.log(`Written: ${filepath} (${voxels.length} voxels, ${sizeX}x${sizeY}x${sizeZ})`);
 }
 
-// ── Main ────────────────────────────────────────────────────────────
+// ── メイン処理 ──────────────────────────────────────────────────────
+// 入力ファイルを読み込み
 console.log('Loading:', INPUT_PATH);
 const data = parseVox(fs.readFileSync(INPUT_PATH));
 console.log(`Loaded: ${data.sx}x${data.sy}x${data.sz}, ${data.voxels.length} voxels, palette: ${data.palette ? 'yes' : 'no'}`);
 
-// Find palette indices that match cap colors
+// キャップ色に一致するパレットインデックスを検索
 const capIndices = new Set();
 if (data.palette) {
   for (let i = 0; i < 256; i++) {
     const pc = data.palette[i];
     for (const cc of CAP_COLORS) {
+      // パレット色がキャップ色と完全一致するか確認
       if (pc.r === cc.r && pc.g === cc.g && pc.b === cc.b) {
-        capIndices.add(i + 1); // VOX palette index is 1-based in XYZI
+        capIndices.add(i + 1); // XYZIのパレットインデックスは1始まり
         console.log(`  Palette match: index ${i + 1} = (${pc.r},${pc.g},${pc.b})`);
       }
     }
@@ -116,7 +123,7 @@ if (data.palette) {
 
 console.log(`Cap palette indices: [${[...capIndices].join(', ')}]`);
 
-// Extract cap voxels
+// キャップボクセルを抽出（キャップ色のパレットインデックスを持つボクセルのみ）
 const capVoxels = [];
 for (const v of data.voxels) {
   if (capIndices.has(v.ci)) {
@@ -126,27 +133,29 @@ for (const v of data.voxels) {
 
 console.log(`Extracted ${capVoxels.length} cap voxels`);
 
-// Build cap palette (reuse the 2 cap colors)
+// キャップ用パレットを構築（2色のみ使用）
 const capPalette = [];
-capPalette[0] = { r: 200, g: 50, b: 50 };   // main cap
-capPalette[1] = { r: 150, g: 35, b: 40 };    // brim
-for (let i = 2; i < 256; i++) capPalette[i] = { r: 0, g: 0, b: 0 };
+capPalette[0] = { r: 200, g: 50, b: 50 };   // キャップ本体
+capPalette[1] = { r: 150, g: 35, b: 40 };    // ツバ
+for (let i = 2; i < 256; i++) capPalette[i] = { r: 0, g: 0, b: 0 }; // 残りは黒
 
-// Remap cap voxel ci to new palette (1=main, 2=brim)
+// キャップボクセルのカラーインデックスを新パレットにリマップ（1=本体, 2=ツバ）
 const indexMap = new Map();
 let newIdx = 1;
 for (const ci of capIndices) {
   const pc = data.palette[ci - 1];
-  // Match to cap color
-  if (pc.r === 200 && pc.g === 50 && pc.b === 50) indexMap.set(ci, 1);
-  else if (pc.r === 150 && pc.g === 35 && pc.b === 40) indexMap.set(ci, 2);
-  else indexMap.set(ci, newIdx++);
+  // 色に基づいてマッピング先を決定
+  if (pc.r === 200 && pc.g === 50 && pc.b === 50) indexMap.set(ci, 1);      // 本体色
+  else if (pc.r === 150 && pc.g === 35 && pc.b === 40) indexMap.set(ci, 2);  // ツバ色
+  else indexMap.set(ci, newIdx++);                                             // その他
 }
 
+// リマップされたボクセルデータを生成
 const outputVoxels = capVoxels.map(v => ({
   x: v.x, y: v.y, z: v.z,
-  ci: indexMap.get(v.ci) || 1,
+  ci: indexMap.get(v.ci) || 1,  // マップにない場合はデフォルト1（本体）
 }));
 
+// キャップVOXファイルとして書き出し
 writeVox(OUT_PATH, data.sx, data.sy, data.sz, outputVoxels, capPalette);
 console.log('Done!');

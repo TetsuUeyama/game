@@ -1,24 +1,27 @@
 /**
  * scale_segments_to_model.js
  *
- * Baseモデルのセグメントボクセルを、新キャラのbody_metricsに基づいてスケーリング。
+ * ベースモデルのセグメントボクセルを、新キャラのbody_metricsに基づいてスケーリングするスクリプト。
  * 各セグメントをボーン軸方向（長さ）とボーン垂直方向（幅・奥行）で伸縮。
  *
  * Usage:
  *   node scripts/scale_segments_to_model.js <base_dir> <new_metrics.json> <output_dir>
  *
- * Example:
+ * 例:
  *   node scripts/scale_segments_to_model.js \
  *     game-assets/vox/female/BasicBodyFemale \
  *     game-assets/vox/female/NewCharacter/body_metrics.json \
  *     game-assets/vox/female/NewCharacter
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
-const BASE_DIR = process.argv[2];
-const NEW_METRICS_PATH = process.argv[3];
-const OUT_DIR = process.argv[4];
+// コマンドライン引数
+const BASE_DIR = process.argv[2];          // ベースモデルディレクトリ
+const NEW_METRICS_PATH = process.argv[3];  // 新モデルのメトリクスJSON
+const OUT_DIR = process.argv[4];           // 出力ディレクトリ
 
 if (!BASE_DIR || !NEW_METRICS_PATH || !OUT_DIR) {
   console.log('Usage: node scale_segments_to_model.js <base_dir> <new_metrics.json> <output_dir>');
@@ -26,8 +29,9 @@ if (!BASE_DIR || !NEW_METRICS_PATH || !OUT_DIR) {
 }
 
 // ========================================================================
-// VOX parser/writer
+// VOXパーサー/ライター
 // ========================================================================
+// VOXファイルパーサー（コンパクト版）
 function parseVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let offset = 8, sizeX = 0, sizeY = 0, sizeZ = 0;
@@ -45,6 +49,7 @@ function parseVox(filePath) {
   return { sizeX, sizeY, sizeZ, voxels, palette };
 }
 
+// VOXファイルライター（コンパクト版）
 function writeVox(filePath, sizeX, sizeY, sizeZ, voxels, palette) {
   const n = voxels.length;
   const chunks = [];
@@ -62,20 +67,20 @@ function writeVox(filePath, sizeX, sizeY, sizeZ, voxels, palette) {
 }
 
 // ========================================================================
-// Load data
+// データ読み込み
 // ========================================================================
-const baseMeta = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'segments.json'), 'utf8'));
-const baseMetrics = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'body_metrics.json'), 'utf8'));
-const newMetrics = JSON.parse(fs.readFileSync(NEW_METRICS_PATH, 'utf8'));
+const baseMeta = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'segments.json'), 'utf8'));   // ベースセグメント情報
+const baseMetrics = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'body_metrics.json'), 'utf8'));  // ベースメトリクス
+const newMetrics = JSON.parse(fs.readFileSync(NEW_METRICS_PATH, 'utf8'));                       // 新モデルメトリクス
 
 console.log(`\n=== Segment Scaler ===`);
 console.log(`  Base: ${baseMetrics.model} (height=${baseMetrics.body_height.toFixed(3)})`);
 console.log(`  New:  ${newMetrics.model} (height=${newMetrics.body_height.toFixed(3)})`);
 
 // ========================================================================
-// Compute per-segment scale ratios
+// セグメントごとのスケール比率を計算
 // ========================================================================
-// Compute limb group total lengths for fallback ratios
+// 肢グループの合計長さからフォールバック比率を計算
 const LIMB_GROUPS = {
   'arm.l': ['shoulder.l','c_arm_twist.l','c_arm_twist_2.l','c_arm_stretch.l','c_forearm_twist.l','c_forearm_twist_2.l','c_forearm_stretch.l','hand.l'],
   'arm.r': ['shoulder.r','c_arm_twist.r','c_arm_twist_2.r','c_arm_stretch.r','c_forearm_twist.r','c_forearm_twist_2.r','c_forearm_stretch.r','hand.r'],
@@ -84,6 +89,7 @@ const LIMB_GROUPS = {
   'spine': ['c_root_bend.x','c_spine_01_bend.x','c_spine_02_bend.x','c_spine_03_bend.x','neck.x'],
 };
 
+// 各肢グループの合計長比率を計算
 const groupRatios = {};
 for (const [group, bones] of Object.entries(LIMB_GROUPS)) {
   let baseTotal = 0, newTotal = 0;
@@ -95,12 +101,13 @@ for (const [group, bones] of Object.entries(LIMB_GROUPS)) {
   console.log(`  Group ${group}: base=${baseTotal.toFixed(4)} new=${newTotal.toFixed(4)} ratio=${groupRatios[group].toFixed(3)}`);
 }
 
-// Map each bone to its group
+// 各ボーンをグループにマッピング
 const boneToGroup = {};
 for (const [group, bones] of Object.entries(LIMB_GROUPS)) {
   for (const bn of bones) boneToGroup[bn] = group;
 }
 
+// 各セグメントのスケール比率を計算
 const scaleRatios = {};
 
 for (const [boneName, baseM] of Object.entries(baseMetrics.metrics)) {
@@ -114,12 +121,13 @@ for (const [boneName, baseM] of Object.entries(baseMetrics.metrics)) {
   const width = baseM.width > 0.001 ? newM.width / baseM.width : 1.0;
   const depth = baseM.depth > 0.001 ? newM.depth / baseM.depth : 1.0;
 
-  // Use group ratio for axial scaling (ensures consistent limb proportions)
+  // 軸方向はグループ比率を使用（肢の一貫したプロポーションを保証）
   const group = boneToGroup[boneName];
   if (group) {
     axial = groupRatios[group];
   }
 
+  // 0.7〜1.5の範囲にクランプ
   scaleRatios[boneName] = {
     axial: Math.max(0.7, Math.min(1.5, axial)),
     width: Math.max(0.7, Math.min(1.5, width)),
@@ -127,7 +135,7 @@ for (const [boneName, baseM] of Object.entries(baseMetrics.metrics)) {
   };
 }
 
-// Print scale ratios for key bones
+// 主要ボーンのスケール比率を表示
 console.log('\n  Scale ratios:');
 for (const [name, ratio] of Object.entries(scaleRatios)) {
   if (ratio.axial !== 1.0 || ratio.width !== 1.0 || ratio.depth !== 1.0) {
@@ -136,26 +144,16 @@ for (const [name, ratio] of Object.entries(scaleRatios)) {
 }
 
 // ========================================================================
-// Build bone hierarchy for cumulative offset calculation
+// 累積オフセット計算のためのボーン階層を構築
 // ========================================================================
 const segDir = path.join(OUT_DIR, 'segments');
 fs.mkdirSync(segDir, { recursive: true });
 
 const vs = baseMeta.voxel_size;
 
-// Build parent-child map from bone_hierarchy if available, or from bone_positions
-const boneHierarchy = baseMeta.bone_hierarchy || {};
-// Determine processing order: root first, then children
-// Segments that share the same body region are grouped by their Z position
-const segNames = Object.keys(baseMeta.segments);
-
-// For each segment, compute the cumulative position offset from scaling
-// Parent's tail moves when parent scales -> child's head should follow
-const segOffsets = {}; // segName -> {dx, dy, dz} cumulative voxel offset
-
-// Define the bone chain order (from root outward)
+// ボーンチェーン順序の定義（ルートから末端へ）
 const BONE_CHAINS = {
-  // Spine chain
+  // 脊椎チェーン
   'c_root_bend.x': { parent: null },
   'c_spine_01_bend.x': { parent: 'c_root_bend.x' },
   'c_spine_02_bend.x': { parent: 'c_spine_01_bend.x' },
@@ -163,7 +161,7 @@ const BONE_CHAINS = {
   'neck.x': { parent: 'c_spine_03_bend.x' },
   'head.x': { parent: 'neck.x' },
   'jawbone.x': { parent: 'head.x' },
-  // Left arm
+  // 左腕チェーン
   'shoulder.l': { parent: 'c_spine_03_bend.x' },
   'c_arm_twist.l': { parent: 'shoulder.l' },
   'c_arm_twist_2.l': { parent: 'c_arm_twist.l' },
@@ -172,7 +170,7 @@ const BONE_CHAINS = {
   'c_forearm_twist_2.l': { parent: 'c_forearm_twist.l' },
   'c_forearm_stretch.l': { parent: 'c_forearm_twist_2.l' },
   'hand.l': { parent: 'c_forearm_stretch.l' },
-  // Right arm
+  // 右腕チェーン
   'shoulder.r': { parent: 'c_spine_03_bend.x' },
   'c_arm_twist.r': { parent: 'shoulder.r' },
   'c_arm_twist_2.r': { parent: 'c_arm_twist.r' },
@@ -181,7 +179,7 @@ const BONE_CHAINS = {
   'c_forearm_twist_2.r': { parent: 'c_forearm_twist.r' },
   'c_forearm_stretch.r': { parent: 'c_forearm_twist_2.r' },
   'hand.r': { parent: 'c_forearm_stretch.r' },
-  // Left leg
+  // 左脚チェーン
   'c_thigh_twist.l': { parent: 'c_root_bend.x' },
   'c_thigh_twist_2.l': { parent: 'c_thigh_twist.l' },
   'c_thigh_stretch.l': { parent: 'c_thigh_twist_2.l' },
@@ -189,7 +187,7 @@ const BONE_CHAINS = {
   'c_leg_twist.l': { parent: 'c_leg_stretch.l' },
   'c_leg_twist_2.l': { parent: 'c_leg_twist.l' },
   'foot.l': { parent: 'c_leg_twist_2.l' },
-  // Right leg
+  // 右脚チェーン
   'c_thigh_twist.r': { parent: 'c_root_bend.x' },
   'c_thigh_twist_2.r': { parent: 'c_thigh_twist.r' },
   'c_thigh_stretch.r': { parent: 'c_thigh_twist_2.r' },
@@ -197,7 +195,7 @@ const BONE_CHAINS = {
   'c_leg_twist.r': { parent: 'c_leg_stretch.r' },
   'c_leg_twist_2.r': { parent: 'c_leg_twist.r' },
   'foot.r': { parent: 'c_leg_twist_2.r' },
-  // Face/ear/eye
+  // 顔/耳/目
   'c_ear_01.l': { parent: 'head.x' },
   'c_ear_02.l': { parent: 'c_ear_01.l' },
   'c_ear_01.r': { parent: 'head.x' },
@@ -208,26 +206,25 @@ const BONE_CHAINS = {
   'breast.r': { parent: 'c_spine_03_bend.x' },
 };
 
-// Compute cumulative offsets by traversing bone chains
-// When a parent bone scales axially, its tail moves. The child's head should follow.
+// 親チェーンの累積テールシフトを計算する関数（再帰）
 function computeParentTailShift(segName) {
   const chain = BONE_CHAINS[segName];
   if (!chain || !chain.parent) return { dx: 0, dy: 0, dz: 0 };
 
   const parentName = chain.parent;
   const parentBone = baseMeta.bone_positions[parentName];
-  if (!parentBone) return computeParentTailShift(parentName); // skip missing parents
+  if (!parentBone) return computeParentTailShift(parentName);
 
   const parentRatio = scaleRatios[parentName] || { axial: 1.0 };
 
-  // Parent's tail shift due to axial scaling
+  // 親の軸方向スケーリングによるテールシフト
   const pHead = parentBone.head_voxel;
   const pTail = parentBone.tail_voxel;
   const tailShiftX = (pTail[0] - pHead[0]) * (parentRatio.axial - 1);
   const tailShiftY = (pTail[1] - pHead[1]) * (parentRatio.axial - 1);
   const tailShiftZ = (pTail[2] - pHead[2]) * (parentRatio.axial - 1);
 
-  // Add parent's own cumulative offset
+  // 親自身の累積オフセットを加算
   const parentOffset = computeParentTailShift(parentName);
 
   return {
@@ -238,11 +235,11 @@ function computeParentTailShift(segName) {
 }
 
 // ========================================================================
-// Scale each segment's voxels with cumulative offset
+// 各セグメントのボクセルを累積オフセット付きでスケーリング
 // ========================================================================
 const newSegments = {};
 const newBonePositions = {};
-const allScaledSegments = {}; // segName -> {voxels, palette, sizeX, sizeY, sizeZ}
+const allScaledSegments = {};
 
 for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
   const segFile = path.join(BASE_DIR, segInfo.file);
@@ -253,20 +250,22 @@ for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
 
   const bonePosData = baseMeta.bone_positions[segName];
   if (!bonePosData) {
+    // ボーン位置データがない場合、そのままコピー
     const outFile = path.join(segDir, `${segName}.vox`);
     writeVox(outFile, segModel.sizeX, segModel.sizeY, segModel.sizeZ, segModel.voxels, segModel.palette);
     newSegments[segName] = { file: `segments/${segName}.vox`, voxels: segModel.voxels.length };
     continue;
   }
 
-  // Cumulative offset from parent chain scaling
+  // 親チェーンのスケーリングからの累積オフセット
   const cumOffset = computeParentTailShift(segName);
 
+  // ピボット位置（ボーンヘッド + 累積オフセット）
   const pivotX = bonePosData.head_voxel[0] + cumOffset.dx;
   const pivotY = bonePosData.head_voxel[1] + cumOffset.dy;
   const pivotZ = bonePosData.head_voxel[2] + cumOffset.dz;
 
-  // Bone axis
+  // ボーン軸方向を計算
   const boneDir = [
     bonePosData.tail_voxel[0] - bonePosData.head_voxel[0],
     bonePosData.tail_voxel[1] - bonePosData.head_voxel[1],
@@ -280,7 +279,7 @@ for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
     axisX = 0; axisY = 0; axisZ = 1;
   }
 
-  // Perpendicular axes
+  // ボーン軸に垂直な2軸を計算
   let perpX1, perpY1, perpZ1;
   if (Math.abs(axisZ) < 0.9) {
     perpX1 = axisY; perpY1 = -axisX; perpZ1 = 0;
@@ -289,62 +288,62 @@ for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
   }
   const pLen = Math.sqrt(perpX1 ** 2 + perpY1 ** 2 + perpZ1 ** 2);
   perpX1 /= pLen; perpY1 /= pLen; perpZ1 /= pLen;
+  // 第2垂直軸（外積）
   const perpX2 = axisY * perpZ1 - axisZ * perpY1;
   const perpY2 = axisZ * perpX1 - axisX * perpZ1;
   const perpZ2 = axisX * perpY1 - axisY * perpX1;
 
+  // ボクセルをスケーリング
   const scaledVoxels = [];
   const origPivotX = bonePosData.head_voxel[0];
   const origPivotY = bonePosData.head_voxel[1];
   const origPivotZ = bonePosData.head_voxel[2];
 
-  // Track which original positions had voxels (for gap fill)
   const isScalingDown = ratio.axial < 1.0 || ratio.width < 1.0 || ratio.depth < 1.0;
 
   for (const v of segModel.voxels) {
+    // ピボットからの相対位置
     const dx = v.x - origPivotX;
     const dy = v.y - origPivotY;
     const dz = v.z - origPivotZ;
 
+    // ボーン軸方向と垂直方向に投影
     const axialProj = dx * axisX + dy * axisY + dz * axisZ;
     const perpProj1 = dx * perpX1 + dy * perpY1 + dz * perpZ1;
     const perpProj2 = dx * perpX2 + dy * perpY2 + dz * perpZ2;
 
     let newX, newY, newZ;
     if (isScalingDown && boneDirLen > 0.1) {
-      // Use distance from TAIL (tip) to decide what to cut.
-      // Voxels close to tail = protrusion tip = candidates for removal/taper
-      // Voxels far from tail = body side = keep as-is
+      // 縮小時: テール（先端）からの距離で切り取り/テーパーを適用
       const tailX = bonePosData.tail_voxel[0];
       const tailY = bonePosData.tail_voxel[1];
       const tailZ = bonePosData.tail_voxel[2];
       const distToTail = Math.sqrt((v.x-tailX)**2 + (v.y-tailY)**2 + (v.z-tailZ)**2);
       const distPivotToTail = boneDirLen;
 
-      // Voxels within ratio*boneDirLen of tail are the tip region to shrink
-      const tipRadius = distPivotToTail * (1 - ratio.axial); // how much to cut
+      const tipRadius = distPivotToTail * (1 - ratio.axial);
 
+      // 先端部分は破棄
       if (distToTail < tipRadius) {
-        // At the very tip: discard
         continue;
       }
 
-      // Taper width: voxels near tail get narrower
+      // テーパー: テール付近のボクセルは幅を狭める
       let widthScale = 1.0, depthScale = 1.0;
-      const taperZone = distPivotToTail * 0.5; // taper starts halfway
+      const taperZone = distPivotToTail * 0.5;
       if (distToTail < taperZone) {
-        const taperT = 1 - distToTail / taperZone; // 1 at tail, 0 at halfway
+        const taperT = 1 - distToTail / taperZone;
         widthScale = 1.0 + (ratio.width - 1.0) * taperT;
         depthScale = 1.0 + (ratio.depth - 1.0) * taperT;
       }
 
       const newPerp1 = perpProj1 * widthScale;
       const newPerp2 = perpProj2 * depthScale;
-      // Keep original position, only narrow perpendicular
       newX = Math.round(origPivotX + cumOffset.dx + axialProj * axisX + newPerp1 * perpX1 + newPerp2 * perpX2);
       newY = Math.round(origPivotY + cumOffset.dy + axialProj * axisY + newPerp1 * perpY1 + newPerp2 * perpY2);
       newZ = Math.round(origPivotZ + cumOffset.dz + axialProj * axisZ + newPerp1 * perpZ1 + newPerp2 * perpZ2);
     } else {
+      // 拡大時: 軸方向と垂直方向をそれぞれスケーリング
       const newAxial = axialProj * ratio.axial;
       const newPerp1 = perpProj1 * ratio.width;
       const newPerp2 = perpProj2 * ratio.depth;
@@ -356,6 +355,7 @@ for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
     scaledVoxels.push({ x: newX, y: newY, z: newZ, c: v.c });
   }
 
+  // スケーリング後のボーン位置を更新
   newBonePositions[segName] = {
     head_voxel: [Math.round(pivotX), Math.round(pivotY), Math.round(pivotZ)],
     tail_voxel: [
@@ -371,7 +371,7 @@ for (const [segName, segInfo] of Object.entries(baseMeta.segments)) {
 }
 
 // ========================================================================
-// Post-process: fill gaps from shrunk segments with body surface
+// 後処理: 縮小セグメントのギャップをボディ表面で埋める
 // ========================================================================
 const allOccupied = new Set();
 for (const [, segData] of Object.entries(allScaledSegments)) {
@@ -390,8 +390,7 @@ for (const [segName] of Object.entries(baseMeta.segments)) {
   const fillColor = allScaledSegments[fillTarget].voxels.length > 0
     ? allScaledSegments[fillTarget].voxels[0].c : 1;
 
-  // Fill ALL original breast positions that are now empty
-  // (body surface where breast shrank away)
+  // 縮小で空いた元のセグメント位置を埋める
   const segFile = path.join(BASE_DIR, baseMeta.segments[segName].file);
   if (!fs.existsSync(segFile)) continue;
   const origModel = parseVox(segFile);
@@ -413,7 +412,7 @@ for (const [segName] of Object.entries(baseMeta.segments)) {
 }
 
 // ========================================================================
-// Post-process: find global bounds, shift to fit within 0-255
+// 後処理: グローバル範囲を検出し、0-255に収まるようにシフト
 // ========================================================================
 let globalMinX = Infinity, globalMinY = Infinity, globalMinZ = Infinity;
 let globalMaxX = -Infinity, globalMaxY = -Infinity, globalMaxZ = -Infinity;
@@ -429,7 +428,7 @@ for (const [, segData] of Object.entries(allScaledSegments)) {
   }
 }
 
-// Shift to ensure all coords >= 0
+// 全座標が0以上になるようにシフト
 const shiftX = globalMinX < 0 ? -globalMinX : 0;
 const shiftY = globalMinY < 0 ? -globalMinY : 0;
 const shiftZ = globalMinZ < 0 ? -globalMinZ : 0;
@@ -440,7 +439,7 @@ const newGridZ = Math.min(256, globalMaxZ + shiftZ + 2);
 
 if (shiftX || shiftY || shiftZ) {
   console.log(`\n  Grid shift: [${shiftX}, ${shiftY}, ${shiftZ}]`);
-  // Also shift bone positions
+  // ボーン位置もシフト
   for (const [name, bp] of Object.entries(newBonePositions)) {
     bp.head_voxel = [bp.head_voxel[0] + shiftX, bp.head_voxel[1] + shiftY, bp.head_voxel[2] + shiftZ];
     bp.tail_voxel = [bp.tail_voxel[0] + shiftX, bp.tail_voxel[1] + shiftY, bp.tail_voxel[2] + shiftZ];
@@ -449,7 +448,7 @@ if (shiftX || shiftY || shiftZ) {
 
 console.log(`  New grid: ${newGridX}x${newGridY}x${newGridZ}`);
 
-// Write shifted and clamped segments
+// シフト・クランプしたセグメントを書き出し
 for (const [segName, segData] of Object.entries(allScaledSegments)) {
   const shifted = [];
   const seen = new Set();
@@ -469,11 +468,11 @@ for (const [segName, segData] of Object.entries(allScaledSegments)) {
 }
 
 // ========================================================================
-// Write output metadata
+// 出力メタデータを書き出し
 // ========================================================================
 const dirName = path.basename(OUT_DIR);
 
-// parts.json
+// parts.jsonを生成
 const parts = Object.entries(newSegments).map(([key, info]) => ({
   key,
   file: `/${dirName}/${info.file}`,
@@ -485,14 +484,14 @@ const parts = Object.entries(newSegments).map(([key, info]) => ({
 }));
 fs.writeFileSync(path.join(OUT_DIR, 'parts.json'), JSON.stringify(parts, null, 2));
 
-// Update bb_min for the shift
+// シフトに応じてbb_minを更新
 const newBbMin = [
   baseMeta.bb_min[0] - shiftX * vs,
   baseMeta.bb_min[1] - shiftY * vs,
   baseMeta.bb_min[2] - shiftZ * vs,
 ];
 
-// segments.json
+// segments.jsonを生成
 const newMeta = {
   ...baseMeta,
   model: newMetrics.model,
@@ -506,7 +505,7 @@ const newMeta = {
 };
 fs.writeFileSync(path.join(OUT_DIR, 'segments.json'), JSON.stringify(newMeta, null, 2));
 
-// grid.json
+// grid.jsonを生成
 const baseGrid = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'grid.json'), 'utf8'));
 baseGrid.gx = newGridX;
 baseGrid.gy = newGridY;
@@ -514,6 +513,6 @@ baseGrid.gz = newGridZ;
 baseGrid.bb_min = newBbMin;
 fs.writeFileSync(path.join(OUT_DIR, 'grid.json'), JSON.stringify(baseGrid, null, 2));
 
+// 結果サマリー
 console.log(`\n  Output: ${OUT_DIR}`);
 console.log(`  Total segments: ${Object.keys(newSegments).length}`);
-console.log('Done.');

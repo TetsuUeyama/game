@@ -1,17 +1,17 @@
 /**
- * Convert FBX animation to JSON motion data.
- * Outputs WORLD-SPACE delta quaternions and delta positions per bone per frame.
- * Delta = difference from rest pose (frame 0).
+ * FBXアニメーションをJSONモーションデータに変換するスクリプト。
+ * 各ボーン×各フレームのワールド空間デルタクォータニオンとデルタ位置を出力する。
+ * デルタ = レストポーズ（フレーム0）からの差分。
  *
- * Usage: node scripts/convert-fbx-motion.mjs <input.fbx> [output.json]
+ * 使用方法: node scripts/convert-fbx-motion.mjs <input.fbx> [output.json]
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { Blob } from 'buffer';
+import fs from 'fs';       // ファイルシステムモジュール
+import path from 'path';   // パス操作モジュール
+import { fileURLToPath } from 'url';  // URL→ファイルパス変換
+import { Blob } from 'buffer';        // Blobポリフィル
 
-// ── Polyfills for Three.js in Node.js ──
+// ── Three.js Node.js環境ポリフィル ──
 global.Blob = Blob;
 global.self = global;
 global.window = global;
@@ -32,6 +32,7 @@ global.URL = global.URL || {};
 global.URL.createObjectURL = global.URL.createObjectURL || (() => '');
 global.URL.revokeObjectURL = global.URL.revokeObjectURL || (() => '');
 
+// fetchポリフィル（ローカルファイル読み込み用）
 if (!global.fetch) {
   global.fetch = async (url) => {
     const filePath = url.startsWith('file://') ? fileURLToPath(url) : url;
@@ -47,6 +48,7 @@ if (!global.fetch) {
 
 const THREE = await import('three');
 
+// FileLoaderをNode.js対応にオーバーライド
 THREE.FileLoader.prototype.load = function (url, onLoad, _onProgress, onError) {
   try {
     const filePath = path.resolve(url);
@@ -64,29 +66,34 @@ THREE.FileLoader.prototype.load = function (url, onLoad, _onProgress, onError) {
   return {};
 };
 
+// TextureLoaderのスタブ
 THREE.TextureLoader.prototype.load = function () {
   return new THREE.Texture();
 };
 
 const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
 
+// mixamorigプレフィックスを除去するヘルパー
 function cleanBoneName(name) {
   return name.replace(/^mixamorig/, '');
 }
 
+// 小数点4桁に丸めるヘルパー
 function round4(v) {
   return Math.round(v * 10000) / 10000;
 }
 
+// FBXファイルを読み込み、モーションデータに変換するメイン関数
 async function convertFBX(inputPath, outputPath) {
   console.log(`Loading FBX: ${inputPath}`);
 
+  // FBXファイルを読み込み
   const loader = new FBXLoader();
   const group = await new Promise((resolve, reject) => {
     loader.load(inputPath, resolve, undefined, reject);
   });
 
-  // Collect all bones
+  // 全ボーンを収集してマップに格納
   const allBones = [];
   const boneByName = {};
   group.traverse((obj) => {
@@ -97,12 +104,12 @@ async function convertFBX(inputPath, outputPath) {
   });
   console.log(`Bones found: ${allBones.length}`);
 
-  // Build hierarchy info
+  // ボーン階層情報を構築
   const hierarchy = [];
   for (const bone of allBones) {
     const name = cleanBoneName(bone.name);
-    const parentName = bone.parent?.isBone ? cleanBoneName(bone.parent.name) : null;
-    const pos = bone.position;
+    const parentName = bone.parent?.isBone ? cleanBoneName(bone.parent.name) : null;  // 親ボーン名
+    const pos = bone.position;  // ローカル位置
     hierarchy.push({
       name,
       parent: parentName,
@@ -110,18 +117,20 @@ async function convertFBX(inputPath, outputPath) {
     });
   }
 
+  // アニメーションクリップの存在確認
   const clips = group.animations;
   if (!clips || clips.length === 0) {
     console.error('No animation clips found!');
     process.exit(1);
   }
 
-  const results = [];
+  const results = [];  // 変換結果を格納する配列
 
+  // 各アニメーションクリップを処理
   for (const clip of clips) {
     console.log(`\nProcessing: "${clip.name}" (${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks)`);
 
-    // Determine source FPS from first quaternion track
+    // ソースFPSを最初のクォータニオントラックから決定
     let sourceFps = 30;
     for (const track of clip.tracks) {
       if (track.name.endsWith('.quaternion') && track.times.length > 1) {
@@ -129,12 +138,13 @@ async function convertFBX(inputPath, outputPath) {
         break;
       }
     }
+    // ターゲットFPS（40fps超の場合は30fpsにダウンサンプル）
     const targetFps = sourceFps > 40 ? 30 : sourceFps;
-    const dt = 1.0 / targetFps;
-    const totalFrames = Math.ceil(clip.duration * targetFps);
+    const dt = 1.0 / targetFps;                        // 1フレームの時間間隔
+    const totalFrames = Math.ceil(clip.duration * targetFps);  // 総フレーム数
     console.log(`  Source FPS: ${sourceFps}, Target FPS: ${targetFps}, Frames: ${totalFrames}`);
 
-    // Identify which bones have animation tracks
+    // アニメーショントラックを持つボーンを特定
     const trackedBoneNames = new Set();
     for (const track of clip.tracks) {
       const dotIdx = track.name.lastIndexOf('.');
@@ -142,11 +152,12 @@ async function convertFBX(inputPath, outputPath) {
       trackedBoneNames.add(cleanBoneName(rawName));
     }
 
-    // Capture BIND POSE (T-pose, before any animation) as rest reference.
-    // This is critical: the voxel viewer model is in T-pose, so delta quaternions
-    // must represent changes from T-pose (bind pose), NOT from frame 0.
+    // バインドポーズ（Tポーズ、アニメーション前）をレスト基準としてキャプチャ
+    // 重要: ボクセルビューアのモデルはTポーズなので、デルタクォータニオンは
+    // フレーム0からではなくTポーズ（バインドポーズ）からの変化を表す必要がある
     group.updateMatrixWorld(true);
 
+    // レスト（バインド）ポーズのワールド位置・回転を保存
     const restWorldPos = {};
     const restWorldQuat = {};
     for (const bone of allBones) {
@@ -159,29 +170,29 @@ async function convertFBX(inputPath, outputPath) {
       restWorldQuat[name] = quat.clone();
     }
 
-    // Now set up animation mixer for frame evaluation
+    // アニメーションミキサーを設定
     const mixer = new THREE.AnimationMixer(group);
     const action = mixer.clipAction(clip);
     action.play();
 
-    // Compute FBX body scale (Hips to Head world distance) from bind pose
+    // FBXボディスケール（Hips→Headのワールド距離）をバインドポーズから計算
     const hipsRestY = restWorldPos['Hips']?.y ?? 0;
     const headRestY = restWorldPos['Head']?.y ?? 1;
     const fbxBodyHeight = headRestY - hipsRestY;
     console.log(`  FBX body height (Hips→Head): ${fbxBodyHeight.toFixed(3)}`);
 
-    // Determine which bones to output (all tracked bones)
+    // 出力するボーンを決定（トラックを持つボーンのみ）
     const outputBones = allBones
       .map(b => cleanBoneName(b.name))
       .filter(name => trackedBoneNames.has(name));
     console.log(`  Output bones (${outputBones.length}): ${outputBones.join(', ')}`);
 
-    // Evaluate each frame - world-space delta from rest
+    // 各フレームを評価 — レストポーズからのワールド空間デルタ
     const frames = [];
     for (let f = 0; f < totalFrames; f++) {
       const time = f * dt;
-      mixer.setTime(time);
-      group.updateMatrixWorld(true);
+      mixer.setTime(time);              // フレーム時間を設定
+      group.updateMatrixWorld(true);     // ワールド行列を更新
 
       const frame = {};
       for (const name of outputBones) {
@@ -190,43 +201,43 @@ async function convertFBX(inputPath, outputPath) {
 
         const worldPos = new THREE.Vector3();
         const worldQuat = new THREE.Quaternion();
-        bone.getWorldPosition(worldPos);
-        bone.getWorldQuaternion(worldQuat);
+        bone.getWorldPosition(worldPos);     // アニメーション後のワールド位置
+        bone.getWorldQuaternion(worldQuat);  // アニメーション後のワールド回転
 
-        // Delta position = animated - rest (in FBX world space)
+        // デルタ位置 = アニメーション後 - レスト（FBXワールド空間）
         const dp = worldPos.clone().sub(restWorldPos[name]);
 
-        // Delta rotation = animated * restInverse (RIGHT-SIDED)
-        // This ensures dq.rotate(bindBoneVec) = Q_anim.rotate(localOffset)
-        // which is required for correct FK positioning with bind-pose bone vectors.
+        // デルタ回転 = animated × restInverse（右側乗算）
+        // これにより dq.rotate(bindBoneVec) = Q_anim.rotate(localOffset) が保証される
+        // バインドポーズのボーンベクトルを使った正しいFK位置計算に必要
         const dq = worldQuat.clone().multiply(restWorldQuat[name].clone().invert());
 
         const entry = {
-          dq: [round4(dq.x), round4(dq.y), round4(dq.z), round4(dq.w)],
+          dq: [round4(dq.x), round4(dq.y), round4(dq.z), round4(dq.w)],  // デルタクォータニオン
         };
 
-        // Include delta position for root motion (Hips etc.)
+        // ルートモーション用のデルタ位置を含める（Hips等）
         if (Math.abs(dp.x) > 0.0001 || Math.abs(dp.y) > 0.0001 || Math.abs(dp.z) > 0.0001) {
           entry.dp = [round4(dp.x), round4(dp.y), round4(dp.z)];
         }
 
         frame[name] = entry;
       }
-      frames.push(frame);
+      frames.push(frame);  // フレームデータを追加
     }
 
-    // Cleanup
+    // ミキサーのクリーンアップ
     mixer.stopAllAction();
     mixer.uncacheRoot(group);
 
-    // Print samples
+    // サンプルフレームの内容を表示
     console.log(`  Frame 0 Hips: ${JSON.stringify(frames[0].Hips)}`);
     const mid = Math.floor(totalFrames / 2);
     console.log(`  Frame ${mid} Hips: ${JSON.stringify(frames[mid].Hips)}`);
     console.log(`  Frame ${mid} Head: ${JSON.stringify(frames[mid].Head)}`);
 
-    // Bind-pose world positions for FK bone vectors
-    // The viewer needs these to compute correct bone directions
+    // FKボーンベクトル計算用のバインドポーズワールド位置
+    // ビューアが正しいボーン方向を計算するために必要
     const bindWorldPositions = {};
     for (const bone of allBones) {
       const name = cleanBoneName(bone.name);
@@ -235,20 +246,22 @@ async function convertFBX(inputPath, outputPath) {
       bindWorldPositions[name] = [round4(wp.x), round4(wp.y), round4(wp.z)];
     }
 
+    // 結果オブジェクトを追加
     results.push({
-      name: clip.name || path.basename(inputPath, '.fbx'),
-      label: path.basename(inputPath, '.fbx'),
-      duration: clip.duration,
-      fps: targetFps,
-      frameCount: frames.length,
-      fbxBodyHeight,
-      hierarchy,
-      outputBones,
-      bindWorldPositions,
-      frames,
+      name: clip.name || path.basename(inputPath, '.fbx'),  // クリップ名
+      label: path.basename(inputPath, '.fbx'),               // 表示ラベル
+      duration: clip.duration,                               // アニメーション長（秒）
+      fps: targetFps,                                        // フレームレート
+      frameCount: frames.length,                             // フレーム数
+      fbxBodyHeight,                                         // FBXボディ高さ
+      hierarchy,                                             // ボーン階層情報
+      outputBones,                                           // 出力ボーンリスト
+      bindWorldPositions,                                    // バインドポーズ位置
+      frames,                                                // フレームデータ
     });
   }
 
+  // JSONファイルに書き出し（単一クリップならオブジェクト、複数なら配列）
   const output = results.length === 1 ? results[0] : results;
   fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
   console.log(`\nWritten to: ${outputPath}`);
@@ -256,11 +269,14 @@ async function convertFBX(inputPath, outputPath) {
   console.log(`File size: ${(stat.size / 1024 / 1024).toFixed(2)} MB`);
 }
 
-// ── CLI ──
+// ── CLI引数の処理 ──
 const args = process.argv.slice(2);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// 入力ファイル（引数なしの場合はデフォルトのHip Hop Dancing.fbx）
 const inputFile = args[0] || path.join(__dirname, '..', 'public', 'models', 'character-motion', 'Hip Hop Dancing.fbx');
+// 出力ファイル（.fbx → .motion.json に変換）
 const defaultOutput = inputFile.replace(/\.fbx$/i, '.motion.json');
 const outputFile = args[1] || defaultOutput;
 
+// 変換を実行
 convertFBX(path.resolve(inputFile), path.resolve(outputFile));

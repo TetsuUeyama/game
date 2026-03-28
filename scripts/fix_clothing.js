@@ -1,20 +1,27 @@
 /**
- * Fix clothing part: generate shell on CE Body surface.
- * Handles arm/torso region mismatch between HP and CE Body.
+ * fix_clothing.js
+ *
+ * 衣装パーツを修正するスクリプト: CEボディ表面にシェルを生成。
+ * HPとCEボディ間の腕/体幹領域の不一致を処理する。
  *
  * Usage: node scripts/fix_clothing.js <part_key> [--arm-only]
- * Example: node scripts/fix_clothing.js suit_top
+ * 例: node scripts/fix_clothing.js suit_top
  */
+// ファイルシステムモジュール
 const fs = require('fs');
+// パス操作モジュール
 const path = require('path');
 
+// コマンドライン引数からパーツキーを取得
 const PART = process.argv[2];
 if (!PART) {
   console.error('Usage: node scripts/fix_clothing.js <part_key> [--arm-only]');
   process.exit(1);
 }
+// --arm-onlyフラグ: 腕部分のみを処理するオプション
 const armOnly = process.argv.includes('--arm-only');
 
+// VOXファイルパーサー
 function readVox(filePath) {
   const buf = fs.readFileSync(filePath);
   let off = 0;
@@ -38,6 +45,7 @@ function readVox(filePath) {
   return { sx, sy, sz, voxels, palette };
 }
 
+// VOXファイルライター
 function writeVox(filePath, sx, sy, sz, voxels, palette) {
   const sizeData = Buffer.alloc(12);
   sizeData.writeUInt32LE(sx, 0); sizeData.writeUInt32LE(sy, 4); sizeData.writeUInt32LE(sz, 8);
@@ -65,11 +73,12 @@ function writeVox(filePath, sx, sy, sz, voxels, palette) {
   fs.writeFileSync(filePath, Buffer.concat([voxH, mainH, children]));
 }
 
-// --- Main ---
+// --- メイン処理 ---
 const BASE = path.join(__dirname, '..');
 const DIR = 'public/box3-new';
 const PREFIX = 'highpriestess_blender_rigged';
 
+// 衣装パーツとCEボディを読み込み
 const part = readVox(path.join(BASE, DIR, `${PREFIX}_${PART}.vox`));
 const body = readVox(path.join(BASE, DIR, `${PREFIX}_body.vox`));
 const SX = part.sx, SY = part.sy, SZ = part.sz;
@@ -77,7 +86,7 @@ const SX = part.sx, SY = part.sy, SZ = part.sz;
 console.log(`Body: ${body.voxels.length} voxels`);
 console.log(`${PART} (original): ${part.voxels.length} voxels`);
 
-// Build body set + surface
+// ボディセットとボディ表面を構築
 const bodySet = new Set();
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
@@ -93,8 +102,8 @@ for (const v of body.voxels) {
 }
 console.log(`Body surface: ${bodySurface.length} voxels`);
 
-// --- Detect body regions ---
-// Body width per Z level
+// --- ボディ領域を検出 ---
+// Z値ごとのボディX幅を計算
 const bodyXByZ = {};
 for (const v of body.voxels) {
   if (!bodyXByZ[v.z]) bodyXByZ[v.z] = { min: v.x, max: v.x, count: 0 };
@@ -106,7 +115,7 @@ const bodyWidths = Object.entries(bodyXByZ).map(([z, d]) => ({ z: +z, w: d.max -
 bodyWidths.sort((a, b) => a.w - b.w);
 const medianWidth = bodyWidths[Math.floor(bodyWidths.length / 2)].w;
 
-// Arm Z levels: where body width exceeds 1.8x median
+// 腕のZ断面: 中央値の1.8倍以上の幅
 const armZLevels = new Set();
 for (const { z, w } of bodyWidths) {
   if (w > medianWidth * 1.8) armZLevels.add(z);
@@ -117,7 +126,7 @@ if (armZLevels.size > 0) {
   console.log(`Detected arm Z levels: ${armZmin}~${armZmax} (width > ${(medianWidth * 1.8).toFixed(0)}, median=${medianWidth})`);
 }
 
-// Torso X range (from non-arm Z levels)
+// 体幹のX範囲（腕以外のZ断面から）
 const torsoXs = [];
 for (const [zStr, data] of Object.entries(bodyXByZ)) {
   if (!armZLevels.has(+zStr) && data.count > 5) {
@@ -130,7 +139,8 @@ const torsoXmin = refTorso ? refTorso.min : 0;
 const torsoXmax = refTorso ? refTorso.max : SX;
 console.log(`Torso X range: ${torsoXmin}~${torsoXmax}`);
 
-// --- Clothing analysis ---
+// --- 衣装の分析 ---
+// Z値ごとの衣装X範囲
 const partXByZ = {};
 for (const v of part.voxels) {
   if (!partXByZ[v.z]) partXByZ[v.z] = { xmin: v.x, xmax: v.x };
@@ -141,10 +151,11 @@ for (const v of part.voxels) {
 }
 const partZmin = Math.min(...part.voxels.map(v => v.z));
 const partZmax = Math.max(...part.voxels.map(v => v.z));
+// 衣装が腕を覆っているか判定（X幅が中央値の1.3倍超）
 const clothingCoversArms = Object.values(partXByZ).some(r => (r.xmax - r.xmin) > medianWidth * 1.3);
 console.log(`Clothing Z range: ${partZmin}~${partZmax}, covers arms: ${clothingCoversArms}`);
 
-// Color lookup
+// 衣装からの色検索マップ
 const clothingColorByZ = {};
 for (const v of part.voxels) {
   if (!clothingColorByZ[v.z]) clothingColorByZ[v.z] = [];
@@ -166,7 +177,7 @@ function getNearestColor(x, y, z) {
   return bestC;
 }
 
-// --- Separate inside/outside ---
+// --- ボディ内側/外側を分離 ---
 const outsideVoxels = [];
 const insideVoxels = [];
 for (const v of part.voxels) {
@@ -175,12 +186,12 @@ for (const v of part.voxels) {
 }
 console.log(`  Outside body: ${outsideVoxels.length}, Inside body: ${insideVoxels.length}`);
 
-// --- Step 1: Keep outside-body voxels ---
+// --- ステップ1: ボディ外側のボクセルを保持 ---
 const result = [];
 const placed = new Set();
 if (!armOnly) {
   for (const v of outsideVoxels) {
-    // Skip floating voxels below CE Body arm level (HP arm positions)
+    // CEボディ腕レベル以下の浮遊ボクセル（HPの腕位置）をスキップ
     if (clothingCoversArms && v.z < armZmin) continue;
     const key = `${v.x},${v.y},${v.z}`;
     if (!placed.has(key)) { placed.add(key); result.push(v); }
@@ -188,7 +199,7 @@ if (!armOnly) {
 }
 console.log(`Step 1 - kept outside: ${result.length}${armOnly ? ' (arm-only)' : ''}`);
 
-// --- Step 2: Generate shell on body surface ---
+// --- ステップ2: ボディ表面にシェルを生成 ---
 let shellArm = 0, shellTorso = 0;
 for (const sv of bodySurface) {
   const isArmZ = armZLevels.has(sv.z);
@@ -196,11 +207,12 @@ for (const sv of bodySurface) {
   const isInPartZ = (sv.z >= partZmin && sv.z <= partZmax);
 
   if (armOnly) {
+    // arm-onlyモード: 腕のZ断面かつ腕のX位置のみ
     if (!isArmZ || !isArmX) continue;
   } else if (isArmZ && clothingCoversArms && isArmX) {
-    // ARM surface: always cover if clothing covers arms
+    // 腕表面: 衣装が腕を覆っている場合は常にカバー
   } else if (isInPartZ && sv.z >= armZmin) {
-    // TORSO/SHOULDER at arm level or above: use per-Z X range
+    // 体幹/肩（腕レベル以上）: Z断面ごとのX範囲を使用
     const xRange = partXByZ[sv.z];
     if (!xRange) continue;
     const effXmin = Math.max(xRange.xmin, torsoXmin - 3);
@@ -210,6 +222,7 @@ for (const sv of bodySurface) {
     continue;
   }
 
+  // 空き隣接にシェルボクセルを配置
   for (const [dx, dy, dz] of DIRS) {
     const nx = sv.x + dx, ny = sv.y + dy, nz = sv.z + dz;
     if (nx < 0 || nx >= SX || ny < 0 || ny >= SY || nz < 0 || nz >= SZ) continue;
@@ -223,9 +236,11 @@ for (const sv of bodySurface) {
 console.log(`Step 2 - shell arm: ${shellArm}, shell torso: ${shellTorso}`);
 console.log(`Total: ${result.length} voxels`);
 
+// 結果をVOXファイルとして書き出し
 writeVox(path.join(BASE, DIR, `${PREFIX}_${PART}.vox`), SX, SY, SZ, result, part.palette);
 console.log(`Written: ${PREFIX}_${PART}.vox`);
 
+// パーツマニフェストを更新
 const manifestPath = path.join(BASE, DIR, `${PREFIX}_parts.json`);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const entry = manifest.find(p => p.key === PART);

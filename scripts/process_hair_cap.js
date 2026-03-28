@@ -1,24 +1,28 @@
 /**
- * Post-process voxelized hair to originate from the knit cap.
+ * process_hair_cap.js
  *
- * Logic:
- * 1. Load body, cap, and raw hair voxels (all on same hires grid)
- * 2. Remove hair voxels that overlap with body
- * 3. Remove hair voxels that are inside the body (below cap region)
- * 4. Keep hair that connects to cap surface or extends outward from it
- * 5. Output processed hair + merged preview file
+ * ボクセル化された髪をニット帽を起点として後処理するスクリプト。
+ *
+ * ロジック:
+ * 1. ボディ、キャップ、生の髪ボクセルを読み込み（全て同じ高解像度グリッド上）
+ * 2. ボディと重複する髪ボクセルを除去
+ * 3. ボディ内部（キャップ領域の下）の髪ボクセルを除去
+ * 4. キャップ表面に接続された、または外側に伸びる髪を保持
+ * 5. 処理済み髪 + 統合プレビューファイルを出力
  *
  * Usage: node scripts/process_hair_cap.js
  */
+// ファイルシステムモジュール
 const fs = require('fs');
 
-const BODY_PATH = 'public/box2/cyberpunk_elf_body_base_hires_sym.vox';
-const CAP_PATH  = 'public/box2/knit_cap.vox';
-const HAIR_PATH = 'public/box2/cyberpunk_elf_hair_hires.vox';
-const OUT_HAIR  = 'public/box2/cyberpunk_elf_hair_hires_processed.vox';
-const OUT_MERGED = 'public/box2/body_cap_hair.vox';
+// 入出力ファイルパス
+const BODY_PATH = 'public/box2/cyberpunk_elf_body_base_hires_sym.vox';   // ボディVOX
+const CAP_PATH  = 'public/box2/knit_cap.vox';                             // キャップVOX
+const HAIR_PATH = 'public/box2/cyberpunk_elf_hair_hires.vox';             // 生の髪VOX
+const OUT_HAIR  = 'public/box2/cyberpunk_elf_hair_hires_processed.vox';   // 処理済み髪出力
+const OUT_MERGED = 'public/box2/body_cap_hair.vox';                       // 統合プレビュー出力
 
-// ── Parse/Write VOX ─────────────────────────────────────────────────
+// ── VOXパーサー/ライター ─────────────────────────────────────────────
 function parseVox(buffer) {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let off = 0;
@@ -74,21 +78,22 @@ function writeVox(filepath, sizeX, sizeY, sizeZ, voxels, palette) {
   console.log(`Written: ${filepath} (${voxels.length} voxels)`);
 }
 
-// ── Main ────────────────────────────────────────────────────────────
+// ── メイン処理 ──────────────────────────────────────────────────────
 console.log('Loading files...');
+// 3つのVOXファイルを読み込み
 const body = parseVox(fs.readFileSync(BODY_PATH));
 const cap = parseVox(fs.readFileSync(CAP_PATH));
 const hair = parseVox(fs.readFileSync(HAIR_PATH));
 console.log(`Body: ${body.voxels.length}, Cap: ${cap.voxels.length}, Hair: ${hair.voxels.length}`);
 
-// Build occupation sets
-const bodySet = new Set();
+// 占有セットを構築
+const bodySet = new Set();  // ボディボクセルの座標セット
 for (const v of body.voxels) bodySet.add(`${v.x},${v.y},${v.z}`);
 
-const capSet = new Set();
+const capSet = new Set();   // キャップボクセルの座標セット
 for (const v of cap.voxels) capSet.add(`${v.x},${v.y},${v.z}`);
 
-// Cap surface: cap voxels that have at least one empty neighbor (not body, not cap)
+// キャップ表面: 少なくとも1つの空き隣接（ボディでもキャップでもない）を持つキャップボクセル
 const DIRS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 const capSurface = new Set();
 for (const v of cap.voxels) {
@@ -102,7 +107,7 @@ for (const v of cap.voxels) {
 }
 console.log(`Cap surface voxels: ${capSurface.size}`);
 
-// Step 1: Remove hair that overlaps body or cap
+// ステップ1: ボディまたはキャップと重複する髪を除去
 let removed_overlap = 0;
 const hairFiltered = [];
 for (const v of hair.voxels) {
@@ -116,18 +121,18 @@ for (const v of hair.voxels) {
 console.log(`Removed overlap with body/cap: ${removed_overlap}`);
 console.log(`Hair after overlap removal: ${hairFiltered.length}`);
 
-// Step 2: Flood fill from cap surface to find connected hair
-// Hair voxels that are adjacent to cap surface → seed
-// Then expand outward through connected hair voxels
-const hairSet = new Set();
-const hairMap = new Map();
+// ステップ2: キャップ表面からフラッドフィルして接続された髪を検出
+// キャップ表面に隣接する髪ボクセル → シード
+// シードから接続された髪ボクセルを辿って拡張
+const hairSet = new Set();    // 髪ボクセルの座標セット
+const hairMap = new Map();    // 座標 → ボクセルデータ
 for (const v of hairFiltered) {
   const key = `${v.x},${v.y},${v.z}`;
   hairSet.add(key);
   hairMap.set(key, v);
 }
 
-// Find hair voxels adjacent to cap surface (seeds)
+// キャップ表面に隣接する髪ボクセルをシードとして検出
 const seeds = new Set();
 for (const v of cap.voxels) {
   if (!capSurface.has(`${v.x},${v.y},${v.z}`)) continue;
@@ -140,7 +145,7 @@ for (const v of cap.voxels) {
 }
 console.log(`Hair seeds (adjacent to cap): ${seeds.size}`);
 
-// Flood fill through hair from seeds
+// シードから髪ボクセルをフラッドフィル
 const connected = new Set(seeds);
 const queue = [...seeds];
 while (queue.length > 0) {
@@ -157,49 +162,49 @@ while (queue.length > 0) {
 console.log(`Connected hair voxels (from cap): ${connected.size}`);
 console.log(`Disconnected hair removed: ${hairFiltered.length - connected.size}`);
 
-// Build output hair
+// 出力用の処理済み髪ボクセルを構築
 const outputHair = [];
 for (const key of connected) {
   outputHair.push(hairMap.get(key));
 }
 
-// Write processed hair
+// 処理済み髪をVOXファイルとして書き出し
 writeVox(OUT_HAIR, hair.sx, hair.sy, hair.sz, outputHair, hair.palette);
 
-// Write merged preview (body + cap + hair)
+// 統合プレビュー（ボディ + キャップ + 髪）を作成
 const mergedPalette = [];
 for (let i = 0; i < 256; i++) {
   mergedPalette.push(body.palette ? body.palette[i] : { r: 0, g: 0, b: 0 });
 }
-// Cap colors at 253-254
-mergedPalette[253] = { r: 200, g: 50, b: 50 };
-mergedPalette[254] = { r: 150, g: 35, b: 40 };
-// Hair color at 252 (use average from hair palette)
+// キャップ色をインデックス253-254に設定
+mergedPalette[253] = { r: 200, g: 50, b: 50 };   // キャップ本体
+mergedPalette[254] = { r: 150, g: 35, b: 40 };   // キャップのツバ
+// 髪色をインデックス252に設定（髪パレットの最初の色を使用）
 if (hair.palette && hair.palette.length > 0) {
-  mergedPalette[252] = hair.palette[0]; // first hair color
+  mergedPalette[252] = hair.palette[0];
 }
 
 const merged = [];
 const mergedSet = new Set();
 
-// Body first
+// ボディを最初に追加
 for (const v of body.voxels) {
   const key = `${v.x},${v.y},${v.z}`;
   mergedSet.add(key);
   merged.push(v);
 }
 
-// Cap
+// キャップを追加（ボディと重複しないもの）
 for (const v of cap.voxels) {
   const key = `${v.x},${v.y},${v.z}`;
   if (!mergedSet.has(key)) {
     mergedSet.add(key);
+    // キャップのカラーインデックスをリマップ（ci=2はツバ色）
     merged.push({ x: v.x, y: v.y, z: v.z, ci: v.ci === 2 ? 255 : 254 });
   }
 }
 
-// Hair (use original palette index mapped to merged palette)
-// For simplicity, map all hair to ci=253 in merged view
+// 髪を追加（統合プレビューでは全てci=253で表示）
 for (const v of outputHair) {
   const key = `${v.x},${v.y},${v.z}`;
   if (!mergedSet.has(key)) {
@@ -208,8 +213,10 @@ for (const v of outputHair) {
   }
 }
 
+// 統合プレビューをVOXファイルとして書き出し
 writeVox(OUT_MERGED, body.sx, body.sy, body.sz, merged, mergedPalette);
 
+// サマリーを表示
 console.log(`\nSummary:`);
 console.log(`  Original hair: ${hair.voxels.length}`);
 console.log(`  Processed hair: ${outputHair.length}`);
