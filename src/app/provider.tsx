@@ -4,7 +4,7 @@ import { ChakraProvider, defaultSystem, Theme } from "@chakra-ui/react";
 // ReactのReactNode型をインポート
 import { ReactNode } from "react";
 // カラーモード関連のコンポーネントとフックをインポート
-import { ColorModeProvider, useColorMode } from "./ColorMode";
+import { ColorModeProvider, useColorMode } from "@/components/ui/ColorMode";
 
 // Propsの型定義（childrenのみ）
 type Props = {

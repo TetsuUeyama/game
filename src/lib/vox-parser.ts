@@ -1,17 +1,8 @@
-// 共有VOXパーサーと型定義
+// 共有VOXパーサー
+// 型定義は types/vox.ts を参照
 
-// VOXモデルのインターフェース（パース結果の型）
-export interface VoxModel {
-  sizeX: number; sizeY: number; sizeZ: number;  // モデルのグリッドサイズ（X, Y, Z方向のボクセル数）
-  voxels: { x: number; y: number; z: number; colorIndex: number }[];  // ボクセルの配列（座標とカラーインデックス）
-  palette: { r: number; g: number; b: number }[];  // カラーパレット（256色、各色はRGB 0.0〜1.0）
-}
-
-// 色付きボクセルエントリのインターフェース（座標とRGB色を直接持つ）
-export interface VoxelEntry {
-  x: number; y: number; z: number;  // ボクセルの座標
-  r: number; g: number; b: number;  // RGB色（0.0〜1.0）
-}
+import type { VoxModel, VoxelEntry } from '@/types/vox';
+export type { VoxModel, VoxelEntry };
 
 // ArrayBufferからVOXファイルをパースする関数
 export function parseVox(buf: ArrayBuffer): VoxModel {
