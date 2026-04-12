@@ -78,8 +78,15 @@ else:
 
 bpy.context.view_layer.update()
 
-# 対象パーツを検索
-mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
+# MASKモディファイア無効化（MustardUI等で非表示のパーツも処理可能にする）
+for obj in bpy.context.scene.objects:
+    if obj.type == 'MESH':
+        for mod in obj.modifiers:
+            if mod.type == 'MASK' and mod.show_viewport:
+                mod.show_viewport = False
+
+# 対象パーツを検索（非表示パーツも含む）
+mesh_objects = [o for o in bpy.context.scene.objects if o.type == 'MESH']
 part_obj = None
 for o in mesh_objects:
     if o.name == PART_NAME:
@@ -224,7 +231,9 @@ _group_input_map = {}  # グループノード内部の入力マッピング
 
 def trace_output(node_tree, node, output_socket):
     """ノードの出力をトレースして色情報のツリーを構築。"""
-    if node.type == 'GROUP_INPUT':
+    if node.type == 'REROUTE':
+        return trace_input(node_tree, node, 'Input')
+    elif node.type == 'GROUP_INPUT':
         # 外部グループノードの入力にマップバック
         gt_name = node_tree.name if hasattr(node_tree, 'name') else ''
         inp_map = _group_input_map.get(gt_name, {})
@@ -328,20 +337,32 @@ for mat in part_obj.data.materials:
         continue
     info = {'eval_tree': None, 'color': (180, 180, 180)}
     if mat.use_nodes:
+        found_bsdf = False
         for nd in mat.node_tree.nodes:
             if nd.type == 'BSDF_PRINCIPLED':
                 bc_inp = nd.inputs.get('Base Color')
                 if bc_inp:
                     if bc_inp.is_linked:
-                        # ノードツリーをトレースして評価ツリーを構築
                         info['eval_tree'] = trace_input(mat.node_tree, nd, 'Base Color')
                         print(f"  Material '{mat.name}': has eval_tree")
                     else:
-                        # フラットカラーを使用
                         c = bc_inp.default_value
                         info['color'] = (int(c[0]*255), int(c[1]*255), int(c[2]*255))
                         print(f"  Material '{mat.name}': color {info['color']}")
+                found_bsdf = True
                 break
+        # BSDF_PRINCIPLEDが外側にない場合（MustardUI等）:
+        # Material Output → Surface入力 → GROUPノードを辿る
+        if not found_bsdf:
+            for nd in mat.node_tree.nodes:
+                if nd.type == 'OUTPUT_MATERIAL':
+                    surface_link = find_input_link(mat.node_tree, nd, 'Surface')
+                    if surface_link:
+                        result = trace_output(mat.node_tree, surface_link.from_node, surface_link.from_socket)
+                        if result[0] != 'color' or result[1] != (0.7, 0.5, 0.4):
+                            info['eval_tree'] = result
+                            print(f"  Material '{mat.name}': traced via Material Output -> {result[0]}")
+                    break
     mat_info[mat.name] = info
 
 # BVHツリーを構築
@@ -400,12 +421,9 @@ def get_color(face_idx, loc):
                     max(0, min(255, int(rgb[2]*255))))
     return mi.get('color', (180, 180, 180)) if mi else (180, 180, 180)
 
-# BVH距離閾値を計算（ボディと同じロジック）
-base_voxel = max(grid_info['def_max'][0]-grid_info['def_min'][0],
-                 grid_info['def_max'][1]-grid_info['def_min'][1],
-                 grid_info['def_max'][2]-grid_info['def_min'][2]) / 100
-thr = max(voxel_size * 1.2, base_voxel * 1.2)
-print(f"  Threshold: {thr:.4f}")
+# BVH距離閾値: 薄い衣装は1ボクセル厚、厚い部分もスリムに
+thr = voxel_size * 0.55
+print(f"  Threshold: {thr:.6f} (voxel_size={voxel_size:.6f}, ratio=0.55)")
 
 # ボディグリッドを使って衣装をボクセル化
 print(f"  Voxelizing {PART_NAME}...")

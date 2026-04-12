@@ -3,11 +3,11 @@ import Link from 'next/link';
 
 // アプリケーション内の各ページへのリンク定義（パスとラベルの配列）
 const pages = [
-  { href: '/realistic-viewer', label: 'Realistic Viewer' },    // リアリスティックボクセルビューア
-  { href: '/motion-lab', label: 'Motion Lab' },                // モーションラボ（ポーズ編集・キーフレームブレンド）
+  { href: '/realistic-viewer', label: 'Voxel Viewer' },        // ボクセルモデルビューア（静的表示）
   { href: '/equip-config', label: 'Equipment Behavior Config' }, // 装備ビヘイビア設定
   { href: '/model-import', label: 'Model Import' },            // モデルインポート
   { href: '/template-editor', label: 'Template Editor' },      // テンプレートエディタ
+  { href: '/clothing-preview', label: 'Clothing Preview' },    // 衣装プレビュー・部位指定
 ];
 
 // ホームページコンポーネント（各ツールページへのリンクを表示）

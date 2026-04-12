@@ -15,6 +15,7 @@ import {
   guessCategory, detectTPose, loadTemplateVox, computeModelBounds, voxelizeMesh,
   type TemplateCategory, type TPoseStatus,
 } from '@/lib/model-import-utils';
+import { loadBaseProfile, normalizeToBase, BASE_BODY_VOX_URL } from '@/lib/body-normalizer';
 
 // ========================================================================
 // Types（型定義）
@@ -106,6 +107,8 @@ export default function ModelImportView() {
   const [voxRes, setVoxRes] = useState(VSCALE);         // ボクセル解像度
   const [voxStatus, setVoxStatus] = useState('');        // ボクセル化ステータスメッセージ
   const [chibiEnabled, setChibiEnabled] = useState(true); // デフォルメ変形有効フラグ
+  const [normalizeEnabled, setNormalizeEnabled] = useState(false); // 基準Body補正有効フラグ
+  const [normalizeRate, setNormalizeRate] = useState(0.5);         // 基準Body補正適用率
 
   // エンジン初期化（マウント時に1回実行）
   useEffect(() => {
@@ -296,8 +299,14 @@ export default function ModelImportView() {
     for (const m of voxelMeshesRef.current) m.dispose(); voxelMeshesRef.current = [];
     const cx = BODY_SIZE.x / 2, cy = BODY_SIZE.y / 2; // グリッドの中心座標
     const results: Record<string, VoxelEntry[]> = {}; // パーツ別結果格納用
-    // ボクセル化対象パーツをフィルタ（表示中・除外とbody以外）
-    const entries = Object.entries(parts).filter(([_, p]) => p.visible && p.category !== 'exclude' && p.category !== 'body');
+    // ボクセル化対象パーツをフィルタ（基準Body補正有効時はbodyも含む）
+    const entries = Object.entries(parts).filter(([_, p]) =>
+      p.visible && p.category !== 'exclude' && (p.category !== 'body' || normalizeEnabled)
+    );
+
+    // 基準Body補正が有効な場合、基準プロファイルを事前読み込み
+    const baseProfile = normalizeEnabled ? await loadBaseProfile(BASE_BODY_VOX_URL).catch(() => null) : null;
+    if (normalizeEnabled && !baseProfile) setVoxStatus('Warning: base body profile load failed');
 
     // デフォルメ変形のバウンディングボックスを計算（有効時のみ）
     const deformBounds = chibiEnabled ? computeModelBounds(meshMapRef.current, parts) : null;
@@ -319,6 +328,11 @@ export default function ModelImportView() {
       for (const mesh of meshes) {
         const mv = voxelizeMesh(mesh, BODY_SIZE.x, BODY_SIZE.y, BODY_SIZE.z, cx + offX, cy + offY, offZ, voxRes * scaleMul, deform);
         partVoxels.push(...mv);
+      }
+
+      // 基準Body補正（bodyカテゴリのパーツのみ）
+      if (normalizeEnabled && baseProfile && partCfg.category === 'body' && partVoxels.length > 0) {
+        partVoxels = normalizeToBase(partVoxels, baseProfile, normalizeRate);
       }
 
       // テンプレートVOXとマージ（カテゴリに対応するテンプレートがある場合）
@@ -347,7 +361,7 @@ export default function ModelImportView() {
     const total = Object.values(results).reduce((s, a) => s + a.length, 0);
     setVoxStatus(`${Object.keys(results).length} parts, ${total} voxels`);
     setMode('voxelize'); // ボクセル化モードに切り替え
-  }, [parts, scaleMul, offX, offY, offZ, voxRes, chibiEnabled]);
+  }, [parts, scaleMul, offX, offY, offZ, voxRes, chibiEnabled, normalizeEnabled, normalizeRate]);
 
   // 全パーツの結合VOXファイルをエクスポートする関数
   const doExportAll = useCallback(() => {
@@ -574,6 +588,26 @@ export default function ModelImportView() {
               </div>
             </div>
 
+            {/* 基準Body補正 */}
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #333' }}>
+              <label style={{ fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={normalizeEnabled} onChange={e => setNormalizeEnabled(e.target.checked)} />
+                <span>Base Body Normalize (Queen Marika)</span>
+              </label>
+              {normalizeEnabled && (
+                <div style={{ marginTop: 6, marginLeft: 20 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr 30px', gap: '4px', alignItems: 'center', fontSize: 11 }}>
+                    <span>Rate</span>
+                    <input type="range" min="0" max="1" step="0.05" value={normalizeRate} onChange={e => setNormalizeRate(Number(e.target.value))} />
+                    <span style={{ color: '#8cf' }}>{normalizeRate.toFixed(2)}</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: '#666', marginTop: 2 }}>
+                    0.0=original, 0.5=half blend, 1.0=full base shape
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* 3Dモデルとボクセルの表示/非表示チェックボックス */}
             <div style={{ padding: '8px 12px', borderBottom: '1px solid #333', display: 'flex', gap: 16 }}>
               <label style={{ fontSize: 11, cursor: 'pointer' }}>
@@ -586,7 +620,7 @@ export default function ModelImportView() {
 
             {/* ボクセル化対象パーツリスト（ボクセル数・個別エクスポートボタン付き） */}
             <div style={{ flex: 1, overflow: 'auto' }}>
-              {Object.entries(parts).filter(([_, p]) => p.visible && p.category !== 'exclude' && p.category !== 'body').map(([name, part]) => (
+              {Object.entries(parts).filter(([_, p]) => p.visible && p.category !== 'exclude' && (p.category !== 'body' || normalizeEnabled)).map(([name, part]) => (
                 <div key={name} style={{ padding: '6px 12px', borderBottom: '1px solid #1a1a2e', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {/* カテゴリ色の小さなインジケーター */}
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: CATEGORY_INFO[part.category].color, display: 'inline-block', flexShrink: 0 }} />
