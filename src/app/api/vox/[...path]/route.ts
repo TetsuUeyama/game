@@ -15,6 +15,8 @@ const SAFE_SEGMENT = /^[a-zA-Z0-9._-]+$/;
 const CONTENT_TYPES: Record<string, string> = {
   '.vox': 'application/octet-stream',   // VOXファイルはバイナリデータ
   '.json': 'application/json',           // JSONファイル
+  '.png': 'image/png',                   // プレビュー画像
+  '.glb': 'model/gltf-binary',          // GLBモデル
 };
 
 // GET: 指定パスのVOX/JSONファイルを返すAPIエンドポイント（動的ルート [...path]）

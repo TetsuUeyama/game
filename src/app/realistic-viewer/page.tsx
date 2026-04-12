@@ -1,2 +1,2 @@
 'use client';
-export { default } from '@/views/RealisticViewerView';
+export { default } from '@/views/VoxelViewerView';
