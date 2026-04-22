@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Engine, Scene, ArcRotateCamera, HemisphericLight,
@@ -76,7 +76,9 @@ function buildEditorMesh(
 
 export default function VoxelBehaviorEditorView() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const partKey = params.partKey as string;
+  const setKey = searchParams.get('set');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -191,18 +193,20 @@ export default function VoxelBehaviorEditorView() {
     if (!sceneRef.current || !partKey) return;
     (async () => {
       try {
-        const manifestResp = await fetch(`/box2/cyberpunk_elf_parts.json?v=${Date.now()}`);
-        if (!manifestResp.ok) throw new Error('Failed to load manifest');
+        if (!setKey) throw new Error('Missing ?set= query parameter');
+        const manifestUrl = `/api/equip-manifest?set=${setKey}&v=${Date.now()}`;
+        const manifestResp = await fetch(manifestUrl);
+        if (!manifestResp.ok) throw new Error(`Failed to load manifest: ${manifestUrl}`);
         const parts: EquipManifestEntry[] = await manifestResp.json();
         const part = parts.find(p => p.key === partKey);
-        if (!part) throw new Error(`Part "${partKey}" not found in manifest`);
+        if (!part) throw new Error(`Part "${partKey}" not found in set "${setKey}"`);
         setPartInfo(part);
 
         const { model, voxels } = await loadVoxFile(part.file);
         voxelsRef.current = voxels;
         centerRef.current = { cx: model.sizeX / 2, cy: model.sizeY / 2 };
 
-        const behResp = await fetch(`/api/equip-behavior?partKey=${partKey}`);
+        const behResp = await fetch(`/api/equip-behavior?partKey=${partKey}&setKey=${setKey}`);
         if (behResp.ok) {
           const data: BehaviorData = await behResp.json();
           const map = new Map<string, EquipBehavior>();
@@ -218,7 +222,7 @@ export default function VoxelBehaviorEditorView() {
         setLoading(false);
       }
     })();
-  }, [partKey, rebuildMesh]);
+  }, [partKey, setKey, rebuildMesh]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -373,7 +377,7 @@ export default function VoxelBehaviorEditorView() {
       const resp = await fetch('/api/equip-behavior', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partKey, behaviors: { surface, gravity } }),
+        body: JSON.stringify({ partKey, setKey, behaviors: { surface, gravity } }),
       });
       if (!resp.ok) throw new Error('Save failed');
       setDirty(false);
@@ -381,7 +385,7 @@ export default function VoxelBehaviorEditorView() {
       alert(e instanceof Error ? e.message : String(e));
     }
     setSaving(false);
-  }, [partKey]);
+  }, [partKey, setKey]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', background: '#1a1a2e' }}>
@@ -395,6 +399,7 @@ export default function VoxelBehaviorEditorView() {
             <span style={{ fontSize: 10, color: '#555' }}>Voxel Behavior Editor</span>
           </div>
           <div style={{ fontWeight: 'bold', fontSize: 18 }}>{partKey}</div>
+          {setKey && <div style={{ fontSize: 11, color: '#8af' }}>{setKey}</div>}
           {partInfo && <div style={{ fontSize: 11, color: '#888' }}>{partInfo.voxels} voxels</div>}
         </div>
 

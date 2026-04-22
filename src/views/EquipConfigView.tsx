@@ -10,21 +10,33 @@ interface EquipConfig {
   behaviors: Record<string, EquipBehavior>;
 }
 
-const STORAGE_KEY = 'fbx-viewer-equip-config';
-const VOX_PARTS_MANIFEST = '/box2/cyberpunk_elf_parts.json';
+interface ManifestEntry {
+  key: string;
+  source: 'static' | 'dynamic';
+  label?: string;
+}
 
-function loadEquipConfig(): EquipConfig | null {
+const STORAGE_PREFIX = 'fbx-viewer-equip-config';
+const SET_STORAGE_KEY = 'fbx-viewer-equip-set';
+
+function storageKeyFor(setKey: string): string {
+  return `${STORAGE_PREFIX}:${setKey}`;
+}
+
+function loadEquipConfig(setKey: string): EquipConfig | null {
   try {
-    const s = localStorage.getItem(STORAGE_KEY);
+    const s = localStorage.getItem(storageKeyFor(setKey));
     return s ? JSON.parse(s) : null;
   } catch { return null; }
 }
 
-function saveEquipConfig(config: EquipConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+function saveEquipConfig(setKey: string, config: EquipConfig) {
+  localStorage.setItem(storageKeyFor(setKey), JSON.stringify(config));
 }
 
 export default function EquipConfigView() {
+  const [manifests, setManifests] = useState<ManifestEntry[]>([]);
+  const [selectedSet, setSelectedSet] = useState<string | null>(null);
   const [equipList, setEquipList] = useState<EquipPart[]>([]);
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [behaviors, setBehaviors] = useState<Record<string, EquipBehavior>>({});
@@ -36,13 +48,39 @@ export default function EquipConfigView() {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch(VOX_PARTS_MANIFEST + `?v=${Date.now()}`);
+        const resp = await fetch('/api/equip-manifests');
+        if (!resp.ok) throw new Error(`Failed to load manifests: ${resp.status}`);
+        const list: ManifestEntry[] = await resp.json();
+        if (list.length === 0) {
+          setError('No clothing set found in public/box2 (expects *_parts.json)');
+          setLoading(false);
+          return;
+        }
+        setManifests(list);
+        const stored = localStorage.getItem(SET_STORAGE_KEY);
+        const initial = list.find(m => m.key === stored)?.key ?? list[0].key;
+        setSelectedSet(initial);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSet) return;
+    localStorage.setItem(SET_STORAGE_KEY, selectedSet);
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        const resp = await fetch(`/api/equip-manifest?set=${selectedSet}&v=${Date.now()}`);
         if (!resp.ok) throw new Error(`Failed to load manifest: ${resp.status}`);
         const parts: EquipPart[] = await resp.json();
         const equipParts = parts.filter(p => p.key !== 'body');
         setEquipList(equipParts);
 
-        const savedConfig = loadEquipConfig();
+        const savedConfig = loadEquipConfig(selectedSet);
         const en: Record<string, boolean> = {};
         const bh: Record<string, EquipBehavior> = {};
         for (const p of equipParts) {
@@ -55,7 +93,7 @@ export default function EquipConfigView() {
         const vbMap: Record<string, BehaviorData> = {};
         await Promise.all(equipParts.map(async (p) => {
           try {
-            const r = await fetch(`/api/equip-behavior?partKey=${p.key}`);
+            const r = await fetch(`/api/equip-behavior?partKey=${p.key}&setKey=${selectedSet}`);
             if (r.ok) vbMap[p.key] = await r.json();
           } catch { /* ignore */ }
         }));
@@ -67,29 +105,32 @@ export default function EquipConfigView() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [selectedSet]);
 
   const showSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 1500); };
 
   const toggleEnabled = (key: string) => {
+    if (!selectedSet) return;
     const next = { ...enabled, [key]: !enabled[key] };
     setEnabled(next);
-    saveEquipConfig({ enabled: next, behaviors });
+    saveEquipConfig(selectedSet, { enabled: next, behaviors });
     showSaved();
   };
 
   const changeBehavior = (key: string, behavior: EquipBehavior) => {
+    if (!selectedSet) return;
     const next = { ...behaviors, [key]: behavior };
     setBehaviors(next);
-    saveEquipConfig({ enabled, behaviors: next });
+    saveEquipConfig(selectedSet, { enabled, behaviors: next });
     showSaved();
   };
 
   const setAllBehavior = (behavior: EquipBehavior) => {
+    if (!selectedSet) return;
     const next: Record<string, EquipBehavior> = {};
     for (const p of equipList) next[p.key] = behavior;
     setBehaviors(next);
-    saveEquipConfig({ enabled, behaviors: next });
+    saveEquipConfig(selectedSet, { enabled, behaviors: next });
     showSaved();
   };
 
@@ -107,7 +148,6 @@ export default function EquipConfigView() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <h1 style={{ margin: 0, fontSize: 22 }}>Equipment Behavior Config</h1>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Link href="/fbx-viewer" style={{ color: '#68f', fontSize: 13 }}>Viewer</Link>
             <Link href="/" style={{ color: '#888', fontSize: 13 }}>Top</Link>
           </div>
         </div>
@@ -117,6 +157,28 @@ export default function EquipConfigView() {
             position: 'fixed', top: 16, right: 16, padding: '8px 16px',
             background: '#4a6', color: '#fff', borderRadius: 6, fontSize: 13, zIndex: 100,
           }}>Saved</div>
+        )}
+
+        {manifests.length > 0 && (
+          <div style={{
+            background: '#0f0f23', borderRadius: 8, padding: '10px 14px', marginBottom: '1rem',
+            border: '1px solid #333', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 12, color: '#888' }}>Clothing Set:</span>
+            {manifests.map(mf => (
+              <button
+                key={mf.key}
+                onClick={() => setSelectedSet(mf.key)}
+                style={{
+                  padding: '4px 12px', borderRadius: 4, fontSize: 12, cursor: 'pointer',
+                  background: selectedSet === mf.key ? '#4a6' : '#2a2a3e',
+                  color: selectedSet === mf.key ? '#fff' : '#aaa',
+                  border: selectedSet === mf.key ? '2px solid #6c8' : '2px solid transparent',
+                  fontWeight: selectedSet === mf.key ? 'bold' : 'normal',
+                }}
+              >{mf.label ?? mf.key}</button>
+            ))}
+          </div>
         )}
 
         <div style={{
@@ -170,7 +232,9 @@ export default function EquipConfigView() {
                       style={{ cursor: 'pointer', width: 16, height: 16 }}
                     />
                     <span style={{ fontWeight: 'bold', fontSize: 14, minWidth: 120 }}>{ep.key}</span>
-                    <span style={{ fontSize: 11, color: '#888' }}>{ep.voxels} voxels</span>
+                    <span style={{ fontSize: 11, color: '#888' }}>
+                      {ep.voxels > 0 ? `${ep.voxels} voxels` : ''}
+                    </span>
                     <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
                       {BEHAVIOR_INFO_LIST.map(info => (
                         <button
@@ -203,7 +267,7 @@ export default function EquipConfigView() {
                       </span>
                     )}
                     <Link
-                      href={`/equip-config/${ep.key}`}
+                      href={`/equip-config/${ep.key}?set=${selectedSet ?? ''}`}
                       style={{
                         marginLeft: 'auto', fontSize: 11, padding: '3px 10px',
                         background: '#2a2a4e', color: '#8af', borderRadius: 4,

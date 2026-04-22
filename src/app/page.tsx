@@ -8,6 +8,7 @@ const pages = [
   { href: '/model-import', label: 'Model Import' },            // モデルインポート
   { href: '/template-editor', label: 'Template Editor' },      // テンプレートエディタ
   { href: '/clothing-preview', label: 'Clothing Preview' },    // 衣装プレビュー・部位指定
+  { href: '/skinned-voxel-demo', label: 'Skinned Voxel Demo' }, // スキン付きボクセルデモ
 ];
 
 // ホームページコンポーネント（各ツールページへのリンクを表示）

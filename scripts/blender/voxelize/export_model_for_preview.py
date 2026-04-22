@@ -79,16 +79,17 @@ _L = ['.l', '_l', 'left', '_L', '.L', 'Left']
 _R = ['.r', '_r', 'right', '_R', '.R', 'Right']
 
 AUTO_BONE_RULES = [
+    # 足指（手指より先に判定。`c_toes_index1.l` のような複合命名で手指ルールが
+    # 誤マッチするのを防ぐ）
+    (['toe', 'lefttoe', 'righttoe'], _L, 'foot_l'),
+    (['toe', 'lefttoe', 'righttoe'], _R, 'foot_r'),
+    (['foot', 'leftfoot', 'rightfoot'], _L, 'foot_l'),
+    (['foot', 'leftfoot', 'rightfoot'], _R, 'foot_r'),
     # 手指
     (['index', 'middle', 'ring', 'pinky', 'thumb'], _L, 'hand_l'),
     (['index', 'middle', 'ring', 'pinky', 'thumb'], _R, 'hand_r'),
     (['hand', 'lefthand'], _L, 'hand_l'),
     (['hand', 'righthand'], _R, 'hand_r'),
-    # 足指
-    (['toe', 'lefttoe', 'righttoe'], _L, 'foot_l'),
-    (['toe', 'lefttoe', 'righttoe'], _R, 'foot_r'),
-    (['foot', 'leftfoot', 'rightfoot'], _L, 'foot_l'),
-    (['foot', 'leftfoot', 'rightfoot'], _R, 'foot_r'),
     # 脛
     (['shin', 'calf', 'leg_twist', 'leg_stretch', 'knee', 'leftleg', 'rightleg'], _L, 'shin_l'),
     (['shin', 'calf', 'leg_twist', 'leg_stretch', 'knee', 'leftleg', 'rightleg'], _R, 'shin_r'),
@@ -361,11 +362,168 @@ eo = body_obj.evaluated_get(dg)
 body_mesh_data = bpy.data.meshes.new_from_object(eo)
 body_mesh_data.transform(body_obj.matrix_world)
 
-# 頂点カラー作成
+# 頂点カラー作成（削除不可の必須 color attribute があるモデル対策）
 for ca in list(body_mesh_data.color_attributes):
-    body_mesh_data.color_attributes.remove(ca)
-color_attr = body_mesh_data.color_attributes.new(
+    if ca.name == 'RegionColor': continue
+    try: body_mesh_data.color_attributes.remove(ca)
+    except (RuntimeError, Exception): pass
+existing = body_mesh_data.color_attributes.get('RegionColor')
+if existing and (existing.data_type != 'BYTE_COLOR' or existing.domain != 'CORNER'):
+    try: body_mesh_data.color_attributes.remove(existing); existing = None
+    except (RuntimeError, Exception): pass
+color_attr = existing or body_mesh_data.color_attributes.new(
     name="RegionColor", type='BYTE_COLOR', domain='CORNER')
+# アクティブに設定してマテリアルから参照されるように
+try: body_mesh_data.color_attributes.active_color = color_attr
+except AttributeError: pass
+
+# ========================================================================
+# 胴体＋肩 ランドマーク抽出（世界座標）
+#   胴体（hips/lower_torso/upper_torso）と肩（shoulder_l/r）はウェイトが
+#   跨ぐため境界が曖昧。解剖学ボーンのランドマークで再分類する。
+#   - 胴体: Z 座標の帯で分離
+#   - 肩: 肩/鎖骨ボーンのセグメント距離で分離
+# ========================================================================
+armature_obj_ref = None
+for mod in body_obj.modifiers:
+    if mod.type == 'ARMATURE' and mod.object:
+        armature_obj_ref = mod.object
+        break
+
+def _bw(bone, use_tail=False):
+    """ボーン head/tail を世界座標で取得"""
+    p = bone.tail_local if use_tail else bone.head_local
+    return (armature_obj_ref.matrix_world @ p) if armature_obj_ref else p.copy()
+
+def _side_of(bn_lower):
+    if any(m in bn_lower for m in ['.l', '_l', 'left']): return 'l'
+    if any(m in bn_lower for m in ['.r', '_r', 'right']): return 'r'
+    return None
+
+def _match_any(bn, patterns):
+    return any(p in bn for p in patterns)
+
+def _is_ctrl(bn):
+    return any(x in bn for x in ['stretch', 'twist', '_ik', '.ik', 'ctrl', 'tweak', '.twk'])
+
+# body中心X（左右判定基準、フォールバック用）
+_body_xs = [v.co.x for v in body_mesh_data.vertices]
+body_center_x = (min(_body_xs) + max(_body_xs)) / 2 if _body_xs else 0.0
+
+# shoulder / clavicle ボーン（side付き、ctrl除く）
+shoulder_bones = []
+for bone in body_armature.bones:
+    bn = bone.name.lower()
+    if not _match_any(bn, ['shoulder', 'clavicle']): continue
+    if _is_ctrl(bn): continue
+    side = _side_of(bn)
+    if side: shoulder_bones.append((bone, side))
+
+# chest 系（breast/nipple/pectoral、ctrl除外せず — 通常ボーンでない場合も位置指標として使える）
+chest_mark_bones = []
+for bone in body_armature.bones:
+    bn = bone.name.lower()
+    if _match_any(bn, ['breast', 'nipple', 'pectoral']):
+        chest_mark_bones.append(bone)
+
+# pelvis / root 系
+pelvis_bones = []
+for bone in body_armature.bones:
+    bn = bone.name.lower()
+    if _match_any(bn, ['pelvis', 'c_root']) and 'rotate' not in bn:
+        pelvis_bones.append(bone)
+
+# neck 系
+neck_bones = []
+for bone in body_armature.bones:
+    bn = bone.name.lower()
+    if 'neck' in bn and not _is_ctrl(bn):
+        neck_bones.append(bone)
+
+# 胴体 spine 系（DEF/prefix無し両対応）
+torso_spine_bones = []
+for bone in body_armature.bones:
+    bn = bone.name.lower()
+    if not _match_any(bn, ['spine', 'chest', 'torso', 'back']): continue
+    if _is_ctrl(bn): continue
+    torso_spine_bones.append(bone)
+torso_spine_bones.sort(key=lambda b: _bw(b).z)
+
+# ランドマーク計算
+torso_hips_top_z = None
+if pelvis_bones:
+    torso_hips_top_z = max(_bw(b, use_tail=True).z for b in pelvis_bones)
+elif torso_spine_bones:
+    torso_hips_top_z = _bw(torso_spine_bones[0]).z
+
+torso_shoulder_top_z = None
+if shoulder_bones:
+    torso_shoulder_top_z = sum(_bw(b).z for b, _ in shoulder_bones) / len(shoulder_bones)
+elif neck_bones:
+    torso_shoulder_top_z = min(_bw(b).z for b in neck_bones)
+
+torso_chest_z = None
+if chest_mark_bones:
+    torso_chest_z = sum(_bw(b).z for b in chest_mark_bones) / len(chest_mark_bones)
+elif torso_hips_top_z is not None and torso_shoulder_top_z is not None:
+    torso_chest_z = torso_hips_top_z + (torso_shoulder_top_z - torso_hips_top_z) * 0.55
+
+# neck 下端（肩帯 Z 上限の代替）
+torso_shoulder_band_top_z = None
+if neck_bones:
+    torso_shoulder_band_top_z = min(_bw(b).z for b in neck_bones)
+elif torso_shoulder_top_z is not None:
+    # shoulder ボーン Z + 肩ボーン長の30%をキャップとする
+    if shoulder_bones:
+        avg_sh_len = sum((_bw(b, use_tail=True) - _bw(b)).length for b, _ in shoulder_bones) / len(shoulder_bones)
+        torso_shoulder_band_top_z = torso_shoulder_top_z + avg_sh_len * 0.3
+
+# 肩セグメント（世界座標、side付き）
+shoulder_segs = []  # list of (head, tail, side)
+for bone, side in shoulder_bones:
+    shoulder_segs.append((_bw(bone), _bw(bone, use_tail=True), side))
+
+# 肩セグメントの平均長 × 閾値係数 = 肩近傍の距離閾値
+shoulder_dist_threshold = None
+if shoulder_segs:
+    avg_len = sum((t - h).length for h, t, _ in shoulder_segs) / len(shoulder_segs)
+    shoulder_dist_threshold = avg_len * 0.55
+
+def dist_to_seg_xz(p, a, b):
+    """XZ平面上の距離（Y=前後は無視）— 背中側も肩として捕捉するため"""
+    p2x, p2z = p.x, p.z
+    a2x, a2z = a.x, a.z
+    abx, abz = b.x - a2x, b.z - a2z
+    al_sq = abx*abx + abz*abz
+    if al_sq < 1e-10:
+        return math.hypot(p2x - a2x, p2z - a2z)
+    t = max(0.0, min(1.0, ((p2x - a2x)*abx + (p2z - a2z)*abz) / al_sq))
+    cx, cz = a2x + t*abx, a2z + t*abz
+    return math.hypot(p2x - cx, p2z - cz)
+
+def nearest_shoulder_side(p):
+    """肩ボーン近傍（XZ平面）なら side('l'/'r')、そうでないなら None"""
+    if not shoulder_segs or shoulder_dist_threshold is None: return None
+    best_side, best_d = None, float('inf')
+    for h, t, side in shoulder_segs:
+        d = dist_to_seg_xz(p, h, t)
+        if d < best_d:
+            best_d = d; best_side = side
+    if best_d < shoulder_dist_threshold:
+        return best_side
+    return None
+
+can_reclass = all(v is not None for v in
+                  (torso_hips_top_z, torso_chest_z, torso_shoulder_top_z))
+
+print(f"  Torso/shoulder landmarks:")
+print(f"    hips_top_z         = {torso_hips_top_z}")
+print(f"    chest_z            = {torso_chest_z}")
+print(f"    shoulder_top_z     = {torso_shoulder_top_z}")
+print(f"    shoulder_band_top  = {torso_shoulder_band_top_z}")
+print(f"    shoulder segs      = {len(shoulder_segs)} (threshold={shoulder_dist_threshold})")
+print(f"    body_center_x      = {body_center_x:.4f}")
+print(f"    reclassify enabled : {can_reclass}")
 
 if MODE == 'height':
     # 高さベース
@@ -406,6 +564,9 @@ else:
     # ボーンウェイトベース
     # 同じ部位グループに属するボーンのウェイトを合算してからグループ間で比較
     orig_verts = body_obj.data.vertices
+    RECLASSIFY_SET = {'hips', 'lower_torso', 'upper_torso', 'shoulder_l', 'shoulder_r'}
+    reclass_stats = {'changed': 0, 'total_in_set': 0}
+
     for poly in body_mesh_data.polygons:
         for loop_idx in poly.loop_indices:
             vi = body_mesh_data.loops[loop_idx].vertex_index
@@ -423,10 +584,39 @@ else:
                     if total_w > best_weight:
                         best_weight = total_w
                         best_region = region
+
+                # 胴体＋肩のみ ランドマークで再分類
+                if can_reclass and best_region in RECLASSIFY_SET:
+                    reclass_stats['total_in_set'] += 1
+                    prev = best_region
+                    vco = body_mesh_data.vertices[vi].co
+                    vz = vco.z
+                    # 肩帯判定の上限: neck 下端 or shoulder_top + 余裕
+                    _band_top = torso_shoulder_band_top_z if torso_shoulder_band_top_z is not None else torso_shoulder_top_z
+                    if vz < torso_hips_top_z:
+                        best_region = 'hips'
+                    elif vz < torso_chest_z:
+                        best_region = 'lower_torso'
+                    elif vz < _band_top:
+                        # 肩帯: 肩ボーンセグメント近傍なら shoulder、それ以外は upper_torso
+                        side = nearest_shoulder_side(vco)
+                        if side is not None:
+                            best_region = 'shoulder_' + side
+                        else:
+                            best_region = 'upper_torso'
+                    else:
+                        # neck/head 領域。torso系ウェイトの漏れを吸収
+                        best_region = 'upper_torso'
+                    if best_region != prev:
+                        reclass_stats['changed'] += 1
+
                 col = GROUP_COLORS_LINEAR.get(best_region, (0.22, 0.22, 0.22))
             else:
                 col = (0.22, 0.22, 0.22)
             color_attr.data[loop_idx].color = (col[0], col[1], col[2], 1.0)
+
+    if can_reclass:
+        print(f"  Reclassified {reclass_stats['changed']}/{reclass_stats['total_in_set']} loops in torso+shoulder")
 
 # Bodyオブジェクト作成
 body_export = bpy.data.objects.new("Body_Regions", body_mesh_data)
@@ -455,8 +645,10 @@ for poly in body_mesh_data.polygons:
 # ========================================================================
 # GLBエクスポート
 # ========================================================================
-# 全オブジェクト非選択
-bpy.ops.object.select_all(action='DESELECT')
+# 全オブジェクト非選択（ops.select_allはpoll失敗することがあるため直接操作）
+for obj in bpy.context.view_layer.objects:
+    try: obj.select_set(False)
+    except RuntimeError: pass
 for obj in bpy.context.scene.objects:
     obj.hide_viewport = True
 
@@ -537,7 +729,9 @@ for pname in parts_to_export:
     export_col.objects.link(part_export)
     part_export.hide_viewport = False
 
-    bpy.ops.object.select_all(action='DESELECT')
+    for obj in bpy.context.view_layer.objects:
+        try: obj.select_set(False)
+        except RuntimeError: pass
     part_export.select_set(True)
     bpy.context.view_layer.objects.active = part_export
 
