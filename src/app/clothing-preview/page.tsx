@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Engine, Scene, ArcRotateCamera, HemisphericLight, DirectionalLight,
   Vector3, Color3, Color4, Mesh, StandardMaterial, MeshBuilder,
@@ -183,7 +184,7 @@ export default function ClothingPreviewPage() {
       setLoading(true);
       setError(null);
       try {
-        const manifestUrl = `${VOX_API}/${QM_DIR}/preview_models/helena_witch/manifest.json?v=${Date.now()}`;
+        const manifestUrl = `${VOX_API}/${QM_DIR}/preview_models/nina_williams/manifest.json?v=${Date.now()}`;
         const resp = await fetch(manifestUrl);
         if (!resp.ok) {
           setError('manifest.json not found');
@@ -193,7 +194,7 @@ export default function ClothingPreviewPage() {
         const mf: PreviewManifest = await resp.json();
         setManifest(mf);
 
-        const baseUrl = `${VOX_API}/${QM_DIR}/preview_models/helena_witch`;
+        const baseUrl = `${VOX_API}/${QM_DIR}/preview_models/nina_williams`;
         const bust = `?v=${Date.now()}`;
 
         // Body GLB（GLTFローダーのPBRマテリアルが頂点カラーを自動表示）
@@ -286,6 +287,18 @@ export default function ClothingPreviewPage() {
         overflowY: 'auto', background: 'rgba(0,0,0,0.4)',
         borderLeft: '1px solid #333',
       }}>
+        <Link
+          href="/equip-config"
+          style={{
+            display: 'block', padding: '6px 8px', marginBottom: 10,
+            fontSize: 11, textAlign: 'center', textDecoration: 'none',
+            background: 'rgba(70,110,180,0.3)', color: '#8af',
+            border: '1px solid #446', borderRadius: 4,
+          }}
+        >
+          → Voxel Behavior Editor
+        </Link>
+
         {/* 衣装パーツ */}
         <h3 style={{ fontSize: 13, margin: '0 0 8px', color: '#fa8' }}>Clothing Parts</h3>
         {loading && <div style={{ color: '#8af', fontSize: 11 }}>Loading...</div>}
