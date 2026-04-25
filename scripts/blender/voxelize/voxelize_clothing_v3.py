@@ -122,33 +122,52 @@ with open(SRC_BONE_MAPPING) as f:
 src_bone_map = src_bone_data.get('bone_map', {})
 
 # ========================================================================
-# QM Body BVH（ターゲット側のBody表面法線取得用）
+# QM Body 法線ソース選択:
+#   QM_BLEND = "-" or "voxel" → voxel 法線 (省メモリ、推奨)
+#   else                      → QM blend 読み込み (従来方式、メモリ多)
 # ========================================================================
-print("  Loading QM body mesh...")
-# QMのblendからBodyメッシュをアペンド
-with bpy.data.libraries.load(QM_BLEND, link=False) as (data_from, data_to):
-    data_to.objects = [n for n in data_from.objects]
+qm_bvh = None
+bm_qm = None
+tgt_surface_normals = {}  # voxel-based 法線: (x,y,z) -> (ux,uy,uz)
 
-qm_body = None
-for obj in data_to.objects:
-    if obj is not None and obj.type == 'MESH' and 'body' in obj.name.lower() and 'queen' in obj.name.lower():
-        qm_body = obj; break
-if not qm_body:
-    for obj in data_to.objects:
-        if obj is not None and obj.type == 'MESH' and 'body' in obj.name.lower():
-            qm_body = obj; break
+USE_VOXEL_NORMAL = QM_BLEND in ('-', 'voxel', 'voxel-normal', '')
 
-if qm_body:
-    qm_me = qm_body.data
-    bm_qm = bmesh.new(); bm_qm.from_mesh(qm_me)
-    bmesh.ops.transform(bm_qm, matrix=qm_body.matrix_world, verts=bm_qm.verts)
-    bmesh.ops.triangulate(bm_qm, faces=bm_qm.faces)
-    bm_qm.verts.ensure_lookup_table(); bm_qm.faces.ensure_lookup_table()
-    qm_bvh = BVHTree.FromBMesh(bm_qm)
-    print(f"  QM body: {qm_body.name} ({len(qm_me.vertices)} verts)")
+if USE_VOXEL_NORMAL:
+    print("  Using voxel-based surface normals (no QM mesh load)")
+    for (x, y, z) in tgt_body_set:
+        ux = uy = uz = 0.0; empty = 0
+        for (dx, dy, dz) in DIRS6:
+            if (x+dx, y+dy, z+dz) not in tgt_body_set:
+                ux += dx; uy += dy; uz += dz; empty += 1
+        if empty == 0: continue
+        length = (ux*ux + uy*uy + uz*uz) ** 0.5
+        if length < 0.1:
+            tgt_surface_normals[(x, y, z)] = (0.0, 0.0, 1.0)
+        else:
+            tgt_surface_normals[(x, y, z)] = (ux/length, uy/length, uz/length)
+    print(f"  target surface voxels with normals: {len(tgt_surface_normals)}")
 else:
-    print("  WARNING: QM body not found, normal direction may be inaccurate")
-    qm_bvh = None
+    print("  Loading QM body mesh...")
+    with bpy.data.libraries.load(QM_BLEND, link=False) as (data_from, data_to):
+        data_to.objects = [n for n in data_from.objects]
+    qm_body = None
+    for obj in data_to.objects:
+        if obj is not None and obj.type == 'MESH' and 'body' in obj.name.lower() and 'queen' in obj.name.lower():
+            qm_body = obj; break
+    if not qm_body:
+        for obj in data_to.objects:
+            if obj is not None and obj.type == 'MESH' and 'body' in obj.name.lower():
+                qm_body = obj; break
+    if qm_body:
+        qm_me = qm_body.data
+        bm_qm = bmesh.new(); bm_qm.from_mesh(qm_me)
+        bmesh.ops.transform(bm_qm, matrix=qm_body.matrix_world, verts=bm_qm.verts)
+        bmesh.ops.triangulate(bm_qm, faces=bm_qm.faces)
+        bm_qm.verts.ensure_lookup_table(); bm_qm.faces.ensure_lookup_table()
+        qm_bvh = BVHTree.FromBMesh(bm_qm)
+        print(f"  QM body: {qm_body.name} ({len(qm_me.vertices)} verts)")
+    else:
+        print("  WARNING: QM body not found, normal direction may be inaccurate")
 
 # ========================================================================
 # ソースBlendファイル（衣装の元データ）
@@ -471,6 +490,11 @@ for surf_pos, region in target_surface:
         qloc, qnorm, qfi, qdist = qm_bvh.find_nearest(tgt_world)
         if qloc is not None and qnorm is not None:
             tgt_norm = qnorm.normalized()
+    elif USE_VOXEL_NORMAL:
+        # surf_pos は target 表面 voxel 座標 (既に外側へのループで取得済み)
+        n = tgt_surface_normals.get(surf_pos)
+        if n is not None:
+            tgt_norm = Vector((n[0], n[1], n[2]))
 
     # QM表面点→ソースBody表面の対応点を求める
     # ソースBody BVHでQM表面点に最も近い点を取得

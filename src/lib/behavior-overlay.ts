@@ -1,16 +1,19 @@
+
+
 import {
-  Mesh, VertexData, Scene, Color3, StandardMaterial, Skeleton, Vector3,
+  Mesh, Scene, Skeleton, Vector3,
   type Node as BabylonNode,
 } from '@babylonjs/core';
 import { parseVox } from '@/lib/vox-parser';
-import { FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import type { EquipBehavior, BehaviorData } from '@/types/equip';
 import {
-  VoxelCloth, MIXAMO_HUMANOID_CAPSULES, HUMANOID_BONES,
-  type ClothVoxel, type GridInfo as ClothGridInfo,
+  SpringClothSystem, MIXAMO_HUMANOID_CAPSULES,
+  buildBodySkinnedMesh,
+  type GridInfo as ClothGridInfo,
+  type TaggedVoxel,
+  type BodySkinVoxel,
 } from '@/lib/cloth';
 import { defaultBlenderToGltfTransform } from '@/lib/cloth/mesh-builder';
-import type { GridWorldTransform } from '@/lib/cloth/types';
 
 export type GridInfo = ClothGridInfo;
 
@@ -19,12 +22,6 @@ interface PartEntry {
   file: string;
   voxels: number;
   default_on: boolean;
-}
-
-interface ClassifiedVoxel {
-  x: number; y: number; z: number;
-  r: number; g: number; b: number;
-  behavior: EquipBehavior;
 }
 
 /**
@@ -49,116 +46,17 @@ export function detectSkeletonAxes(skeleton: Skeleton): SkeletonAxes | null {
   const hipsP = hips.getAbsolutePosition();
   const up = head.getAbsolutePosition().subtract(hipsP).normalize();
   const rawRight = rRef.getAbsolutePosition().subtract(lRef.getAbsolutePosition());
-  // up に直交化（完全直交でない場合に備える）
   const rightOrtho = rawRight.subtract(up.scale(Vector3.Dot(up, rawRight))).normalize();
-  // 右手系: forward = right × up （検証: cross((1,0,0), (0,1,0)) = (0,0,1)）
   const forward = Vector3.Cross(rightOrtho, up).normalize();
 
   return { up, right: rightOrtho, forward, hips: hipsP };
 }
-
-// 旧: dynamic transform (skeleton 軸から grid→world を構築) は撤去。
-// 理由: overlay mesh を body __root__ の子に parent するため、vertex は
-// body mesh-local (= Blender→glTF 変換後) の空間に置く必要がある。
-// __root__ の world matrix は Babylon が handedness 変換で設定するので、
-// それを引き継げば LH/RH どちらでも body と overlay の world 位置が一致する。
-// skeleton 軸検出は診断ログ用途でのみ使う。
 
 function buildBehaviorLookup(data: BehaviorData): Map<string, EquipBehavior> {
   const map = new Map<string, EquipBehavior>();
   for (const k of data.surface ?? []) map.set(k, 'surface');
   for (const k of data.gravity ?? []) map.set(k, 'gravity');
   return map;
-}
-
-function nearestBoneIndex(
-  wx: number, wy: number, wz: number,
-  bonePositions: Array<[number, number, number]>,
-  boneIndexMap: number[],
-): number {
-  let best = 0, bestD = Infinity;
-  for (let i = 0; i < bonePositions.length; i++) {
-    const [bx, by, bz] = bonePositions[i];
-    const dx = bx - wx, dy = by - wy, dz = bz - wz;
-    const d = dx * dx + dy * dy + dz * dz;
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return boneIndexMap[best];
-}
-
-// ----------------------------------------------------------------------
-// Skinned voxel mesh (synced / surface 用): 最寄り人体ボーンに hard-skinning
-// ----------------------------------------------------------------------
-function buildSkinnedVoxelMesh(
-  scene: Scene,
-  name: string,
-  voxels: ClassifiedVoxel[],
-  transform: GridWorldTransform,
-  skeleton: Skeleton,
-  bonePositions: Array<[number, number, number]>,
-  boneIndexMap: number[],
-): Mesh | null {
-  if (voxels.length === 0) return null;
-
-  const occupied = new Set<string>();
-  for (const v of voxels) occupied.add(`${v.x},${v.y},${v.z}`);
-
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const colors: number[] = [];
-  const indices: number[] = [];
-  const matIdx: number[] = [];
-  const matW: number[] = [];
-
-  for (const voxel of voxels) {
-    // ボーン選択は body と同じ空間（transform 出力 = body mesh-local = glTF coord）で行う。
-    // bone.getAbsolutePosition() も同じ空間を返すので整合する。
-    const [cwx, cwy, cwz] = transform.point(voxel.x + 0.5, voxel.y + 0.5, voxel.z + 0.5);
-    const boneIdx = nearestBoneIndex(cwx, cwy, cwz, bonePositions, boneIndexMap);
-
-    for (let f = 0; f < 6; f++) {
-      const [dx, dy, dz] = FACE_DIRS[f];
-      if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;
-
-      const bi = positions.length / 3;
-      const fv = FACE_VERTS[f];
-      const fn = FACE_NORMALS[f];
-      const [nwx, nwy, nwz] = transform.dir(fn[0], fn[1], fn[2]);
-      for (let vi = 0; vi < 4; vi++) {
-        const [wx, wy, wz] = transform.point(
-          voxel.x + fv[vi][0], voxel.y + fv[vi][1], voxel.z + fv[vi][2],
-        );
-        positions.push(wx, wy, wz);
-        normals.push(nwx, nwy, nwz);
-        colors.push(voxel.r, voxel.g, voxel.b, 1);
-        matIdx.push(boneIdx, 0, 0, 0);
-        matW.push(1, 0, 0, 0);
-      }
-      indices.push(bi, bi + 1, bi + 2, bi, bi + 2, bi + 3);
-    }
-  }
-
-  if (positions.length === 0) return null;
-
-  const vd = new VertexData();
-  vd.positions = positions;
-  vd.normals = normals;
-  vd.colors = colors;
-  vd.indices = indices;
-  vd.matricesIndices = matIdx;
-  vd.matricesWeights = matW;
-
-  const mesh = new Mesh(name, scene);
-  vd.applyToMesh(mesh);
-  mesh.skeleton = skeleton;
-  mesh.numBoneInfluencers = 4;
-
-  const mat = new StandardMaterial(`${name}_mat`, scene);
-  mat.backFaceCulling = false;
-  mat.specularColor = new Color3(0, 0, 0);
-  mesh.material = mat;
-  mesh.isPickable = false;
-  return mesh;
 }
 
 export interface BehaviorOverlayHandle {
@@ -168,8 +66,14 @@ export interface BehaviorOverlayHandle {
 }
 
 /**
- * セット内の voxel を分類し、synced/surface は body に追従する skinned mesh、
- * gravity は VoxelCloth (PBD 布シミュ) で描画する。
+ * セット内の voxel を behavior で 2 つの mesh に分離して構築する。
+ *
+ *   - synced / surface: body bone に直接 hard-skin した mesh (遅延なし、物理なし)
+ *   - gravity:          SpringClothSystem が管理する揺れ物 mesh (spring 物理)
+ *
+ * 分離する理由: 1 枚 mesh で共用すると cloth bone の存在が synced/surface にも
+ * 影響して body motion と微妙にズレることがあるため。分離すれば body 追従分は
+ * 完全に motion と一致する。
  *
  * parentNode を渡すと overlay mesh を GLB の __root__ の子にする。これにより
  * Babylon の handedness 変換（LH 時の root rotation+scale 反転）を overlay も継承し、
@@ -210,9 +114,8 @@ export async function loadBehaviorOverlay(
   const parts: PartEntry[] = await manifestResp.json();
 
   const stats = { synced: 0, surface: 0, gravity: 0, total: 0 };
-  const moving: ClassifiedVoxel[] = [];
-  const stationary: ClassifiedVoxel[] = [];
-  const allKeys = new Set<string>();
+  const bodyVoxels: BodySkinVoxel[] = [];   // synced + surface
+  const gravityVoxels: TaggedVoxel[] = [];  // gravity のみ
 
   for (const part of parts) {
     try {
@@ -230,63 +133,50 @@ export async function loadBehaviorOverlay(
         const origKey = `${v.x},${v.y},${v.z}`;
         const behavior = behaviorMap.get(origKey) ?? 'synced';
         const col = model.palette[v.colorIndex - 1] ?? { r: 0.8, g: 0.8, b: 0.8 };
-        const entry: ClassifiedVoxel = {
+        const entry = {
           x: v.x, y: v.y, z: v.z,
           r: col.r, g: col.g, b: col.b,
-          behavior,
         };
+        if (behavior === 'gravity') {
+          gravityVoxels.push({ ...entry, behavior });
+        } else {
+          bodyVoxels.push(entry);
+        }
         stats[behavior]++;
         stats.total++;
-        allKeys.add(`${v.x},${v.y},${v.z}`);
-        if (behavior === 'gravity') stationary.push(entry);
-        else moving.push(entry);
       }
     } catch (e) {
       console.warn(`overlay part failed: ${part.key}`, e);
     }
   }
 
-  // 人体ボーンのみ抽出（moving voxel の skinning 用）
-  const humanSet = new Set(HUMANOID_BONES);
-  const bonePositions: Array<[number, number, number]> = [];
-  const boneIndexMap: number[] = [];
-  for (let i = 0; i < skeleton.bones.length; i++) {
-    const b = skeleton.bones[i];
-    if (!humanSet.has(b.name)) continue;
-    const p = b.getAbsolutePosition();
-    bonePositions.push([p.x, p.y, p.z]);
-    boneIndexMap.push(i);
-  }
-
   const meshes: Mesh[] = [];
-  let cloth: VoxelCloth | null = null;
+  let cloth: SpringClothSystem | null = null;
 
-  // 追従側: skinning
-  if (moving.length > 0 && bonePositions.length > 0) {
-    const movingMesh = buildSkinnedVoxelMesh(
-      scene, `overlay_${setKey}_moving`, moving, transform, skeleton, bonePositions, boneIndexMap,
+  // 1. body 追従分 (synced + surface): 単純 hard-skin
+  if (bodyVoxels.length > 0) {
+    const t0 = performance.now();
+    const bodyMesh = buildBodySkinnedMesh(
+      scene, `overlay_${setKey}_body`, bodyVoxels, transform, skeleton,
     );
-    if (movingMesh) {
-      if (options.parentNode) movingMesh.parent = options.parentNode;
-      meshes.push(movingMesh);
+    if (bodyMesh) {
+      if (options.parentNode) bodyMesh.parent = options.parentNode;
+      meshes.push(bodyMesh);
+      console.log(`[behavior-overlay] bodyMesh: ${bodyVoxels.length} voxels (${(performance.now() - t0).toFixed(1)}ms)`);
     }
   }
 
-  // 重力側: VoxelCloth ライブラリで PBD 布シミュ
-  if (stationary.length > 0) {
-    const clothVoxels: ClothVoxel[] = stationary.map((v) => ({
-      x: v.x, y: v.y, z: v.z, r: v.r, g: v.g, b: v.b,
-    }));
-    cloth = new VoxelCloth(scene, {
-      name: `overlay_${setKey}_cloth`,
-      voxels: clothVoxels,
-      grid,
-      skeleton,
-      anchorVoxelSet: allKeys,
-      capsules: MIXAMO_HUMANOID_CAPSULES,
-      gridTransform: transform,
-    });
-    if (options.parentNode) cloth.mesh.parent = options.parentNode;
+  // 2. 揺れ物 (gravity): SpringClothSystem で cloth bone + spring 物理
+  if (gravityVoxels.length > 0) {
+    const t0 = performance.now();
+    cloth = new SpringClothSystem(
+      scene, gravityVoxels, transform, skeleton, `overlay_${setKey}_cloth`,
+      {
+        parentNode: options.parentNode,
+        capsules: MIXAMO_HUMANOID_CAPSULES,
+      },
+    );
+    console.log(`[behavior-overlay] cloth: ${cloth.voxelCount} voxels, ${cloth.boneCount} cloth bones (${(performance.now() - t0).toFixed(1)}ms)`);
     meshes.push(cloth.mesh);
   }
 
@@ -296,7 +186,6 @@ export async function loadBehaviorOverlay(
     dispose: () => {
       if (cloth) { cloth.dispose(); cloth = null; }
       for (const m of meshes) {
-        // cloth.mesh は既に dispose 済み。残りだけ処理
         if (!m.isDisposed()) m.dispose();
       }
       meshes.length = 0;

@@ -36,6 +36,11 @@ export interface PbdState {
   damping: number;
   iterations: number;
   collisionEvery: number;
+
+  /** フレーム毎に加える外力（world 単位/frame^2）。setExternalForce で更新 */
+  externalX: number;
+  externalY: number;
+  externalZ: number;
 }
 
 export interface PbdBuildParams {
@@ -274,6 +279,7 @@ export function buildPbdState(
     damping: params.damping,
     iterations: params.iterations,
     collisionEvery: params.collisionEvery,
+    externalX: 0, externalY: 0, externalZ: 0,
   };
 }
 
@@ -306,18 +312,21 @@ export function stepPbd(state: PbdState): void {
     prevX[i] = posX[i]; prevY[i] = posY[i]; prevZ[i] = posZ[i];
   }
 
-  // 2. 自由ノード Verlet 積分
+  // 2. 自由ノード Verlet 積分（重力 + 外力を加える）
   const g = state.gravity;
   const damping = state.damping;
+  const extX = state.externalX;
+  const extY = state.externalY;
+  const extZ = state.externalZ;
   for (let i = 0; i < N; i++) {
     if (pinnedBone[i] >= 0) continue;
     const vx = (posX[i] - prevX[i]) * damping;
     const vy = (posY[i] - prevY[i]) * damping;
     const vz = (posZ[i] - prevZ[i]) * damping;
     prevX[i] = posX[i]; prevY[i] = posY[i]; prevZ[i] = posZ[i];
-    posX[i] += vx;
-    posY[i] += vy + g;
-    posZ[i] += vz;
+    posX[i] += vx + extX;
+    posY[i] += vy + g + extY;
+    posZ[i] += vz + extZ;
   }
 
   // カプセル位置を1フレ分キャッシュ

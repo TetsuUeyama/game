@@ -125,6 +125,38 @@ BONE_GROUPS = {
     ],
 }
 
+# ボーン名 → グループ名 (substring pattern) で未登録ボーンを自動分類
+# 他モデル (DE 等) の命名ゆれ (c_thigh_twist_2.l, toes_*_def.l, hand_l 等) を吸収する
+import re as _re
+def _classify_by_pattern(name):
+    n = name.lower()
+    # side
+    if n.endswith('.l') or n.endswith('_l') or _re.search(r'[._]l[._]', n): s = 'l'
+    elif n.endswith('.r') or n.endswith('_r') or _re.search(r'[._]r[._]', n): s = 'r'
+    else: s = 'x'
+    # head
+    if any(kw in n for kw in ['head.x','jawbone','skull','chin','cheek','nose','ear','eye','eyebrow','eyelid','lips','teeth','tongue']):
+        return 'head'
+    if 'neck' in n: return 'neck'
+    if 'shoulder' in n: return f'shoulder_{s}' if s in ('l','r') else 'upper_torso'
+    if 'breast' in n or 'nipple' in n or 'spine_03' in n or 'spine_04' in n:
+        return 'upper_torso'
+    if 'spine_01' in n or 'spine_02' in n or 'spine_00' in n:
+        return 'lower_torso'
+    if any(kw in n for kw in ['root_bend','butt','genital','vagina','pelvis','tail']):
+        return 'hips'
+    if 'forearm' in n: return f'forearm_{s}' if s in ('l','r') else 'forearm_l'
+    if 'arm_twist' in n or 'arm_stretch' in n or 'arm_bendy' in n or 'elbow' in n:
+        return f'upper_arm_{s}' if s in ('l','r') else 'upper_arm_l'
+    if any(kw in n for kw in ['hand','finger','index','middle','ring','pinky','thumb']) and not n.startswith('c_toes') and 'toes' not in n:
+        return f'hand_{s}' if s in ('l','r') else 'hand_l'
+    if 'thigh' in n: return f'thigh_{s}' if s in ('l','r') else 'thigh_l'
+    if 'leg_twist' in n or 'leg_stretch' in n or 'leg_bendy' in n or 'knee' in n:
+        return f'shin_{s}' if s in ('l','r') else 'shin_l'
+    if 'foot' in n or 'toes' in n or n.startswith('c_toes'):
+        return f'foot_{s}' if s in ('l','r') else 'foot_l'
+    return None
+
 # ボーン名 → グループ名の逆引き
 BONE_TO_GROUP = {}
 for group_name, bones in BONE_GROUPS.items():
@@ -176,22 +208,33 @@ print(f"  Body mesh: {body_obj.name} ({len(body_obj.data.vertices)} verts)")
 vg_idx_to_name = {vg.index: vg.name for vg in body_obj.vertex_groups}
 
 # 各頂点の最大ウェイトのボーングループを取得
+# 注意: evaluated mesh (CorrectiveSmooth 等のモディファイヤ後) は vertex_groups を
+# 保持しないため、ORIGINAL の body_obj.data.vertices から weight を取る。
+# ワールド座標は matrix_world で手動変換。
 dg = bpy.context.evaluated_depsgraph_get()
 eo = body_obj.evaluated_get(dg)
 me = eo.to_mesh()
-me.transform(body_obj.matrix_world)
+me.transform(body_obj.matrix_world)  # BVH のみ evaluated を使う
+
+orig_verts = body_obj.data.vertices
+world_mat = body_obj.matrix_world
 
 vert_regions = []  # index → group_name
 vert_coords = []   # index → world coord
 
-for v in me.vertices:
-    vert_coords.append(Vector(v.co))
+for v in orig_verts:
+    v_world = world_mat @ v.co
+    vert_coords.append(Vector(v_world))
     # 頂点のウェイト一覧を取得
     best_group = 'unknown'
     best_weight = 0.0
     for g in v.groups:
         vg_name = vg_idx_to_name.get(g.group, '')
+        # 1. 明示リストで引く
         region = BONE_TO_GROUP.get(vg_name)
+        # 2. 失敗時パターンで引く (DE 等の命名ゆれ吸収)
+        if not region:
+            region = _classify_by_pattern(vg_name)
         if region and g.weight > best_weight:
             best_weight = g.weight
             best_group = region
