@@ -1,0 +1,236 @@
+00:02.687  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== ARP Addon Check ===
+
+[1] Enabled addons:
+  ENABLED: bl_ext.user_default.auto_rig_pro
+
+[2] ARP module accessible?
+
+[3] ARP operators in bpy.ops:
+  arp: ['action_scale_comp_all', 'actions_linker', 'actions_linker_add', 'actions_linker_add_action', 'actions_linker_remove', 'actions_linker_remove_action', 'actions_list_add', 'actions_list_add_action', 'actions_list_add_batch_actions', 'actions_list_move', 'actions_list_remove', 'actions_list_remove_action', 'add_blink_pose', 'add_corrective_bone', 'add_corrective_driver', 'add_fist_ctrl', 'add_limb', 'add_muscles', 'add_picker', 'align_wings']
+  arp_export_scene: ['fbx']
+  rigidbody: ['bake_to_keyframes', 'connect', 'constraint_add', 'constraint_remove', 'mass_calculate', 'object_add', 'object_remove', 'object_settings_copy', 'objects_add', 'objects_remove', 'shape_change', 'world_add', 'world_remove']
+
+[4] Scene ARP properties:
+  scene.arp_actions_linker
+  scene.arp_actions_links
+  scene.arp_active_tab
+  scene.arp_apply_mods
+  scene.arp_apply_subsurf
+  scene.arp_bake_anim
+  scene.arp_bake_only_active
+  scene.arp_bake_only_active_slot
+  scene.arp_bake_type
+  scene.arp_bind_apply_sk
+  scene.arp_bind_chin
+  scene.arp_bind_engine
+  scene.arp_bind_improve_heels
+  scene.arp_bind_improve_hips
+  scene.arp_bind_improve_twists
+  scene.arp_bind_preserve
+  scene.arp_bind_scale_fix
+  scene.arp_bind_sel_verts
+  scene.arp_bind_selected_bones
+  scene.arp_bind_split
+  scene.arp_body_name
+  scene.arp_bone_axis_primary_export
+  scene.arp_bone_axis_secondary_export
+  scene.arp_bone_tag_show
+  scene.arp_const_bones_idx
+  scene.arp_const_bones_list
+  scene.arp_corrective_shapes_data
+  scene.arp_custom_bones_idx
+  scene.arp_custom_bones_list
+  scene.arp_custom_export_script
+  scene.arp_data_exp_fp
+  scene.arp_debug_bind
+  scene.arp_debug_mode
+  scene.arp_disable_smart_fx
+  scene.arp_driver_bone
+  scene.arp_driver_transform
+  scene.arp_engine_type
+  scene.arp_experimental_mode
+  scene.arp_export_act_name
+  scene.arp_export_actions_links_idx
+  scene.arp_export_actlist
+  scene.arp_export_actlist_idx
+  scene.arp_export_bake_axis_convert
+  scene.arp_export_end_frame
+  scene.arp_export_file_separator
+  scene.arp_export_format_copy
+  scene.arp_export_name_string
+  scene.arp_export_noparent
+  scene.arp_export_renaming
+  scene.arp_export_rig_name
+  scene.arp_export_rig_type
+  scene.arp_export_separate_fbx
+  scene.arp_export_separate_fbx_list
+  scene.arp_export_show_panels
+  scene.arp_export_slot_separator
+  scene.arp_export_start_frame
+  scene.arp_export_tex
+  scene.arp_export_triangulate
+  scene.arp_export_twist
+  scene.arp_export_use_actlist
+  scene.arp_eyeball_name
+  scene.arp_eyeball_name_right
+  scene.arp_eyeball_type
+  scene.arp_facial_markers_save
+  scene.arp_finger_thickness
+  scene.arp_fingers_enable
+  scene.arp_fingers_init_transform
+  scene.arp_fingers_to_detect
+  scene.arp_fix_fbx_matrix
+  scene.arp_fix_fbx_rot
+  scene.arp_foot_dir_l
+  scene.arp_foot_dir_r
+  scene.arp_frame_range_type
+  scene.arp_full_facial
+  scene.arp_ge_add_dummy_mesh
+  scene.arp_ge_bake_sample
+  scene.arp_ge_export_metacarp
+  scene.arp_ge_export_parent_def
+  scene.arp_ge_force_rest_pose_export
+  scene.arp_ge_fp
+  scene.arp_ge_gltf_all_inf
+  scene.arp_ge_gltf_anim_start_zero
+  scene.arp_ge_gltf_export_active_vertex_color_when_no_material
+  scene.arp_ge_gltf_export_all_vertex_colors
+  scene.arp_ge_gltf_export_image_add_webp
+  scene.arp_ge_gltf_export_image_format
+  scene.arp_ge_gltf_export_image_quality
+  scene.arp_ge_gltf_export_image_webp_fallback
+  scene.arp_ge_gltf_export_materials
+  scene.arp_ge_gltf_export_unused_images
+  scene.arp_ge_gltf_export_unused_textures
+  scene.arp_ge_gltf_export_vertex_color
+  scene.arp_ge_gltf_export_vertex_color_name
+  scene.arp_ge_gltf_format
+  scene.arp_ge_gltf_sample_anim
+  scene.arp_ge_gltf_sk_normals
+  scene.arp_ge_gltf_sk_tangents
+  scene.arp_ge_gltf_unitsx100
+  scene.arp_ge_master_traj
+  scene.arp_ge_parent_fallback
+  scene.arp_ge_reset_transforms
+  scene.arp_ge_sel_bones_only
+  scene.arp_ge_sel_only
+  scene.arp_ge_startend_keying
+  scene.arp_ge_startend_keying_sk
+  scene.arp_ge_vcol_type
+  scene.arp_global_scale
+  scene.arp_godot_root_axes
+  scene.arp_highres_threshold
+  scene.arp_ignore_linked_actions
+  scene.arp_inherit_rot
+  scene.arp_init_fbx_rot
+  scene.arp_init_fbx_rot_mesh
+  scene.arp_inputs_expand_ui
+  scene.arp_keep_bend_bones
+  scene.arp_large_icon
+  scene.arp_layers_animated
+  scene.arp_layers_set_render
+  scene.arp_layers_show_exclu
+  scene.arp_layers_show_select
+  scene.arp_mannequin_axes
+  scene.arp_map_presets_expand_ui
+  scene.arp_marker_to_select
+  scene.arp_markers_save
+  scene.arp_mesh_smooth_type
+  scene.arp_optimize_highres
+  scene.arp_prioritize_active_color
+  scene.arp_pseudo_voxels_resolution
+  scene.arp_pseudo_voxels_type
+  scene.arp_push_bend
+  scene.arp_quit
+  scene.arp_remap_allow_root_update
+  scene.arp_remap_only_containing
+  scene.arp_remap_show_tweaks
+  scene.arp_rename_for_godot
+  scene.arp_rename_for_ue
+  scene.arp_rename_fp
+  scene.arp_retarget_decoupled_expand_ui
+  scene.arp_retarget_in_place
+  scene.arp_retro_action_prefix
+  scene.arp_retro_axes
+  scene.arp_retro_constraints
+  scene.arp_retro_export_soft_fix
+  scene.arp_retro_eyes
+  scene.arp_retro_feet
+  scene.arp_retro_ge_UE_twist_pos
+  scene.arp_retro_ge_frame_range
+  scene.arp_retro_ge_mesh
+  scene.arp_retro_ge_ue_axes_tweak
+  scene.arp_retro_gltf_axes_fbx
+  scene.arp_retro_ik_pole
+  scene.arp_retro_lips
+  scene.arp_retro_spine_bend
+  scene.arp_retro_splineik_quat
+  scene.arp_retro_stretch_pin
+  scene.arp_show_debug_44
+  scene.arp_show_def_store
+  scene.arp_show_def_store_col
+  scene.arp_show_deforming
+  scene.arp_show_driver_data
+  scene.arp_show_freeze_warn
+  scene.arp_show_ge_advanced
+  scene.arp_show_ge_debug
+  scene.arp_show_ik_chain_direction
+  scene.arp_simplify_fac
+  scene.arp_smart_AI_body_samples
+  scene.arp_smart_AI_is_installed
+  scene.arp_smart_AI_samples
+  scene.arp_smart_AI_thresh
+  scene.arp_smart_cheeks
+  scene.arp_smart_chin
+  scene.arp_smart_depth
+  scene.arp_smart_ears
+  scene.arp_smart_eyebrows
+  scene.arp_smart_eyes
+  scene.arp_smart_fingers_engine
+  scene.arp_smart_mouth
+  scene.arp_smart_neck_count
+  scene.arp_smart_nose
+  scene.arp_smart_overwrite
+  scene.arp_smart_preset_settings
+  scene.arp_smart_remesh
+  scene.arp_smart_remesh_type
+  scene.arp_smart_root_vertical
+  scene.arp_smart_shoulders_align
+  scene.arp_smart_spine_count
+  scene.arp_smart_spine_shape
+  scene.arp_smart_sym
+  scene.arp_smart_teeth
+  scene.arp_smart_tongue
+  scene.arp_smart_twist_count
+  scene.arp_smart_type
+  scene.arp_softlink_bones_idx
+  scene.arp_softlink_bones_list
+  scene.arp_spline_snap_indiv
+  scene.arp_spline_snap_iter_max
+  scene.arp_spline_snap_precision
+  scene.arp_teeth_lower_name
+  scene.arp_teeth_name
+  scene.arp_teeth_type
+  scene.arp_tongue_name
+  scene.arp_twist_fac
+  scene.arp_ue4
+  scene.arp_ue_ik
+  scene.arp_ue_ik_anim
+  scene.arp_ue_root_motion
+  scene.arp_units_x100
+  scene.arp_use_tspace
+
+[5] Addon scripts path:
+  C:\Users\user\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons:
+  C:\Users\user\AppData\Roaming\Blender Foundation\Blender\5.0\scripts:
+  sys.path addon dir: C:\Users\user\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\modules
+  sys.path addon dir: C:\Program Files\Blender Foundation\Blender 5.0\5.0\scripts\addons_core
+  sys.path addon dir: C:\Users\user\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons
+
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

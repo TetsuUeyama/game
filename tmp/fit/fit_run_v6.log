@@ -1,0 +1,31 @@
+00:02.078  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+00:11.500  object.modifier  | WARNING Object: "Helena Default - Dress", Modifier: "SD", ターゲットに三つ以上のポリゴンが共有する辺がありました
+00:11.500  object.modifier  | WARNING Object: "Helena Default - Dress", Modifier: "SD", ターゲットに三つ以上のポリゴンが共有する辺がありました
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+Cannot read ARP prefs
+Update armature presets...
+
+=== fit_helena_to_qm V6 (SurfaceDeform + body shrinkwrap) ===
+  min offset for safety push: 3.0mm
+
+[1] Append Helena
+  dress=Helena Default - Dress body=Body arm=Helena
+
+[2] Origin align
+  delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget body + dress
+  bone transforms: 443/1150
+  body zero-weight: 4537
+  dress zero-weight: 0
+
+[4] Prepare dress for SD
+  cleared 2 shape keys
+
+[5a] Clean Helena body mesh
+  cleared 295 body shape keys
+情報: 80 個の頂点を削除しました
+  remove_doubles: 25903 -> 25823
+
+[5] Surface Deform on dress, target = Helena body (LBS'd)
+  ERROR: SD not bound

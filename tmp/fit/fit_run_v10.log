@@ -1,0 +1,54 @@
+00:02.593  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== V10 (bone-anchor + region 3D scale + Laplacian) ===
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Compute per-region bbox scales
+  scale ratios for 21 regions:
+    breast_l                       scale=(1.45, 1.54, 2.77)
+    breast_r                       scale=(1.40, 1.54, 2.77)
+    c_arm_stretch.l                scale=(0.64, 0.92, 0.74)
+    c_arm_stretch.r                scale=(0.67, 1.01, 0.72)
+    c_forearm_stretch.l            scale=(0.64, 0.91, 0.77)
+    c_forearm_stretch.r            scale=(0.64, 0.91, 0.77)
+    c_leg_stretch.l                scale=(0.77, 1.11, 0.69)
+    c_leg_stretch.r                scale=(0.77, 1.11, 0.69)
+    c_root_bend.x                  scale=(2.00, 1.50, 0.83)
+    c_spine_01_bend.x              scale=(2.82, 3.00, 3.00)
+    c_spine_03_bend.x              scale=(0.70, 0.90, 0.37)
+    c_thigh_stretch.l              scale=(0.85, 1.03, 0.52)
+    c_thigh_stretch.r              scale=(0.85, 1.03, 0.52)
+    foot.l                         scale=(1.13, 1.68, 0.66)
+    foot.r                         scale=(1.13, 1.68, 0.66)
+    hand.l                         scale=(0.65, 1.50, 1.01)
+    hand.r                         scale=(0.65, 1.50, 1.01)
+    head.x                         scale=(0.84, 1.05, 0.88)
+    neck.x                         scale=(0.60, 0.77, 0.84)
+    shoulder.l                     scale=(0.65, 1.20, 1.05)
+    shoulder.r                     scale=(0.68, 1.18, 1.04)
+
+[5] Per-vertex anchor-offset + region scale
+  ok: 12301, no_region: 397
+
+[6] Laplacian smoothing (30 iter alpha=0.3)
+  smoothing done
+
+[7] Safety push for embedded verts
+  inside: 7107, pushed: 7107
+
+[8] VG rename + save
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v10.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v10.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

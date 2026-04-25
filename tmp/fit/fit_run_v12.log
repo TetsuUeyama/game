@@ -1,0 +1,36 @@
+00:02.188  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== V12 (Closest-Point Offset Preservation) ===
+  min_offset=2.0mm max_depth=20cm
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Build Helena body BVH
+  islands: 20 (top sizes: [24648, 175, 60, 60, 60]); kept 24648 verts
+
+[5] Build QM body BVH
+  islands: 48 (top sizes: [19193, 1067, 950, 216, 175]); kept 19193 verts
+
+[6] Apply offset-preserving deformation to dress (12698 verts)
+  ok: 12698, miss: 0, depth-clipped: 0, n_flipped: 1127, min-offset-clamped: 4290
+  depth (after clamp): min=0.2cm max=6.9cm avg=0.9cm
+  tangent: max=5.8cm avg=0.3cm
+
+[7] Safety push (light)
+  inside: 1906 (15.0%), pushed: 1906
+
+[8] VG rename + save
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v12.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v12.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

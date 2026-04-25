@@ -1,0 +1,52 @@
+00:02.250  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== fit V8 (per-bone radius scaling) ===
+  min offset: 3.0mm
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Compute per-bone radii
+  bone radius ratios (QM/Helena):
+    breast_l                       helena=6.6cm qm=2.9cm ratio=0.43
+    breast_r                       helena=6.7cm qm=2.9cm ratio=0.42
+    c_arm_stretch.l                helena=7.4cm qm=3.7cm ratio=0.51
+    c_arm_stretch.r                helena=7.3cm qm=3.7cm ratio=0.51
+    c_forearm_stretch.l            helena=12.2cm qm=3.4cm ratio=0.28
+    c_forearm_stretch.r            helena=12.2cm qm=3.4cm ratio=0.28
+    c_leg_stretch.l                helena=5.9cm qm=4.9cm ratio=0.83
+    c_leg_stretch.r                helena=5.9cm qm=4.9cm ratio=0.83
+    c_root_bend.x                  helena=5.4cm qm=10.1cm ratio=1.85
+    c_spine_01_bend.x              helena=2.6cm qm=8.9cm ratio=3.44
+    c_spine_03_bend.x              helena=13.6cm qm=9.4cm ratio=0.69
+    c_thigh_stretch.l              helena=6.7cm qm=6.4cm ratio=0.96
+    c_thigh_stretch.r              helena=6.7cm qm=6.4cm ratio=0.96
+    foot.l                         helena=4.0cm qm=3.5cm ratio=0.88
+    foot.r                         helena=4.0cm qm=3.5cm ratio=0.88
+    hand.l                         helena=21.6cm qm=2.0cm ratio=0.09
+    hand.r                         helena=21.6cm qm=2.0cm ratio=0.09
+    head.x                         helena=8.6cm qm=6.5cm ratio=0.76
+    neck.x                         helena=5.8cm qm=4.4cm ratio=0.77
+    shoulder.l                     helena=4.7cm qm=5.6cm ratio=1.20
+    shoulder.r                     helena=4.8cm qm=5.6cm ratio=1.18
+
+[5] Apply radius scaling
+  scaled: 12254, unchanged: 444
+
+[6] Safety push
+  inside after scaling: 8519, pushed: 8519
+
+[7] VG rename + re-parent
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v8.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v8.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

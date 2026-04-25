@@ -1,0 +1,46 @@
+00:04.484  blend            | Read blend: "E:\Helena_Douglas_1.10.blend"
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:76: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  dress_mat.use_nodes = True
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:90: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  body_mat.use_nodes = True
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:142: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world.use_nodes = True
+01:24.625  render           | Saved: 'C:\tmp\fit\renders_orig\front.png'
+01:29.969  render           | Saved: 'C:\tmp\fit\renders_orig\front_dressonly.png'
+01:47.578  render           | Saved: 'C:\tmp\fit\renders_orig\front_bodyonly.png'
+02:04.609  render           | Saved: 'C:\tmp\fit\renders_orig\back.png'
+02:08.922  render           | Saved: 'C:\tmp\fit\renders_orig\back_dressonly.png'
+02:25.656  render           | Saved: 'C:\tmp\fit\renders_orig\back_bodyonly.png'
+02:40.281  render           | Saved: 'C:\tmp\fit\renders_orig\side_r.png'
+02:44.859  render           | Saved: 'C:\tmp\fit\renders_orig\side_r_dressonly.png'
+02:58.484  render           | Saved: 'C:\tmp\fit\renders_orig\side_r_bodyonly.png'
+03:16.094  render           | Saved: 'C:\tmp\fit\renders_orig\perspective.png'
+03:20.250  render           | Saved: 'C:\tmp\fit\renders_orig\perspective_dressonly.png'
+03:36.781  render           | Saved: 'C:\tmp\fit\renders_orig\perspective_bodyonly.png'
+Cannot read ARP prefs
+Update armature presets...
+  QM body: Body  Dress: Helena Default - Dress
+  QM body bbox: (-0.79, -0.13, -0.0) .. (0.79, 0.12, 1.66)
+  Dress bbox: (-0.62, -0.15, 0.16) .. (0.62, 0.5, 1.44)
+  scene center: (0.0, 0.17, 0.83) size: (1.57, 0.65, 1.66)
+  dress material slots: 1
+  body material slots: 1
+  rendering front -> tmp/fit/renders_orig\front.png
+  rendering front dress only -> tmp/fit/renders_orig\front_dressonly.png
+  rendering front body only -> tmp/fit/renders_orig\front_bodyonly.png
+  rendering back -> tmp/fit/renders_orig\back.png
+  rendering back dress only -> tmp/fit/renders_orig\back_dressonly.png
+  rendering back body only -> tmp/fit/renders_orig\back_bodyonly.png
+  rendering side_r -> tmp/fit/renders_orig\side_r.png
+  rendering side_r dress only -> tmp/fit/renders_orig\side_r_dressonly.png
+  rendering side_r body only -> tmp/fit/renders_orig\side_r_bodyonly.png
+  rendering perspective -> tmp/fit/renders_orig\perspective.png
+  rendering perspective dress only -> tmp/fit/renders_orig\perspective_dressonly.png
+  rendering perspective body only -> tmp/fit/renders_orig\perspective_bodyonly.png
+
+=== DONE ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+scripts disabled for "E:\Helena_Douglas_1.10.blend", skipping 'Helena_ui.py'
+scripts disabled for "E:\Helena_Douglas_1.10.blend", skipping 'mustard_ui.py'
+
+Blender quit

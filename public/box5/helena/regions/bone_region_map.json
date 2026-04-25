@@ -1,0 +1,49 @@
+{
+ "grid": {
+  "gx": 234,
+  "gy": 50,
+  "gz": 251
+ },
+ "regions": [
+  "hand_r",
+  "forearm_r",
+  "upper_arm_r",
+  "foot_r",
+  "thigh_r",
+  "hips",
+  "shin_r",
+  "upper_torso",
+  "shoulder_r",
+  "head",
+  "lower_torso",
+  "neck",
+  "shoulder_l",
+  "thigh_l",
+  "shin_l",
+  "foot_l",
+  "upper_arm_l",
+  "forearm_l",
+  "hand_l"
+ ],
+ "region_voxel_counts": {
+  "hand_r": 1418,
+  "forearm_r": 2731,
+  "upper_arm_r": 4619,
+  "foot_r": 2829,
+  "thigh_r": 13448,
+  "hips": 8647,
+  "shin_r": 8186,
+  "upper_torso": 21467,
+  "shoulder_r": 2056,
+  "head": 7129,
+  "lower_torso": 2016,
+  "neck": 1462,
+  "shoulder_l": 1984,
+  "thigh_l": 13471,
+  "shin_l": 8187,
+  "foot_l": 2837,
+  "upper_arm_l": 4655,
+  "forearm_l": 2722,
+  "hand_l": 1419
+ }
+}

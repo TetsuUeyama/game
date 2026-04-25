@@ -1,0 +1,352 @@
+{
+  "bone_groups": {
+    "head": [
+      "head.x",
+      "jawbone.x",
+      "c_cheek_inflate.l",
+      "c_cheek_inflate.r",
+      "c_cheek_smile.l",
+      "c_cheek_smile.r",
+      "c_chin_01.x",
+      "c_chin_02.x",
+      "c_ear_01.l",
+      "c_ear_01.r",
+      "c_ear_02.l",
+      "c_ear_02.r",
+      "c_eye_offset.l",
+      "c_eye_offset.r",
+      "c_eye_ref_track.l",
+      "c_eye_ref_track.r",
+      "c_eyebrow_01.l",
+      "c_eyebrow_01.r",
+      "c_eyebrow_01_end.l",
+      "c_eyebrow_01_end.r",
+      "c_eyebrow_02.l",
+      "c_eyebrow_02.r",
+      "c_eyebrow_03.l",
+      "c_eyebrow_03.r",
+      "c_eyelid_bot_01.l",
+      "c_eyelid_bot_01.r",
+      "c_eyelid_bot_02.l",
+      "c_eyelid_bot_02.r",
+      "c_eyelid_bot_03.l",
+      "c_eyelid_bot_03.r",
+      "c_eyelid_corner_01.l",
+      "c_eyelid_corner_01.r",
+      "c_eyelid_corner_02.l",
+      "c_eyelid_corner_02.r",
+      "c_eyelid_top_01.l",
+      "c_eyelid_top_01.r",
+      "c_eyelid_top_02.l",
+      "c_eyelid_top_02.r",
+      "c_eyelid_top_03.l",
+      "c_eyelid_top_03.r",
+      "c_lips_bot.l",
+      "c_lips_bot.r",
+      "c_lips_bot.x",
+      "c_lips_bot_01.l",
+      "c_lips_bot_01.r",
+      "c_lips_smile.l",
+      "c_lips_smile.r",
+      "c_lips_top.l",
+      "c_lips_top.r",
+      "c_lips_top.x",
+      "c_lips_top_01.l",
+      "c_lips_top_01.r",
+      "c_nose_01.x",
+      "c_nose_02.x",
+      "c_nose_03.x",
+      "c_teeth_bot.l",
+      "c_teeth_bot.r",
+      "c_teeth_bot.x",
+      "c_teeth_top.l",
+      "c_teeth_top.r",
+      "c_teeth_top.x",
+      "tong_01.x",
+      "tong_02.x",
+      "tong_03.x"
+    ],
+    "neck": [
+      "neck.x"
+    ],
+    "shoulder_l": [
+      "shoulder.l"
+    ],
+    "shoulder_r": [
+      "shoulder.r"
+    ],
+    "upper_torso": [
+      "c_spine_03_bend.x",
+      "breast_l",
+      "breast_r",
+      "nipple_l",
+      "nipple_r"
+    ],
+    "lower_torso": [
+      "c_spine_02_bend.x",
+      "c_spine_01_bend.x"
+    ],
+    "hips": [
+      "c_root_bend.x",
+      "butt_l",
+      "butt_r",
+      "genital",
+      "vagina_01.l",
+      "vagina_01.r",
+      "vagina_01.x",
+      "vagina_02.l",
+      "vagina_02.r",
+      "vagina_02.x"
+    ],
+    "upper_arm_l": [
+      "c_arm_twist.l",
+      "c_arm_stretch.l"
+    ],
+    "upper_arm_r": [
+      "c_arm_twist.r",
+      "c_arm_stretch.r"
+    ],
+    "forearm_l": [
+      "c_forearm_twist.l",
+      "c_forearm_stretch.l",
+      "lowerarm_elbow_l"
+    ],
+    "forearm_r": [
+      "c_forearm_twist.r",
+      "c_forearm_stretch.r",
+      "lowerarm_elbow_r"
+    ],
+    "hand_l": [
+      "hand.l",
+      "c_index1_base.l",
+      "index1.l",
+      "c_index2.l",
+      "c_index3.l",
+      "c_middle1_base.l",
+      "middle1.l",
+      "c_middle2.l",
+      "c_middle3.l",
+      "c_ring1_base.l",
+      "ring1.l",
+      "c_ring2.l",
+      "c_ring3.l",
+      "c_pinky1_base.l",
+      "pinky1.l",
+      "c_pinky2.l",
+      "c_pinky3.l",
+      "thumb1.l",
+      "c_thumb2.l",
+      "c_thumb3.l"
+    ],
+    "hand_r": [
+      "hand.r",
+      "c_index1_base.r",
+      "index1.r",
+      "c_index2.r",
+      "c_index3.r",
+      "c_middle1_base.r",
+      "middle1.r",
+      "c_middle2.r",
+      "c_middle3.r",
+      "c_ring1_base.r",
+      "ring1.r",
+      "c_ring2.r",
+      "c_ring3.r",
+      "c_pinky1_base.r",
+      "pinky1.r",
+      "c_pinky2.r",
+      "c_pinky3.r",
+      "thumb1.r",
+      "c_thumb2.r",
+      "c_thumb3.r"
+    ],
+    "thigh_l": [
+      "c_thigh_twist.l",
+      "c_thigh_stretch.l"
+    ],
+    "thigh_r": [
+      "c_thigh_twist.r",
+      "c_thigh_stretch.r"
+    ],
+    "shin_l": [
+      "c_leg_twist.l",
+      "c_leg_stretch.l",
+      "knee_l"
+    ],
+    "shin_r": [
+      "c_leg_twist.r",
+      "c_leg_stretch.r",
+      "knee_r"
+    ],
+    "foot_l": [
+      "foot.l",
+      "toes_01.l",
+      "c_toes_thumb1.l",
+      "c_toes_thumb2.l",
+      "c_toes_index1.l",
+      "c_toes_index2.l",
+      "c_toes_index3.l",
+      "c_toes_middle1.l",
+      "c_toes_middle2.l",
+      "c_toes_middle3.l",
+      "c_toes_ring1.l",
+      "c_toes_ring2.l",
+      "c_toes_ring3.l",
+      "c_toes_pinky1.l",
+      "c_toes_pinky2.l",
+      "c_toes_pinky3.l"
+    ],
+    "foot_r": [
+      "foot.r",
+      "toes_01.r",
+      "c_toes_thumb1.r",
+      "c_toes_thumb2.r",
+      "c_toes_index1.r",
+      "c_toes_index2.r",
+      "c_toes_index3.r",
+      "c_toes_middle1.r",
+      "c_toes_middle2.r",
+      "c_toes_middle3.r",
+      "c_toes_ring1.r",
+      "c_toes_ring2.r",
+      "c_toes_ring3.r",
+      "c_toes_pinky1.r",
+      "c_toes_pinky2.r",
+      "c_toes_pinky3.r"
+    ]
+  },
+  "group_colors": {
+    "head": [
+      255,
+      200,
+      200
+    ],
+    "neck": [
+      255,
+      150,
+      150
+    ],
+    "shoulder_l": [
+      200,
+      200,
+      255
+    ],
+    "shoulder_r": [
+      150,
+      150,
+      255
+    ],
+    "upper_torso": [
+      255,
+      255,
+      150
+    ],
+    "lower_torso": [
+      255,
+      220,
+      100
+    ],
+    "hips": [
+      255,
+      180,
+      80
+    ],
+    "upper_arm_l": [
+      100,
+      200,
+      255
+    ],
+    "upper_arm_r": [
+      50,
+      180,
+      255
+    ],
+    "forearm_l": [
+      100,
+      255,
+      200
+    ],
+    "forearm_r": [
+      50,
+      230,
+      180
+    ],
+    "hand_l": [
+      150,
+      255,
+      150
+    ],
+    "hand_r": [
+      100,
+      220,
+      100
+    ],
+    "thigh_l": [
+      255,
+      150,
+      255
+    ],
+    "thigh_r": [
+      230,
+      100,
+      230
+    ],
+    "shin_l": [
+      200,
+      100,
+      255
+    ],
+    "shin_r": [
+      180,
+      80,
+      230
+    ],
+    "foot_l": [
+      255,
+      100,
+      100
+    ],
+    "foot_r": [
+      220,
+      80,
+      80
+    ],
+    "unknown": [
+      128,
+      128,
+      128
+    ]
+  },
+  "grid": {
+    "gx": 196,
+    "gy": 69,
+    "gz": 251,
+    "voxel_size": 0.007051008224487305,
+    "grid_origin": [
+      -0.6885720491409302,
+      -0.23248787224292755,
+      -0.03571581840515137
+    ]
+  },
+  "region_voxel_counts": {
+    "hand_r": 1315,
+    "forearm_r": 2138,
+    "upper_arm_r": 4271,
+    "thigh_r": 12087,
+    "hips": 12810,
+    "shin_r": 6854,
+    "foot_r": 2347,
+    "upper_torso": 10906,
+    "shoulder_r": 1899,
+    "lower_torso": 6641,
+    "head": 7161,
+    "neck": 1114,
+    "thigh_l": 12038,
+    "shoulder_l": 1918,
+    "shin_l": 6850,
+    "foot_l": 2342,
+    "upper_arm_l": 4261,
+    "forearm_l": 2123,
+    "hand_l": 1313
+  }
+}

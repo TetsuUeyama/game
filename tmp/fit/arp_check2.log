@@ -1,0 +1,150 @@
+00:02.375  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== Searching ARP operators ===
+
+Operators matching keywords (201):
+  bpy.ops.arp.action_scale_comp_all
+  bpy.ops.arp.actions_linker
+  bpy.ops.arp.actions_linker_add
+  bpy.ops.arp.actions_linker_add_action
+  bpy.ops.arp.actions_linker_remove
+  bpy.ops.arp.actions_linker_remove_action
+  bpy.ops.arp.actions_list_add
+  bpy.ops.arp.actions_list_add_action
+  bpy.ops.arp.actions_list_add_batch_actions
+  bpy.ops.arp.actions_list_move
+  bpy.ops.arp.actions_list_remove
+  bpy.ops.arp.actions_list_remove_action
+  bpy.ops.arp.add_blink_pose
+  bpy.ops.arp.add_corrective_bone
+  bpy.ops.arp.add_corrective_driver
+  bpy.ops.arp.add_fist_ctrl
+  bpy.ops.arp.add_limb
+  bpy.ops.arp.add_muscles
+  bpy.ops.arp.add_picker
+  bpy.ops.arp.align_wings
+  bpy.ops.arp.append_arp
+  bpy.ops.arp.apply_blink_pose
+  bpy.ops.arp.apply_cs_transforms
+  bpy.ops.arp.apply_fist_pose
+  bpy.ops.arp.apply_offset
+  bpy.ops.arp.apply_pose_as_rest
+  bpy.ops.arp.apply_shape
+  bpy.ops.arp.arp_export_fbx_panel
+  bpy.ops.arp.arp_export_gltf_panel
+  bpy.ops.arp.assign_colors
+  bpy.ops.arp.auto_scale
+  bpy.ops.arp.batch_retarget
+  bpy.ops.arp.bind_to_rig
+  bpy.ops.arp.bind_vhds
+  bpy.ops.arp.bone_tag_add
+  bpy.ops.arp.bone_tag_remove
+  bpy.ops.arp.bones_tag_manager
+  bpy.ops.arp.build_bones_list
+  bpy.ops.arp.cancel_corrective_driver
+  bpy.ops.arp.cancel_redefine
+  bpy.ops.arp.check_for_update
+  bpy.ops.arp.check_rig_export
+  bpy.ops.arp.childof_keyer
+  bpy.ops.arp.childof_switcher
+  bpy.ops.arp.clean_scene
+  bpy.ops.arp.clear_root_motion
+  bpy.ops.arp.convert_rot_mode
+  bpy.ops.arp.copy_bone_rest
+  bpy.ops.arp.copy_raw_coordinates
+  bpy.ops.arp.create_driver
+  bpy.ops.arp.debug_44
+  bpy.ops.arp.delete_action
+  bpy.ops.arp.delete_arp
+  bpy.ops.arp.delete_bone_collec
+  bpy.ops.arp.disable_limb
+  bpy.ops.arp.dupli_limb
+  bpy.ops.arp.dupli_limb_mirror
+  bpy.ops.arp.edit_custom_shape
+  bpy.ops.arp.edit_ref
+  bpy.ops.arp.exec_rem_armature_presets
+  bpy.ops.arp.exec_rem_custom_limbs
+  bpy.ops.arp.exec_rem_export_presets
+  bpy.ops.arp.export
+  bpy.ops.arp.export_colors
+  bpy.ops.arp.export_config
+  bpy.ops.arp.export_data
+  bpy.ops.arp.export_picker
+  bpy.ops.arp.export_rig_data
+  bpy.ops.arp.export_rig_data_options
+  bpy.ops.arp.extract_root_motion
+  bpy.ops.arp.fix_rig_export
+  bpy.ops.arp.free_lock_ik_fingers
+  bpy.ops.arp.freeze_armature
+  bpy.ops.arp.ge_load_preset
+  bpy.ops.arp.ge_remove_preset
+  bpy.ops.arp.ge_save_preset
+  bpy.ops.arp.guess_fingers
+  bpy.ops.arp.guess_markers
+  bpy.ops.arp.import_colors
+  bpy.ops.arp.import_config
+  bpy.ops.arp.import_config_preset
+  bpy.ops.arp.import_picker
+  bpy.ops.arp.import_rig_data
+  bpy.ops.arp.import_rig_data_options
+  bpy.ops.arp.install_ext
+  bpy.ops.arp.layers_add_defaults
+  bpy.ops.arp.layers_set_export
+  bpy.ops.arp.layers_set_export_preset
+  bpy.ops.arp.layers_set_import
+  bpy.ops.arp.layers_set_import_preset
+  bpy.ops.arp.layers_sets_add
+  bpy.ops.arp.layers_sets_add_bones
+  bpy.ops.arp.layers_sets_add_collection
+  bpy.ops.arp.layers_sets_add_object
+  bpy.ops.arp.layers_sets_all_toggle
+  bpy.ops.arp.layers_sets_clear_objects
+  bpy.ops.arp.layers_sets_edit
+  bpy.ops.arp.layers_sets_move
+  bpy.ops.arp.layers_sets_remove
+  bpy.ops.arp.layers_sets_remove_bones
+
+
+=== ARP source files ===
+
+  ROOT: C:\Users\user/AppData/Roaming/Blender Foundation/Blender/5.0/extensions/user_default/auto_rig_pro
+    00_LOG.txt
+    LICENSE.txt
+    __init__.py
+    __pycache__
+    armature_presets
+    blender_manifest.toml
+    icons
+    icons_279
+    limb_presets
+    misc_presets
+    remap_presets
+    src
+
+=== Try to import ARP modules directly ===
+  bl_ext.user_default
+  Imported: <module 'bl_ext.user_default.auto_rig_pro' from 'C:\\Users\\user\\AppData\\Roaming\\Blender Foundation\\Blender\\5.0\\extensions\\user_default\\auto_rig_pro\\__init__.py'>
+  Location: C:\Users\user\AppData\Roaming\Blender Foundation\Blender\5.0\extensions\user_default\auto_rig_pro\__init__.py
+    arp_fbx_init
+    auto_rig
+    auto_rig_ge
+    auto_rig_prefs
+    auto_rig_remap
+    auto_rig_smart
+    bpy
+    cleanse_modules
+    get_action_slot_idx
+    glTF2ExportUserExtension
+    menu_func_export
+    persistent
+    register
+    rig_functions
+    shutil
+    src
+    unregister
+    utils
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

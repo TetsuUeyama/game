@@ -1,0 +1,52 @@
+00:02.344  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== fit_helena_to_qm V3 ===
+  helena: E:/Helena_Douglas_1.10.blend
+  h_body: Body
+  h_dress: Helena Default - Dress
+  qm_body: Queen Marika Body
+  qm_arm: QueenMarika_rig
+  out: E:/MOdel/Helena_to_QM_fitted_v3.blend
+
+[0] QM scene check
+
+[1] Append Helena
+  body=Body dress=Helena Default - Dress arm=Helena
+
+[2] Origin align
+  delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  bone transforms: 443/1150
+    Body: zero-weight 4537
+    Helena Default - Dress: zero-weight 0
+
+[4] Shrinkwrap on body (disabled)
+  SW added: TARGET_PROJECT offset=0.003
+
+[5] Mesh Deform on dress
+  cleared 2 shape keys
+  binding MD (precision=7)...
+  bound OK
+
+[6] Enable SW
+
+[7] Apply MD
+  applied
+
+[8] Post-process: push embedded dress verts outside QM body
+  already outside: 5482
+  pushed to surface + 5mm: 7216
+
+[9] Re-parent dress to QM armature + VG rename
+  VG: kept=0 renamed=24 merged=11 removed=263
+
+[10] Cleanup + save
+情報: 「Helena_to_QM_fitted_v3.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v3.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

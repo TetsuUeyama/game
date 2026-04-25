@@ -1,0 +1,33 @@
+00:02.875  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== V13 (Blender Shrinkwrap) ===
+  offset=5.0mm method=NEAREST_SURFACEPOINT
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Add Shrinkwrap (method=NEAREST_SURFACEPOINT, offset=5.0mm)
+  PRE shrinkwrap: inside=6096 outside=6602 signed-dist min=-8.3cm max=7.0cm avg=-0.7cm
+
+[5] Apply Shrinkwrap
+情報: 適用したモディファイアーは一番上ではなかったため，予想とは違う結果になった可能性があります
+  dress baked
+  POST shrinkwrap: inside=6096 outside=6602 signed-dist min=-1.0cm max=0.6cm avg=0.0cm
+
+[6] Safety push
+  inside: 6095 (48.0%), pushed: 6095
+
+[7] VG rename + save
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v13.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v13.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

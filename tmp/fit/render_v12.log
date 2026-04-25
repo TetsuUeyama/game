@@ -1,0 +1,45 @@
+00:02.797  blend            | Read blend: "E:\MOdel\Helena_to_QM_fitted_v12.blend"
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:76: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  dress_mat.use_nodes = True
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:90: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  body_mat.use_nodes = True
+C:\Users\user\developsecond\contactform\scripts\blender\fitting\render_fit_check.py:142: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world.use_nodes = True
+01:03.156  render           | Saved: 'C:\tmp\fit\renders_v12\front.png'
+01:09.094  render           | Saved: 'C:\tmp\fit\renders_v12\front_dressonly.png'
+01:14.391  render           | Saved: 'C:\tmp\fit\renders_v12\front_bodyonly.png'
+01:21.110  render           | Saved: 'C:\tmp\fit\renders_v12\back.png'
+01:26.781  render           | Saved: 'C:\tmp\fit\renders_v12\back_dressonly.png'
+01:31.875  render           | Saved: 'C:\tmp\fit\renders_v12\back_bodyonly.png'
+01:37.391  render           | Saved: 'C:\tmp\fit\renders_v12\side_r.png'
+01:42.063  render           | Saved: 'C:\tmp\fit\renders_v12\side_r_dressonly.png'
+01:46.344  render           | Saved: 'C:\tmp\fit\renders_v12\side_r_bodyonly.png'
+01:52.438  render           | Saved: 'C:\tmp\fit\renders_v12\perspective.png'
+01:57.719  render           | Saved: 'C:\tmp\fit\renders_v12\perspective_dressonly.png'
+02:02.672  render           | Saved: 'C:\tmp\fit\renders_v12\perspective_bodyonly.png'
+Cannot read ARP prefs
+Update armature presets...
+  QM body: Queen Marika Body  Dress: Helena Default - Dress (fit QM v12)
+  QM body bbox: (-0.67, -0.21, -0.01) .. (0.67, 0.11, 1.69)
+  Dress bbox: (-0.49, -0.12, 0.65) .. (0.49, 0.15, 1.48)
+  scene center: (0.0, -0.03, 0.84) size: (1.33, 0.36, 1.7)
+  dress material slots: 1
+  body material slots: 1
+  rendering front -> tmp/fit/renders_v12\front.png
+  rendering front dress only -> tmp/fit/renders_v12\front_dressonly.png
+  rendering front body only -> tmp/fit/renders_v12\front_bodyonly.png
+  rendering back -> tmp/fit/renders_v12\back.png
+  rendering back dress only -> tmp/fit/renders_v12\back_dressonly.png
+  rendering back body only -> tmp/fit/renders_v12\back_bodyonly.png
+  rendering side_r -> tmp/fit/renders_v12\side_r.png
+  rendering side_r dress only -> tmp/fit/renders_v12\side_r_dressonly.png
+  rendering side_r body only -> tmp/fit/renders_v12\side_r_bodyonly.png
+  rendering perspective -> tmp/fit/renders_v12\perspective.png
+  rendering perspective dress only -> tmp/fit/renders_v12\perspective_dressonly.png
+  rendering perspective body only -> tmp/fit/renders_v12\perspective_bodyonly.png
+
+=== DONE ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+scripts disabled for "E:\MOdel\Helena_to_QM_fitted_v12.blend", skipping 'mustard_ui.py'
+
+Blender quit

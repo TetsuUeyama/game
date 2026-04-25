@@ -19,6 +19,8 @@
  */
 
 export { VoxelCloth } from './voxel-cloth';
+export { SpringClothSystem, type TaggedVoxel } from './cloth-system';
+export { buildBodySkinnedMesh, type BodySkinVoxel } from './body-skin';
 export {
   MIXAMO_HUMANOID_CAPSULES,
   DEFAULT_ANCHOR_BONES,

@@ -1,0 +1,5016 @@
+{
+ "armature": "DarkElfBlader_rig",
+ "bone_count": 334,
+ "bones": [
+  {
+   "name": "c_root_bend.x",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.045634,
+    1.145155
+   ],
+   "tail_rest": [
+    0.0,
+    -0.035428,
+    1.108054
+   ]
+  },
+  {
+   "name": "foot.l",
+   "parent": "leg_fk.l",
+   "use_deform": true,
+   "head_rest": [
+    0.130355,
+    0.007515,
+    0.156859
+   ],
+   "tail_rest": [
+    0.138461,
+    -0.039055,
+    0.053978
+   ]
+  },
+  {
+   "name": "c_toes_thumb1_base.l",
+   "parent": "toes_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.110869,
+    -0.051358,
+    0.040271
+   ],
+   "tail_rest": [
+    0.111077,
+    -0.081248,
+    0.028588
+   ]
+  },
+  {
+   "name": "toes_thumb1_def.l",
+   "parent": "c_toes_thumb1_base.l",
+   "use_deform": true,
+   "head_rest": [
+    0.111077,
+    -0.081248,
+    0.028588
+   ],
+   "tail_rest": [
+    0.111293,
+    -0.100556,
+    0.021848
+   ]
+  },
+  {
+   "name": "toes_thumb2_def.l",
+   "parent": "toes_thumb1_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.111293,
+    -0.100556,
+    0.021848
+   ],
+   "tail_rest": [
+    0.113246,
+    -0.120571,
+    0.01165
+   ]
+  },
+  {
+   "name": "c_toes_index1_base.l",
+   "parent": "toes_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.129683,
+    -0.053008,
+    0.046541
+   ],
+   "tail_rest": [
+    0.132032,
+    -0.074158,
+    0.031514
+   ]
+  },
+  {
+   "name": "toes_index1_def.l",
+   "parent": "c_toes_index1_base.l",
+   "use_deform": true,
+   "head_rest": [
+    0.132032,
+    -0.074158,
+    0.031514
+   ],
+   "tail_rest": [
+    0.133321,
+    -0.087322,
+    0.026639
+   ]
+  },
+  {
+   "name": "toes_index2_def.l",
+   "parent": "toes_index1_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.133321,
+    -0.087322,
+    0.026639
+   ],
+   "tail_rest": [
+    0.13447,
+    -0.098232,
+    0.019854
+   ]
+  },
+  {
+   "name": "toes_index3_def.l",
+   "parent": "toes_index2_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.13447,
+    -0.098232,
+    0.019854
+   ],
+   "tail_rest": [
+    0.135633,
+    -0.110883,
+    0.011797
+   ]
+  },
+  {
+   "name": "c_toes_middle1_base.l",
+   "parent": "toes_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.145461,
+    -0.049326,
+    0.045049
+   ],
+   "tail_rest": [
+    0.147558,
+    -0.068993,
+    0.032398
+   ]
+  },
+  {
+   "name": "toes_middle1_def.l",
+   "parent": "c_toes_middle1_base.l",
+   "use_deform": true,
+   "head_rest": [
+    0.147558,
+    -0.068993,
+    0.032398
+   ],
+   "tail_rest": [
+    0.148849,
+    -0.08011,
+    0.027195
+   ]
+  },
+  {
+   "name": "toes_middle2_def.l",
+   "parent": "toes_middle1_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.148849,
+    -0.08011,
+    0.027195
+   ],
+   "tail_rest": [
+    0.150231,
+    -0.091067,
+    0.020238
+   ]
+  },
+  {
+   "name": "toes_middle3_def.l",
+   "parent": "toes_middle2_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.150231,
+    -0.091067,
+    0.020238
+   ],
+   "tail_rest": [
+    0.151656,
+    -0.101895,
+    0.012455
+   ]
+  },
+  {
+   "name": "c_toes_ring1_base.l",
+   "parent": "toes_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.158182,
+    -0.044627,
+    0.043347
+   ],
+   "tail_rest": [
+    0.161941,
+    -0.062296,
+    0.032331
+   ]
+  },
+  {
+   "name": "toes_ring1_def.l",
+   "parent": "c_toes_ring1_base.l",
+   "use_deform": true,
+   "head_rest": [
+    0.161941,
+    -0.062296,
+    0.032331
+   ],
+   "tail_rest": [
+    0.163497,
+    -0.076233,
+    0.024773
+   ]
+  },
+  {
+   "name": "toes_ring2_def.l",
+   "parent": "toes_ring1_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.163497,
+    -0.076233,
+    0.024773
+   ],
+   "tail_rest": [
+    0.16449,
+    -0.085779,
+    0.019092
+   ]
+  },
+  {
+   "name": "toes_ring3_def.l",
+   "parent": "toes_ring2_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.16449,
+    -0.085779,
+    0.019092
+   ],
+   "tail_rest": [
+    0.165623,
+    -0.096119,
+    0.011245
+   ]
+  },
+  {
+   "name": "c_toes_pinky1_base.l",
+   "parent": "toes_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.173032,
+    -0.04041,
+    0.042006
+   ],
+   "tail_rest": [
+    0.176381,
+    -0.057073,
+    0.030182
+   ]
+  },
+  {
+   "name": "toes_pinky1_def.l",
+   "parent": "c_toes_pinky1_base.l",
+   "use_deform": true,
+   "head_rest": [
+    0.176381,
+    -0.057073,
+    0.030182
+   ],
+   "tail_rest": [
+    0.176892,
+    -0.066055,
+    0.024979
+   ]
+  },
+  {
+   "name": "toes_pinky2_def.l",
+   "parent": "toes_pinky1_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.176892,
+    -0.066055,
+    0.024979
+   ],
+   "tail_rest": [
+    0.177552,
+    -0.073864,
+    0.019368
+   ]
+  },
+  {
+   "name": "toes_pinky3_def.l",
+   "parent": "toes_pinky2_def.l",
+   "use_deform": true,
+   "head_rest": [
+    0.177552,
+    -0.073864,
+    0.019368
+   ],
+   "tail_rest": [
+    0.178217,
+    -0.082572,
+    0.010173
+   ]
+  },
+  {
+   "name": "c_thigh_twist_2.l",
+   "parent": "thigh_twist_2.l",
+   "use_deform": true,
+   "head_rest": [
+    0.116127,
+    -0.020237,
+    0.902389
+   ],
+   "tail_rest": [
+    0.119324,
+    -0.025515,
+    0.745311
+   ]
+  },
+  {
+   "name": "c_thigh_stretch.l",
+   "parent": "thigh_str_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.119324,
+    -0.025515,
+    0.745311
+   ],
+   "tail_rest": [
+    0.122522,
+    -0.030793,
+    0.588234
+   ]
+  },
+  {
+   "name": "c_thigh_twist.l",
+   "parent": "thigh_twt_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.11293,
+    -0.014959,
+    1.059466
+   ],
+   "tail_rest": [
+    0.116127,
+    -0.020237,
+    0.902389
+   ]
+  },
+  {
+   "name": "foot.r",
+   "parent": "leg_fk.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.130355,
+    0.007515,
+    0.156859
+   ],
+   "tail_rest": [
+    -0.138461,
+    -0.039055,
+    0.053978
+   ]
+  },
+  {
+   "name": "c_toes_thumb1_base.r",
+   "parent": "toes_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.110869,
+    -0.051358,
+    0.040271
+   ],
+   "tail_rest": [
+    -0.111077,
+    -0.081248,
+    0.028588
+   ]
+  },
+  {
+   "name": "toes_thumb1_def.r",
+   "parent": "c_toes_thumb1_base.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.111077,
+    -0.081248,
+    0.028588
+   ],
+   "tail_rest": [
+    -0.111293,
+    -0.100556,
+    0.021848
+   ]
+  },
+  {
+   "name": "toes_thumb2_def.r",
+   "parent": "toes_thumb1_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.111293,
+    -0.100556,
+    0.021848
+   ],
+   "tail_rest": [
+    -0.113246,
+    -0.120571,
+    0.01165
+   ]
+  },
+  {
+   "name": "c_toes_index1_base.r",
+   "parent": "toes_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.129683,
+    -0.053008,
+    0.046541
+   ],
+   "tail_rest": [
+    -0.132032,
+    -0.074158,
+    0.031514
+   ]
+  },
+  {
+   "name": "toes_index1_def.r",
+   "parent": "c_toes_index1_base.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.132032,
+    -0.074158,
+    0.031514
+   ],
+   "tail_rest": [
+    -0.133321,
+    -0.087322,
+    0.026639
+   ]
+  },
+  {
+   "name": "toes_index2_def.r",
+   "parent": "toes_index1_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.133321,
+    -0.087322,
+    0.026639
+   ],
+   "tail_rest": [
+    -0.13447,
+    -0.098232,
+    0.019854
+   ]
+  },
+  {
+   "name": "toes_index3_def.r",
+   "parent": "toes_index2_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.13447,
+    -0.098232,
+    0.019854
+   ],
+   "tail_rest": [
+    -0.135633,
+    -0.110883,
+    0.011797
+   ]
+  },
+  {
+   "name": "c_toes_middle1_base.r",
+   "parent": "toes_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.145461,
+    -0.049326,
+    0.045049
+   ],
+   "tail_rest": [
+    -0.147558,
+    -0.068993,
+    0.032398
+   ]
+  },
+  {
+   "name": "toes_middle1_def.r",
+   "parent": "c_toes_middle1_base.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.147558,
+    -0.068993,
+    0.032398
+   ],
+   "tail_rest": [
+    -0.148849,
+    -0.08011,
+    0.027195
+   ]
+  },
+  {
+   "name": "toes_middle2_def.r",
+   "parent": "toes_middle1_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.148849,
+    -0.08011,
+    0.027195
+   ],
+   "tail_rest": [
+    -0.150231,
+    -0.091067,
+    0.020238
+   ]
+  },
+  {
+   "name": "toes_middle3_def.r",
+   "parent": "toes_middle2_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.150231,
+    -0.091067,
+    0.020238
+   ],
+   "tail_rest": [
+    -0.151656,
+    -0.101895,
+    0.012455
+   ]
+  },
+  {
+   "name": "c_toes_ring1_base.r",
+   "parent": "toes_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.158182,
+    -0.044627,
+    0.043347
+   ],
+   "tail_rest": [
+    -0.161941,
+    -0.062296,
+    0.032331
+   ]
+  },
+  {
+   "name": "toes_ring1_def.r",
+   "parent": "c_toes_ring1_base.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.161941,
+    -0.062296,
+    0.032331
+   ],
+   "tail_rest": [
+    -0.163497,
+    -0.076233,
+    0.024773
+   ]
+  },
+  {
+   "name": "toes_ring2_def.r",
+   "parent": "toes_ring1_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.163497,
+    -0.076233,
+    0.024773
+   ],
+   "tail_rest": [
+    -0.16449,
+    -0.085779,
+    0.019092
+   ]
+  },
+  {
+   "name": "toes_ring3_def.r",
+   "parent": "toes_ring2_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.16449,
+    -0.085779,
+    0.019092
+   ],
+   "tail_rest": [
+    -0.165623,
+    -0.096119,
+    0.011245
+   ]
+  },
+  {
+   "name": "c_toes_pinky1_base.r",
+   "parent": "toes_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.173032,
+    -0.04041,
+    0.042006
+   ],
+   "tail_rest": [
+    -0.176381,
+    -0.057073,
+    0.030182
+   ]
+  },
+  {
+   "name": "toes_pinky1_def.r",
+   "parent": "c_toes_pinky1_base.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.176381,
+    -0.057073,
+    0.030182
+   ],
+   "tail_rest": [
+    -0.176892,
+    -0.066055,
+    0.024979
+   ]
+  },
+  {
+   "name": "toes_pinky2_def.r",
+   "parent": "toes_pinky1_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.176892,
+    -0.066055,
+    0.024979
+   ],
+   "tail_rest": [
+    -0.177552,
+    -0.073864,
+    0.019368
+   ]
+  },
+  {
+   "name": "toes_pinky3_def.r",
+   "parent": "toes_pinky2_def.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.177552,
+    -0.073864,
+    0.019368
+   ],
+   "tail_rest": [
+    -0.178217,
+    -0.082572,
+    0.010173
+   ]
+  },
+  {
+   "name": "c_thigh_twist_2.r",
+   "parent": "thigh_twist_2.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.116127,
+    -0.020237,
+    0.902389
+   ],
+   "tail_rest": [
+    -0.119324,
+    -0.025515,
+    0.745311
+   ]
+  },
+  {
+   "name": "c_thigh_stretch.r",
+   "parent": "thigh_str_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.119324,
+    -0.025515,
+    0.745311
+   ],
+   "tail_rest": [
+    -0.122522,
+    -0.030793,
+    0.588234
+   ]
+  },
+  {
+   "name": "c_thigh_twist.r",
+   "parent": "thigh_twt_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.11293,
+    -0.014959,
+    1.059466
+   ],
+   "tail_rest": [
+    -0.116127,
+    -0.020237,
+    0.902389
+   ]
+  },
+  {
+   "name": "genital",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.039121,
+    1.016509
+   ],
+   "tail_rest": [
+    0.0,
+    -0.049788,
+    0.992788
+   ]
+  },
+  {
+   "name": "vagina_02_l",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    0.007741,
+    -0.049642,
+    0.999591
+   ],
+   "tail_rest": [
+    0.008316,
+    -0.049526,
+    0.973589
+   ]
+  },
+  {
+   "name": "vagina_01_l",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    0.007742,
+    -0.069892,
+    0.999591
+   ],
+   "tail_rest": [
+    0.008318,
+    -0.070477,
+    0.973595
+   ]
+  },
+  {
+   "name": "vagina_01_r",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    -0.00774,
+    -0.069892,
+    0.999591
+   ],
+   "tail_rest": [
+    -0.008316,
+    -0.070477,
+    0.973595
+   ]
+  },
+  {
+   "name": "vagina_02_r",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    -0.00774,
+    -0.049642,
+    0.999591
+   ],
+   "tail_rest": [
+    -0.008315,
+    -0.049526,
+    0.973589
+   ]
+  },
+  {
+   "name": "vagina_middle_01",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.058048,
+    1.000164
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.058151,
+    0.974156
+   ]
+  },
+  {
+   "name": "vagina_middle_02",
+   "parent": "genital",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.038041,
+    1.000164
+   ],
+   "tail_rest": [
+    2e-06,
+    -0.032777,
+    0.974694
+   ]
+  },
+  {
+   "name": "butt.l",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.075723,
+    0.028683,
+    1.057159
+   ],
+   "tail_rest": [
+    0.077856,
+    0.141615,
+    1.045444
+   ]
+  },
+  {
+   "name": "butt.r",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.075723,
+    0.028683,
+    1.057159
+   ],
+   "tail_rest": [
+    -0.077856,
+    0.141615,
+    1.045444
+   ]
+  },
+  {
+   "name": "armor_belt_outer.r",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.205583,
+    -0.041074,
+    1.015754
+   ],
+   "tail_rest": [
+    -0.211955,
+    -0.040408,
+    0.989296
+   ]
+  },
+  {
+   "name": "armor_belt_plates_01.r",
+   "parent": "armor_belt_outer.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.231016,
+    -0.050327,
+    1.018685
+   ],
+   "tail_rest": [
+    -0.240061,
+    -0.044139,
+    0.953502
+   ]
+  },
+  {
+   "name": "armor_belt_plates_02.r",
+   "parent": "armor_belt_plates_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.240061,
+    -0.044139,
+    0.953502
+   ],
+   "tail_rest": [
+    -0.250126,
+    -0.040784,
+    0.893234
+   ]
+  },
+  {
+   "name": "armor_belt_plates_03.r",
+   "parent": "armor_belt_plates_02.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.250126,
+    -0.040784,
+    0.893234
+   ],
+   "tail_rest": [
+    -0.256931,
+    -0.03739,
+    0.832514
+   ]
+  },
+  {
+   "name": "armor_belt_outer_back_01",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.001961,
+    0.122501,
+    1.128414
+   ],
+   "tail_rest": [
+    0.043302,
+    0.168263,
+    1.015931
+   ]
+  },
+  {
+   "name": "armor_belt_outer_back_02",
+   "parent": "armor_belt_outer_back_01",
+   "use_deform": true,
+   "head_rest": [
+    0.043302,
+    0.168265,
+    1.015931
+   ],
+   "tail_rest": [
+    0.097037,
+    0.188426,
+    0.899454
+   ]
+  },
+  {
+   "name": "armor_belt_outer_back_03",
+   "parent": "armor_belt_outer_back_02",
+   "use_deform": true,
+   "head_rest": [
+    0.097037,
+    0.188426,
+    0.899454
+   ],
+   "tail_rest": [
+    0.171421,
+    0.168611,
+    0.794882
+   ]
+  },
+  {
+   "name": "armor_belt_outer.l",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.164286,
+    -0.03729,
+    1.137788
+   ],
+   "tail_rest": [
+    0.173699,
+    -0.035484,
+    1.116706
+   ]
+  },
+  {
+   "name": "armor_belt_plates_01.l",
+   "parent": "armor_belt_outer.l",
+   "use_deform": true,
+   "head_rest": [
+    0.1868,
+    -0.032072,
+    1.136289
+   ],
+   "tail_rest": [
+    0.212513,
+    -0.024824,
+    1.085436
+   ]
+  },
+  {
+   "name": "armor_belt_plates_02.l",
+   "parent": "armor_belt_plates_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.212513,
+    -0.024824,
+    1.085436
+   ],
+   "tail_rest": [
+    0.247161,
+    -0.018329,
+    1.037916
+   ]
+  },
+  {
+   "name": "armor_belt_plates_03.l",
+   "parent": "armor_belt_plates_02.l",
+   "use_deform": true,
+   "head_rest": [
+    0.247161,
+    -0.018329,
+    1.037916
+   ],
+   "tail_rest": [
+    0.273566,
+    -0.00946,
+    0.985715
+   ]
+  },
+  {
+   "name": "beltcape_back.l.01",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.057008,
+    0.112846,
+    1.081265
+   ],
+   "tail_rest": [
+    0.073679,
+    0.130649,
+    1.008793
+   ]
+  },
+  {
+   "name": "beltcape_back.l.02",
+   "parent": "beltcape_back.l.01",
+   "use_deform": true,
+   "head_rest": [
+    0.073679,
+    0.130649,
+    1.008793
+   ],
+   "tail_rest": [
+    0.086721,
+    0.137096,
+    0.910856
+   ]
+  },
+  {
+   "name": "beltcape_back.l.03",
+   "parent": "beltcape_back.l.02",
+   "use_deform": true,
+   "head_rest": [
+    0.086721,
+    0.137096,
+    0.910856
+   ],
+   "tail_rest": [
+    0.097276,
+    0.141818,
+    0.798621
+   ]
+  },
+  {
+   "name": "beltcape_back.l.04",
+   "parent": "beltcape_back.l.03",
+   "use_deform": true,
+   "head_rest": [
+    0.097276,
+    0.141818,
+    0.798621
+   ],
+   "tail_rest": [
+    0.114172,
+    0.149096,
+    0.676533
+   ]
+  },
+  {
+   "name": "beltcape_back.l.05",
+   "parent": "beltcape_back.l.04",
+   "use_deform": true,
+   "head_rest": [
+    0.114172,
+    0.149096,
+    0.676533
+   ],
+   "tail_rest": [
+    0.13027,
+    0.158888,
+    0.547409
+   ]
+  },
+  {
+   "name": "beltcape_back.l.06",
+   "parent": "beltcape_back.l.05",
+   "use_deform": true,
+   "head_rest": [
+    0.13027,
+    0.158888,
+    0.547409
+   ],
+   "tail_rest": [
+    0.145418,
+    0.16731,
+    0.430334
+   ]
+  },
+  {
+   "name": "beltcape_back.l.07",
+   "parent": "beltcape_back.l.06",
+   "use_deform": true,
+   "head_rest": [
+    0.145418,
+    0.16731,
+    0.430334
+   ],
+   "tail_rest": [
+    0.153967,
+    0.170232,
+    0.342699
+   ]
+  },
+  {
+   "name": "beltcape_back.l.08",
+   "parent": "beltcape_back.l.07",
+   "use_deform": true,
+   "head_rest": [
+    0.153967,
+    0.170232,
+    0.342699
+   ],
+   "tail_rest": [
+    0.164587,
+    0.176886,
+    0.255494
+   ]
+  },
+  {
+   "name": "beltcape_back.x.01",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.128543,
+    1.068479
+   ],
+   "tail_rest": [
+    -0.0,
+    0.14773,
+    0.992854
+   ]
+  },
+  {
+   "name": "beltcape_back.x.02",
+   "parent": "beltcape_back.x.01",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.14773,
+    0.992854
+   ],
+   "tail_rest": [
+    -0.0,
+    0.151988,
+    0.903716
+   ]
+  },
+  {
+   "name": "beltcape_back.x.03",
+   "parent": "beltcape_back.x.02",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.151988,
+    0.903716
+   ],
+   "tail_rest": [
+    -0.0,
+    0.160218,
+    0.793685
+   ]
+  },
+  {
+   "name": "beltcape_back.x.04",
+   "parent": "beltcape_back.x.03",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.160218,
+    0.793685
+   ],
+   "tail_rest": [
+    -0.0,
+    0.171508,
+    0.667184
+   ]
+  },
+  {
+   "name": "beltcape_back.x.05",
+   "parent": "beltcape_back.x.04",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.171508,
+    0.667184
+   ],
+   "tail_rest": [
+    -0.0,
+    0.183024,
+    0.530943
+   ]
+  },
+  {
+   "name": "beltcape_back.x.06",
+   "parent": "beltcape_back.x.05",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.183024,
+    0.530943
+   ],
+   "tail_rest": [
+    -0.0,
+    0.195594,
+    0.401933
+   ]
+  },
+  {
+   "name": "beltcape_back.x.07",
+   "parent": "beltcape_back.x.06",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.195594,
+    0.401933
+   ],
+   "tail_rest": [
+    -0.0,
+    0.212593,
+    0.26859
+   ]
+  },
+  {
+   "name": "beltcape_back.x.08",
+   "parent": "beltcape_back.x.07",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.212593,
+    0.26859
+   ],
+   "tail_rest": [
+    -0.0,
+    0.232281,
+    0.135618
+   ]
+  },
+  {
+   "name": "beltcape_back.r.01",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.05701,
+    0.112846,
+    1.081265
+   ],
+   "tail_rest": [
+    -0.073681,
+    0.130649,
+    1.008793
+   ]
+  },
+  {
+   "name": "beltcape_back.r.02",
+   "parent": "beltcape_back.r.01",
+   "use_deform": true,
+   "head_rest": [
+    -0.073681,
+    0.130649,
+    1.008793
+   ],
+   "tail_rest": [
+    -0.086722,
+    0.137096,
+    0.910856
+   ]
+  },
+  {
+   "name": "beltcape_back.r.03",
+   "parent": "beltcape_back.r.02",
+   "use_deform": true,
+   "head_rest": [
+    -0.086723,
+    0.137096,
+    0.910856
+   ],
+   "tail_rest": [
+    -0.097278,
+    0.141818,
+    0.798621
+   ]
+  },
+  {
+   "name": "beltcape_back.r.04",
+   "parent": "beltcape_back.r.03",
+   "use_deform": true,
+   "head_rest": [
+    -0.097278,
+    0.141818,
+    0.798621
+   ],
+   "tail_rest": [
+    -0.114174,
+    0.149096,
+    0.676533
+   ]
+  },
+  {
+   "name": "beltcape_back.r.05",
+   "parent": "beltcape_back.r.04",
+   "use_deform": true,
+   "head_rest": [
+    -0.114174,
+    0.149096,
+    0.676533
+   ],
+   "tail_rest": [
+    -0.130272,
+    0.158889,
+    0.547409
+   ]
+  },
+  {
+   "name": "beltcape_back.r.06",
+   "parent": "beltcape_back.r.05",
+   "use_deform": true,
+   "head_rest": [
+    -0.130272,
+    0.158889,
+    0.547409
+   ],
+   "tail_rest": [
+    -0.14542,
+    0.16731,
+    0.430334
+   ]
+  },
+  {
+   "name": "beltcape_back.r.07",
+   "parent": "beltcape_back.r.06",
+   "use_deform": true,
+   "head_rest": [
+    -0.14542,
+    0.16731,
+    0.430334
+   ],
+   "tail_rest": [
+    -0.153969,
+    0.170233,
+    0.342699
+   ]
+  },
+  {
+   "name": "beltcape_back.r.08",
+   "parent": "beltcape_back.r.07",
+   "use_deform": true,
+   "head_rest": [
+    -0.153969,
+    0.170233,
+    0.342699
+   ],
+   "tail_rest": [
+    -0.164588,
+    0.176886,
+    0.255494
+   ]
+  },
+  {
+   "name": "armor_hip_front",
+   "parent": "root.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.147856,
+    1.029296
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.147225,
+    0.93839
+   ]
+  },
+  {
+   "name": "beltcape_front_01",
+   "parent": "armor_hip_front",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.136281,
+    0.939127
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.133583,
+    0.829985
+   ]
+  },
+  {
+   "name": "beltcape_front_02",
+   "parent": "beltcape_front_01",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.133583,
+    0.829985
+   ],
+   "tail_rest": [
+    0.0,
+    -0.133583,
+    0.704167
+   ]
+  },
+  {
+   "name": "beltcape_front_03",
+   "parent": "beltcape_front_02",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.133583,
+    0.704167
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.135381,
+    0.580899
+   ]
+  },
+  {
+   "name": "beltcape_front_04",
+   "parent": "beltcape_front_03",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.13538,
+    0.580899
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.134578,
+    0.457619
+   ]
+  },
+  {
+   "name": "c_spine_01_bend.x",
+   "parent": "spine_01.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.045634,
+    1.145155
+   ],
+   "tail_rest": [
+    0.0,
+    -0.057398,
+    1.227865
+   ]
+  },
+  {
+   "name": "c_spine_02_bend.x",
+   "parent": "spine_02.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.057398,
+    1.227865
+   ],
+   "tail_rest": [
+    0.0,
+    -0.057244,
+    1.30732
+   ]
+  },
+  {
+   "name": "neck.x",
+   "parent": "c_neck.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.022378,
+    1.532004
+   ],
+   "tail_rest": [
+    0.0,
+    -0.032686,
+    1.614828
+   ]
+  },
+  {
+   "name": "shoulder.r",
+   "parent": "c_shoulder.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.012442,
+    -0.005311,
+    1.505682
+   ],
+   "tail_rest": [
+    -0.13386,
+    -0.005311,
+    1.48915
+   ]
+  },
+  {
+   "name": "armor_clavice.r",
+   "parent": "shoulder.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.03654,
+    -0.0,
+    1.518299
+   ],
+   "tail_rest": [
+    -0.09802,
+    -0.0,
+    1.558569
+   ]
+  },
+  {
+   "name": "c_arm_twist_2.r",
+   "parent": "arm_twist_2.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.221484,
+    -0.000205,
+    1.441938
+   ],
+   "tail_rest": [
+    -0.309109,
+    0.0049,
+    1.394726
+   ]
+  },
+  {
+   "name": "c_arm_stretch.r",
+   "parent": "arm_str_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.309109,
+    0.0049,
+    1.394726
+   ],
+   "tail_rest": [
+    -0.396733,
+    0.010006,
+    1.347513
+   ]
+  },
+  {
+   "name": "c_arm_twist.r",
+   "parent": "arm_twt_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.13386,
+    -0.005311,
+    1.48915
+   ],
+   "tail_rest": [
+    -0.221484,
+    -0.000205,
+    1.441938
+   ]
+  },
+  {
+   "name": "shoulder.l",
+   "parent": "c_shoulder.l",
+   "use_deform": true,
+   "head_rest": [
+    0.012442,
+    -0.005311,
+    1.505682
+   ],
+   "tail_rest": [
+    0.13386,
+    -0.005311,
+    1.48915
+   ]
+  },
+  {
+   "name": "armor_clavice.l",
+   "parent": "shoulder.l",
+   "use_deform": true,
+   "head_rest": [
+    0.03654,
+    -0.0,
+    1.518299
+   ],
+   "tail_rest": [
+    0.108275,
+    -0.0,
+    1.565286
+   ]
+  },
+  {
+   "name": "c_arm_twist_2.l",
+   "parent": "arm_twist_2.l",
+   "use_deform": true,
+   "head_rest": [
+    0.221484,
+    -0.000205,
+    1.441938
+   ],
+   "tail_rest": [
+    0.309109,
+    0.0049,
+    1.394726
+   ]
+  },
+  {
+   "name": "c_arm_stretch.l",
+   "parent": "arm_str_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.309109,
+    0.0049,
+    1.394726
+   ],
+   "tail_rest": [
+    0.396733,
+    0.010006,
+    1.347513
+   ]
+  },
+  {
+   "name": "armor_elbow",
+   "parent": "c_arm_stretch.l",
+   "use_deform": true,
+   "head_rest": [
+    0.374773,
+    -0.0,
+    1.361044
+   ],
+   "tail_rest": [
+    0.406941,
+    -0.0,
+    1.432192
+   ]
+  },
+  {
+   "name": "c_arm_twist.l",
+   "parent": "arm_twt_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.13386,
+    -0.005311,
+    1.48915
+   ],
+   "tail_rest": [
+    0.221484,
+    -0.000205,
+    1.441938
+   ]
+  },
+  {
+   "name": "armor_shoulder_02",
+   "parent": "c_arm_twist.l",
+   "use_deform": true,
+   "head_rest": [
+    0.158209,
+    -0.0,
+    1.490121
+   ],
+   "tail_rest": [
+    0.231631,
+    -0.0,
+    1.555806
+   ]
+  },
+  {
+   "name": "armor_shoulder_01",
+   "parent": "c_arm_twist.l",
+   "use_deform": true,
+   "head_rest": [
+    0.127953,
+    -0.0,
+    1.503328
+   ],
+   "tail_rest": [
+    0.156521,
+    -0.0,
+    1.584183
+   ]
+  },
+  {
+   "name": "armor_cape_A_01",
+   "parent": "armor_shoulder_01",
+   "use_deform": true,
+   "head_rest": [
+    0.111046,
+    -0.086879,
+    1.478895
+   ],
+   "tail_rest": [
+    0.161948,
+    -0.108778,
+    1.426241
+   ]
+  },
+  {
+   "name": "armor_cape_A_02",
+   "parent": "armor_cape_A_01",
+   "use_deform": true,
+   "head_rest": [
+    0.161959,
+    -0.108777,
+    1.426251
+   ],
+   "tail_rest": [
+    0.207404,
+    -0.116458,
+    1.348054
+   ]
+  },
+  {
+   "name": "armor_cape_A_03",
+   "parent": "armor_cape_A_02",
+   "use_deform": true,
+   "head_rest": [
+    0.207405,
+    -0.116458,
+    1.348055
+   ],
+   "tail_rest": [
+    0.230523,
+    -0.116458,
+    1.260278
+   ]
+  },
+  {
+   "name": "armor_cape_B_01",
+   "parent": "armor_shoulder_01",
+   "use_deform": true,
+   "head_rest": [
+    0.127621,
+    -0.048438,
+    1.513867
+   ],
+   "tail_rest": [
+    0.195907,
+    -0.075212,
+    1.4758
+   ]
+  },
+  {
+   "name": "armor_cape_B_02",
+   "parent": "armor_cape_B_01",
+   "use_deform": true,
+   "head_rest": [
+    0.195916,
+    -0.075209,
+    1.475814
+   ],
+   "tail_rest": [
+    0.250599,
+    -0.088918,
+    1.416985
+   ]
+  },
+  {
+   "name": "armor_cape_B_03",
+   "parent": "armor_cape_B_02",
+   "use_deform": true,
+   "head_rest": [
+    0.2506,
+    -0.088918,
+    1.416985
+   ],
+   "tail_rest": [
+    0.297177,
+    -0.094853,
+    1.350394
+   ]
+  },
+  {
+   "name": "armor_cape_C_01",
+   "parent": "armor_shoulder_01",
+   "use_deform": true,
+   "head_rest": [
+    0.146473,
+    -0.017528,
+    1.542165
+   ],
+   "tail_rest": [
+    0.225813,
+    -0.013277,
+    1.52315
+   ]
+  },
+  {
+   "name": "armor_cape_C_02",
+   "parent": "armor_cape_C_01",
+   "use_deform": true,
+   "head_rest": [
+    0.225814,
+    -0.013262,
+    1.523158
+   ],
+   "tail_rest": [
+    0.289167,
+    -0.013884,
+    1.473507
+   ]
+  },
+  {
+   "name": "armor_cape_C_03",
+   "parent": "armor_cape_C_02",
+   "use_deform": true,
+   "head_rest": [
+    0.289167,
+    -0.013883,
+    1.473508
+   ],
+   "tail_rest": [
+    0.351716,
+    -0.010551,
+    1.422955
+   ]
+  },
+  {
+   "name": "armor_cape_D_01",
+   "parent": "armor_shoulder_01",
+   "use_deform": true,
+   "head_rest": [
+    0.139004,
+    0.033268,
+    1.531283
+   ],
+   "tail_rest": [
+    0.189876,
+    0.051235,
+    1.502476
+   ]
+  },
+  {
+   "name": "armor_cape_D_02",
+   "parent": "armor_cape_D_01",
+   "use_deform": true,
+   "head_rest": [
+    0.18987,
+    0.051246,
+    1.502472
+   ],
+   "tail_rest": [
+    0.256908,
+    0.060901,
+    1.456929
+   ]
+  },
+  {
+   "name": "armor_cape_D_03",
+   "parent": "armor_cape_D_02",
+   "use_deform": true,
+   "head_rest": [
+    0.256908,
+    0.060903,
+    1.456928
+   ],
+   "tail_rest": [
+    0.31844,
+    0.06828,
+    1.403817
+   ]
+  },
+  {
+   "name": "armor_cape_E_01",
+   "parent": "armor_shoulder_01",
+   "use_deform": true,
+   "head_rest": [
+    0.1069,
+    0.062034,
+    1.502236
+   ],
+   "tail_rest": [
+    0.149812,
+    0.081541,
+    1.452187
+   ]
+  },
+  {
+   "name": "armor_cape_E_02",
+   "parent": "armor_cape_E_01",
+   "use_deform": true,
+   "head_rest": [
+    0.149801,
+    0.081546,
+    1.45218
+   ],
+   "tail_rest": [
+    0.19233,
+    0.094791,
+    1.393073
+   ]
+  },
+  {
+   "name": "armor_cape_E_03",
+   "parent": "armor_cape_E_02",
+   "use_deform": true,
+   "head_rest": [
+    0.192329,
+    0.094792,
+    1.393073
+   ],
+   "tail_rest": [
+    0.232414,
+    0.104949,
+    1.331691
+   ]
+  },
+  {
+   "name": "breast.l",
+   "parent": "spine_03.x",
+   "use_deform": true,
+   "head_rest": [
+    0.068291,
+    -0.092382,
+    1.433682
+   ],
+   "tail_rest": [
+    0.097437,
+    -0.203574,
+    1.379845
+   ]
+  },
+  {
+   "name": "nipple.l",
+   "parent": "breast.l",
+   "use_deform": true,
+   "head_rest": [
+    0.097437,
+    -0.203575,
+    1.379845
+   ],
+   "tail_rest": [
+    0.130604,
+    -0.325961,
+    1.385594
+   ]
+  },
+  {
+   "name": "breast.r",
+   "parent": "spine_03.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.068291,
+    -0.092382,
+    1.433682
+   ],
+   "tail_rest": [
+    -0.097437,
+    -0.203574,
+    1.379845
+   ]
+  },
+  {
+   "name": "nipple.r",
+   "parent": "breast.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.097437,
+    -0.203575,
+    1.379845
+   ],
+   "tail_rest": [
+    -0.130604,
+    -0.325961,
+    1.385594
+   ]
+  },
+  {
+   "name": "c_spine_03_bend.x",
+   "parent": "spine_03.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.057244,
+    1.30732
+   ],
+   "tail_rest": [
+    0.0,
+    -0.022378,
+    1.532004
+   ]
+  },
+  {
+   "name": "head.x",
+   "parent": "c_head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.032686,
+    1.614828
+   ],
+   "tail_rest": [
+    0.0,
+    -0.032686,
+    1.800754
+   ]
+  },
+  {
+   "name": "jawbone.x",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.051656,
+    1.647631
+   ],
+   "tail_rest": [
+    0.0,
+    -0.127534,
+    1.592917
+   ]
+  },
+  {
+   "name": "c_lips_bot.l",
+   "parent": "c_lips_bot_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.008819,
+    -0.139378,
+    1.615741
+   ],
+   "tail_rest": [
+    0.008819,
+    -0.139378,
+    1.619681
+   ]
+  },
+  {
+   "name": "c_lips_bot.r",
+   "parent": "c_lips_bot_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.008819,
+    -0.139378,
+    1.615741
+   ],
+   "tail_rest": [
+    -0.008819,
+    -0.139378,
+    1.619681
+   ]
+  },
+  {
+   "name": "c_lips_bot.x",
+   "parent": "c_lips_bot_offset.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.141264,
+    1.614293
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.141264,
+    1.618233
+   ]
+  },
+  {
+   "name": "c_lips_bot_01.l",
+   "parent": "c_lips_bot_01_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.016611,
+    -0.13238,
+    1.619003
+   ],
+   "tail_rest": [
+    0.016611,
+    -0.13238,
+    1.622943
+   ]
+  },
+  {
+   "name": "c_lips_bot_01.r",
+   "parent": "c_lips_bot_01_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.016611,
+    -0.13238,
+    1.619003
+   ],
+   "tail_rest": [
+    -0.016611,
+    -0.13238,
+    1.622943
+   ]
+  },
+  {
+   "name": "c_teeth_bot.x",
+   "parent": "c_teeth_bot_master.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.121611,
+    1.613531
+   ],
+   "tail_rest": [
+    0.0,
+    -0.133063,
+    1.613531
+   ]
+  },
+  {
+   "name": "c_teeth_bot.l",
+   "parent": "c_teeth_bot_master.x",
+   "use_deform": true,
+   "head_rest": [
+    0.023299,
+    -0.088951,
+    1.613531
+   ],
+   "tail_rest": [
+    0.023299,
+    -0.100403,
+    1.613531
+   ]
+  },
+  {
+   "name": "c_teeth_bot.r",
+   "parent": "c_teeth_bot_master.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.023299,
+    -0.088951,
+    1.613531
+   ],
+   "tail_rest": [
+    -0.023299,
+    -0.100403,
+    1.613531
+   ]
+  },
+  {
+   "name": "tong_03.x",
+   "parent": "c_tong_03.x",
+   "use_deform": true,
+   "head_rest": [
+    -2e-05,
+    -0.118967,
+    1.619592
+   ],
+   "tail_rest": [
+    -2e-05,
+    -0.13405,
+    1.615414
+   ]
+  },
+  {
+   "name": "tong_02.x",
+   "parent": "c_tong_02.x",
+   "use_deform": true,
+   "head_rest": [
+    -2e-05,
+    -0.098947,
+    1.622559
+   ],
+   "tail_rest": [
+    -2e-05,
+    -0.118967,
+    1.619592
+   ]
+  },
+  {
+   "name": "tong_01.x",
+   "parent": "c_tong_01.x",
+   "use_deform": true,
+   "head_rest": [
+    -2e-05,
+    -0.076068,
+    1.619687
+   ],
+   "tail_rest": [
+    -2e-05,
+    -0.098947,
+    1.622559
+   ]
+  },
+  {
+   "name": "c_chin_01.x",
+   "parent": "jawbone.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.130347,
+    1.605873
+   ],
+   "tail_rest": [
+    0.0,
+    -0.139649,
+    1.605873
+   ]
+  },
+  {
+   "name": "c_chin_02.x",
+   "parent": "jawbone.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.127534,
+    1.592917
+   ],
+   "tail_rest": [
+    0.0,
+    -0.136836,
+    1.592917
+   ]
+  },
+  {
+   "name": "c_lips_top.x",
+   "parent": "c_lips_top_offset.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.147053,
+    1.630852
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.147053,
+    1.634792
+   ]
+  },
+  {
+   "name": "c_lips_top.l",
+   "parent": "c_lips_top_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.008238,
+    -0.144327,
+    1.630407
+   ],
+   "tail_rest": [
+    0.008238,
+    -0.144327,
+    1.634347
+   ]
+  },
+  {
+   "name": "c_lips_top.r",
+   "parent": "c_lips_top_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.008238,
+    -0.144325,
+    1.630407
+   ],
+   "tail_rest": [
+    -0.008238,
+    -0.144325,
+    1.634347
+   ]
+  },
+  {
+   "name": "c_lips_top_01.l",
+   "parent": "c_lips_top_01_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.015521,
+    -0.138454,
+    1.628078
+   ],
+   "tail_rest": [
+    0.015521,
+    -0.138454,
+    1.632018
+   ]
+  },
+  {
+   "name": "c_lips_top_01.r",
+   "parent": "c_lips_top_01_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.015521,
+    -0.138449,
+    1.628078
+   ],
+   "tail_rest": [
+    -0.015521,
+    -0.138449,
+    1.632018
+   ]
+  },
+  {
+   "name": "c_lips_corner_mini.l",
+   "parent": "c_lips_smile.l",
+   "use_deform": true,
+   "head_rest": [
+    0.022583,
+    -0.128984,
+    1.624221
+   ],
+   "tail_rest": [
+    0.022583,
+    -0.128984,
+    1.626191
+   ]
+  },
+  {
+   "name": "c_lips_corner_mini.r",
+   "parent": "c_lips_smile.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.022583,
+    -0.128984,
+    1.624221
+   ],
+   "tail_rest": [
+    -0.022583,
+    -0.128984,
+    1.626191
+   ]
+  },
+  {
+   "name": "c_teeth_top.x",
+   "parent": "c_teeth_top_master.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.122957,
+    1.638803
+   ],
+   "tail_rest": [
+    0.0,
+    -0.134409,
+    1.638803
+   ]
+  },
+  {
+   "name": "c_teeth_top.l",
+   "parent": "c_teeth_top_master.x",
+   "use_deform": true,
+   "head_rest": [
+    0.022442,
+    -0.09113,
+    1.638803
+   ],
+   "tail_rest": [
+    0.022442,
+    -0.102581,
+    1.638803
+   ]
+  },
+  {
+   "name": "c_teeth_top.r",
+   "parent": "c_teeth_top_master.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.022442,
+    -0.09113,
+    1.638803
+   ],
+   "tail_rest": [
+    -0.022442,
+    -0.102581,
+    1.638803
+   ]
+  },
+  {
+   "name": "c_nose_03.x",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.139718,
+    1.680399
+   ],
+   "tail_rest": [
+    0.0,
+    -0.14902,
+    1.680399
+   ]
+  },
+  {
+   "name": "c_nose_01.x",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.140951,
+    1.652979
+   ],
+   "tail_rest": [
+    0.0,
+    -0.14955,
+    1.652979
+   ]
+  },
+  {
+   "name": "c_nose_02.x",
+   "parent": "c_nose_01.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.14955,
+    1.652979
+   ],
+   "tail_rest": [
+    0.0,
+    -0.15815,
+    1.652979
+   ]
+  },
+  {
+   "name": "c_eye_ref_track.l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.030287,
+    -0.120419,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eye_offset.l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.030287,
+    -0.128553,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eyelid_top_01.l",
+   "parent": "eyelid_top.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.02074,
+    -0.133047,
+    1.687593
+   ]
+  },
+  {
+   "name": "c_eyelid_top_02.l",
+   "parent": "eyelid_top.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.030508,
+    -0.136204,
+    1.691929
+   ]
+  },
+  {
+   "name": "c_eyelid_top_03.l",
+   "parent": "eyelid_top.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.041005,
+    -0.130962,
+    1.690098
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_01.l",
+   "parent": "eyelid_bot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.021661,
+    -0.128237,
+    1.679106
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_02.l",
+   "parent": "eyelid_bot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.031141,
+    -0.128553,
+    1.67797
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_03.l",
+   "parent": "eyelid_bot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.040992,
+    -0.127581,
+    1.679437
+   ]
+  },
+  {
+   "name": "c_eye.l",
+   "parent": "c_eye_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.030287,
+    -0.128553,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eyelid_corner_01.l",
+   "parent": "c_eye_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.013849,
+    -0.129169,
+    1.679602
+   ]
+  },
+  {
+   "name": "c_eyelid_corner_02.l",
+   "parent": "c_eye_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    0.047611,
+    -0.124565,
+    1.685396
+   ]
+  },
+  {
+   "name": "c_eye_ref_track.r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.030287,
+    -0.120419,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eye_offset.r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.030287,
+    -0.128553,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eyelid_corner_01.r",
+   "parent": "c_eye_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.013849,
+    -0.12916,
+    1.679602
+   ]
+  },
+  {
+   "name": "c_eyelid_corner_02.r",
+   "parent": "c_eye_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.047611,
+    -0.124565,
+    1.685396
+   ]
+  },
+  {
+   "name": "c_eyelid_top_01.r",
+   "parent": "eyelid_top.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.02074,
+    -0.133047,
+    1.687593
+   ]
+  },
+  {
+   "name": "c_eyelid_top_02.r",
+   "parent": "eyelid_top.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.030508,
+    -0.136204,
+    1.691929
+   ]
+  },
+  {
+   "name": "c_eyelid_top_03.r",
+   "parent": "eyelid_top.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.041005,
+    -0.13096,
+    1.690098
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_01.r",
+   "parent": "eyelid_bot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.021661,
+    -0.128237,
+    1.679106
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_02.r",
+   "parent": "eyelid_bot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.031141,
+    -0.128553,
+    1.67797
+   ]
+  },
+  {
+   "name": "c_eyelid_bot_03.r",
+   "parent": "eyelid_bot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.040992,
+    -0.127581,
+    1.679437
+   ]
+  },
+  {
+   "name": "c_eye.r",
+   "parent": "c_eye_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.030287,
+    -0.112285,
+    1.688523
+   ],
+   "tail_rest": [
+    -0.030287,
+    -0.128553,
+    1.688523
+   ]
+  },
+  {
+   "name": "c_eyebrow_03.l",
+   "parent": "c_eyebrow_full.l",
+   "use_deform": true,
+   "head_rest": [
+    0.04991,
+    -0.123802,
+    1.70317
+   ],
+   "tail_rest": [
+    0.04991,
+    -0.123802,
+    1.709291
+   ]
+  },
+  {
+   "name": "c_eyebrow_02.l",
+   "parent": "c_eyebrow_full.l",
+   "use_deform": true,
+   "head_rest": [
+    0.037351,
+    -0.135492,
+    1.703358
+   ],
+   "tail_rest": [
+    0.037351,
+    -0.135492,
+    1.709479
+   ]
+  },
+  {
+   "name": "c_eyebrow_01.l",
+   "parent": "c_eyebrow_full.l",
+   "use_deform": true,
+   "head_rest": [
+    0.024962,
+    -0.139238,
+    1.700351
+   ],
+   "tail_rest": [
+    0.024962,
+    -0.139238,
+    1.706472
+   ]
+  },
+  {
+   "name": "c_eyebrow_01_end.l",
+   "parent": "c_eyebrow_full.l",
+   "use_deform": true,
+   "head_rest": [
+    0.014339,
+    -0.140638,
+    1.696499
+   ],
+   "tail_rest": [
+    0.014339,
+    -0.140638,
+    1.70262
+   ]
+  },
+  {
+   "name": "c_eyebrow_03.r",
+   "parent": "c_eyebrow_full.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.04991,
+    -0.123802,
+    1.70317
+   ],
+   "tail_rest": [
+    -0.04991,
+    -0.123802,
+    1.709291
+   ]
+  },
+  {
+   "name": "c_eyebrow_02.r",
+   "parent": "c_eyebrow_full.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.037351,
+    -0.135494,
+    1.703358
+   ],
+   "tail_rest": [
+    -0.037351,
+    -0.135494,
+    1.709479
+   ]
+  },
+  {
+   "name": "c_eyebrow_01.r",
+   "parent": "c_eyebrow_full.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.024962,
+    -0.139238,
+    1.700351
+   ],
+   "tail_rest": [
+    -0.024962,
+    -0.139238,
+    1.706472
+   ]
+  },
+  {
+   "name": "c_eyebrow_01_end.r",
+   "parent": "c_eyebrow_full.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.014339,
+    -0.140638,
+    1.696499
+   ],
+   "tail_rest": [
+    -0.014339,
+    -0.140638,
+    1.70262
+   ]
+  },
+  {
+   "name": "c_cheek_smile.l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.034035,
+    -0.12825,
+    1.662024
+   ],
+   "tail_rest": [
+    0.034035,
+    -0.12825,
+    1.674804
+   ]
+  },
+  {
+   "name": "c_cheek_smile.r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.034035,
+    -0.128254,
+    1.662024
+   ],
+   "tail_rest": [
+    -0.034035,
+    -0.128254,
+    1.674804
+   ]
+  },
+  {
+   "name": "c_cheek_inflate.l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.030355,
+    -0.117451,
+    1.644478
+   ],
+   "tail_rest": [
+    0.030355,
+    -0.142891,
+    1.644478
+   ]
+  },
+  {
+   "name": "c_cheek_inflate.r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.030355,
+    -0.117451,
+    1.644478
+   ],
+   "tail_rest": [
+    -0.030355,
+    -0.142891,
+    1.644478
+   ]
+  },
+  {
+   "name": "c_ear_01.l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.069593,
+    -0.041286,
+    1.662883
+   ],
+   "tail_rest": [
+    0.097222,
+    -0.032001,
+    1.672706
+   ]
+  },
+  {
+   "name": "c_ear_02.l",
+   "parent": "c_ear_01.l",
+   "use_deform": true,
+   "head_rest": [
+    0.097222,
+    -0.032001,
+    1.672706
+   ],
+   "tail_rest": [
+    0.124851,
+    -0.022717,
+    1.682528
+   ]
+  },
+  {
+   "name": "c_ear_01.r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.069593,
+    -0.041283,
+    1.662883
+   ],
+   "tail_rest": [
+    -0.097222,
+    -0.032,
+    1.672706
+   ]
+  },
+  {
+   "name": "c_ear_02.r",
+   "parent": "c_ear_01.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.097222,
+    -0.032,
+    1.672706
+   ],
+   "tail_rest": [
+    -0.124851,
+    -0.022717,
+    1.682528
+   ]
+  },
+  {
+   "name": "hair_ponytail_root",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.029457,
+    1.788339
+   ],
+   "tail_rest": [
+    0.0,
+    0.060102,
+    1.814529
+   ]
+  },
+  {
+   "name": "hair_ponytail_01",
+   "parent": "hair_ponytail_root",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.073993,
+    1.8264
+   ],
+   "tail_rest": [
+    0.0,
+    0.140919,
+    1.821925
+   ]
+  },
+  {
+   "name": "hair_ponytail_02",
+   "parent": "hair_ponytail_01",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.140919,
+    1.821925
+   ],
+   "tail_rest": [
+    0.0,
+    0.196573,
+    1.767037
+   ]
+  },
+  {
+   "name": "hair_ponytail_03",
+   "parent": "hair_ponytail_02",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.196573,
+    1.767037
+   ],
+   "tail_rest": [
+    0.0,
+    0.217943,
+    1.692276
+   ]
+  },
+  {
+   "name": "hair_ponytail_04",
+   "parent": "hair_ponytail_03",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.217943,
+    1.692276
+   ],
+   "tail_rest": [
+    1e-06,
+    0.210607,
+    1.584062
+   ]
+  },
+  {
+   "name": "hair_ponytail_05",
+   "parent": "hair_ponytail_04",
+   "use_deform": true,
+   "head_rest": [
+    1e-06,
+    0.210607,
+    1.584063
+   ],
+   "tail_rest": [
+    1e-06,
+    0.19922,
+    1.520004
+   ]
+  },
+  {
+   "name": "hair_ponytail_06",
+   "parent": "hair_ponytail_05",
+   "use_deform": true,
+   "head_rest": [
+    1e-06,
+    0.191378,
+    1.475879
+   ],
+   "tail_rest": [
+    1e-06,
+    0.180729,
+    1.365504
+   ]
+  },
+  {
+   "name": "hair_ponytail_07",
+   "parent": "hair_ponytail_06",
+   "use_deform": true,
+   "head_rest": [
+    2e-06,
+    0.180727,
+    1.365504
+   ],
+   "tail_rest": [
+    0.0,
+    0.209607,
+    1.261672
+   ]
+  },
+  {
+   "name": "hair_ponytail_08",
+   "parent": "hair_ponytail_07",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.209607,
+    1.261672
+   ],
+   "tail_rest": [
+    -0.009727,
+    0.2604,
+    1.14756
+   ]
+  },
+  {
+   "name": "hair_ponytail_09",
+   "parent": "hair_ponytail_08",
+   "use_deform": true,
+   "head_rest": [
+    -0.009727,
+    0.2604,
+    1.14756
+   ],
+   "tail_rest": [
+    -0.030247,
+    0.263057,
+    1.025288
+   ]
+  },
+  {
+   "name": "hair_ponytail_10",
+   "parent": "hair_ponytail_09",
+   "use_deform": true,
+   "head_rest": [
+    -0.030247,
+    0.263057,
+    1.025288
+   ],
+   "tail_rest": [
+    -0.023085,
+    0.233487,
+    0.905067
+   ]
+  },
+  {
+   "name": "hair_ponytail_11",
+   "parent": "hair_ponytail_05",
+   "use_deform": true,
+   "head_rest": [
+    0.054129,
+    0.192795,
+    1.584063
+   ],
+   "tail_rest": [
+    0.05413,
+    0.173595,
+    1.47588
+   ]
+  },
+  {
+   "name": "hair_ponytail_12",
+   "parent": "hair_ponytail_11",
+   "use_deform": true,
+   "head_rest": [
+    0.05413,
+    0.173596,
+    1.47588
+   ],
+   "tail_rest": [
+    0.05413,
+    0.163172,
+    1.365504
+   ]
+  },
+  {
+   "name": "hair_ponytail_13",
+   "parent": "hair_ponytail_12",
+   "use_deform": true,
+   "head_rest": [
+    0.05413,
+    0.16317,
+    1.365504
+   ],
+   "tail_rest": [
+    0.046632,
+    0.181343,
+    1.261672
+   ]
+  },
+  {
+   "name": "hair_ponytail_14",
+   "parent": "hair_ponytail_13",
+   "use_deform": true,
+   "head_rest": [
+    0.046632,
+    0.181343,
+    1.261672
+   ],
+   "tail_rest": [
+    0.032676,
+    0.239449,
+    1.15042
+   ]
+  },
+  {
+   "name": "hair_ponytail_15",
+   "parent": "hair_ponytail_14",
+   "use_deform": true,
+   "head_rest": [
+    0.032676,
+    0.239449,
+    1.15042
+   ],
+   "tail_rest": [
+    -0.000307,
+    0.262049,
+    1.030631
+   ]
+  },
+  {
+   "name": "hair_ponytail_16",
+   "parent": "hair_ponytail_05",
+   "use_deform": true,
+   "head_rest": [
+    0.010588,
+    0.250144,
+    1.584063
+   ],
+   "tail_rest": [
+    0.015487,
+    0.230602,
+    1.475879
+   ]
+  },
+  {
+   "name": "hair_ponytail_17",
+   "parent": "hair_ponytail_16",
+   "use_deform": true,
+   "head_rest": [
+    0.015487,
+    0.230603,
+    1.475879
+   ],
+   "tail_rest": [
+    0.022643,
+    0.235372,
+    1.361658
+   ]
+  },
+  {
+   "name": "hair_ponytail_18",
+   "parent": "hair_ponytail_17",
+   "use_deform": true,
+   "head_rest": [
+    0.022643,
+    0.23537,
+    1.361658
+   ],
+   "tail_rest": [
+    0.025378,
+    0.278134,
+    1.253737
+   ]
+  },
+  {
+   "name": "hair_ponytail_19",
+   "parent": "hair_ponytail_18",
+   "use_deform": true,
+   "head_rest": [
+    0.025378,
+    0.278134,
+    1.253737
+   ],
+   "tail_rest": [
+    0.009072,
+    0.313015,
+    1.14419
+   ]
+  },
+  {
+   "name": "hair_ponytail_20",
+   "parent": "hair_ponytail_05",
+   "use_deform": true,
+   "head_rest": [
+    -0.054738,
+    0.192795,
+    1.584062
+   ],
+   "tail_rest": [
+    -0.054738,
+    0.212535,
+    1.475879
+   ]
+  },
+  {
+   "name": "hair_ponytail_21",
+   "parent": "hair_ponytail_20",
+   "use_deform": true,
+   "head_rest": [
+    -0.054738,
+    0.212536,
+    1.47588
+   ],
+   "tail_rest": [
+    -0.064893,
+    0.225972,
+    1.361658
+   ]
+  },
+  {
+   "name": "hair_ponytail_22",
+   "parent": "hair_ponytail_21",
+   "use_deform": true,
+   "head_rest": [
+    -0.064893,
+    0.22597,
+    1.361657
+   ],
+   "tail_rest": [
+    -0.049418,
+    0.254855,
+    1.253737
+   ]
+  },
+  {
+   "name": "hair_ponytail_23",
+   "parent": "hair_ponytail_22",
+   "use_deform": true,
+   "head_rest": [
+    -0.049418,
+    0.254855,
+    1.253737
+   ],
+   "tail_rest": [
+    -0.034885,
+    0.292964,
+    1.15042
+   ]
+  },
+  {
+   "name": "hair_ponytail_24",
+   "parent": "hair_ponytail_23",
+   "use_deform": true,
+   "head_rest": [
+    -0.034885,
+    0.292964,
+    1.15042
+   ],
+   "tail_rest": [
+    -0.018686,
+    0.311064,
+    1.042032
+   ]
+  },
+  {
+   "name": "hair_ponytail_25",
+   "parent": "hair_ponytail_05",
+   "use_deform": true,
+   "head_rest": [
+    -0.022508,
+    0.155037,
+    1.584063
+   ],
+   "tail_rest": [
+    -0.022708,
+    0.151847,
+    1.47588
+   ]
+  },
+  {
+   "name": "hair_ponytail_26",
+   "parent": "hair_ponytail_25",
+   "use_deform": true,
+   "head_rest": [
+    -0.022708,
+    0.151848,
+    1.47588
+   ],
+   "tail_rest": [
+    -0.03751,
+    0.14418,
+    1.361658
+   ]
+  },
+  {
+   "name": "hair_ponytail_27",
+   "parent": "hair_ponytail_26",
+   "use_deform": true,
+   "head_rest": [
+    -0.03751,
+    0.144178,
+    1.361658
+   ],
+   "tail_rest": [
+    -0.042171,
+    0.159633,
+    1.253737
+   ]
+  },
+  {
+   "name": "hair_ponytail_28",
+   "parent": "hair_ponytail_27",
+   "use_deform": true,
+   "head_rest": [
+    -0.042171,
+    0.159633,
+    1.253737
+   ],
+   "tail_rest": [
+    -0.056403,
+    0.189617,
+    1.149785
+   ]
+  },
+  {
+   "name": "hair_ribbon_05_r",
+   "parent": "hair_ponytail_root",
+   "use_deform": true,
+   "head_rest": [
+    -0.01521,
+    0.051335,
+    1.776115
+   ],
+   "tail_rest": [
+    -0.046039,
+    0.062254,
+    1.752549
+   ]
+  },
+  {
+   "name": "hair_ribbon_01_r",
+   "parent": "hair_ponytail_root",
+   "use_deform": true,
+   "head_rest": [
+    -0.01845,
+    0.058139,
+    1.763536
+   ],
+   "tail_rest": [
+    -0.023315,
+    0.058441,
+    1.713114
+   ]
+  },
+  {
+   "name": "hair_ribbon_02_r",
+   "parent": "hair_ribbon_01_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.023315,
+    0.058441,
+    1.713114
+   ],
+   "tail_rest": [
+    -0.026097,
+    0.05864,
+    1.667594
+   ]
+  },
+  {
+   "name": "hair_ribbon_03_r",
+   "parent": "hair_ribbon_02_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.026096,
+    0.05864,
+    1.667594
+   ],
+   "tail_rest": [
+    -0.031565,
+    0.059989,
+    1.624154
+   ]
+  },
+  {
+   "name": "hair_ribbon_04_r",
+   "parent": "hair_ribbon_03_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.031565,
+    0.05999,
+    1.624154
+   ],
+   "tail_rest": [
+    -0.042515,
+    0.067483,
+    1.582407
+   ]
+  },
+  {
+   "name": "hair_ribbon_01_l",
+   "parent": "hair_ponytail_root",
+   "use_deform": true,
+   "head_rest": [
+    0.01845,
+    0.058139,
+    1.763536
+   ],
+   "tail_rest": [
+    0.023314,
+    0.058441,
+    1.713114
+   ]
+  },
+  {
+   "name": "hair_ribbon_02_l",
+   "parent": "hair_ribbon_01_l",
+   "use_deform": true,
+   "head_rest": [
+    0.023314,
+    0.058441,
+    1.713114
+   ],
+   "tail_rest": [
+    0.026096,
+    0.05864,
+    1.667594
+   ]
+  },
+  {
+   "name": "hair_ribbon_03_l",
+   "parent": "hair_ribbon_02_l",
+   "use_deform": true,
+   "head_rest": [
+    0.026096,
+    0.05864,
+    1.667594
+   ],
+   "tail_rest": [
+    0.031565,
+    0.059989,
+    1.624154
+   ]
+  },
+  {
+   "name": "hair_ribbon_04_l",
+   "parent": "hair_ribbon_03_l",
+   "use_deform": true,
+   "head_rest": [
+    0.031565,
+    0.05999,
+    1.624154
+   ],
+   "tail_rest": [
+    0.042515,
+    0.067483,
+    1.582408
+   ]
+  },
+  {
+   "name": "hair_ribbon_05_l",
+   "parent": "hair_ponytail_root",
+   "use_deform": true,
+   "head_rest": [
+    0.01521,
+    0.051335,
+    1.776115
+   ],
+   "tail_rest": [
+    0.046039,
+    0.062254,
+    1.752549
+   ]
+  },
+  {
+   "name": "hair_side_A_01_l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.077468,
+    -0.098657,
+    1.736742
+   ],
+   "tail_rest": [
+    0.075688,
+    -0.093195,
+    1.69982
+   ]
+  },
+  {
+   "name": "hair_side_A_02_l",
+   "parent": "hair_side_A_01_l",
+   "use_deform": true,
+   "head_rest": [
+    0.075688,
+    -0.093195,
+    1.69982
+   ],
+   "tail_rest": [
+    0.071953,
+    -0.093195,
+    1.666394
+   ]
+  },
+  {
+   "name": "hair_side_A_03_l",
+   "parent": "hair_side_A_02_l",
+   "use_deform": true,
+   "head_rest": [
+    0.071953,
+    -0.093195,
+    1.666394
+   ],
+   "tail_rest": [
+    0.056523,
+    -0.099794,
+    1.637246
+   ]
+  },
+  {
+   "name": "hair_front_B_01_l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.06333,
+    -0.125823,
+    1.753429
+   ],
+   "tail_rest": [
+    0.072393,
+    -0.113902,
+    1.721365
+   ]
+  },
+  {
+   "name": "hair_front_B_02_l",
+   "parent": "hair_front_B_01_l",
+   "use_deform": true,
+   "head_rest": [
+    0.072393,
+    -0.113902,
+    1.721365
+   ],
+   "tail_rest": [
+    0.070105,
+    -0.113684,
+    1.690125
+   ]
+  },
+  {
+   "name": "hair_front_B_03_l",
+   "parent": "hair_front_B_02_l",
+   "use_deform": true,
+   "head_rest": [
+    0.070105,
+    -0.113684,
+    1.690125
+   ],
+   "tail_rest": [
+    0.053995,
+    -0.118072,
+    1.663621
+   ]
+  },
+  {
+   "name": "hair_side_B_01_l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.078967,
+    -0.076963,
+    1.713603
+   ],
+   "tail_rest": [
+    0.077673,
+    -0.073334,
+    1.65181
+   ]
+  },
+  {
+   "name": "hair_side_B_02_l",
+   "parent": "hair_side_B_01_l",
+   "use_deform": true,
+   "head_rest": [
+    0.077673,
+    -0.073334,
+    1.65181
+   ],
+   "tail_rest": [
+    0.078433,
+    -0.072069,
+    1.594331
+   ]
+  },
+  {
+   "name": "hair_side_B_03_l",
+   "parent": "hair_side_B_02_l",
+   "use_deform": true,
+   "head_rest": [
+    0.078433,
+    -0.072068,
+    1.594331
+   ],
+   "tail_rest": [
+    0.087898,
+    -0.073064,
+    1.540586
+   ]
+  },
+  {
+   "name": "hair_side_B_04_l",
+   "parent": "hair_side_B_03_l",
+   "use_deform": true,
+   "head_rest": [
+    0.087898,
+    -0.073064,
+    1.540586
+   ],
+   "tail_rest": [
+    0.11271,
+    -0.084275,
+    1.489842
+   ]
+  },
+  {
+   "name": "hair_side_B_05_l",
+   "parent": "hair_side_B_04_l",
+   "use_deform": true,
+   "head_rest": [
+    0.11271,
+    -0.084275,
+    1.489842
+   ],
+   "tail_rest": [
+    0.135464,
+    -0.099117,
+    1.442949
+   ]
+  },
+  {
+   "name": "hair_side_B_06_l",
+   "parent": "hair_side_B_05_l",
+   "use_deform": true,
+   "head_rest": [
+    0.135464,
+    -0.099117,
+    1.442949
+   ],
+   "tail_rest": [
+    0.153758,
+    -0.127822,
+    1.400778
+   ]
+  },
+  {
+   "name": "hair_front_A_01_l",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.025454,
+    -0.146553,
+    1.746936
+   ],
+   "tail_rest": [
+    0.051319,
+    -0.141162,
+    1.722737
+   ]
+  },
+  {
+   "name": "hair_front_A_02_l",
+   "parent": "hair_front_A_01_l",
+   "use_deform": true,
+   "head_rest": [
+    0.051318,
+    -0.141162,
+    1.722737
+   ],
+   "tail_rest": [
+    0.055156,
+    -0.12979,
+    1.69013
+   ]
+  },
+  {
+   "name": "hair_front_A_03_l",
+   "parent": "hair_front_A_02_l",
+   "use_deform": true,
+   "head_rest": [
+    0.055156,
+    -0.12979,
+    1.69013
+   ],
+   "tail_rest": [
+    0.048628,
+    -0.130667,
+    1.656014
+   ]
+  },
+  {
+   "name": "hair_plume_B_01",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    0.010092,
+    -0.153323,
+    1.751844
+   ],
+   "tail_rest": [
+    0.030845,
+    -0.150489,
+    1.774452
+   ]
+  },
+  {
+   "name": "hair_plume_B_02",
+   "parent": "hair_plume_B_01",
+   "use_deform": true,
+   "head_rest": [
+    0.030845,
+    -0.150489,
+    1.774452
+   ],
+   "tail_rest": [
+    0.034986,
+    -0.126038,
+    1.792752
+   ]
+  },
+  {
+   "name": "hair_plume_C_01",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.01009,
+    -0.153323,
+    1.751844
+   ],
+   "tail_rest": [
+    -0.030843,
+    -0.150489,
+    1.774452
+   ]
+  },
+  {
+   "name": "hair_plume_C_02",
+   "parent": "hair_plume_C_01",
+   "use_deform": true,
+   "head_rest": [
+    -0.030843,
+    -0.150489,
+    1.774452
+   ],
+   "tail_rest": [
+    -0.034984,
+    -0.126038,
+    1.792752
+   ]
+  },
+  {
+   "name": "hair_front_A_01_r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.02545,
+    -0.146553,
+    1.746936
+   ],
+   "tail_rest": [
+    -0.051315,
+    -0.141162,
+    1.722737
+   ]
+  },
+  {
+   "name": "hair_front_A_02_r",
+   "parent": "hair_front_A_01_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.051314,
+    -0.141162,
+    1.722737
+   ],
+   "tail_rest": [
+    -0.055152,
+    -0.12979,
+    1.69013
+   ]
+  },
+  {
+   "name": "hair_front_A_03_r",
+   "parent": "hair_front_A_02_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.055152,
+    -0.12979,
+    1.69013
+   ],
+   "tail_rest": [
+    -0.048624,
+    -0.130667,
+    1.656015
+   ]
+  },
+  {
+   "name": "hair_front_B_01_r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.06333,
+    -0.125823,
+    1.753429
+   ],
+   "tail_rest": [
+    -0.072393,
+    -0.113902,
+    1.721365
+   ]
+  },
+  {
+   "name": "hair_front_B_02_r",
+   "parent": "hair_front_B_01_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.072393,
+    -0.113902,
+    1.721364
+   ],
+   "tail_rest": [
+    -0.070105,
+    -0.113684,
+    1.690124
+   ]
+  },
+  {
+   "name": "hair_front_B_03_r",
+   "parent": "hair_front_B_02_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.070105,
+    -0.113684,
+    1.690124
+   ],
+   "tail_rest": [
+    -0.053994,
+    -0.118072,
+    1.66362
+   ]
+  },
+  {
+   "name": "hair_side_A_01_r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.07747,
+    -0.098657,
+    1.736742
+   ],
+   "tail_rest": [
+    -0.07569,
+    -0.093195,
+    1.699821
+   ]
+  },
+  {
+   "name": "hair_side_A_02_r",
+   "parent": "hair_side_A_01_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.07569,
+    -0.093195,
+    1.699821
+   ],
+   "tail_rest": [
+    -0.071955,
+    -0.093195,
+    1.666395
+   ]
+  },
+  {
+   "name": "hair_side_A_03_r",
+   "parent": "hair_side_A_02_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.071955,
+    -0.093195,
+    1.666395
+   ],
+   "tail_rest": [
+    -0.056525,
+    -0.099794,
+    1.637247
+   ]
+  },
+  {
+   "name": "hair_side_B_01_r",
+   "parent": "head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.07897,
+    -0.076963,
+    1.713603
+   ],
+   "tail_rest": [
+    -0.077676,
+    -0.073334,
+    1.651809
+   ]
+  },
+  {
+   "name": "hair_side_B_02_r",
+   "parent": "hair_side_B_01_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.077676,
+    -0.073334,
+    1.651809
+   ],
+   "tail_rest": [
+    -0.078435,
+    -0.072069,
+    1.594331
+   ]
+  },
+  {
+   "name": "hair_side_B_03_r",
+   "parent": "hair_side_B_02_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.078436,
+    -0.072068,
+    1.594331
+   ],
+   "tail_rest": [
+    -0.087901,
+    -0.073064,
+    1.540586
+   ]
+  },
+  {
+   "name": "hair_side_B_04_r",
+   "parent": "hair_side_B_03_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.087901,
+    -0.073064,
+    1.540586
+   ],
+   "tail_rest": [
+    -0.112713,
+    -0.084275,
+    1.489842
+   ]
+  },
+  {
+   "name": "hair_side_B_05_r",
+   "parent": "hair_side_B_04_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.112712,
+    -0.084275,
+    1.489842
+   ],
+   "tail_rest": [
+    -0.135467,
+    -0.099117,
+    1.442949
+   ]
+  },
+  {
+   "name": "hair_side_B_06_r",
+   "parent": "hair_side_B_05_r",
+   "use_deform": true,
+   "head_rest": [
+    -0.135467,
+    -0.099117,
+    1.442949
+   ],
+   "tail_rest": [
+    -0.153761,
+    -0.127822,
+    1.400778
+   ]
+  },
+  {
+   "name": "hair_plume_A_01",
+   "parent": "c_head.x",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.143798,
+    1.744183
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.154925,
+    1.766573
+   ]
+  },
+  {
+   "name": "hair_plume_A_02",
+   "parent": "hair_plume_A_01",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.154926,
+    1.766573
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.145215,
+    1.795192
+   ]
+  },
+  {
+   "name": "hair_plume_A_03",
+   "parent": "hair_plume_A_02",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.145215,
+    1.795192
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.124157,
+    1.81687
+   ]
+  },
+  {
+   "name": "c_leg_twist.l",
+   "parent": "leg_twist.l",
+   "use_deform": true,
+   "head_rest": [
+    0.127744,
+    -0.005254,
+    0.300651
+   ],
+   "tail_rest": [
+    0.130355,
+    0.007515,
+    0.156859
+   ]
+  },
+  {
+   "name": "c_leg_twist_2.l",
+   "parent": "leg_twist_2.l",
+   "use_deform": true,
+   "head_rest": [
+    0.125133,
+    -0.018024,
+    0.444442
+   ],
+   "tail_rest": [
+    0.127744,
+    -0.005254,
+    0.300651
+   ]
+  },
+  {
+   "name": "c_leg_stretch.l",
+   "parent": "leg_str_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.122522,
+    -0.030793,
+    0.588234
+   ],
+   "tail_rest": [
+    0.125133,
+    -0.018024,
+    0.444442
+   ]
+  },
+  {
+   "name": "armor_knee_01.l",
+   "parent": "c_leg_stretch.l",
+   "use_deform": true,
+   "head_rest": [
+    0.121471,
+    -0.055308,
+    0.60404
+   ],
+   "tail_rest": [
+    0.121471,
+    -0.106884,
+    0.586464
+   ]
+  },
+  {
+   "name": "knee.l",
+   "parent": "c_leg_stretch.l",
+   "use_deform": true,
+   "head_rest": [
+    0.119324,
+    -0.015447,
+    0.577532
+   ],
+   "tail_rest": [
+    0.118669,
+    -0.095721,
+    0.578986
+   ]
+  },
+  {
+   "name": "armor_knee_02.l",
+   "parent": "c_leg_stretch.l",
+   "use_deform": true,
+   "head_rest": [
+    0.125061,
+    -0.017695,
+    0.544637
+   ],
+   "tail_rest": [
+    0.125061,
+    -0.074341,
+    0.468611
+   ]
+  },
+  {
+   "name": "c_leg_twist.r",
+   "parent": "leg_twist.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.127744,
+    -0.005254,
+    0.300651
+   ],
+   "tail_rest": [
+    -0.130355,
+    0.007515,
+    0.156859
+   ]
+  },
+  {
+   "name": "c_leg_twist_2.r",
+   "parent": "leg_twist_2.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.125133,
+    -0.018024,
+    0.444442
+   ],
+   "tail_rest": [
+    -0.127744,
+    -0.005254,
+    0.300651
+   ]
+  },
+  {
+   "name": "c_leg_stretch.r",
+   "parent": "leg_str_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.122522,
+    -0.030793,
+    0.588234
+   ],
+   "tail_rest": [
+    -0.125133,
+    -0.018024,
+    0.444442
+   ]
+  },
+  {
+   "name": "armor_knee_01.r",
+   "parent": "c_leg_stretch.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.121471,
+    -0.055308,
+    0.60404
+   ],
+   "tail_rest": [
+    -0.121471,
+    -0.106884,
+    0.586464
+   ]
+  },
+  {
+   "name": "knee.r",
+   "parent": "c_leg_stretch.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.119324,
+    -0.015447,
+    0.577532
+   ],
+   "tail_rest": [
+    -0.118669,
+    -0.095721,
+    0.578986
+   ]
+  },
+  {
+   "name": "armor_knee_02.r",
+   "parent": "c_leg_stretch.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.125061,
+    -0.017695,
+    0.544637
+   ],
+   "tail_rest": [
+    -0.125061,
+    -0.074341,
+    0.468611
+   ]
+  },
+  {
+   "name": "c_forearm_twist.l",
+   "parent": "forearm_twt_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.517449,
+    0.000654,
+    1.287055
+   ],
+   "tail_rest": [
+    0.577807,
+    -0.004023,
+    1.256826
+   ]
+  },
+  {
+   "name": "c_forearm_twist_2.l",
+   "parent": "forearm_twist_2.l",
+   "use_deform": true,
+   "head_rest": [
+    0.457091,
+    0.00533,
+    1.317284
+   ],
+   "tail_rest": [
+    0.517449,
+    0.000654,
+    1.287055
+   ]
+  },
+  {
+   "name": "c_forearm_stretch.l",
+   "parent": "forearm_str_offset.l",
+   "use_deform": true,
+   "head_rest": [
+    0.396733,
+    0.010006,
+    1.347513
+   ],
+   "tail_rest": [
+    0.457091,
+    0.00533,
+    1.317284
+   ]
+  },
+  {
+   "name": "elbow.l",
+   "parent": "c_forearm_stretch.l",
+   "use_deform": true,
+   "head_rest": [
+    0.402607,
+    0.007475,
+    1.344915
+   ],
+   "tail_rest": [
+    0.401863,
+    0.039465,
+    1.344947
+   ]
+  },
+  {
+   "name": "c_forearm_twist.r",
+   "parent": "forearm_twt_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.517449,
+    0.000654,
+    1.287055
+   ],
+   "tail_rest": [
+    -0.577807,
+    -0.004023,
+    1.256826
+   ]
+  },
+  {
+   "name": "c_forearm_twist_2.r",
+   "parent": "forearm_twist_2.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.457091,
+    0.00533,
+    1.317284
+   ],
+   "tail_rest": [
+    -0.517449,
+    0.000654,
+    1.287055
+   ]
+  },
+  {
+   "name": "c_forearm_stretch.r",
+   "parent": "forearm_str_offset.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.396733,
+    0.010006,
+    1.347513
+   ],
+   "tail_rest": [
+    -0.457091,
+    0.00533,
+    1.317284
+   ]
+  },
+  {
+   "name": "elbow.r",
+   "parent": "c_forearm_stretch.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.402607,
+    0.007475,
+    1.344915
+   ],
+   "tail_rest": [
+    -0.401863,
+    0.039465,
+    1.344947
+   ]
+  },
+  {
+   "name": "hand.l",
+   "parent": "forearm.l",
+   "use_deform": true,
+   "head_rest": [
+    0.577807,
+    -0.004023,
+    1.256826
+   ],
+   "tail_rest": [
+    0.620151,
+    -0.002761,
+    1.22614
+   ]
+  },
+  {
+   "name": "c_pinky1_base.l",
+   "parent": "hand.l",
+   "use_deform": true,
+   "head_rest": [
+    0.599271,
+    0.025012,
+    1.243137
+   ],
+   "tail_rest": [
+    0.630974,
+    0.036226,
+    1.215576
+   ]
+  },
+  {
+   "name": "pinky1.l",
+   "parent": "c_pinky1.l",
+   "use_deform": true,
+   "head_rest": [
+    0.630974,
+    0.036226,
+    1.215576
+   ],
+   "tail_rest": [
+    0.651521,
+    0.043588,
+    1.194465
+   ]
+  },
+  {
+   "name": "c_pinky2.l",
+   "parent": "c_pinky2_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.651521,
+    0.043588,
+    1.194465
+   ],
+   "tail_rest": [
+    0.662097,
+    0.047443,
+    1.180624
+   ]
+  },
+  {
+   "name": "c_pinky3.l",
+   "parent": "c_pinky3_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.662097,
+    0.047443,
+    1.180624
+   ],
+   "tail_rest": [
+    0.671556,
+    0.050706,
+    1.165871
+   ]
+  },
+  {
+   "name": "c_ring1_base.l",
+   "parent": "hand.l",
+   "use_deform": true,
+   "head_rest": [
+    0.603291,
+    0.009368,
+    1.243714
+   ],
+   "tail_rest": [
+    0.640267,
+    0.019499,
+    1.217775
+   ]
+  },
+  {
+   "name": "ring1.l",
+   "parent": "c_ring1.l",
+   "use_deform": true,
+   "head_rest": [
+    0.640267,
+    0.019499,
+    1.217775
+   ],
+   "tail_rest": [
+    0.665313,
+    0.02221,
+    1.190966
+   ]
+  },
+  {
+   "name": "c_ring2.l",
+   "parent": "c_ring2_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.665313,
+    0.02221,
+    1.190966
+   ],
+   "tail_rest": [
+    0.678174,
+    0.024109,
+    1.175937
+   ]
+  },
+  {
+   "name": "c_ring3.l",
+   "parent": "c_ring3_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.678174,
+    0.024109,
+    1.175937
+   ],
+   "tail_rest": [
+    0.690985,
+    0.026556,
+    1.157031
+   ]
+  },
+  {
+   "name": "c_middle1_base.l",
+   "parent": "hand.l",
+   "use_deform": true,
+   "head_rest": [
+    0.60386,
+    -0.004073,
+    1.243659
+   ],
+   "tail_rest": [
+    0.644535,
+    -0.000935,
+    1.218487
+   ]
+  },
+  {
+   "name": "middle1.l",
+   "parent": "c_middle1.l",
+   "use_deform": true,
+   "head_rest": [
+    0.644535,
+    -0.000935,
+    1.218487
+   ],
+   "tail_rest": [
+    0.675181,
+    -4.5e-05,
+    1.187733
+   ]
+  },
+  {
+   "name": "c_middle2.l",
+   "parent": "c_middle2_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.675181,
+    -4.5e-05,
+    1.187733
+   ],
+   "tail_rest": [
+    0.689579,
+    0.001004,
+    1.17248
+   ]
+  },
+  {
+   "name": "c_middle3.l",
+   "parent": "c_middle3_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.689579,
+    0.001004,
+    1.17248
+   ],
+   "tail_rest": [
+    0.704341,
+    0.001435,
+    1.153168
+   ]
+  },
+  {
+   "name": "c_index1_base.l",
+   "parent": "hand.l",
+   "use_deform": true,
+   "head_rest": [
+    0.603962,
+    -0.019413,
+    1.243854
+   ],
+   "tail_rest": [
+    0.643058,
+    -0.023995,
+    1.216049
+   ]
+  },
+  {
+   "name": "index1.l",
+   "parent": "c_index1.l",
+   "use_deform": true,
+   "head_rest": [
+    0.643058,
+    -0.023995,
+    1.216049
+   ],
+   "tail_rest": [
+    0.671095,
+    -0.026113,
+    1.18923
+   ]
+  },
+  {
+   "name": "c_index2.l",
+   "parent": "c_index2_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.671095,
+    -0.026113,
+    1.18923
+   ],
+   "tail_rest": [
+    0.685566,
+    -0.027167,
+    1.172386
+   ]
+  },
+  {
+   "name": "c_index3.l",
+   "parent": "c_index3_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.685566,
+    -0.027167,
+    1.172386
+   ],
+   "tail_rest": [
+    0.698511,
+    -0.027956,
+    1.153619
+   ]
+  },
+  {
+   "name": "thumb1.l",
+   "parent": "c_thumb1.l",
+   "use_deform": true,
+   "head_rest": [
+    0.5796,
+    -0.028616,
+    1.243001
+   ],
+   "tail_rest": [
+    0.602466,
+    -0.051506,
+    1.215803
+   ]
+  },
+  {
+   "name": "c_thumb2.l",
+   "parent": "c_thumb2_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.602466,
+    -0.051506,
+    1.215803
+   ],
+   "tail_rest": [
+    0.616689,
+    -0.065512,
+    1.197575
+   ]
+  },
+  {
+   "name": "c_thumb3.l",
+   "parent": "c_thumb3_rot.l",
+   "use_deform": true,
+   "head_rest": [
+    0.616689,
+    -0.065512,
+    1.197575
+   ],
+   "tail_rest": [
+    0.630697,
+    -0.075731,
+    1.179493
+   ]
+  },
+  {
+   "name": "hand.r",
+   "parent": "forearm.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.577807,
+    -0.004023,
+    1.256826
+   ],
+   "tail_rest": [
+    -0.620151,
+    -0.002761,
+    1.22614
+   ]
+  },
+  {
+   "name": "c_pinky1_base.r",
+   "parent": "hand.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.599271,
+    0.025012,
+    1.243137
+   ],
+   "tail_rest": [
+    -0.630974,
+    0.036226,
+    1.215576
+   ]
+  },
+  {
+   "name": "pinky1.r",
+   "parent": "c_pinky1.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.630974,
+    0.036226,
+    1.215576
+   ],
+   "tail_rest": [
+    -0.651521,
+    0.043588,
+    1.194465
+   ]
+  },
+  {
+   "name": "c_pinky2.r",
+   "parent": "c_pinky2_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.651521,
+    0.043588,
+    1.194465
+   ],
+   "tail_rest": [
+    -0.662097,
+    0.047443,
+    1.180624
+   ]
+  },
+  {
+   "name": "c_pinky3.r",
+   "parent": "c_pinky3_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.662097,
+    0.047443,
+    1.180624
+   ],
+   "tail_rest": [
+    -0.671556,
+    0.050706,
+    1.165871
+   ]
+  },
+  {
+   "name": "c_ring1_base.r",
+   "parent": "hand.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.603291,
+    0.009368,
+    1.243714
+   ],
+   "tail_rest": [
+    -0.640267,
+    0.019499,
+    1.217775
+   ]
+  },
+  {
+   "name": "ring1.r",
+   "parent": "c_ring1.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.640267,
+    0.019499,
+    1.217775
+   ],
+   "tail_rest": [
+    -0.665313,
+    0.02221,
+    1.190966
+   ]
+  },
+  {
+   "name": "c_ring2.r",
+   "parent": "c_ring2_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.665313,
+    0.02221,
+    1.190966
+   ],
+   "tail_rest": [
+    -0.678174,
+    0.024109,
+    1.175937
+   ]
+  },
+  {
+   "name": "c_ring3.r",
+   "parent": "c_ring3_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.678174,
+    0.024109,
+    1.175937
+   ],
+   "tail_rest": [
+    -0.690985,
+    0.026556,
+    1.157031
+   ]
+  },
+  {
+   "name": "c_middle1_base.r",
+   "parent": "hand.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.60386,
+    -0.004073,
+    1.243659
+   ],
+   "tail_rest": [
+    -0.644535,
+    -0.000935,
+    1.218487
+   ]
+  },
+  {
+   "name": "middle1.r",
+   "parent": "c_middle1.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.644535,
+    -0.000935,
+    1.218487
+   ],
+   "tail_rest": [
+    -0.675181,
+    -4.5e-05,
+    1.187733
+   ]
+  },
+  {
+   "name": "c_middle2.r",
+   "parent": "c_middle2_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.675181,
+    -4.5e-05,
+    1.187733
+   ],
+   "tail_rest": [
+    -0.689579,
+    0.001004,
+    1.17248
+   ]
+  },
+  {
+   "name": "c_middle3.r",
+   "parent": "c_middle3_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.689579,
+    0.001004,
+    1.17248
+   ],
+   "tail_rest": [
+    -0.704341,
+    0.001435,
+    1.153168
+   ]
+  },
+  {
+   "name": "c_index1_base.r",
+   "parent": "hand.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.603962,
+    -0.019413,
+    1.243854
+   ],
+   "tail_rest": [
+    -0.643058,
+    -0.023995,
+    1.216049
+   ]
+  },
+  {
+   "name": "index1.r",
+   "parent": "c_index1.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.643058,
+    -0.023995,
+    1.216049
+   ],
+   "tail_rest": [
+    -0.671095,
+    -0.026113,
+    1.18923
+   ]
+  },
+  {
+   "name": "c_index2.r",
+   "parent": "c_index2_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.671095,
+    -0.026113,
+    1.18923
+   ],
+   "tail_rest": [
+    -0.685566,
+    -0.027167,
+    1.172386
+   ]
+  },
+  {
+   "name": "c_index3.r",
+   "parent": "c_index3_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.685566,
+    -0.027167,
+    1.172386
+   ],
+   "tail_rest": [
+    -0.698511,
+    -0.027956,
+    1.153619
+   ]
+  },
+  {
+   "name": "thumb1.r",
+   "parent": "c_thumb1.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.5796,
+    -0.028616,
+    1.243001
+   ],
+   "tail_rest": [
+    -0.602466,
+    -0.051506,
+    1.215803
+   ]
+  },
+  {
+   "name": "c_thumb2.r",
+   "parent": "c_thumb2_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.602466,
+    -0.051506,
+    1.215803
+   ],
+   "tail_rest": [
+    -0.616689,
+    -0.065512,
+    1.197575
+   ]
+  },
+  {
+   "name": "c_thumb3.r",
+   "parent": "c_thumb3_rot.r",
+   "use_deform": true,
+   "head_rest": [
+    -0.616689,
+    -0.065512,
+    1.197575
+   ],
+   "tail_rest": [
+    -0.630697,
+    -0.075731,
+    1.179493
+   ]
+  }
+ ]
+}

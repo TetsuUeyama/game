@@ -1,0 +1,56 @@
+00:01.844  blend            | Read blend: "E:\MOdel\Helena_to_QM_fitted_v8.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== voxelize_mustardui ===
+  out_dir: public/box5/qm_mustardui
+  resolution: 250
+  mesh: Helena Default - Dress (fit QM v8)
+  prefix: helena_default_dress
+  surface-threshold: 0.9 (× voxel_size)
+  Armature: QueenMarika_rig (853 bones)
+  skeleton.json exists: skip
+  Visible rigged meshes: 13
+  grid.json exists: 196x69x251, voxel_size=0.00705
+
+  Target: Helena Default - Dress (fit QM v8) (12698 verts)
+    Mat 'Material': HELCOS001_A02_KIDSALB.PNG
+    Mat 'Material.004': HELCOS001_B03_KIDSALB.PNG
+    Mat 'Material.005': HELCOS001_C01_KIDSOCC.PNG
+  Triangulated: 24546 tris, uv=yes
+  Mapped vertex groups -> bones: 24/24
+  Pass 1: surface sampling (threshold = 0.9 × voxel_size)...
+    surface: 109476 voxels (7.0s)
+  Pass 2: parity ray cast for interior...
+    column 0/196 interior so far: 0
+    column 20/196 interior so far: 0
+    column 40/196 interior so far: 60
+    column 60/196 interior so far: 944
+    column 80/196 interior so far: 5726
+    column 100/196 interior so far: 10187
+    column 120/196 interior so far: 16096
+    column 140/196 interior so far: 19775
+    column 160/196 interior so far: 20281
+    column 180/196 interior so far: 20284
+    interior: 20284 voxels (1.3s)
+  TOTAL: 129760 voxels
+  -> public/box5/qm_mustardui\helena_default_dress.vox (196x69x251, 129760 voxels, 170 colors)
+  -> public/box5/qm_mustardui\helena_default_dress.weights.json (19 unique bones)
+
+  Top bones by voxel weight-sum:
+    c_root_bend.x: 26357.0
+    c_spine_03_bend.x: 18210.7
+    c_spine_02_bend.x: 14337.6
+    c_spine_01_bend.x: 14142.6
+    c_thigh_stretch.r: 9002.8
+    c_thigh_stretch.l: 8667.2
+    c_arm_stretch.l: 2775.9
+    c_arm_stretch.r: 2642.8
+    shoulder.r: 2283.2
+    shoulder.l: 2069.8
+
+  Done in 21.5s
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+scripts disabled for "E:\MOdel\Helena_to_QM_fitted_v8.blend", skipping 'mustard_ui.py'
+
+Blender quit

@@ -1,0 +1,6126 @@
+{
+ "armature": "Helena",
+ "bone_count": 408,
+ "bones": [
+  {
+   "name": "DEF-spine",
+   "parent": "root",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.033985,
+    0.852443
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.009684,
+    0.971056
+   ]
+  },
+  {
+   "name": "DEF-spine.001",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.009684,
+    0.971056
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.022932,
+    1.057764
+   ]
+  },
+  {
+   "name": "DEF-spine.002",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.022932,
+    1.057764
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.022037,
+    1.163333
+   ]
+  },
+  {
+   "name": "DEF-spine.003",
+   "parent": "DEF-spine.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.022037,
+    1.163333
+   ],
+   "tail_rest": [
+    -0.0,
+    0.041109,
+    1.393159
+   ]
+  },
+  {
+   "name": "DEF-spine.004",
+   "parent": "DEF-spine.003",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.041109,
+    1.393159
+   ],
+   "tail_rest": [
+    -0.0,
+    0.032749,
+    1.43484
+   ]
+  },
+  {
+   "name": "DEF-spine.005",
+   "parent": "DEF-spine.004",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.032749,
+    1.43484
+   ],
+   "tail_rest": [
+    -0.0,
+    0.024047,
+    1.47735
+   ]
+  },
+  {
+   "name": "DEF-spine.006",
+   "parent": "DEF-spine.005",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.024047,
+    1.47735
+   ],
+   "tail_rest": [
+    -0.0,
+    0.024047,
+    1.646422
+   ]
+  },
+  {
+   "name": "Bone",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.05807,
+    1.095531
+   ],
+   "tail_rest": [
+    0.0,
+    0.088991,
+    0.993325
+   ]
+  },
+  {
+   "name": "Bone.007",
+   "parent": "Bone",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.088991,
+    0.993325
+   ],
+   "tail_rest": [
+    0.0,
+    0.119912,
+    0.89112
+   ]
+  },
+  {
+   "name": "Bone.006",
+   "parent": "Bone.007",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.119912,
+    0.89112
+   ],
+   "tail_rest": [
+    0.0,
+    0.150832,
+    0.788914
+   ]
+  },
+  {
+   "name": "Bone.005",
+   "parent": "Bone.006",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.150832,
+    0.788914
+   ],
+   "tail_rest": [
+    0.0,
+    0.181753,
+    0.686708
+   ]
+  },
+  {
+   "name": "Bone.004",
+   "parent": "Bone.005",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.181753,
+    0.686708
+   ],
+   "tail_rest": [
+    0.0,
+    0.212674,
+    0.584503
+   ]
+  },
+  {
+   "name": "Bone.003",
+   "parent": "Bone.004",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.212674,
+    0.584503
+   ],
+   "tail_rest": [
+    0.0,
+    0.243595,
+    0.482297
+   ]
+  },
+  {
+   "name": "Bone.002",
+   "parent": "Bone.003",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.243595,
+    0.482297
+   ],
+   "tail_rest": [
+    0.0,
+    0.274515,
+    0.380091
+   ]
+  },
+  {
+   "name": "Bone.001",
+   "parent": "Bone.002",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.274515,
+    0.380091
+   ],
+   "tail_rest": [
+    0.0,
+    0.305436,
+    0.277886
+   ]
+  },
+  {
+   "name": "Bone.001.L",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.099247,
+    0.019699,
+    1.093658
+   ],
+   "tail_rest": [
+    0.135978,
+    0.036392,
+    1.006755
+   ]
+  },
+  {
+   "name": "Bone.001.L.009",
+   "parent": "Bone.001.L",
+   "use_deform": true,
+   "head_rest": [
+    0.135978,
+    0.036392,
+    1.006755
+   ],
+   "tail_rest": [
+    0.172708,
+    0.053085,
+    0.919852
+   ]
+  },
+  {
+   "name": "Bone.001.L.008",
+   "parent": "Bone.001.L.009",
+   "use_deform": true,
+   "head_rest": [
+    0.172708,
+    0.053085,
+    0.919852
+   ],
+   "tail_rest": [
+    0.209439,
+    0.069778,
+    0.832949
+   ]
+  },
+  {
+   "name": "Bone.001.L.007",
+   "parent": "Bone.001.L.008",
+   "use_deform": true,
+   "head_rest": [
+    0.209439,
+    0.069778,
+    0.832949
+   ],
+   "tail_rest": [
+    0.24617,
+    0.086471,
+    0.746047
+   ]
+  },
+  {
+   "name": "Bone.001.L.006",
+   "parent": "Bone.001.L.007",
+   "use_deform": true,
+   "head_rest": [
+    0.24617,
+    0.086471,
+    0.746047
+   ],
+   "tail_rest": [
+    0.282901,
+    0.103164,
+    0.659144
+   ]
+  },
+  {
+   "name": "Bone.001.L.005",
+   "parent": "Bone.001.L.006",
+   "use_deform": true,
+   "head_rest": [
+    0.282901,
+    0.103164,
+    0.659144
+   ],
+   "tail_rest": [
+    0.319632,
+    0.119856,
+    0.572241
+   ]
+  },
+  {
+   "name": "Bone.001.L.004",
+   "parent": "Bone.001.L.005",
+   "use_deform": true,
+   "head_rest": [
+    0.319632,
+    0.119856,
+    0.572241
+   ],
+   "tail_rest": [
+    0.356363,
+    0.136549,
+    0.485338
+   ]
+  },
+  {
+   "name": "Bone.001.L.003",
+   "parent": "Bone.001.L.004",
+   "use_deform": true,
+   "head_rest": [
+    0.356363,
+    0.136549,
+    0.485338
+   ],
+   "tail_rest": [
+    0.393094,
+    0.153242,
+    0.398435
+   ]
+  },
+  {
+   "name": "Bone.001.R",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.099247,
+    0.019699,
+    1.093658
+   ],
+   "tail_rest": [
+    -0.135978,
+    0.036392,
+    1.006755
+   ]
+  },
+  {
+   "name": "Bone.001.R.009",
+   "parent": "Bone.001.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.135978,
+    0.036392,
+    1.006755
+   ],
+   "tail_rest": [
+    -0.172708,
+    0.053085,
+    0.919852
+   ]
+  },
+  {
+   "name": "Bone.001.R.008",
+   "parent": "Bone.001.R.009",
+   "use_deform": true,
+   "head_rest": [
+    -0.172708,
+    0.053085,
+    0.919852
+   ],
+   "tail_rest": [
+    -0.209439,
+    0.069778,
+    0.832949
+   ]
+  },
+  {
+   "name": "Bone.001.R.007",
+   "parent": "Bone.001.R.008",
+   "use_deform": true,
+   "head_rest": [
+    -0.209439,
+    0.069778,
+    0.832949
+   ],
+   "tail_rest": [
+    -0.24617,
+    0.086471,
+    0.746047
+   ]
+  },
+  {
+   "name": "Bone.001.R.006",
+   "parent": "Bone.001.R.007",
+   "use_deform": true,
+   "head_rest": [
+    -0.24617,
+    0.086471,
+    0.746047
+   ],
+   "tail_rest": [
+    -0.282901,
+    0.103164,
+    0.659144
+   ]
+  },
+  {
+   "name": "Bone.001.R.005",
+   "parent": "Bone.001.R.006",
+   "use_deform": true,
+   "head_rest": [
+    -0.282901,
+    0.103164,
+    0.659144
+   ],
+   "tail_rest": [
+    -0.319632,
+    0.119856,
+    0.572241
+   ]
+  },
+  {
+   "name": "Bone.001.R.004",
+   "parent": "Bone.001.R.005",
+   "use_deform": true,
+   "head_rest": [
+    -0.319632,
+    0.119856,
+    0.572241
+   ],
+   "tail_rest": [
+    -0.356363,
+    0.136549,
+    0.485338
+   ]
+  },
+  {
+   "name": "Bone.001.R.003",
+   "parent": "Bone.001.R.004",
+   "use_deform": true,
+   "head_rest": [
+    -0.356363,
+    0.136549,
+    0.485338
+   ],
+   "tail_rest": [
+    -0.393094,
+    0.153242,
+    0.398435
+   ]
+  },
+  {
+   "name": "Bone.001.L.001",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.051256,
+    0.051177,
+    1.094039
+   ],
+   "tail_rest": [
+    0.072857,
+    0.077258,
+    0.995556
+   ]
+  },
+  {
+   "name": "Bone.001.L.016",
+   "parent": "Bone.001.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.072857,
+    0.077258,
+    0.995556
+   ],
+   "tail_rest": [
+    0.094458,
+    0.103339,
+    0.897072
+   ]
+  },
+  {
+   "name": "Bone.001.L.015",
+   "parent": "Bone.001.L.016",
+   "use_deform": true,
+   "head_rest": [
+    0.094458,
+    0.103339,
+    0.897072
+   ],
+   "tail_rest": [
+    0.116059,
+    0.12942,
+    0.798589
+   ]
+  },
+  {
+   "name": "Bone.001.L.014",
+   "parent": "Bone.001.L.015",
+   "use_deform": true,
+   "head_rest": [
+    0.116059,
+    0.12942,
+    0.798589
+   ],
+   "tail_rest": [
+    0.13766,
+    0.155501,
+    0.700106
+   ]
+  },
+  {
+   "name": "Bone.001.L.013",
+   "parent": "Bone.001.L.014",
+   "use_deform": true,
+   "head_rest": [
+    0.13766,
+    0.155501,
+    0.700106
+   ],
+   "tail_rest": [
+    0.159261,
+    0.181582,
+    0.601622
+   ]
+  },
+  {
+   "name": "Bone.001.L.012",
+   "parent": "Bone.001.L.013",
+   "use_deform": true,
+   "head_rest": [
+    0.159261,
+    0.181582,
+    0.601622
+   ],
+   "tail_rest": [
+    0.180862,
+    0.207663,
+    0.503139
+   ]
+  },
+  {
+   "name": "Bone.001.L.011",
+   "parent": "Bone.001.L.012",
+   "use_deform": true,
+   "head_rest": [
+    0.180862,
+    0.207663,
+    0.503139
+   ],
+   "tail_rest": [
+    0.202462,
+    0.233744,
+    0.404655
+   ]
+  },
+  {
+   "name": "Bone.001.L.010",
+   "parent": "Bone.001.L.011",
+   "use_deform": true,
+   "head_rest": [
+    0.202462,
+    0.233744,
+    0.404655
+   ],
+   "tail_rest": [
+    0.224063,
+    0.259825,
+    0.306172
+   ]
+  },
+  {
+   "name": "Bone.001.R.001",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.051256,
+    0.051177,
+    1.094039
+   ],
+   "tail_rest": [
+    -0.072857,
+    0.077258,
+    0.98581
+   ]
+  },
+  {
+   "name": "Bone.001.R.016",
+   "parent": "Bone.001.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.072857,
+    0.077258,
+    0.98581
+   ],
+   "tail_rest": [
+    -0.094458,
+    0.103339,
+    0.877581
+   ]
+  },
+  {
+   "name": "Bone.001.R.015",
+   "parent": "Bone.001.R.016",
+   "use_deform": true,
+   "head_rest": [
+    -0.094458,
+    0.103339,
+    0.877581
+   ],
+   "tail_rest": [
+    -0.116059,
+    0.12942,
+    0.769353
+   ]
+  },
+  {
+   "name": "Bone.001.R.014",
+   "parent": "Bone.001.R.015",
+   "use_deform": true,
+   "head_rest": [
+    -0.116059,
+    0.12942,
+    0.769353
+   ],
+   "tail_rest": [
+    -0.13766,
+    0.155501,
+    0.661124
+   ]
+  },
+  {
+   "name": "Bone.001.R.013",
+   "parent": "Bone.001.R.014",
+   "use_deform": true,
+   "head_rest": [
+    -0.13766,
+    0.155501,
+    0.661124
+   ],
+   "tail_rest": [
+    -0.159261,
+    0.181582,
+    0.552895
+   ]
+  },
+  {
+   "name": "Bone.001.R.012",
+   "parent": "Bone.001.R.013",
+   "use_deform": true,
+   "head_rest": [
+    -0.159261,
+    0.181582,
+    0.552895
+   ],
+   "tail_rest": [
+    -0.180862,
+    0.207663,
+    0.444666
+   ]
+  },
+  {
+   "name": "Bone.001.R.011",
+   "parent": "Bone.001.R.012",
+   "use_deform": true,
+   "head_rest": [
+    -0.180862,
+    0.207663,
+    0.444666
+   ],
+   "tail_rest": [
+    -0.202462,
+    0.233744,
+    0.336437
+   ]
+  },
+  {
+   "name": "Bone.001.R.010",
+   "parent": "Bone.001.R.011",
+   "use_deform": true,
+   "head_rest": [
+    -0.202462,
+    0.233744,
+    0.336437
+   ],
+   "tail_rest": [
+    -0.224063,
+    0.259825,
+    0.228208
+   ]
+  },
+  {
+   "name": "Bone.001.L.002",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.10861,
+    -0.038144,
+    1.092507
+   ],
+   "tail_rest": [
+    0.146653,
+    -0.031109,
+    1.029376
+   ]
+  },
+  {
+   "name": "Bone.001.L.023",
+   "parent": "Bone.001.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.146653,
+    -0.031109,
+    1.029376
+   ],
+   "tail_rest": [
+    0.184696,
+    -0.024075,
+    0.966245
+   ]
+  },
+  {
+   "name": "Bone.001.L.022",
+   "parent": "Bone.001.L.023",
+   "use_deform": true,
+   "head_rest": [
+    0.184696,
+    -0.024075,
+    0.966245
+   ],
+   "tail_rest": [
+    0.222739,
+    -0.01704,
+    0.903113
+   ]
+  },
+  {
+   "name": "Bone.001.L.021",
+   "parent": "Bone.001.L.022",
+   "use_deform": true,
+   "head_rest": [
+    0.222739,
+    -0.01704,
+    0.903113
+   ],
+   "tail_rest": [
+    0.260783,
+    -0.010005,
+    0.839982
+   ]
+  },
+  {
+   "name": "Bone.001.L.020",
+   "parent": "Bone.001.L.021",
+   "use_deform": true,
+   "head_rest": [
+    0.260783,
+    -0.010005,
+    0.839982
+   ],
+   "tail_rest": [
+    0.298826,
+    -0.00297,
+    0.77685
+   ]
+  },
+  {
+   "name": "Bone.001.L.019",
+   "parent": "Bone.001.L.020",
+   "use_deform": true,
+   "head_rest": [
+    0.298826,
+    -0.00297,
+    0.77685
+   ],
+   "tail_rest": [
+    0.336869,
+    0.004065,
+    0.713719
+   ]
+  },
+  {
+   "name": "Bone.001.L.018",
+   "parent": "Bone.001.L.019",
+   "use_deform": true,
+   "head_rest": [
+    0.336869,
+    0.004065,
+    0.713719
+   ],
+   "tail_rest": [
+    0.374912,
+    0.011099,
+    0.650588
+   ]
+  },
+  {
+   "name": "Bone.001.L.017",
+   "parent": "Bone.001.L.018",
+   "use_deform": true,
+   "head_rest": [
+    0.374912,
+    0.011099,
+    0.650588
+   ],
+   "tail_rest": [
+    0.412955,
+    0.018134,
+    0.587456
+   ]
+  },
+  {
+   "name": "Bone.001.R.002",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.10861,
+    -0.038144,
+    1.092507
+   ],
+   "tail_rest": [
+    -0.146653,
+    -0.031109,
+    1.029376
+   ]
+  },
+  {
+   "name": "Bone.001.R.023",
+   "parent": "Bone.001.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.146653,
+    -0.031109,
+    1.029376
+   ],
+   "tail_rest": [
+    -0.184696,
+    -0.024075,
+    0.966245
+   ]
+  },
+  {
+   "name": "Bone.001.R.022",
+   "parent": "Bone.001.R.023",
+   "use_deform": true,
+   "head_rest": [
+    -0.184696,
+    -0.024075,
+    0.966245
+   ],
+   "tail_rest": [
+    -0.222739,
+    -0.01704,
+    0.903113
+   ]
+  },
+  {
+   "name": "Bone.001.R.021",
+   "parent": "Bone.001.R.022",
+   "use_deform": true,
+   "head_rest": [
+    -0.222739,
+    -0.01704,
+    0.903113
+   ],
+   "tail_rest": [
+    -0.260783,
+    -0.010005,
+    0.839982
+   ]
+  },
+  {
+   "name": "Bone.001.R.020",
+   "parent": "Bone.001.R.021",
+   "use_deform": true,
+   "head_rest": [
+    -0.260783,
+    -0.010005,
+    0.839982
+   ],
+   "tail_rest": [
+    -0.298826,
+    -0.00297,
+    0.77685
+   ]
+  },
+  {
+   "name": "Bone.001.R.019",
+   "parent": "Bone.001.R.020",
+   "use_deform": true,
+   "head_rest": [
+    -0.298826,
+    -0.00297,
+    0.77685
+   ],
+   "tail_rest": [
+    -0.336869,
+    0.004065,
+    0.713719
+   ]
+  },
+  {
+   "name": "Bone.001.R.018",
+   "parent": "Bone.001.R.019",
+   "use_deform": true,
+   "head_rest": [
+    -0.336869,
+    0.004065,
+    0.713719
+   ],
+   "tail_rest": [
+    -0.374912,
+    0.011099,
+    0.650588
+   ]
+  },
+  {
+   "name": "Bone.001.R.017",
+   "parent": "Bone.001.R.018",
+   "use_deform": true,
+   "head_rest": [
+    -0.374912,
+    0.011099,
+    0.650588
+   ],
+   "tail_rest": [
+    -0.412955,
+    0.018134,
+    0.587456
+   ]
+  },
+  {
+   "name": "Bone.008.L",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.03491,
+    0.120069,
+    1.036685
+   ],
+   "tail_rest": [
+    0.04343,
+    0.210831,
+    0.939368
+   ]
+  },
+  {
+   "name": "Bone.008.L.003",
+   "parent": "Bone.008.L",
+   "use_deform": true,
+   "head_rest": [
+    0.04343,
+    0.210831,
+    0.939368
+   ],
+   "tail_rest": [
+    0.05195,
+    0.301593,
+    0.84205
+   ]
+  },
+  {
+   "name": "Bone.008.L.002",
+   "parent": "Bone.008.L.003",
+   "use_deform": true,
+   "head_rest": [
+    0.05195,
+    0.301593,
+    0.84205
+   ],
+   "tail_rest": [
+    0.06047,
+    0.392355,
+    0.744733
+   ]
+  },
+  {
+   "name": "Bone.008.L.001",
+   "parent": "Bone.008.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.06047,
+    0.392355,
+    0.744733
+   ],
+   "tail_rest": [
+    0.06899,
+    0.483117,
+    0.647416
+   ]
+  },
+  {
+   "name": "Bone.008.R",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.03491,
+    0.120069,
+    1.036685
+   ],
+   "tail_rest": [
+    -0.04343,
+    0.210831,
+    0.939368
+   ]
+  },
+  {
+   "name": "Bone.008.R.003",
+   "parent": "Bone.008.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.04343,
+    0.210831,
+    0.939368
+   ],
+   "tail_rest": [
+    -0.05195,
+    0.301593,
+    0.84205
+   ]
+  },
+  {
+   "name": "Bone.008.R.002",
+   "parent": "Bone.008.R.003",
+   "use_deform": true,
+   "head_rest": [
+    -0.05195,
+    0.301593,
+    0.84205
+   ],
+   "tail_rest": [
+    -0.06047,
+    0.392355,
+    0.744733
+   ]
+  },
+  {
+   "name": "Bone.008.R.001",
+   "parent": "Bone.008.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.06047,
+    0.392355,
+    0.744733
+   ],
+   "tail_rest": [
+    -0.06899,
+    0.483117,
+    0.647416
+   ]
+  },
+  {
+   "name": "Bone.008.R.004",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.072593,
+    0.130125,
+    0.888841
+   ],
+   "tail_rest": [
+    -0.077233,
+    0.148748,
+    0.7716
+   ]
+  },
+  {
+   "name": "Bone.008.R.011",
+   "parent": "Bone.008.R.004",
+   "use_deform": true,
+   "head_rest": [
+    -0.077233,
+    0.148748,
+    0.7716
+   ],
+   "tail_rest": [
+    -0.081873,
+    0.167371,
+    0.654359
+   ]
+  },
+  {
+   "name": "Bone.008.R.010",
+   "parent": "Bone.008.R.011",
+   "use_deform": true,
+   "head_rest": [
+    -0.081873,
+    0.167371,
+    0.654359
+   ],
+   "tail_rest": [
+    -0.086514,
+    0.185993,
+    0.537118
+   ]
+  },
+  {
+   "name": "Bone.008.R.009",
+   "parent": "Bone.008.R.010",
+   "use_deform": true,
+   "head_rest": [
+    -0.086514,
+    0.185993,
+    0.537118
+   ],
+   "tail_rest": [
+    -0.091154,
+    0.204616,
+    0.419877
+   ]
+  },
+  {
+   "name": "Bone.008.R.008",
+   "parent": "Bone.008.R.009",
+   "use_deform": true,
+   "head_rest": [
+    -0.091154,
+    0.204616,
+    0.419877
+   ],
+   "tail_rest": [
+    -0.095795,
+    0.223239,
+    0.302636
+   ]
+  },
+  {
+   "name": "Bone.008.R.007",
+   "parent": "Bone.008.R.008",
+   "use_deform": true,
+   "head_rest": [
+    -0.095795,
+    0.223239,
+    0.302636
+   ],
+   "tail_rest": [
+    -0.100435,
+    0.241861,
+    0.185395
+   ]
+  },
+  {
+   "name": "Bone.008.L.004",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.072593,
+    0.130125,
+    0.888841
+   ],
+   "tail_rest": [
+    0.077233,
+    0.148748,
+    0.7716
+   ]
+  },
+  {
+   "name": "Bone.008.L.011",
+   "parent": "Bone.008.L.004",
+   "use_deform": true,
+   "head_rest": [
+    0.077233,
+    0.148748,
+    0.7716
+   ],
+   "tail_rest": [
+    0.081873,
+    0.167371,
+    0.654359
+   ]
+  },
+  {
+   "name": "Bone.008.L.010",
+   "parent": "Bone.008.L.011",
+   "use_deform": true,
+   "head_rest": [
+    0.081873,
+    0.167371,
+    0.654359
+   ],
+   "tail_rest": [
+    0.086514,
+    0.185993,
+    0.537118
+   ]
+  },
+  {
+   "name": "Bone.008.L.009",
+   "parent": "Bone.008.L.010",
+   "use_deform": true,
+   "head_rest": [
+    0.086514,
+    0.185993,
+    0.537118
+   ],
+   "tail_rest": [
+    0.091154,
+    0.204616,
+    0.419877
+   ]
+  },
+  {
+   "name": "Bone.008.L.008",
+   "parent": "Bone.008.L.009",
+   "use_deform": true,
+   "head_rest": [
+    0.091154,
+    0.204616,
+    0.419877
+   ],
+   "tail_rest": [
+    0.095795,
+    0.223239,
+    0.302636
+   ]
+  },
+  {
+   "name": "Bone.008.L.007",
+   "parent": "Bone.008.L.008",
+   "use_deform": true,
+   "head_rest": [
+    0.095795,
+    0.223239,
+    0.302636
+   ],
+   "tail_rest": [
+    0.100435,
+    0.241861,
+    0.185395
+   ]
+  },
+  {
+   "name": "Bone.008.R.005",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.153567,
+    0.077681,
+    0.893388
+   ],
+   "tail_rest": [
+    -0.170406,
+    0.094175,
+    0.779996
+   ]
+  },
+  {
+   "name": "Bone.008.R.016",
+   "parent": "Bone.008.R.005",
+   "use_deform": true,
+   "head_rest": [
+    -0.170406,
+    0.094175,
+    0.779996
+   ],
+   "tail_rest": [
+    -0.187244,
+    0.110669,
+    0.666604
+   ]
+  },
+  {
+   "name": "Bone.008.R.015",
+   "parent": "Bone.008.R.016",
+   "use_deform": true,
+   "head_rest": [
+    -0.187244,
+    0.110669,
+    0.666604
+   ],
+   "tail_rest": [
+    -0.204083,
+    0.127163,
+    0.553212
+   ]
+  },
+  {
+   "name": "Bone.008.R.014",
+   "parent": "Bone.008.R.015",
+   "use_deform": true,
+   "head_rest": [
+    -0.204083,
+    0.127163,
+    0.553212
+   ],
+   "tail_rest": [
+    -0.220921,
+    0.143657,
+    0.43982
+   ]
+  },
+  {
+   "name": "Bone.008.R.013",
+   "parent": "Bone.008.R.014",
+   "use_deform": true,
+   "head_rest": [
+    -0.220921,
+    0.143657,
+    0.43982
+   ],
+   "tail_rest": [
+    -0.23776,
+    0.160151,
+    0.326428
+   ]
+  },
+  {
+   "name": "Bone.008.R.012",
+   "parent": "Bone.008.R.013",
+   "use_deform": true,
+   "head_rest": [
+    -0.23776,
+    0.160151,
+    0.326428
+   ],
+   "tail_rest": [
+    -0.254598,
+    0.176645,
+    0.213036
+   ]
+  },
+  {
+   "name": "Bone.008.L.005",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.153567,
+    0.077681,
+    0.893388
+   ],
+   "tail_rest": [
+    0.170406,
+    0.094175,
+    0.779996
+   ]
+  },
+  {
+   "name": "Bone.008.L.016",
+   "parent": "Bone.008.L.005",
+   "use_deform": true,
+   "head_rest": [
+    0.170406,
+    0.094175,
+    0.779996
+   ],
+   "tail_rest": [
+    0.187244,
+    0.110669,
+    0.666604
+   ]
+  },
+  {
+   "name": "Bone.008.L.015",
+   "parent": "Bone.008.L.016",
+   "use_deform": true,
+   "head_rest": [
+    0.187244,
+    0.110669,
+    0.666604
+   ],
+   "tail_rest": [
+    0.204083,
+    0.127163,
+    0.553212
+   ]
+  },
+  {
+   "name": "Bone.008.L.014",
+   "parent": "Bone.008.L.015",
+   "use_deform": true,
+   "head_rest": [
+    0.204083,
+    0.127163,
+    0.553212
+   ],
+   "tail_rest": [
+    0.220921,
+    0.143657,
+    0.43982
+   ]
+  },
+  {
+   "name": "Bone.008.L.013",
+   "parent": "Bone.008.L.014",
+   "use_deform": true,
+   "head_rest": [
+    0.220921,
+    0.143657,
+    0.43982
+   ],
+   "tail_rest": [
+    0.23776,
+    0.160151,
+    0.326428
+   ]
+  },
+  {
+   "name": "Bone.008.L.012",
+   "parent": "Bone.008.L.013",
+   "use_deform": true,
+   "head_rest": [
+    0.23776,
+    0.160151,
+    0.326428
+   ],
+   "tail_rest": [
+    0.254598,
+    0.176645,
+    0.213036
+   ]
+  },
+  {
+   "name": "Bone.008.R.006",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.189005,
+    -0.001348,
+    0.897674
+   ],
+   "tail_rest": [
+    -0.212994,
+    0.007177,
+    0.790438
+   ]
+  },
+  {
+   "name": "Bone.008.R.021",
+   "parent": "Bone.008.R.006",
+   "use_deform": true,
+   "head_rest": [
+    -0.212994,
+    0.007177,
+    0.790438
+   ],
+   "tail_rest": [
+    -0.236984,
+    0.015702,
+    0.683201
+   ]
+  },
+  {
+   "name": "Bone.008.R.020",
+   "parent": "Bone.008.R.021",
+   "use_deform": true,
+   "head_rest": [
+    -0.236984,
+    0.015702,
+    0.683201
+   ],
+   "tail_rest": [
+    -0.260973,
+    0.024228,
+    0.575965
+   ]
+  },
+  {
+   "name": "Bone.008.R.019",
+   "parent": "Bone.008.R.020",
+   "use_deform": true,
+   "head_rest": [
+    -0.260973,
+    0.024228,
+    0.575965
+   ],
+   "tail_rest": [
+    -0.284963,
+    0.032753,
+    0.468729
+   ]
+  },
+  {
+   "name": "Bone.008.R.018",
+   "parent": "Bone.008.R.019",
+   "use_deform": true,
+   "head_rest": [
+    -0.284963,
+    0.032753,
+    0.468729
+   ],
+   "tail_rest": [
+    -0.308952,
+    0.041278,
+    0.361492
+   ]
+  },
+  {
+   "name": "Bone.008.R.017",
+   "parent": "Bone.008.R.018",
+   "use_deform": true,
+   "head_rest": [
+    -0.308952,
+    0.041278,
+    0.361492
+   ],
+   "tail_rest": [
+    -0.332941,
+    0.049803,
+    0.254256
+   ]
+  },
+  {
+   "name": "Bone.008.L.006",
+   "parent": "DEF-spine.001",
+   "use_deform": true,
+   "head_rest": [
+    0.189005,
+    -0.001348,
+    0.897674
+   ],
+   "tail_rest": [
+    0.212994,
+    0.007177,
+    0.790438
+   ]
+  },
+  {
+   "name": "Bone.008.L.021",
+   "parent": "Bone.008.L.006",
+   "use_deform": true,
+   "head_rest": [
+    0.212994,
+    0.007177,
+    0.790438
+   ],
+   "tail_rest": [
+    0.236984,
+    0.015702,
+    0.683201
+   ]
+  },
+  {
+   "name": "Bone.008.L.020",
+   "parent": "Bone.008.L.021",
+   "use_deform": true,
+   "head_rest": [
+    0.236984,
+    0.015702,
+    0.683201
+   ],
+   "tail_rest": [
+    0.260973,
+    0.024228,
+    0.575965
+   ]
+  },
+  {
+   "name": "Bone.008.L.019",
+   "parent": "Bone.008.L.020",
+   "use_deform": true,
+   "head_rest": [
+    0.260973,
+    0.024228,
+    0.575965
+   ],
+   "tail_rest": [
+    0.284963,
+    0.032753,
+    0.468729
+   ]
+  },
+  {
+   "name": "Bone.008.L.018",
+   "parent": "Bone.008.L.019",
+   "use_deform": true,
+   "head_rest": [
+    0.284963,
+    0.032753,
+    0.468729
+   ],
+   "tail_rest": [
+    0.308952,
+    0.041278,
+    0.361492
+   ]
+  },
+  {
+   "name": "Bone.008.L.017",
+   "parent": "Bone.008.L.018",
+   "use_deform": true,
+   "head_rest": [
+    0.308952,
+    0.041278,
+    0.361492
+   ],
+   "tail_rest": [
+    0.332941,
+    0.049803,
+    0.254256
+   ]
+  },
+  {
+   "name": "Vagina",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.027431,
+    0.833362
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.02539,
+    0.877684
+   ]
+  },
+  {
+   "name": "Anus",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.035466,
+    0.851637
+   ],
+   "tail_rest": [
+    -0.0,
+    0.028265,
+    0.895417
+   ]
+  },
+  {
+   "name": "Anus_Open",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.030366,
+    0.82295
+   ],
+   "tail_rest": [
+    -0.0,
+    0.068944,
+    0.844867
+   ]
+  },
+  {
+   "name": "Vagina_Open",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.024456,
+    0.808501
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.066933,
+    0.821321
+   ]
+  },
+  {
+   "name": "Bone.019",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.131676,
+    0.800958
+   ],
+   "tail_rest": [
+    0.0,
+    0.135427,
+    0.699629
+   ]
+  },
+  {
+   "name": "Bone.024",
+   "parent": "Bone.019",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.135427,
+    0.699629
+   ],
+   "tail_rest": [
+    0.0,
+    0.139177,
+    0.5983
+   ]
+  },
+  {
+   "name": "Bone.023",
+   "parent": "Bone.024",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.139177,
+    0.5983
+   ],
+   "tail_rest": [
+    0.0,
+    0.142927,
+    0.496971
+   ]
+  },
+  {
+   "name": "Bone.022",
+   "parent": "Bone.023",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.142927,
+    0.496971
+   ],
+   "tail_rest": [
+    0.0,
+    0.146678,
+    0.395642
+   ]
+  },
+  {
+   "name": "Bone.021",
+   "parent": "Bone.022",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.146678,
+    0.395642
+   ],
+   "tail_rest": [
+    0.0,
+    0.150428,
+    0.294313
+   ]
+  },
+  {
+   "name": "Bone.020.R",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.070134,
+    0.121659,
+    0.800958
+   ],
+   "tail_rest": [
+    -0.072587,
+    0.127413,
+    0.699629
+   ]
+  },
+  {
+   "name": "Bone.020.R.007",
+   "parent": "Bone.020.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.072587,
+    0.127413,
+    0.699629
+   ],
+   "tail_rest": [
+    -0.07504,
+    0.133167,
+    0.5983
+   ]
+  },
+  {
+   "name": "Bone.020.R.006",
+   "parent": "Bone.020.R.007",
+   "use_deform": true,
+   "head_rest": [
+    -0.07504,
+    0.133167,
+    0.5983
+   ],
+   "tail_rest": [
+    -0.077493,
+    0.13892,
+    0.496971
+   ]
+  },
+  {
+   "name": "Bone.020.R.005",
+   "parent": "Bone.020.R.006",
+   "use_deform": true,
+   "head_rest": [
+    -0.077493,
+    0.13892,
+    0.496971
+   ],
+   "tail_rest": [
+    -0.079947,
+    0.144674,
+    0.395642
+   ]
+  },
+  {
+   "name": "Bone.020.R.004",
+   "parent": "Bone.020.R.005",
+   "use_deform": true,
+   "head_rest": [
+    -0.079947,
+    0.144674,
+    0.395642
+   ],
+   "tail_rest": [
+    -0.0824,
+    0.150428,
+    0.294313
+   ]
+  },
+  {
+   "name": "Bone.020.L",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.070134,
+    0.121659,
+    0.800958
+   ],
+   "tail_rest": [
+    0.072587,
+    0.127413,
+    0.699629
+   ]
+  },
+  {
+   "name": "Bone.020.L.007",
+   "parent": "Bone.020.L",
+   "use_deform": true,
+   "head_rest": [
+    0.072587,
+    0.127413,
+    0.699629
+   ],
+   "tail_rest": [
+    0.07504,
+    0.133167,
+    0.5983
+   ]
+  },
+  {
+   "name": "Bone.020.L.006",
+   "parent": "Bone.020.L.007",
+   "use_deform": true,
+   "head_rest": [
+    0.07504,
+    0.133167,
+    0.5983
+   ],
+   "tail_rest": [
+    0.077493,
+    0.13892,
+    0.496971
+   ]
+  },
+  {
+   "name": "Bone.020.L.005",
+   "parent": "Bone.020.L.006",
+   "use_deform": true,
+   "head_rest": [
+    0.077493,
+    0.13892,
+    0.496971
+   ],
+   "tail_rest": [
+    0.079947,
+    0.144674,
+    0.395642
+   ]
+  },
+  {
+   "name": "Bone.020.L.004",
+   "parent": "Bone.020.L.005",
+   "use_deform": true,
+   "head_rest": [
+    0.079947,
+    0.144674,
+    0.395642
+   ],
+   "tail_rest": [
+    0.0824,
+    0.150428,
+    0.294313
+   ]
+  },
+  {
+   "name": "Bone.020.R.001",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.137237,
+    0.101841,
+    0.800958
+   ],
+   "tail_rest": [
+    -0.143442,
+    0.111559,
+    0.699629
+   ]
+  },
+  {
+   "name": "Bone.020.R.011",
+   "parent": "Bone.020.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.143442,
+    0.111559,
+    0.699629
+   ],
+   "tail_rest": [
+    -0.149647,
+    0.121276,
+    0.5983
+   ]
+  },
+  {
+   "name": "Bone.020.R.010",
+   "parent": "Bone.020.R.011",
+   "use_deform": true,
+   "head_rest": [
+    -0.149647,
+    0.121276,
+    0.5983
+   ],
+   "tail_rest": [
+    -0.155853,
+    0.130993,
+    0.496971
+   ]
+  },
+  {
+   "name": "Bone.020.R.009",
+   "parent": "Bone.020.R.010",
+   "use_deform": true,
+   "head_rest": [
+    -0.155853,
+    0.130993,
+    0.496971
+   ],
+   "tail_rest": [
+    -0.162058,
+    0.140711,
+    0.395642
+   ]
+  },
+  {
+   "name": "Bone.020.R.008",
+   "parent": "Bone.020.R.009",
+   "use_deform": true,
+   "head_rest": [
+    -0.162058,
+    0.140711,
+    0.395642
+   ],
+   "tail_rest": [
+    -0.168263,
+    0.150428,
+    0.294313
+   ]
+  },
+  {
+   "name": "Bone.020.L.001",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.137237,
+    0.101841,
+    0.800958
+   ],
+   "tail_rest": [
+    0.143442,
+    0.111559,
+    0.699629
+   ]
+  },
+  {
+   "name": "Bone.020.L.011",
+   "parent": "Bone.020.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.143442,
+    0.111559,
+    0.699629
+   ],
+   "tail_rest": [
+    0.149647,
+    0.121276,
+    0.5983
+   ]
+  },
+  {
+   "name": "Bone.020.L.010",
+   "parent": "Bone.020.L.011",
+   "use_deform": true,
+   "head_rest": [
+    0.149647,
+    0.121276,
+    0.5983
+   ],
+   "tail_rest": [
+    0.155853,
+    0.130993,
+    0.496971
+   ]
+  },
+  {
+   "name": "Bone.020.L.009",
+   "parent": "Bone.020.L.010",
+   "use_deform": true,
+   "head_rest": [
+    0.155853,
+    0.130993,
+    0.496971
+   ],
+   "tail_rest": [
+    0.162058,
+    0.140711,
+    0.395642
+   ]
+  },
+  {
+   "name": "Bone.020.L.008",
+   "parent": "Bone.020.L.009",
+   "use_deform": true,
+   "head_rest": [
+    0.162058,
+    0.140711,
+    0.395642
+   ],
+   "tail_rest": [
+    0.168263,
+    0.150428,
+    0.294313
+   ]
+  },
+  {
+   "name": "Bone.020",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.11643,
+    0.90385
+   ],
+   "tail_rest": [
+    0.0,
+    -0.117234,
+    0.802308
+   ]
+  },
+  {
+   "name": "Bone.029",
+   "parent": "Bone.020",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.117234,
+    0.802308
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.118038,
+    0.700767
+   ]
+  },
+  {
+   "name": "Bone.028",
+   "parent": "Bone.029",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.118038,
+    0.700767
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.118842,
+    0.599225
+   ]
+  },
+  {
+   "name": "Bone.027",
+   "parent": "Bone.028",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.118842,
+    0.599225
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.119645,
+    0.497683
+   ]
+  },
+  {
+   "name": "Bone.026",
+   "parent": "Bone.027",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.119645,
+    0.497683
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.120449,
+    0.396142
+   ]
+  },
+  {
+   "name": "Bone.025",
+   "parent": "Bone.026",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.120449,
+    0.396142
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.121253,
+    0.2946
+   ]
+  },
+  {
+   "name": "Bone.020.R.002",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.070134,
+    -0.106413,
+    0.90385
+   ],
+   "tail_rest": [
+    0.072178,
+    -0.104655,
+    0.802163
+   ]
+  },
+  {
+   "name": "Bone.020.R.016",
+   "parent": "Bone.020.R.002",
+   "use_deform": true,
+   "head_rest": [
+    0.072178,
+    -0.104655,
+    0.802163
+   ],
+   "tail_rest": [
+    0.074222,
+    -0.102896,
+    0.700476
+   ]
+  },
+  {
+   "name": "Bone.020.R.015",
+   "parent": "Bone.020.R.016",
+   "use_deform": true,
+   "head_rest": [
+    0.074222,
+    -0.102896,
+    0.700476
+   ],
+   "tail_rest": [
+    0.076267,
+    -0.101138,
+    0.59879
+   ]
+  },
+  {
+   "name": "Bone.020.R.014",
+   "parent": "Bone.020.R.015",
+   "use_deform": true,
+   "head_rest": [
+    0.076267,
+    -0.101138,
+    0.59879
+   ],
+   "tail_rest": [
+    0.078311,
+    -0.09938,
+    0.497103
+   ]
+  },
+  {
+   "name": "Bone.020.R.013",
+   "parent": "Bone.020.R.014",
+   "use_deform": true,
+   "head_rest": [
+    0.078311,
+    -0.09938,
+    0.497103
+   ],
+   "tail_rest": [
+    0.080355,
+    -0.097622,
+    0.395416
+   ]
+  },
+  {
+   "name": "Bone.020.R.012",
+   "parent": "Bone.020.R.013",
+   "use_deform": true,
+   "head_rest": [
+    0.080355,
+    -0.097622,
+    0.395416
+   ],
+   "tail_rest": [
+    0.0824,
+    -0.095864,
+    0.29373
+   ]
+  },
+  {
+   "name": "Bone.020.L.002",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.070134,
+    -0.106413,
+    0.90385
+   ],
+   "tail_rest": [
+    -0.072178,
+    -0.104655,
+    0.802163
+   ]
+  },
+  {
+   "name": "Bone.020.L.016",
+   "parent": "Bone.020.L.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.072178,
+    -0.104655,
+    0.802163
+   ],
+   "tail_rest": [
+    -0.074222,
+    -0.102896,
+    0.700476
+   ]
+  },
+  {
+   "name": "Bone.020.L.015",
+   "parent": "Bone.020.L.016",
+   "use_deform": true,
+   "head_rest": [
+    -0.074222,
+    -0.102896,
+    0.700476
+   ],
+   "tail_rest": [
+    -0.076267,
+    -0.101138,
+    0.59879
+   ]
+  },
+  {
+   "name": "Bone.020.L.014",
+   "parent": "Bone.020.L.015",
+   "use_deform": true,
+   "head_rest": [
+    -0.076267,
+    -0.101138,
+    0.59879
+   ],
+   "tail_rest": [
+    -0.078311,
+    -0.09938,
+    0.497103
+   ]
+  },
+  {
+   "name": "Bone.020.L.013",
+   "parent": "Bone.020.L.014",
+   "use_deform": true,
+   "head_rest": [
+    -0.078311,
+    -0.09938,
+    0.497103
+   ],
+   "tail_rest": [
+    -0.080355,
+    -0.097622,
+    0.395416
+   ]
+  },
+  {
+   "name": "Bone.020.L.012",
+   "parent": "Bone.020.L.013",
+   "use_deform": true,
+   "head_rest": [
+    -0.080355,
+    -0.097622,
+    0.395416
+   ],
+   "tail_rest": [
+    -0.0824,
+    -0.095864,
+    0.29373
+   ]
+  },
+  {
+   "name": "Bone.020.R.003",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.137237,
+    -0.086595,
+    0.90385
+   ],
+   "tail_rest": [
+    0.142408,
+    -0.081442,
+    0.801876
+   ]
+  },
+  {
+   "name": "Bone.020.R.021",
+   "parent": "Bone.020.R.003",
+   "use_deform": true,
+   "head_rest": [
+    0.142408,
+    -0.081442,
+    0.801876
+   ],
+   "tail_rest": [
+    0.147579,
+    -0.076289,
+    0.699902
+   ]
+  },
+  {
+   "name": "Bone.020.R.020",
+   "parent": "Bone.020.R.021",
+   "use_deform": true,
+   "head_rest": [
+    0.147579,
+    -0.076289,
+    0.699902
+   ],
+   "tail_rest": [
+    0.15275,
+    -0.071136,
+    0.597929
+   ]
+  },
+  {
+   "name": "Bone.020.R.019",
+   "parent": "Bone.020.R.020",
+   "use_deform": true,
+   "head_rest": [
+    0.15275,
+    -0.071136,
+    0.597929
+   ],
+   "tail_rest": [
+    0.157921,
+    -0.065983,
+    0.495955
+   ]
+  },
+  {
+   "name": "Bone.020.R.018",
+   "parent": "Bone.020.R.019",
+   "use_deform": true,
+   "head_rest": [
+    0.157921,
+    -0.065983,
+    0.495955
+   ],
+   "tail_rest": [
+    0.163092,
+    -0.06083,
+    0.393982
+   ]
+  },
+  {
+   "name": "Bone.020.R.017",
+   "parent": "Bone.020.R.018",
+   "use_deform": true,
+   "head_rest": [
+    0.163092,
+    -0.06083,
+    0.393982
+   ],
+   "tail_rest": [
+    0.168263,
+    -0.055677,
+    0.292008
+   ]
+  },
+  {
+   "name": "Bone.020.L.003",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.137237,
+    -0.086595,
+    0.90385
+   ],
+   "tail_rest": [
+    -0.142408,
+    -0.081442,
+    0.801876
+   ]
+  },
+  {
+   "name": "Bone.020.L.021",
+   "parent": "Bone.020.L.003",
+   "use_deform": true,
+   "head_rest": [
+    -0.142408,
+    -0.081442,
+    0.801876
+   ],
+   "tail_rest": [
+    -0.147579,
+    -0.076289,
+    0.699902
+   ]
+  },
+  {
+   "name": "Bone.020.L.020",
+   "parent": "Bone.020.L.021",
+   "use_deform": true,
+   "head_rest": [
+    -0.147579,
+    -0.076289,
+    0.699902
+   ],
+   "tail_rest": [
+    -0.15275,
+    -0.071136,
+    0.597929
+   ]
+  },
+  {
+   "name": "Bone.020.L.019",
+   "parent": "Bone.020.L.020",
+   "use_deform": true,
+   "head_rest": [
+    -0.15275,
+    -0.071136,
+    0.597929
+   ],
+   "tail_rest": [
+    -0.157921,
+    -0.065983,
+    0.495955
+   ]
+  },
+  {
+   "name": "Bone.020.L.018",
+   "parent": "Bone.020.L.019",
+   "use_deform": true,
+   "head_rest": [
+    -0.157921,
+    -0.065983,
+    0.495955
+   ],
+   "tail_rest": [
+    -0.163092,
+    -0.06083,
+    0.393982
+   ]
+  },
+  {
+   "name": "Bone.020.L.017",
+   "parent": "Bone.020.L.018",
+   "use_deform": true,
+   "head_rest": [
+    -0.163092,
+    -0.06083,
+    0.393982
+   ],
+   "tail_rest": [
+    -0.168263,
+    -0.055677,
+    0.292008
+   ]
+  },
+  {
+   "name": "Bone.008",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.152112,
+    0.796907
+   ],
+   "tail_rest": [
+    0.0,
+    0.152112,
+    0.666615
+   ]
+  },
+  {
+   "name": "Bone.013",
+   "parent": "Bone.008",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.152112,
+    0.666615
+   ],
+   "tail_rest": [
+    0.0,
+    0.152112,
+    0.536324
+   ]
+  },
+  {
+   "name": "Bone.012",
+   "parent": "Bone.013",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.152112,
+    0.536324
+   ],
+   "tail_rest": [
+    0.0,
+    0.152112,
+    0.406032
+   ]
+  },
+  {
+   "name": "Bone.011",
+   "parent": "Bone.012",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.152112,
+    0.406032
+   ],
+   "tail_rest": [
+    0.0,
+    0.152112,
+    0.27574
+   ]
+  },
+  {
+   "name": "Bone.010",
+   "parent": "Bone.011",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.152112,
+    0.27574
+   ],
+   "tail_rest": [
+    0.0,
+    0.152112,
+    0.145448
+   ]
+  },
+  {
+   "name": "Bone.009.L",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.113259,
+    0.152112,
+    0.796907
+   ],
+   "tail_rest": [
+    0.127049,
+    0.152112,
+    0.666615
+   ]
+  },
+  {
+   "name": "Bone.009.L.007",
+   "parent": "Bone.009.L",
+   "use_deform": true,
+   "head_rest": [
+    0.127049,
+    0.152112,
+    0.666615
+   ],
+   "tail_rest": [
+    0.140839,
+    0.152112,
+    0.536324
+   ]
+  },
+  {
+   "name": "Bone.009.L.006",
+   "parent": "Bone.009.L.007",
+   "use_deform": true,
+   "head_rest": [
+    0.140839,
+    0.152112,
+    0.536324
+   ],
+   "tail_rest": [
+    0.154629,
+    0.152112,
+    0.406032
+   ]
+  },
+  {
+   "name": "Bone.009.L.005",
+   "parent": "Bone.009.L.006",
+   "use_deform": true,
+   "head_rest": [
+    0.154629,
+    0.152112,
+    0.406032
+   ],
+   "tail_rest": [
+    0.168419,
+    0.152112,
+    0.27574
+   ]
+  },
+  {
+   "name": "Bone.009.L.004",
+   "parent": "Bone.009.L.005",
+   "use_deform": true,
+   "head_rest": [
+    0.168419,
+    0.152112,
+    0.27574
+   ],
+   "tail_rest": [
+    0.182209,
+    0.152112,
+    0.145448
+   ]
+  },
+  {
+   "name": "Bone.009.R",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.113259,
+    0.152112,
+    0.796907
+   ],
+   "tail_rest": [
+    -0.127049,
+    0.152112,
+    0.666615
+   ]
+  },
+  {
+   "name": "Bone.009.R.007",
+   "parent": "Bone.009.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.127049,
+    0.152112,
+    0.666615
+   ],
+   "tail_rest": [
+    -0.140839,
+    0.152112,
+    0.536324
+   ]
+  },
+  {
+   "name": "Bone.009.R.006",
+   "parent": "Bone.009.R.007",
+   "use_deform": true,
+   "head_rest": [
+    -0.140839,
+    0.152112,
+    0.536324
+   ],
+   "tail_rest": [
+    -0.154629,
+    0.152112,
+    0.406032
+   ]
+  },
+  {
+   "name": "Bone.009.R.005",
+   "parent": "Bone.009.R.006",
+   "use_deform": true,
+   "head_rest": [
+    -0.154629,
+    0.152112,
+    0.406032
+   ],
+   "tail_rest": [
+    -0.168419,
+    0.152112,
+    0.27574
+   ]
+  },
+  {
+   "name": "Bone.009.R.004",
+   "parent": "Bone.009.R.005",
+   "use_deform": true,
+   "head_rest": [
+    -0.168419,
+    0.152112,
+    0.27574
+   ],
+   "tail_rest": [
+    -0.182209,
+    0.152112,
+    0.145448
+   ]
+  },
+  {
+   "name": "Bone.009",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.098118,
+    0.919569
+   ],
+   "tail_rest": [
+    0.0,
+    -0.099069,
+    0.790553
+   ]
+  },
+  {
+   "name": "Bone.018",
+   "parent": "Bone.009",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.099069,
+    0.790553
+   ],
+   "tail_rest": [
+    0.0,
+    -0.100021,
+    0.661537
+   ]
+  },
+  {
+   "name": "Bone.017",
+   "parent": "Bone.018",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.100021,
+    0.661537
+   ],
+   "tail_rest": [
+    0.0,
+    -0.100972,
+    0.532521
+   ]
+  },
+  {
+   "name": "Bone.016",
+   "parent": "Bone.017",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.100972,
+    0.532521
+   ],
+   "tail_rest": [
+    0.0,
+    -0.101924,
+    0.403505
+   ]
+  },
+  {
+   "name": "Bone.015",
+   "parent": "Bone.016",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.101924,
+    0.403505
+   ],
+   "tail_rest": [
+    0.0,
+    -0.102876,
+    0.274489
+   ]
+  },
+  {
+   "name": "Bone.014",
+   "parent": "Bone.015",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.102876,
+    0.274489
+   ],
+   "tail_rest": [
+    0.0,
+    -0.103827,
+    0.145473
+   ]
+  },
+  {
+   "name": "Bone.009.L.001",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.113259,
+    -0.098118,
+    0.919569
+   ],
+   "tail_rest": [
+    0.12475,
+    -0.099069,
+    0.790553
+   ]
+  },
+  {
+   "name": "Bone.009.L.016",
+   "parent": "Bone.009.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.12475,
+    -0.099069,
+    0.790553
+   ],
+   "tail_rest": [
+    0.136242,
+    -0.100021,
+    0.661537
+   ]
+  },
+  {
+   "name": "Bone.009.L.015",
+   "parent": "Bone.009.L.016",
+   "use_deform": true,
+   "head_rest": [
+    0.136242,
+    -0.100021,
+    0.661537
+   ],
+   "tail_rest": [
+    0.147734,
+    -0.100972,
+    0.532521
+   ]
+  },
+  {
+   "name": "Bone.009.L.014",
+   "parent": "Bone.009.L.015",
+   "use_deform": true,
+   "head_rest": [
+    0.147734,
+    -0.100972,
+    0.532521
+   ],
+   "tail_rest": [
+    0.159225,
+    -0.101924,
+    0.403505
+   ]
+  },
+  {
+   "name": "Bone.009.L.013",
+   "parent": "Bone.009.L.014",
+   "use_deform": true,
+   "head_rest": [
+    0.159225,
+    -0.101924,
+    0.403505
+   ],
+   "tail_rest": [
+    0.170717,
+    -0.102876,
+    0.274489
+   ]
+  },
+  {
+   "name": "Bone.009.L.012",
+   "parent": "Bone.009.L.013",
+   "use_deform": true,
+   "head_rest": [
+    0.170717,
+    -0.102876,
+    0.274489
+   ],
+   "tail_rest": [
+    0.182209,
+    -0.103827,
+    0.145473
+   ]
+  },
+  {
+   "name": "Bone.009.R.001",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.113259,
+    -0.098118,
+    0.919569
+   ],
+   "tail_rest": [
+    -0.12475,
+    -0.099069,
+    0.790553
+   ]
+  },
+  {
+   "name": "Bone.009.R.016",
+   "parent": "Bone.009.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.12475,
+    -0.099069,
+    0.790553
+   ],
+   "tail_rest": [
+    -0.136242,
+    -0.100021,
+    0.661537
+   ]
+  },
+  {
+   "name": "Bone.009.R.015",
+   "parent": "Bone.009.R.016",
+   "use_deform": true,
+   "head_rest": [
+    -0.136242,
+    -0.100021,
+    0.661537
+   ],
+   "tail_rest": [
+    -0.147734,
+    -0.100972,
+    0.532521
+   ]
+  },
+  {
+   "name": "Bone.009.R.014",
+   "parent": "Bone.009.R.015",
+   "use_deform": true,
+   "head_rest": [
+    -0.147734,
+    -0.100972,
+    0.532521
+   ],
+   "tail_rest": [
+    -0.159225,
+    -0.101924,
+    0.403505
+   ]
+  },
+  {
+   "name": "Bone.009.R.013",
+   "parent": "Bone.009.R.014",
+   "use_deform": true,
+   "head_rest": [
+    -0.159225,
+    -0.101924,
+    0.403505
+   ],
+   "tail_rest": [
+    -0.170717,
+    -0.102876,
+    0.274489
+   ]
+  },
+  {
+   "name": "Bone.009.R.012",
+   "parent": "Bone.009.R.013",
+   "use_deform": true,
+   "head_rest": [
+    -0.170717,
+    -0.102876,
+    0.274489
+   ],
+   "tail_rest": [
+    -0.182209,
+    -0.103827,
+    0.145473
+   ]
+  },
+  {
+   "name": "Bone.009.L.002",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.057387,
+    0.152112,
+    0.796907
+   ],
+   "tail_rest": [
+    0.064176,
+    0.152112,
+    0.666372
+   ]
+  },
+  {
+   "name": "Bone.009.L.011",
+   "parent": "Bone.009.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.064176,
+    0.152112,
+    0.666372
+   ],
+   "tail_rest": [
+    0.070965,
+    0.152112,
+    0.535836
+   ]
+  },
+  {
+   "name": "Bone.009.L.010",
+   "parent": "Bone.009.L.011",
+   "use_deform": true,
+   "head_rest": [
+    0.070965,
+    0.152112,
+    0.535836
+   ],
+   "tail_rest": [
+    0.077753,
+    0.152112,
+    0.4053
+   ]
+  },
+  {
+   "name": "Bone.009.L.009",
+   "parent": "Bone.009.L.010",
+   "use_deform": true,
+   "head_rest": [
+    0.077753,
+    0.152112,
+    0.4053
+   ],
+   "tail_rest": [
+    0.084542,
+    0.152112,
+    0.274765
+   ]
+  },
+  {
+   "name": "Bone.009.L.008",
+   "parent": "Bone.009.L.009",
+   "use_deform": true,
+   "head_rest": [
+    0.084542,
+    0.152112,
+    0.274765
+   ],
+   "tail_rest": [
+    0.091331,
+    0.152112,
+    0.144229
+   ]
+  },
+  {
+   "name": "Bone.009.R.002",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.057387,
+    0.152112,
+    0.796907
+   ],
+   "tail_rest": [
+    -0.064176,
+    0.152112,
+    0.666372
+   ]
+  },
+  {
+   "name": "Bone.009.R.011",
+   "parent": "Bone.009.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.064176,
+    0.152112,
+    0.666372
+   ],
+   "tail_rest": [
+    -0.070965,
+    0.152112,
+    0.535836
+   ]
+  },
+  {
+   "name": "Bone.009.R.010",
+   "parent": "Bone.009.R.011",
+   "use_deform": true,
+   "head_rest": [
+    -0.070965,
+    0.152112,
+    0.535836
+   ],
+   "tail_rest": [
+    -0.077753,
+    0.152112,
+    0.4053
+   ]
+  },
+  {
+   "name": "Bone.009.R.009",
+   "parent": "Bone.009.R.010",
+   "use_deform": true,
+   "head_rest": [
+    -0.077753,
+    0.152112,
+    0.4053
+   ],
+   "tail_rest": [
+    -0.084542,
+    0.152112,
+    0.274765
+   ]
+  },
+  {
+   "name": "Bone.009.R.008",
+   "parent": "Bone.009.R.009",
+   "use_deform": true,
+   "head_rest": [
+    -0.084542,
+    0.152112,
+    0.274765
+   ],
+   "tail_rest": [
+    -0.091331,
+    0.152112,
+    0.144229
+   ]
+  },
+  {
+   "name": "Bone.009.L.003",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.057387,
+    -0.098118,
+    0.919569
+   ],
+   "tail_rest": [
+    0.063045,
+    -0.099069,
+    0.79035
+   ]
+  },
+  {
+   "name": "Bone.009.L.021",
+   "parent": "Bone.009.L.003",
+   "use_deform": true,
+   "head_rest": [
+    0.063045,
+    -0.099069,
+    0.79035
+   ],
+   "tail_rest": [
+    0.068702,
+    -0.100021,
+    0.661131
+   ]
+  },
+  {
+   "name": "Bone.009.L.020",
+   "parent": "Bone.009.L.021",
+   "use_deform": true,
+   "head_rest": [
+    0.068702,
+    -0.100021,
+    0.661131
+   ],
+   "tail_rest": [
+    0.074359,
+    -0.100972,
+    0.531912
+   ]
+  },
+  {
+   "name": "Bone.009.L.019",
+   "parent": "Bone.009.L.020",
+   "use_deform": true,
+   "head_rest": [
+    0.074359,
+    -0.100972,
+    0.531912
+   ],
+   "tail_rest": [
+    0.080017,
+    -0.101924,
+    0.402692
+   ]
+  },
+  {
+   "name": "Bone.009.L.018",
+   "parent": "Bone.009.L.019",
+   "use_deform": true,
+   "head_rest": [
+    0.080017,
+    -0.101924,
+    0.402692
+   ],
+   "tail_rest": [
+    0.085674,
+    -0.102876,
+    0.273473
+   ]
+  },
+  {
+   "name": "Bone.009.L.017",
+   "parent": "Bone.009.L.018",
+   "use_deform": true,
+   "head_rest": [
+    0.085674,
+    -0.102876,
+    0.273473
+   ],
+   "tail_rest": [
+    0.091332,
+    -0.103827,
+    0.144254
+   ]
+  },
+  {
+   "name": "Bone.009.R.003",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.057387,
+    -0.098118,
+    0.919569
+   ],
+   "tail_rest": [
+    -0.063045,
+    -0.099069,
+    0.79035
+   ]
+  },
+  {
+   "name": "Bone.009.R.021",
+   "parent": "Bone.009.R.003",
+   "use_deform": true,
+   "head_rest": [
+    -0.063045,
+    -0.099069,
+    0.79035
+   ],
+   "tail_rest": [
+    -0.068702,
+    -0.100021,
+    0.661131
+   ]
+  },
+  {
+   "name": "Bone.009.R.020",
+   "parent": "Bone.009.R.021",
+   "use_deform": true,
+   "head_rest": [
+    -0.068702,
+    -0.100021,
+    0.661131
+   ],
+   "tail_rest": [
+    -0.074359,
+    -0.100972,
+    0.531912
+   ]
+  },
+  {
+   "name": "Bone.009.R.019",
+   "parent": "Bone.009.R.020",
+   "use_deform": true,
+   "head_rest": [
+    -0.074359,
+    -0.100972,
+    0.531912
+   ],
+   "tail_rest": [
+    -0.080017,
+    -0.101924,
+    0.402692
+   ]
+  },
+  {
+   "name": "Bone.009.R.018",
+   "parent": "Bone.009.R.019",
+   "use_deform": true,
+   "head_rest": [
+    -0.080017,
+    -0.101924,
+    0.402692
+   ],
+   "tail_rest": [
+    -0.085674,
+    -0.102876,
+    0.273473
+   ]
+  },
+  {
+   "name": "Bone.009.R.017",
+   "parent": "Bone.009.R.018",
+   "use_deform": true,
+   "head_rest": [
+    -0.085674,
+    -0.102876,
+    0.273473
+   ],
+   "tail_rest": [
+    -0.091332,
+    -0.103827,
+    0.144254
+   ]
+  },
+  {
+   "name": "Bone.019.L",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.074809,
+    0.13255,
+    0.835076
+   ],
+   "tail_rest": [
+    0.074809,
+    0.132133,
+    0.738539
+   ]
+  },
+  {
+   "name": "Bone.019.L.002",
+   "parent": "Bone.019.L",
+   "use_deform": true,
+   "head_rest": [
+    0.074809,
+    0.132133,
+    0.738539
+   ],
+   "tail_rest": [
+    0.074809,
+    0.131715,
+    0.642002
+   ]
+  },
+  {
+   "name": "Bone.019.L.001",
+   "parent": "Bone.019.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.074809,
+    0.131715,
+    0.642002
+   ],
+   "tail_rest": [
+    0.074809,
+    0.131297,
+    0.545465
+   ]
+  },
+  {
+   "name": "Bone.019.R",
+   "parent": "DEF-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.074809,
+    0.13255,
+    0.835076
+   ],
+   "tail_rest": [
+    -0.074809,
+    0.132133,
+    0.738539
+   ]
+  },
+  {
+   "name": "Bone.019.R.002",
+   "parent": "Bone.019.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.074809,
+    0.132133,
+    0.738539
+   ],
+   "tail_rest": [
+    -0.074809,
+    0.131715,
+    0.642002
+   ]
+  },
+  {
+   "name": "Bone.019.R.001",
+   "parent": "Bone.019.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.074809,
+    0.131715,
+    0.642002
+   ],
+   "tail_rest": [
+    -0.074809,
+    0.131297,
+    0.545465
+   ]
+  },
+  {
+   "name": "hips",
+   "parent": "torso",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.022932,
+    1.057764
+   ],
+   "tail_rest": [
+    -0.0,
+    0.116575,
+    1.057764
+   ]
+  },
+  {
+   "name": "butt.L",
+   "parent": "hips",
+   "use_deform": true,
+   "head_rest": [
+    0.082435,
+    0.010572,
+    0.884555
+   ],
+   "tail_rest": [
+    0.082435,
+    0.106627,
+    0.884555
+   ]
+  },
+  {
+   "name": "butt.R",
+   "parent": "hips",
+   "use_deform": true,
+   "head_rest": [
+    -0.082435,
+    0.010572,
+    0.884555
+   ],
+   "tail_rest": [
+    -0.082435,
+    0.106627,
+    0.884555
+   ]
+  },
+  {
+   "name": "DEF-ear.L",
+   "parent": "ORG-ear.L",
+   "use_deform": true,
+   "head_rest": [
+    0.064436,
+    0.011856,
+    1.534667
+   ],
+   "tail_rest": [
+    0.070826,
+    0.014197,
+    1.556089
+   ]
+  },
+  {
+   "name": "DEF-ear.L.001",
+   "parent": "ORG-ear.L",
+   "use_deform": true,
+   "head_rest": [
+    0.070826,
+    0.014197,
+    1.556089
+   ],
+   "tail_rest": [
+    0.080216,
+    0.033188,
+    1.559126
+   ]
+  },
+  {
+   "name": "DEF-ear.L.002",
+   "parent": "ORG-ear.L",
+   "use_deform": true,
+   "head_rest": [
+    0.080216,
+    0.033188,
+    1.559126
+   ],
+   "tail_rest": [
+    0.076443,
+    0.035835,
+    1.535185
+   ]
+  },
+  {
+   "name": "DEF-ear.L.003",
+   "parent": "DEF-ear.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.076443,
+    0.035835,
+    1.535185
+   ],
+   "tail_rest": [
+    0.06571,
+    0.015292,
+    1.515401
+   ]
+  },
+  {
+   "name": "DEF-ear.L.004",
+   "parent": "ORG-ear.L",
+   "use_deform": true,
+   "head_rest": [
+    0.06571,
+    0.015292,
+    1.515401
+   ],
+   "tail_rest": [
+    0.064436,
+    0.011856,
+    1.534667
+   ]
+  },
+  {
+   "name": "DEF-ear.R",
+   "parent": "ORG-ear.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.064436,
+    0.011856,
+    1.534667
+   ],
+   "tail_rest": [
+    -0.070826,
+    0.014197,
+    1.556089
+   ]
+  },
+  {
+   "name": "DEF-ear.R.001",
+   "parent": "ORG-ear.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.070826,
+    0.014197,
+    1.556089
+   ],
+   "tail_rest": [
+    -0.080216,
+    0.033188,
+    1.559126
+   ]
+  },
+  {
+   "name": "DEF-ear.R.002",
+   "parent": "ORG-ear.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.080216,
+    0.033188,
+    1.559126
+   ],
+   "tail_rest": [
+    -0.076443,
+    0.035835,
+    1.535185
+   ]
+  },
+  {
+   "name": "DEF-ear.R.003",
+   "parent": "DEF-ear.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.076443,
+    0.035835,
+    1.535185
+   ],
+   "tail_rest": [
+    -0.06571,
+    0.015292,
+    1.515401
+   ]
+  },
+  {
+   "name": "DEF-ear.R.004",
+   "parent": "ORG-ear.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.06571,
+    0.015292,
+    1.515401
+   ],
+   "tail_rest": [
+    -0.064436,
+    0.011856,
+    1.534667
+   ]
+  },
+  {
+   "name": "DEF-teeth.T",
+   "parent": "ORG-teeth.T",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.05879,
+    1.505031
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.031137,
+    1.505031
+   ]
+  },
+  {
+   "name": "DEF-nose.002",
+   "parent": "ORG-nose_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.088854,
+    1.521518
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.081703,
+    1.516205
+   ]
+  },
+  {
+   "name": "DEF-nose.003",
+   "parent": "DEF-nose.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.081703,
+    1.516205
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.073443,
+    1.510902
+   ]
+  },
+  {
+   "name": "DEF-nose.L.001",
+   "parent": "ORG-nose_master",
+   "use_deform": true,
+   "head_rest": [
+    0.010673,
+    -0.06977,
+    1.520127
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.088854,
+    1.521518
+   ]
+  },
+  {
+   "name": "DEF-nose.R.001",
+   "parent": "ORG-nose_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.010673,
+    -0.06977,
+    1.520127
+   ],
+   "tail_rest": [
+    0.0,
+    -0.088854,
+    1.521518
+   ]
+  },
+  {
+   "name": "DEF-eye_master.L",
+   "parent": "ORG-eye.L",
+   "use_deform": true,
+   "head_rest": [
+    0.028713,
+    -0.043287,
+    1.555808
+   ],
+   "tail_rest": [
+    0.028713,
+    -0.0653,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-lid.B.L",
+   "parent": "ORG-eye.L",
+   "use_deform": true,
+   "head_rest": [
+    0.015072,
+    -0.056376,
+    1.549655
+   ],
+   "tail_rest": [
+    0.020059,
+    -0.057787,
+    1.548494
+   ]
+  },
+  {
+   "name": "DEF-lid.B.L.001",
+   "parent": "DEF-lid.B.L",
+   "use_deform": true,
+   "head_rest": [
+    0.020059,
+    -0.057787,
+    1.548494
+   ],
+   "tail_rest": [
+    0.029762,
+    -0.058249,
+    1.54741
+   ]
+  },
+  {
+   "name": "DEF-lid.B.L.002",
+   "parent": "DEF-lid.B.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.029762,
+    -0.058249,
+    1.54741
+   ],
+   "tail_rest": [
+    0.038313,
+    -0.055619,
+    1.548818
+   ]
+  },
+  {
+   "name": "DEF-lid.B.L.003",
+   "parent": "DEF-lid.B.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.038313,
+    -0.055619,
+    1.548818
+   ],
+   "tail_rest": [
+    0.04151,
+    -0.052205,
+    1.553627
+   ]
+  },
+  {
+   "name": "DEF-lid.T.L",
+   "parent": "ORG-eye.L",
+   "use_deform": true,
+   "head_rest": [
+    0.04151,
+    -0.052205,
+    1.553627
+   ],
+   "tail_rest": [
+    0.037342,
+    -0.05814,
+    1.557999
+   ]
+  },
+  {
+   "name": "DEF-lid.T.L.001",
+   "parent": "DEF-lid.T.L",
+   "use_deform": true,
+   "head_rest": [
+    0.037342,
+    -0.05814,
+    1.557999
+   ],
+   "tail_rest": [
+    0.02958,
+    -0.061038,
+    1.560639
+   ]
+  },
+  {
+   "name": "DEF-lid.T.L.002",
+   "parent": "DEF-lid.T.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.02958,
+    -0.061038,
+    1.560639
+   ],
+   "tail_rest": [
+    0.021999,
+    -0.060719,
+    1.559105
+   ]
+  },
+  {
+   "name": "DEF-lid.T.L.003",
+   "parent": "DEF-lid.T.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.021999,
+    -0.060719,
+    1.559105
+   ],
+   "tail_rest": [
+    0.015072,
+    -0.056376,
+    1.549655
+   ]
+  },
+  {
+   "name": "DEF-eye.L",
+   "parent": "MCH-eye.L",
+   "use_deform": true,
+   "head_rest": [
+    0.028713,
+    -0.043287,
+    1.555808
+   ],
+   "tail_rest": [
+    0.028713,
+    -0.057962,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-eye_iris.L",
+   "parent": "DEF-eye.L",
+   "use_deform": true,
+   "head_rest": [
+    0.028713,
+    -0.057962,
+    1.555808
+   ],
+   "tail_rest": [
+    0.028713,
+    -0.0653,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-eye_master.R",
+   "parent": "ORG-eye.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.028713,
+    -0.043287,
+    1.555808
+   ],
+   "tail_rest": [
+    -0.028713,
+    -0.0653,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-lid.B.R",
+   "parent": "ORG-eye.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.015072,
+    -0.056376,
+    1.549655
+   ],
+   "tail_rest": [
+    -0.020059,
+    -0.057787,
+    1.548494
+   ]
+  },
+  {
+   "name": "DEF-lid.B.R.001",
+   "parent": "DEF-lid.B.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.020059,
+    -0.057787,
+    1.548494
+   ],
+   "tail_rest": [
+    -0.029762,
+    -0.058249,
+    1.54741
+   ]
+  },
+  {
+   "name": "DEF-lid.B.R.002",
+   "parent": "DEF-lid.B.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.029762,
+    -0.058249,
+    1.54741
+   ],
+   "tail_rest": [
+    -0.038313,
+    -0.055619,
+    1.548818
+   ]
+  },
+  {
+   "name": "DEF-lid.B.R.003",
+   "parent": "DEF-lid.B.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.038313,
+    -0.055619,
+    1.548818
+   ],
+   "tail_rest": [
+    -0.04151,
+    -0.052205,
+    1.553627
+   ]
+  },
+  {
+   "name": "DEF-lid.T.R",
+   "parent": "ORG-eye.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.04151,
+    -0.052205,
+    1.553627
+   ],
+   "tail_rest": [
+    -0.037342,
+    -0.05814,
+    1.557999
+   ]
+  },
+  {
+   "name": "DEF-lid.T.R.001",
+   "parent": "DEF-lid.T.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.037342,
+    -0.05814,
+    1.557999
+   ],
+   "tail_rest": [
+    -0.02958,
+    -0.061038,
+    1.560639
+   ]
+  },
+  {
+   "name": "DEF-lid.T.R.002",
+   "parent": "DEF-lid.T.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.02958,
+    -0.061038,
+    1.560639
+   ],
+   "tail_rest": [
+    -0.021999,
+    -0.060719,
+    1.559105
+   ]
+  },
+  {
+   "name": "DEF-lid.T.R.003",
+   "parent": "DEF-lid.T.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.021999,
+    -0.060719,
+    1.559105
+   ],
+   "tail_rest": [
+    -0.015072,
+    -0.056376,
+    1.549655
+   ]
+  },
+  {
+   "name": "DEF-eye.R",
+   "parent": "MCH-eye.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.028713,
+    -0.043287,
+    1.555808
+   ],
+   "tail_rest": [
+    -0.028713,
+    -0.057962,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-eye_iris.R",
+   "parent": "DEF-eye.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.028713,
+    -0.057962,
+    1.555808
+   ],
+   "tail_rest": [
+    -0.028713,
+    -0.0653,
+    1.555808
+   ]
+  },
+  {
+   "name": "DEF-teeth.B",
+   "parent": "ORG-teeth.B",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.05483,
+    1.486971
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.027116,
+    1.486971
+   ]
+  },
+  {
+   "name": "DEF-tongue",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.059751,
+    1.495951
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.044408,
+    1.499347
+   ]
+  },
+  {
+   "name": "DEF-tongue.001",
+   "parent": "DEF-tongue",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.044408,
+    1.499347
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.023626,
+    1.496704
+   ]
+  },
+  {
+   "name": "DEF-tongue.002",
+   "parent": "DEF-tongue.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.023626,
+    1.496704
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.000648,
+    1.48339
+   ]
+  },
+  {
+   "name": "DEF-jaw_master",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.007806,
+    1.48596
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.06432,
+    1.481236
+   ]
+  },
+  {
+   "name": "DEF-chin",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.050521,
+    1.459095
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.063488,
+    1.467707
+   ]
+  },
+  {
+   "name": "DEF-chin.001",
+   "parent": "DEF-chin",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.063488,
+    1.467707
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.065257,
+    1.48187
+   ]
+  },
+  {
+   "name": "DEF-jaw",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.027409,
+    1.464845
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.050521,
+    1.459095
+   ]
+  },
+  {
+   "name": "DEF-jaw.L",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    0.056155,
+    0.002227,
+    1.545366
+   ],
+   "tail_rest": [
+    0.050746,
+    -0.001654,
+    1.499096
+   ]
+  },
+  {
+   "name": "DEF-jaw.L.001",
+   "parent": "DEF-jaw.L",
+   "use_deform": true,
+   "head_rest": [
+    0.050746,
+    -0.001654,
+    1.499096
+   ],
+   "tail_rest": [
+    0.029672,
+    -0.039617,
+    1.472473
+   ]
+  },
+  {
+   "name": "DEF-chin.L",
+   "parent": "DEF-jaw.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.029672,
+    -0.039617,
+    1.472473
+   ],
+   "tail_rest": [
+    0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "DEF-jaw.R",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.056155,
+    0.002227,
+    1.545366
+   ],
+   "tail_rest": [
+    -0.050746,
+    -0.001654,
+    1.499096
+   ]
+  },
+  {
+   "name": "DEF-jaw.R.001",
+   "parent": "DEF-jaw.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.050746,
+    -0.001654,
+    1.499096
+   ],
+   "tail_rest": [
+    -0.029672,
+    -0.039617,
+    1.472473
+   ]
+  },
+  {
+   "name": "DEF-chin.R",
+   "parent": "DEF-jaw.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.029672,
+    -0.039617,
+    1.472473
+   ],
+   "tail_rest": [
+    -0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "root.001",
+   "parent": "ORG-jaw_master",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.001515,
+    1.46281
+   ],
+   "tail_rest": [
+    0.0,
+    -0.001515,
+    1.488009
+   ]
+  },
+  {
+   "name": "ZixH_tongue-root",
+   "parent": "root.001",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.000192,
+    1.489462
+   ],
+   "tail_rest": [
+    0.0,
+    -0.000192,
+    1.49761
+   ]
+  },
+  {
+   "name": "ZixH_CTRL-tongue",
+   "parent": "ZixH_tongue-root",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.017977,
+    1.498206
+   ],
+   "tail_rest": [
+    0.0,
+    -0.017977,
+    1.506377
+   ]
+  },
+  {
+   "name": "ZixH_CTRL-tongue.001",
+   "parent": "ZixH_CTRL-tongue",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.038096,
+    1.493544
+   ],
+   "tail_rest": [
+    0.0,
+    -0.038096,
+    1.501853
+   ]
+  },
+  {
+   "name": "ZixH_CTRL-tongue.002",
+   "parent": "ZixH_CTRL-tongue.001",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.056319,
+    1.493106
+   ],
+   "tail_rest": [
+    0.0,
+    -0.056319,
+    1.501416
+   ]
+  },
+  {
+   "name": "Ultimate_tongue_rig",
+   "parent": "ZixH_tongue-root",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.003945,
+    1.482134
+   ],
+   "tail_rest": [
+    0.0,
+    -0.000192,
+    1.489462
+   ]
+  },
+  {
+   "name": "ZixH_DEF-tongue",
+   "parent": "Ultimate_tongue_rig",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.000192,
+    1.489462
+   ],
+   "tail_rest": [
+    0.0,
+    -0.017977,
+    1.498206
+   ]
+  },
+  {
+   "name": "ZixH_DEF-tongue.001",
+   "parent": "ZixH_DEF-tongue",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.017977,
+    1.498206
+   ],
+   "tail_rest": [
+    0.0,
+    -0.038096,
+    1.493544
+   ]
+  },
+  {
+   "name": "ZixH_DEF-tongue.002",
+   "parent": "ZixH_DEF-tongue.001",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.038096,
+    1.493544
+   ],
+   "tail_rest": [
+    0.0,
+    -0.056319,
+    1.493106
+   ]
+  },
+  {
+   "name": "ZixH_root.006",
+   "parent": "ZixH_DEF-tongue.002",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.056319,
+    1.493106
+   ],
+   "tail_rest": [
+    0.0,
+    -0.062393,
+    1.493359
+   ]
+  },
+  {
+   "name": "Keys_tongue_2",
+   "parent": "root.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.008655,
+    1.50005
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.021017,
+    1.499633
+   ]
+  },
+  {
+   "name": "Keys_tongue_3",
+   "parent": "root.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.022948,
+    1.493474
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.038093,
+    1.493474
+   ]
+  },
+  {
+   "name": "Keys_tongue",
+   "parent": "Keys_tongue_3",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.038093,
+    1.493474
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.056337,
+    1.493058
+   ]
+  },
+  {
+   "name": "Keys_tongue_tip",
+   "parent": "Keys_tongue",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.056337,
+    1.493058
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.075441,
+    1.493058
+   ]
+  },
+  {
+   "name": "DEF-lip.T.L",
+   "parent": "MCH-jaw_master_top",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.074498,
+    1.498196
+   ],
+   "tail_rest": [
+    0.011825,
+    -0.069084,
+    1.497427
+   ]
+  },
+  {
+   "name": "DEF-lip.T.L.001",
+   "parent": "DEF-lip.T.L",
+   "use_deform": true,
+   "head_rest": [
+    0.011825,
+    -0.069084,
+    1.497427
+   ],
+   "tail_rest": [
+    0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "DEF-lip.T.R",
+   "parent": "MCH-jaw_master_top",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.074498,
+    1.498196
+   ],
+   "tail_rest": [
+    -0.011825,
+    -0.069084,
+    1.497427
+   ]
+  },
+  {
+   "name": "DEF-lip.T.R.001",
+   "parent": "DEF-lip.T.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.011825,
+    -0.069084,
+    1.497427
+   ],
+   "tail_rest": [
+    -0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "DEF-lip.B.L",
+   "parent": "MCH-jaw_master_bottom",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.071902,
+    1.489399
+   ],
+   "tail_rest": [
+    0.011219,
+    -0.067573,
+    1.491688
+   ]
+  },
+  {
+   "name": "DEF-lip.B.L.001",
+   "parent": "DEF-lip.B.L",
+   "use_deform": true,
+   "head_rest": [
+    0.011219,
+    -0.067573,
+    1.491688
+   ],
+   "tail_rest": [
+    0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "DEF-lip.B.R",
+   "parent": "MCH-jaw_master_bottom",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    -0.071902,
+    1.489399
+   ],
+   "tail_rest": [
+    -0.011219,
+    -0.067573,
+    1.491688
+   ]
+  },
+  {
+   "name": "DEF-lip.B.R.001",
+   "parent": "DEF-lip.B.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.011219,
+    -0.067573,
+    1.491688
+   ],
+   "tail_rest": [
+    -0.021346,
+    -0.058313,
+    1.494327
+   ]
+  },
+  {
+   "name": "DEF-brow.B.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.047969,
+    -0.048155,
+    1.560553
+   ],
+   "tail_rest": [
+    0.042693,
+    -0.056726,
+    1.56407
+   ]
+  },
+  {
+   "name": "DEF-brow.B.L.001",
+   "parent": "DEF-brow.B.L",
+   "use_deform": true,
+   "head_rest": [
+    0.042693,
+    -0.056726,
+    1.56407
+   ],
+   "tail_rest": [
+    0.034991,
+    -0.06305,
+    1.56498
+   ]
+  },
+  {
+   "name": "DEF-brow.B.L.002",
+   "parent": "DEF-brow.B.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.034991,
+    -0.06305,
+    1.56498
+   ],
+   "tail_rest": [
+    0.023529,
+    -0.066934,
+    1.563524
+   ]
+  },
+  {
+   "name": "DEF-brow.B.L.003",
+   "parent": "DEF-brow.B.L.002",
+   "use_deform": true,
+   "head_rest": [
+    0.023529,
+    -0.066934,
+    1.563524
+   ],
+   "tail_rest": [
+    0.013402,
+    -0.06483,
+    1.557351
+   ]
+  },
+  {
+   "name": "DEF-brow.B.L.004",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.013402,
+    -0.06483,
+    1.557351
+   ],
+   "tail_rest": [
+    0.01775,
+    -0.059998,
+    1.541386
+   ]
+  },
+  {
+   "name": "DEF-nose.L",
+   "parent": "DEF-brow.B.L.004",
+   "use_deform": true,
+   "head_rest": [
+    0.01775,
+    -0.059998,
+    1.541386
+   ],
+   "tail_rest": [
+    0.010673,
+    -0.06977,
+    1.520127
+   ]
+  },
+  {
+   "name": "DEF-brow.B.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.047969,
+    -0.048155,
+    1.560553
+   ],
+   "tail_rest": [
+    -0.042693,
+    -0.056726,
+    1.56407
+   ]
+  },
+  {
+   "name": "DEF-brow.B.R.001",
+   "parent": "DEF-brow.B.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.042693,
+    -0.056726,
+    1.56407
+   ],
+   "tail_rest": [
+    -0.034991,
+    -0.06305,
+    1.56498
+   ]
+  },
+  {
+   "name": "DEF-brow.B.R.002",
+   "parent": "DEF-brow.B.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.034991,
+    -0.06305,
+    1.56498
+   ],
+   "tail_rest": [
+    -0.023529,
+    -0.066934,
+    1.563524
+   ]
+  },
+  {
+   "name": "DEF-brow.B.R.003",
+   "parent": "DEF-brow.B.R.002",
+   "use_deform": true,
+   "head_rest": [
+    -0.023529,
+    -0.066934,
+    1.563524
+   ],
+   "tail_rest": [
+    -0.013402,
+    -0.06483,
+    1.557351
+   ]
+  },
+  {
+   "name": "DEF-brow.B.R.004",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.013402,
+    -0.06483,
+    1.557351
+   ],
+   "tail_rest": [
+    -0.01775,
+    -0.059998,
+    1.541386
+   ]
+  },
+  {
+   "name": "DEF-nose.R",
+   "parent": "DEF-brow.B.R.004",
+   "use_deform": true,
+   "head_rest": [
+    -0.01775,
+    -0.059998,
+    1.541386
+   ],
+   "tail_rest": [
+    -0.010673,
+    -0.06977,
+    1.520127
+   ]
+  },
+  {
+   "name": "DEF-brow.T.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.059682,
+    -0.016876,
+    1.553371
+   ],
+   "tail_rest": [
+    0.046403,
+    -0.050103,
+    1.567715
+   ]
+  },
+  {
+   "name": "DEF-brow.T.L.001",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.046403,
+    -0.050103,
+    1.567715
+   ],
+   "tail_rest": [
+    0.035658,
+    -0.063273,
+    1.570042
+   ]
+  },
+  {
+   "name": "DEF-brow.T.L.002",
+   "parent": "DEF-brow.T.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.035658,
+    -0.063273,
+    1.570042
+   ],
+   "tail_rest": [
+    0.013038,
+    -0.071786,
+    1.563931
+   ]
+  },
+  {
+   "name": "DEF-brow.T.L.003",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.013038,
+    -0.071786,
+    1.563931
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.071152,
+    1.554856
+   ]
+  },
+  {
+   "name": "DEF-brow.T.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.059682,
+    -0.016876,
+    1.553371
+   ],
+   "tail_rest": [
+    -0.046403,
+    -0.050103,
+    1.567715
+   ]
+  },
+  {
+   "name": "DEF-brow.T.R.001",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.046403,
+    -0.050103,
+    1.567715
+   ],
+   "tail_rest": [
+    -0.035658,
+    -0.063273,
+    1.570042
+   ]
+  },
+  {
+   "name": "DEF-brow.T.R.002",
+   "parent": "DEF-brow.T.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.035658,
+    -0.063273,
+    1.570042
+   ],
+   "tail_rest": [
+    -0.013038,
+    -0.071786,
+    1.563931
+   ]
+  },
+  {
+   "name": "DEF-brow.T.R.003",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.013038,
+    -0.071786,
+    1.563931
+   ],
+   "tail_rest": [
+    0.0,
+    -0.071152,
+    1.554856
+   ]
+  },
+  {
+   "name": "DEF-cheek.B.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.021346,
+    -0.058313,
+    1.494327
+   ],
+   "tail_rest": [
+    0.051078,
+    -0.033613,
+    1.515348
+   ]
+  },
+  {
+   "name": "DEF-cheek.B.L.001",
+   "parent": "DEF-cheek.B.L",
+   "use_deform": true,
+   "head_rest": [
+    0.051078,
+    -0.033613,
+    1.515348
+   ],
+   "tail_rest": [
+    0.059682,
+    -0.016876,
+    1.553371
+   ]
+  },
+  {
+   "name": "DEF-cheek.B.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.021346,
+    -0.058313,
+    1.494327
+   ],
+   "tail_rest": [
+    -0.051078,
+    -0.033613,
+    1.515348
+   ]
+  },
+  {
+   "name": "DEF-cheek.B.R.001",
+   "parent": "DEF-cheek.B.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.051078,
+    -0.033613,
+    1.515348
+   ],
+   "tail_rest": [
+    -0.059682,
+    -0.016876,
+    1.553371
+   ]
+  },
+  {
+   "name": "DEF-cheek.T.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.059682,
+    -0.016876,
+    1.553371
+   ],
+   "tail_rest": [
+    0.034263,
+    -0.058021,
+    1.528269
+   ]
+  },
+  {
+   "name": "DEF-cheek.T.L.001",
+   "parent": "DEF-cheek.T.L",
+   "use_deform": true,
+   "head_rest": [
+    0.034263,
+    -0.058021,
+    1.528269
+   ],
+   "tail_rest": [
+    0.01775,
+    -0.059998,
+    1.541386
+   ]
+  },
+  {
+   "name": "DEF-cheek.T.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.059682,
+    -0.016876,
+    1.553371
+   ],
+   "tail_rest": [
+    -0.034263,
+    -0.058021,
+    1.528269
+   ]
+  },
+  {
+   "name": "DEF-cheek.T.R.001",
+   "parent": "DEF-cheek.T.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.034263,
+    -0.058021,
+    1.528269
+   ],
+   "tail_rest": [
+    -0.01775,
+    -0.059998,
+    1.541386
+   ]
+  },
+  {
+   "name": "DEF-forehead.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.015151,
+    -0.068727,
+    1.603947
+   ],
+   "tail_rest": [
+    0.013038,
+    -0.071786,
+    1.563931
+   ]
+  },
+  {
+   "name": "DEF-forehead.L.001",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.034011,
+    -0.057824,
+    1.607101
+   ],
+   "tail_rest": [
+    0.035658,
+    -0.063273,
+    1.570042
+   ]
+  },
+  {
+   "name": "DEF-forehead.L.002",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.048566,
+    -0.038504,
+    1.604736
+   ],
+   "tail_rest": [
+    0.046403,
+    -0.050103,
+    1.567715
+   ]
+  },
+  {
+   "name": "DEF-forehead.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.015151,
+    -0.068727,
+    1.603947
+   ],
+   "tail_rest": [
+    -0.013038,
+    -0.071786,
+    1.563931
+   ]
+  },
+  {
+   "name": "DEF-forehead.R.001",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.034011,
+    -0.057824,
+    1.607101
+   ],
+   "tail_rest": [
+    -0.035658,
+    -0.063273,
+    1.570042
+   ]
+  },
+  {
+   "name": "DEF-forehead.R.002",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.048566,
+    -0.038504,
+    1.604736
+   ],
+   "tail_rest": [
+    -0.046403,
+    -0.050103,
+    1.567715
+   ]
+  },
+  {
+   "name": "DEF-nose",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.071152,
+    1.554856
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.078342,
+    1.539181
+   ]
+  },
+  {
+   "name": "DEF-nose.001",
+   "parent": "DEF-nose",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.078342,
+    1.539181
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.088854,
+    1.521518
+   ]
+  },
+  {
+   "name": "DEF-nose.004",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    -0.073443,
+    1.510902
+   ],
+   "tail_rest": [
+    -0.0,
+    -0.07342,
+    1.504763
+   ]
+  },
+  {
+   "name": "DEF-temple.L",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    0.052941,
+    0.003925,
+    1.592971
+   ],
+   "tail_rest": [
+    0.056155,
+    0.002227,
+    1.545366
+   ]
+  },
+  {
+   "name": "DEF-temple.R",
+   "parent": "ORG-face",
+   "use_deform": true,
+   "head_rest": [
+    -0.052941,
+    0.003925,
+    1.592971
+   ],
+   "tail_rest": [
+    -0.056155,
+    0.002227,
+    1.545366
+   ]
+  },
+  {
+   "name": "DEF-shoulder.L",
+   "parent": "ORG-shoulder.L",
+   "use_deform": true,
+   "head_rest": [
+    0.015603,
+    -0.020041,
+    1.368524
+   ],
+   "tail_rest": [
+    0.133738,
+    0.044366,
+    1.369587
+   ]
+  },
+  {
+   "name": "DEF-upper_arm.L",
+   "parent": "ORG-shoulder.L",
+   "use_deform": true,
+   "head_rest": [
+    0.133738,
+    0.044366,
+    1.369587
+   ],
+   "tail_rest": [
+    0.26414,
+    0.044983,
+    1.357825
+   ]
+  },
+  {
+   "name": "DEF-upper_arm.L.001",
+   "parent": "DEF-upper_arm.L",
+   "use_deform": true,
+   "head_rest": [
+    0.26414,
+    0.044983,
+    1.357825
+   ],
+   "tail_rest": [
+    0.394542,
+    0.045601,
+    1.346063
+   ]
+  },
+  {
+   "name": "DEF-forearm.L",
+   "parent": "DEF-upper_arm.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.394542,
+    0.045601,
+    1.346063
+   ],
+   "tail_rest": [
+    0.508076,
+    0.011035,
+    1.352335
+   ]
+  },
+  {
+   "name": "DEF-forearm.L.001",
+   "parent": "DEF-forearm.L",
+   "use_deform": true,
+   "head_rest": [
+    0.508076,
+    0.011035,
+    1.352335
+   ],
+   "tail_rest": [
+    0.62161,
+    -0.023531,
+    1.358608
+   ]
+  },
+  {
+   "name": "DEF-hand.L",
+   "parent": "DEF-forearm.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.62161,
+    -0.023531,
+    1.358608
+   ],
+   "tail_rest": [
+    0.689104,
+    -0.027515,
+    1.350288
+   ]
+  },
+  {
+   "name": "DEF-f_index.01.L",
+   "parent": "ORG-palm.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.70387,
+    -0.057134,
+    1.351036
+   ],
+   "tail_rest": [
+    0.733679,
+    -0.059935,
+    1.349486
+   ]
+  },
+  {
+   "name": "DEF-f_index.02.L",
+   "parent": "DEF-f_index.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.733679,
+    -0.059935,
+    1.349486
+   ],
+   "tail_rest": [
+    0.751705,
+    -0.061576,
+    1.347638
+   ]
+  },
+  {
+   "name": "DEF-f_index.03.L",
+   "parent": "DEF-f_index.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.751705,
+    -0.061576,
+    1.347638
+   ],
+   "tail_rest": [
+    0.767826,
+    -0.062604,
+    1.344894
+   ]
+  },
+  {
+   "name": "DEF-thumb.01.L",
+   "parent": "ORG-palm.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.644204,
+    -0.053692,
+    1.340697
+   ],
+   "tail_rest": [
+    0.659958,
+    -0.070981,
+    1.335426
+   ]
+  },
+  {
+   "name": "DEF-thumb.02.L",
+   "parent": "DEF-thumb.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.659958,
+    -0.070981,
+    1.335426
+   ],
+   "tail_rest": [
+    0.680315,
+    -0.086229,
+    1.327708
+   ]
+  },
+  {
+   "name": "DEF-thumb.03.L",
+   "parent": "DEF-thumb.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.680315,
+    -0.086229,
+    1.327708
+   ],
+   "tail_rest": [
+    0.696837,
+    -0.099844,
+    1.320948
+   ]
+  },
+  {
+   "name": "DEF-palm.01.L",
+   "parent": "ORG-palm.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.656201,
+    -0.053725,
+    1.35411
+   ],
+   "tail_rest": [
+    0.70387,
+    -0.057134,
+    1.351036
+   ]
+  },
+  {
+   "name": "DEF-f_middle.01.L",
+   "parent": "ORG-palm.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.70613,
+    -0.035743,
+    1.352976
+   ],
+   "tail_rest": [
+    0.739305,
+    -0.037401,
+    1.350247
+   ]
+  },
+  {
+   "name": "DEF-f_middle.02.L",
+   "parent": "DEF-f_middle.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.739305,
+    -0.037401,
+    1.350247
+   ],
+   "tail_rest": [
+    0.763464,
+    -0.039146,
+    1.349871
+   ]
+  },
+  {
+   "name": "DEF-f_middle.03.L",
+   "parent": "DEF-f_middle.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.763464,
+    -0.039146,
+    1.349871
+   ],
+   "tail_rest": [
+    0.781319,
+    -0.039961,
+    1.347589
+   ]
+  },
+  {
+   "name": "DEF-palm.02.L",
+   "parent": "ORG-palm.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.657233,
+    -0.035949,
+    1.355803
+   ],
+   "tail_rest": [
+    0.70613,
+    -0.035743,
+    1.352976
+   ]
+  },
+  {
+   "name": "DEF-f_ring.01.L",
+   "parent": "ORG-palm.03.L",
+   "use_deform": true,
+   "head_rest": [
+    0.704667,
+    -0.017817,
+    1.34999
+   ],
+   "tail_rest": [
+    0.733104,
+    -0.015461,
+    1.349411
+   ]
+  },
+  {
+   "name": "DEF-f_ring.02.L",
+   "parent": "DEF-f_ring.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.733104,
+    -0.015461,
+    1.349411
+   ],
+   "tail_rest": [
+    0.753493,
+    -0.014944,
+    1.348628
+   ]
+  },
+  {
+   "name": "DEF-f_ring.03.L",
+   "parent": "DEF-f_ring.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.753493,
+    -0.014944,
+    1.348628
+   ],
+   "tail_rest": [
+    0.769819,
+    -0.014532,
+    1.347116
+   ]
+  },
+  {
+   "name": "DEF-palm.03.L",
+   "parent": "ORG-palm.03.L",
+   "use_deform": true,
+   "head_rest": [
+    0.65684,
+    -0.016719,
+    1.355286
+   ],
+   "tail_rest": [
+    0.704667,
+    -0.017817,
+    1.34999
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.01.L",
+   "parent": "ORG-palm.04.L",
+   "use_deform": true,
+   "head_rest": [
+    0.6993,
+    0.002113,
+    1.34444
+   ],
+   "tail_rest": [
+    0.717017,
+    0.004823,
+    1.345245
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.02.L",
+   "parent": "DEF-f_pinky.01.L",
+   "use_deform": true,
+   "head_rest": [
+    0.717017,
+    0.004823,
+    1.345245
+   ],
+   "tail_rest": [
+    0.731951,
+    0.006353,
+    1.344653
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.03.L",
+   "parent": "DEF-f_pinky.02.L",
+   "use_deform": true,
+   "head_rest": [
+    0.731951,
+    0.006353,
+    1.344653
+   ],
+   "tail_rest": [
+    0.746009,
+    0.007404,
+    1.343826
+   ]
+  },
+  {
+   "name": "DEF-palm.04.L",
+   "parent": "ORG-palm.04.L",
+   "use_deform": true,
+   "head_rest": [
+    0.655925,
+    -0.004159,
+    1.353631
+   ],
+   "tail_rest": [
+    0.6993,
+    0.002113,
+    1.34444
+   ]
+  },
+  {
+   "name": "DEF-shoulder.R",
+   "parent": "ORG-shoulder.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.015603,
+    -0.020041,
+    1.368524
+   ],
+   "tail_rest": [
+    -0.133738,
+    0.044366,
+    1.369587
+   ]
+  },
+  {
+   "name": "DEF-upper_arm.R",
+   "parent": "ORG-shoulder.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.133738,
+    0.044366,
+    1.369587
+   ],
+   "tail_rest": [
+    -0.26414,
+    0.044983,
+    1.357825
+   ]
+  },
+  {
+   "name": "DEF-upper_arm.R.001",
+   "parent": "DEF-upper_arm.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.26414,
+    0.044983,
+    1.357825
+   ],
+   "tail_rest": [
+    -0.394542,
+    0.045601,
+    1.346063
+   ]
+  },
+  {
+   "name": "DEF-forearm.R",
+   "parent": "DEF-upper_arm.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.394542,
+    0.045601,
+    1.346063
+   ],
+   "tail_rest": [
+    -0.508076,
+    0.011035,
+    1.352335
+   ]
+  },
+  {
+   "name": "DEF-forearm.R.001",
+   "parent": "DEF-forearm.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.508076,
+    0.011035,
+    1.352335
+   ],
+   "tail_rest": [
+    -0.62161,
+    -0.023531,
+    1.358608
+   ]
+  },
+  {
+   "name": "DEF-hand.R",
+   "parent": "DEF-forearm.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.62161,
+    -0.023531,
+    1.358608
+   ],
+   "tail_rest": [
+    -0.689104,
+    -0.027515,
+    1.350288
+   ]
+  },
+  {
+   "name": "DEF-f_index.01.R",
+   "parent": "ORG-palm.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.70387,
+    -0.057134,
+    1.351036
+   ],
+   "tail_rest": [
+    -0.733679,
+    -0.059935,
+    1.349486
+   ]
+  },
+  {
+   "name": "DEF-f_index.02.R",
+   "parent": "DEF-f_index.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.733679,
+    -0.059935,
+    1.349486
+   ],
+   "tail_rest": [
+    -0.751705,
+    -0.061576,
+    1.347638
+   ]
+  },
+  {
+   "name": "DEF-f_index.03.R",
+   "parent": "DEF-f_index.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.751705,
+    -0.061576,
+    1.347638
+   ],
+   "tail_rest": [
+    -0.767826,
+    -0.062604,
+    1.344894
+   ]
+  },
+  {
+   "name": "DEF-thumb.01.R",
+   "parent": "ORG-palm.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.644204,
+    -0.053692,
+    1.340697
+   ],
+   "tail_rest": [
+    -0.659958,
+    -0.070981,
+    1.335426
+   ]
+  },
+  {
+   "name": "DEF-thumb.02.R",
+   "parent": "DEF-thumb.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.659958,
+    -0.070981,
+    1.335426
+   ],
+   "tail_rest": [
+    -0.680315,
+    -0.086229,
+    1.327708
+   ]
+  },
+  {
+   "name": "DEF-thumb.03.R",
+   "parent": "DEF-thumb.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.680315,
+    -0.086229,
+    1.327708
+   ],
+   "tail_rest": [
+    -0.696837,
+    -0.099844,
+    1.320948
+   ]
+  },
+  {
+   "name": "DEF-palm.01.R",
+   "parent": "ORG-palm.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.656201,
+    -0.053725,
+    1.35411
+   ],
+   "tail_rest": [
+    -0.70387,
+    -0.057134,
+    1.351036
+   ]
+  },
+  {
+   "name": "DEF-f_middle.01.R",
+   "parent": "ORG-palm.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.70613,
+    -0.035743,
+    1.352976
+   ],
+   "tail_rest": [
+    -0.739305,
+    -0.037401,
+    1.350247
+   ]
+  },
+  {
+   "name": "DEF-f_middle.02.R",
+   "parent": "DEF-f_middle.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.739305,
+    -0.037401,
+    1.350247
+   ],
+   "tail_rest": [
+    -0.763464,
+    -0.039146,
+    1.349871
+   ]
+  },
+  {
+   "name": "DEF-f_middle.03.R",
+   "parent": "DEF-f_middle.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.763464,
+    -0.039146,
+    1.349871
+   ],
+   "tail_rest": [
+    -0.781319,
+    -0.039961,
+    1.347589
+   ]
+  },
+  {
+   "name": "DEF-palm.02.R",
+   "parent": "ORG-palm.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.657233,
+    -0.035949,
+    1.355803
+   ],
+   "tail_rest": [
+    -0.70613,
+    -0.035743,
+    1.352976
+   ]
+  },
+  {
+   "name": "DEF-f_ring.01.R",
+   "parent": "ORG-palm.03.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.704667,
+    -0.017817,
+    1.34999
+   ],
+   "tail_rest": [
+    -0.733104,
+    -0.015461,
+    1.349411
+   ]
+  },
+  {
+   "name": "DEF-f_ring.02.R",
+   "parent": "DEF-f_ring.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.733104,
+    -0.015461,
+    1.349411
+   ],
+   "tail_rest": [
+    -0.753493,
+    -0.014944,
+    1.348628
+   ]
+  },
+  {
+   "name": "DEF-f_ring.03.R",
+   "parent": "DEF-f_ring.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.753493,
+    -0.014944,
+    1.348628
+   ],
+   "tail_rest": [
+    -0.769819,
+    -0.014532,
+    1.347116
+   ]
+  },
+  {
+   "name": "DEF-palm.03.R",
+   "parent": "ORG-palm.03.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.65684,
+    -0.016719,
+    1.355286
+   ],
+   "tail_rest": [
+    -0.704667,
+    -0.017817,
+    1.34999
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.01.R",
+   "parent": "ORG-palm.04.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.6993,
+    0.002113,
+    1.34444
+   ],
+   "tail_rest": [
+    -0.717017,
+    0.004823,
+    1.345245
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.02.R",
+   "parent": "DEF-f_pinky.01.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.717017,
+    0.004823,
+    1.345245
+   ],
+   "tail_rest": [
+    -0.731951,
+    0.006353,
+    1.344653
+   ]
+  },
+  {
+   "name": "DEF-f_pinky.03.R",
+   "parent": "DEF-f_pinky.02.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.731951,
+    0.006353,
+    1.344653
+   ],
+   "tail_rest": [
+    -0.746009,
+    0.007404,
+    1.343826
+   ]
+  },
+  {
+   "name": "DEF-palm.04.R",
+   "parent": "ORG-palm.04.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.655925,
+    -0.004159,
+    1.353631
+   ],
+   "tail_rest": [
+    -0.6993,
+    0.002113,
+    1.34444
+   ]
+  },
+  {
+   "name": "DEF-breast.L",
+   "parent": "ORG-breast.L",
+   "use_deform": true,
+   "head_rest": [
+    0.06907,
+    -0.06307,
+    1.240246
+   ],
+   "tail_rest": [
+    0.098046,
+    -0.133252,
+    1.240715
+   ]
+  },
+  {
+   "name": "DEF-breast.R",
+   "parent": "ORG-breast.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.06907,
+    -0.06307,
+    1.240246
+   ],
+   "tail_rest": [
+    -0.098046,
+    -0.133252,
+    1.240715
+   ]
+  },
+  {
+   "name": "DEF-pelvis.L",
+   "parent": "ORG-pelvis.L",
+   "use_deform": true,
+   "head_rest": [
+    -0.0,
+    0.033985,
+    0.852443
+   ],
+   "tail_rest": [
+    0.103067,
+    -0.057969,
+    0.963048
+   ]
+  },
+  {
+   "name": "DEF-pelvis.R",
+   "parent": "ORG-pelvis.R",
+   "use_deform": true,
+   "head_rest": [
+    0.0,
+    0.033985,
+    0.852443
+   ],
+   "tail_rest": [
+    -0.103067,
+    -0.057969,
+    0.963048
+   ]
+  },
+  {
+   "name": "DEF-thigh.L",
+   "parent": "ORG-spine",
+   "use_deform": true,
+   "head_rest": [
+    0.082435,
+    0.010572,
+    0.884555
+   ],
+   "tail_rest": [
+    0.085547,
+    -0.002853,
+    0.690204
+   ]
+  },
+  {
+   "name": "DEF-thigh.L.001",
+   "parent": "DEF-thigh.L",
+   "use_deform": true,
+   "head_rest": [
+    0.085547,
+    -0.002853,
+    0.690204
+   ],
+   "tail_rest": [
+    0.088659,
+    -0.016278,
+    0.495854
+   ]
+  },
+  {
+   "name": "DEF-shin.L",
+   "parent": "DEF-thigh.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.088659,
+    -0.016278,
+    0.495854
+   ],
+   "tail_rest": [
+    0.096742,
+    0.015469,
+    0.292219
+   ]
+  },
+  {
+   "name": "DEF-shin.L.001",
+   "parent": "DEF-shin.L",
+   "use_deform": true,
+   "head_rest": [
+    0.096742,
+    0.015469,
+    0.292219
+   ],
+   "tail_rest": [
+    0.104824,
+    0.047216,
+    0.088584
+   ]
+  },
+  {
+   "name": "DEF-foot.L",
+   "parent": "DEF-shin.L.001",
+   "use_deform": true,
+   "head_rest": [
+    0.104824,
+    0.047216,
+    0.088584
+   ],
+   "tail_rest": [
+    0.142136,
+    -0.080858,
+    0.013084
+   ]
+  },
+  {
+   "name": "DEF-toe.L",
+   "parent": "DEF-foot.L",
+   "use_deform": true,
+   "head_rest": [
+    0.142136,
+    -0.080858,
+    0.013084
+   ],
+   "tail_rest": [
+    0.15211,
+    -0.112449,
+    0.011707
+   ]
+  },
+  {
+   "name": "DEF-thigh.R",
+   "parent": "ORG-spine",
+   "use_deform": true,
+   "head_rest": [
+    -0.082435,
+    0.010572,
+    0.884555
+   ],
+   "tail_rest": [
+    -0.085547,
+    -0.002853,
+    0.690204
+   ]
+  },
+  {
+   "name": "DEF-thigh.R.001",
+   "parent": "DEF-thigh.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.085547,
+    -0.002853,
+    0.690204
+   ],
+   "tail_rest": [
+    -0.088659,
+    -0.016278,
+    0.495854
+   ]
+  },
+  {
+   "name": "DEF-shin.R",
+   "parent": "DEF-thigh.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.088659,
+    -0.016278,
+    0.495854
+   ],
+   "tail_rest": [
+    -0.096742,
+    0.015469,
+    0.292219
+   ]
+  },
+  {
+   "name": "DEF-shin.R.001",
+   "parent": "DEF-shin.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.096742,
+    0.015469,
+    0.292219
+   ],
+   "tail_rest": [
+    -0.104824,
+    0.047216,
+    0.088584
+   ]
+  },
+  {
+   "name": "DEF-foot.R",
+   "parent": "DEF-shin.R.001",
+   "use_deform": true,
+   "head_rest": [
+    -0.104824,
+    0.047216,
+    0.088584
+   ],
+   "tail_rest": [
+    -0.142136,
+    -0.080858,
+    0.013084
+   ]
+  },
+  {
+   "name": "DEF-toe.R",
+   "parent": "DEF-foot.R",
+   "use_deform": true,
+   "head_rest": [
+    -0.142136,
+    -0.080858,
+    0.013084
+   ],
+   "tail_rest": [
+    -0.15211,
+    -0.112449,
+    0.011707
+   ]
+  }
+ ]
+}

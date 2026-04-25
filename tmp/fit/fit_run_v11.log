@@ -1,0 +1,33 @@
+00:02.500  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== V11 (Displacement Field) ===
+  K=8 min_offset=3.0mm
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Compute displacement field (Helena body → QM body)
+  25903 displacements; mag min=0.0cm max=8.3cm avg=1.3cm
+
+[5] Build Helena body KD-tree
+
+[6] Apply displacement to dress (12698 verts)
+  applied: 12698
+
+[7] Safety push
+  inside: 4133, pushed: 4133
+
+[8] VG rename + save
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v11.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v11.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

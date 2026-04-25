@@ -1,0 +1,38 @@
+00:02.312  blend            | Read blend: "E:\MOdel\要確認モデル\QueenMarika_Rigged_MustardUI.blend"
+Cannot read ARP prefs
+Update armature presets...
+
+=== V9 (V7 + Laplacian smoothing) ===
+  min offset: 3.0mm
+  smoothing: 30 iter, alpha=0.3
+
+[1] Append Helena
+
+[2] origin delta: (0.0, -0.041, 0.009)
+
+[3] LBS retarget
+  body zw: 4537, dress zw: 0
+
+[4] Build per-bone BVHs
+
+[5] V7 target transfer (bone-region restricted)
+  matched: 12698, fallback: 0, clamped: 5135
+
+[6] Laplacian smoothing (30 iterations, alpha=0.3)
+  avg neighbors per vert: 4.0
+  iter 1/30 done
+  iter 10/30 done
+  iter 20/30 done
+  iter 30/30 done
+
+[7] Safety push
+  inside: 6530, pushed: 6530
+
+[8] VG rename + save
+  VG: kept=0 renamed=24 merged=11 removed=263
+情報: 「Helena_to_QM_fitted_v9.blend」で保存しました
+
+=== DONE: E:/MOdel/Helena_to_QM_fitted_v9.blend ===
+Blender 5.0.1 (hash a3db93c5b259 built 2025-12-16 01:32:30)
+
+Blender quit

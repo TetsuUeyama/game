@@ -9,6 +9,10 @@ const pages = [
   { href: '/template-editor', label: 'Template Editor' },      // テンプレートエディタ
   { href: '/clothing-preview', label: 'Clothing Preview' },    // 衣装プレビュー・部位指定
   { href: '/skinned-voxel-demo', label: 'Skinned Voxel Demo' }, // スキン付きボクセルデモ
+  { href: '/characters-preview', label: 'Characters Preview' }, // キャラクター一覧プレビュー
+  { href: '/cloth-test', label: 'Cloth Test' },                // クロスシミュレーションテスト
+  { href: '/darkelfblader-preview', label: 'Dark Elf Blader Preview' }, // ダークエルフブレイダープレビュー
+  { href: '/qm-mustardui-preview', label: 'QM MustardUI Preview' }, // QM MustardUI プレビュー
 ];
 
 // ホームページコンポーネント（各ツールページへのリンクを表示）

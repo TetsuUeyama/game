@@ -92,6 +92,23 @@ export class VoxelCloth {
     }
   }
 
+  /**
+   * 風など外力をセット（world 単位/frame^2）。毎フレ加算される。
+   * リセットしたい場合は 0,0,0 を渡す。
+   */
+  setExternalForce(x: number, y: number, z: number): void {
+    if (!this.state) return;
+    this.state.externalX = x;
+    this.state.externalY = y;
+    this.state.externalZ = z;
+  }
+
+  /** 重力値を変更（world 単位/frame^2）。0 で無重力。 */
+  setGravity(g: number): void {
+    if (!this.state) return;
+    this.state.gravity = g;
+  }
+
   /** 1 フレーム分シミュレーションを進めて mesh に反映。autoUpdate=true なら自動呼び出し */
   update(): void {
     if (!this.state) return;
