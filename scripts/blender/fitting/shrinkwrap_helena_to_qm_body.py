@@ -192,7 +192,8 @@ for helena in target_meshes:
     avg_dist = sum_dist / max(1, n_snap)
     tag = "body" if is_body else f"outfit+{offset*1000:.0f}mm"
     print(f"    [{helena.name}] ({tag}) verts={n_total} head={n_head} "
-          f"snap={n_snap} no_w={n_no_w} avg={avg_dist*1000:.2f}mm max={max_dist*1000:.2f}mm")
+          f"snap={n_snap} no_w={n_no_w} "
+          f"avg={avg_dist*1000:.2f}mm max={max_dist*1000:.2f}mm")
     totals['verts'] += n_total
     totals['head'] += n_head
     totals['snap'] += n_snap

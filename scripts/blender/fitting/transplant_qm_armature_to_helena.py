@@ -28,7 +28,7 @@ import bpy
 import sys
 import os
 import json
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 
 # ============================================================
@@ -154,6 +154,35 @@ for src in source_armatures:
         for b in src_bones:
             if b.name not in valid_map:
                 valid_map[b.name] = ROOT_FALLBACK
+
+    # Special-case: Hair-style sub-armatures.
+    # All hair bones get root-fallback to QM head.x. Their bone frames
+    # (Y axis direction) often differ from QM head.x by 90-180°, so the
+    # full rotation+translation LBS would flip/twist the hair geometry.
+    # Use translation-only retarget: shift entire hair so its root bone's
+    # head world position aligns with QM head.x's head world position.
+    is_hair_arm = "hair" in src.name.lower()
+    if is_hair_arm and "head.x" in qm_bone_names:
+        # Find the root (parentless) bone of the hair armature
+        root_bone = None
+        for b in src_bones:
+            if b.parent is None:
+                root_bone = b
+                break
+        if root_bone is None:
+            root_bone = next(iter(src_bones))
+        M_h_root = src_world @ root_bone.matrix_local
+        M_q_head = qm_world  @ qm_arm.data.bones["head.x"].matrix_local
+        delta = M_q_head.translation - M_h_root.translation
+        T_translation = Matrix.Translation(delta)
+        for b in src_bones:
+            bone_T[b.name] = T_translation
+            name_to_qm[b.name] = "head.x"
+            src_arm_of_bone[b.name] = src
+        n_fallback += len(src_bones)
+        print(f"  [{src.name}] hair-mode: translation-only retarget, "
+              f"delta={delta.length:.4f}m")
+        continue
 
     # Build retarget transforms.
     #   T_h2q = M_q_world @ M_h_world^-1

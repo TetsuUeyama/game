@@ -26,6 +26,7 @@ type PanelKey = (typeof PANELS)[number]['key'];
 
 // Shared outfit list (rendered on every panel where showOutfits=true)
 const OUTFITS = [
+  { key: 'hair',           label: 'Hair',             color: '#fa8' },
   { key: 'bodysuit',       label: 'Bodysuit',         color: '#88f' },
   { key: 'dark_prison_a',  label: 'Dark Prison A',    color: '#a4a' },
   { key: 'dark_prison_b',  label: 'Dark Prison B',    color: '#a4a' },
