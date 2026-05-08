@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import {
   Engine, Scene, ArcRotateCamera, HemisphericLight, DirectionalLight,
   Vector3, Color3, Color4, Mesh, StandardMaterial, MeshBuilder,
+  VertexData,
 } from '@babylonjs/core';
-import { SCALE } from '@/lib/vox-parser';
+import { SCALE, parseVox, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
+import { buildExteriorOracle } from '@/lib/vox-mesh';
 import { CharacterSelectorTmp } from '@/templates/realistic-viewer/CharacterSelectorTmp';
 import { HairSwapTmp } from '@/templates/realistic-viewer/HairSwapTmp';
 import { PartListTmp } from '@/templates/realistic-viewer/PartListTmp';
@@ -119,7 +121,157 @@ const CHARACTERS: Record<string, CharacterConfig> = {
   spartanhoplite_weapons: { label: 'SpartanHoplite Weapons', manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons/grid.json`, gender: 'male', category: 'weapons' },
   radagon_tall_weapons: { label: 'Radagon (Tall) Weapons', manifest: `${VOX_API}/male/realistic-radagon-weapons-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-radagon-weapons-tall/grid.json`, gender: 'male', category: 'weapons' },
   spartanhoplite_tall_weapons: { label: 'SpartanHoplite (Tall) Weapons', manifest: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/parts.json`, gridJson: `${VOX_API}/male/realistic-spartanhoplite-weapons-tall/grid.json`, gender: 'male', category: 'weapons' },
+  // [TEMP TEST] qm-mustardui の chunked body を realistic-viewer の rendering で表示
+  qm_chunked_test: { label: '[TEST] QM Chunked Body', manifest: '', gridJson: '', gender: 'female', category: 'female' },
 };
+
+// ========================================================================
+// [TEMP TEST] qm-mustardui の任意パーツを realistic-viewer の rendering 規約で構築
+// - chunked / single-file 両対応 (part-specific grid.json があれば優先、なければ commonGrid)
+// - world 座標で配置 (chunks 整合のため必須)
+// - flat normal (頂点平均なし) — realistic-viewer 規約
+// ========================================================================
+type QMPartGrid = {
+  voxel_size: number;
+  grid_origin: [number, number, number];
+  chunks?: Array<{ vox_file: string; grid_origin: [number, number, number] }>;
+};
+
+async function loadQMPart(
+  scene: Scene, baseUrl: string, partKey: string, name: string,
+  commonGrid?: QMPartGrid,
+  applyExteriorOracle: boolean = false,  // body のみ true (中空 shell の内側 face を skip)
+): Promise<Mesh | null> {
+  const cb = `?v=${Date.now()}`;
+  // part-specific grid.json (sub-grid mode) を試す
+  let partGrid: QMPartGrid | null = null;
+  try {
+    const r = await fetch(`${baseUrl}/${partKey}.grid.json${cb}`);
+    if (r.ok) partGrid = await r.json() as QMPartGrid;
+  } catch { /* fall back */ }
+
+  const grid = partGrid ?? commonGrid;
+  if (!grid) return null;
+  const vs = grid.voxel_size;
+  const chunkSpecs = partGrid?.chunks ?? [{ vox_file: `${partKey}.vox`, grid_origin: grid.grid_origin }];
+
+  // 全 chunks をまず読み込む (oracle 構築のため)
+  type LoadedChunk = { origin: [number, number, number]; model: ReturnType<typeof parseVox> };
+  const loadedChunks: LoadedChunk[] = [];
+  for (const cs of chunkSpecs) {
+    const resp = await fetch(`${baseUrl}/${cs.vox_file}${cb}`);
+    if (!resp.ok) continue;
+    const model = parseVox(await resp.arrayBuffer());
+    loadedChunks.push({ origin: cs.grid_origin, model });
+  }
+  if (loadedChunks.length === 0) return null;
+
+  // [P-X] body の場合、internal_voxels.json (口腔内 voxel リスト) を読み込んで
+  //        oracle の exterior seed に渡す → 閉じた口腔 cavity も exterior 扱い
+  let internalVoxelWorldCenters: Array<[number, number, number]> | undefined;
+  if (applyExteriorOracle) {
+    try {
+      const ivResp = await fetch(`${baseUrl}/${partKey}.internal_voxels.json${cb}`);
+      if (ivResp.ok) {
+        const iv = await ivResp.json() as {
+          voxel_size: number;
+          grid_origin: [number, number, number];
+          internal_voxels: number[][];
+        };
+        const [gox, goy, goz] = iv.grid_origin;
+        const ivs = iv.voxel_size;
+        internalVoxelWorldCenters = iv.internal_voxels.map(([ix, iy, iz]) => [
+          gox + (ix + 0.5) * ivs,
+          goy + (iy + 0.5) * ivs,
+          goz + (iz + 0.5) * ivs,
+        ] as [number, number, number]);
+        console.log(`[loadQMPart ${partKey}] loaded ${internalVoxelWorldCenters.length} internal voxels`);
+      }
+    } catch { /* skip */ }
+  }
+
+  // [P1-A/B] body の中空 shell 内側 face skip 用 oracle 構築
+  const oracle = applyExteriorOracle
+    ? buildExteriorOracle(
+        loadedChunks.map(c => ({ origin: c.origin, voxels: c.model.voxels })),
+        vs,
+        2,
+        internalVoxelWorldCenters,
+      )
+    : null;
+  if (oracle) {
+    const s = oracle.stats;
+    console.log(`[loadQMPart ${partKey}] exterior oracle: grid=${s.gx}x${s.gy}x${s.gz}, voxels=${s.voxels}, exteriorCells=${s.exteriorCells}, internalSeeds=${s.internalSeeds ?? 0}, ${s.ms.toFixed(0)}ms`);
+  }
+
+  const positions: number[] = [], normals: number[] = [], colors: number[] = [], indices: number[] = [];
+  for (const c of loadedChunks) {
+    const model = c.model;
+    const origin = c.origin;
+    const occupied = new Set<string>();
+    for (const v of model.voxels) occupied.add(`${v.x},${v.y},${v.z}`);
+    for (const voxel of model.voxels) {
+      const col = model.palette[voxel.colorIndex - 1] ?? { r: 0.8, g: 0.8, b: 0.8 };
+      for (let f = 0; f < 6; f++) {
+        const [dx, dy, dz] = FACE_DIRS[f];
+        if (occupied.has(`${voxel.x + dx},${voxel.y + dy},${voxel.z + dz}`)) continue;
+        // [P1-A/B] oracle: 隣接 cell が exterior でなければ「内側 face」 → skip
+        if (oracle) {
+          const nwx = origin[0] + (voxel.x + dx + 0.5) * vs;
+          const nwy = origin[1] + (voxel.y + dy + 0.5) * vs;
+          const nwz = origin[2] + (voxel.z + dz + 0.5) * vs;
+          if (!oracle.isExteriorWorldCell(nwx, nwy, nwz)) continue;
+        }
+        const bi = positions.length / 3, fv = FACE_VERTS[f], fn = FACE_NORMALS[f];
+        for (let vi = 0; vi < 4; vi++) {
+          const bx = origin[0] + (voxel.x + fv[vi][0]) * vs;
+          const by = origin[1] + (voxel.y + fv[vi][1]) * vs;
+          const bz = origin[2] + (voxel.z + fv[vi][2]) * vs;
+          positions.push(bx, bz, -by);
+          normals.push(fn[0], fn[2], -fn[1]);
+          colors.push(col.r, col.g, col.b, 1);
+        }
+        indices.push(bi, bi + 1, bi + 2, bi, bi + 2, bi + 3);
+      }
+    }
+  }
+
+  if (positions.length === 0) return null;
+  const vd = new VertexData();
+  vd.positions = positions; vd.normals = normals; vd.colors = colors; vd.indices = indices;
+  const mesh = new Mesh(name, scene);
+  vd.applyToMesh(mesh, true);
+  return mesh;
+}
+
+// [C5] body 内側パーツ (zOffset を適用しない / 専用 material 使用)
+const QM_INSIDE_PARTS = new Set(['eyes']);  // lips は別モデル流用なので削除
+// [C5b] voxel データの位置ズレ補正用、追加前方オフセット (m単位)
+// 正値で前方 (Babylon +Z = 顔の前方向) にシフト、負値で後方
+const QM_PART_FORWARD_OFFSET: Record<string, number> = {
+  eyes: -0.002,  // 目玉位置補正 -2mm
+};
+
+// qm_chunked_test で表示するパーツ定義
+const QM_TEST_PARTS: Array<{ key: string; isBody: boolean; defaultOn: boolean }> = [
+  { key: 'body',          isBody: true,  defaultOn: true  },
+  { key: 'hair',          isBody: false, defaultOn: true  },
+  { key: 'eyes',          isBody: false, defaultOn: true  },
+  // [removed] lips.vox = 別モデル流用 (このモデルでは不要)
+  // 内蔵パーツ (口腔内メッシュ) は body voxelize 統合で実装予定
+  { key: 'dress',         isBody: false, defaultOn: true  },
+  { key: 'belt',          isBody: false, defaultOn: true  },
+  { key: 'panties',       isBody: false, defaultOn: true  },
+  { key: 'thigh_strap_l', isBody: false, defaultOn: true  },
+  { key: 'thigh_strap_r', isBody: false, defaultOn: true  },
+  { key: 'heels',         isBody: false, defaultOn: true  },
+  { key: 'armband',       isBody: false, defaultOn: true  },
+  { key: 'bracelet',      isBody: false, defaultOn: true  },
+  { key: 'circlet',       isBody: false, defaultOn: true  },
+  { key: 'necklace',      isBody: false, defaultOn: true  },
+  { key: 'bikini_bra',     isBody: false, defaultOn: false },
+  { key: 'bikini_panties', isBody: false, defaultOn: false },
+];
 
 // ========================================================================
 // Component
@@ -138,6 +290,7 @@ function VoxelViewerPage() {
   const sceneRef = useRef<Scene | null>(null);
   const bodyMatRef = useRef<StandardMaterial | null>(null);
   const partMatRef = useRef<StandardMaterial | null>(null);
+  const insidePartMatRef = useRef<StandardMaterial | null>(null);
   const meshesRef = useRef<Record<string, Mesh>>({});
 
   const [selectedCategory, setSelectedCategory] = useState<CharCategory>('base');
@@ -419,6 +572,15 @@ function VoxelViewerPage() {
     partMat.freeze();
     partMatRef.current = partMat;
 
+    // [C5] 内部パーツ用 (eyes, lips) — partMat と同じだが zOffset なし
+    // (zOffset で手前にずらすと body 表面より前に出て透ける)
+    const insidePartMat = new StandardMaterial('insidePartMat', scene);
+    insidePartMat.emissiveColor = Color3.White();
+    insidePartMat.disableLighting = true;
+    insidePartMat.backFaceCulling = false;
+    insidePartMat.freeze();
+    insidePartMatRef.current = insidePartMat;
+
     engine.runRenderLoop(() => scene.render());
     const onResize = () => engine.resize();
     window.addEventListener('resize', onResize);
@@ -451,6 +613,58 @@ function VoxelViewerPage() {
         mesh.dispose();
       }
       meshesRef.current = {};
+
+      // [TEMP TEST] qm-mustardui multi-part 専用ロード経路
+      if (charKey === 'qm_chunked_test') {
+        try {
+          const t0 = performance.now();
+          const cb = `?v=${Date.now()}`;
+          const baseUrl = '/box5/qm_mustardui';
+          const gridResp = await fetch(`${baseUrl}/grid.json${cb}`);
+          const commonGrid = gridResp.ok ? await gridResp.json() as QMPartGrid : undefined;
+
+          const partEntries: PartEntry[] = [];
+          const vis: Record<string, boolean> = {};
+          let totalVerts = 0;
+          let loaded = 0, missing = 0;
+
+          const insidePartMat = insidePartMatRef.current;
+          for (const p of QM_TEST_PARTS) {
+            // body のみ exterior oracle で内側 face を skip
+            const mesh = await loadQMPart(scene, baseUrl, p.key, `part_${p.key}`, commonGrid, p.isBody);
+            if (cancelled) { mesh?.dispose(); return; }
+            if (!mesh) { missing++; continue; }
+            // [C5a] 内部パーツは zOffset なしの専用 material
+            const isInside = QM_INSIDE_PARTS.has(p.key);
+            mesh.material = p.isBody ? bodyMat : (isInside && insidePartMat ? insidePartMat : partMat);
+            // [C5b] 追加前方オフセット (voxel データの位置ズレ補正)
+            const fwd = QM_PART_FORWARD_OFFSET[p.key];
+            if (fwd) mesh.position.z = fwd;
+            mesh.setEnabled(p.defaultOn);
+            meshesRef.current[p.key] = mesh;
+            partEntries.push({
+              key: p.key, file: '', voxels: 0, default_on: p.defaultOn,
+              meshes: [p.key], is_body: p.isBody,
+            });
+            vis[p.key] = p.defaultOn;
+            totalVerts += mesh.getTotalVertices();
+            loaded++;
+          }
+
+          const elapsed = (performance.now() - t0).toFixed(0);
+          console.log(`[qm_chunked_test] ${loaded} parts loaded (${missing} missing) in ${elapsed}ms, total verts=${totalVerts}`);
+          setParts(partEntries);
+          setPartVisibility(vis);
+          setLoading(false);
+        } catch (e) {
+          if (!cancelled) {
+            setError(`Failed to load qm_chunked_test: ${e instanceof Error ? e.message : String(e)}`);
+            setLoading(false);
+            console.error(e);
+          }
+        }
+        return;
+      }
 
       const config = CHARACTERS[charKey];
       if (!config) {

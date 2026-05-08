@@ -134,6 +134,17 @@ const CHARACTERS: CharacterDef[] = [
       { key: 'default_earings', label: 'Default Earrings' },
     ],
   },
+  {
+    id: 'helena_qmrest',
+    label: 'Helena (QM rest pose, overlay)',
+    base: '/box5/helena_qmrest',
+    xOffset: -1.4,  // overlap QM
+    parts: [
+      { key: 'body', label: 'Body (QMRest)' },
+      { key: 'default_dress', label: 'Default Dress (QMRest)' },
+    ],
+    defaultOff: ['body', 'default_dress'],  // off by default, user toggles to compare
+  },
 ];
 
 interface CharacterState {

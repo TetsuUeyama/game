@@ -166,3 +166,148 @@ export async function loadVoxMesh(
   const model = parseVox(await resp.arrayBuffer());
   return buildVoxMesh(model, scene, name, scale);
 }
+
+// ========================================================================
+// 外部空間 (exterior) オラクル
+// 中空 shell の内側 face を skip するための flood fill ベース判定
+//   1. 全 chunks の voxel を統一 world grid に展開
+//   2. bbox 6 面の境界 cell を seed に flood fill
+//   3. exterior に達した cell に隣接する face のみ「外向き face」として描画する
+// 中空 shell の内側 cell は exterior に届かない → 内向き face は skip される
+// ========================================================================
+export type ExteriorOracle = {
+  // 隣接 cell の世界座標を渡して exterior かを判定する
+  // exterior == true なら、そこに面した face は描画する (= 外側に露出している)
+  isExteriorWorldCell: (worldX: number, worldY: number, worldZ: number) => boolean;
+  // デバッグ統計
+  stats: { gx: number; gy: number; gz: number; cells: number; voxels: number; exteriorCells: number; ms: number; internalSeeds?: number };
+};
+
+export function buildExteriorOracle(
+  chunks: Array<{ origin: [number, number, number]; voxels: Array<{ x: number; y: number; z: number }> }>,
+  voxelSize: number,
+  pad: number = 2,
+  // 内蔵 voxel の world 中心座標。これらの voxel に隣接する empty cell を exterior seed として
+  // 追加し、閉じた口腔内 cavity を exterior 扱いにする (内蔵 voxel face を可視化)。
+  internalVoxelWorldCenters?: Array<[number, number, number]>,
+): ExteriorOracle {
+  const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+  // 1. 世界座標 bbox を求める
+  let minWX = Infinity, maxWX = -Infinity;
+  let minWY = Infinity, maxWY = -Infinity;
+  let minWZ = Infinity, maxWZ = -Infinity;
+  let totalVoxels = 0;
+  for (const c of chunks) {
+    for (const v of c.voxels) {
+      const wx = c.origin[0] + v.x * voxelSize;
+      const wy = c.origin[1] + v.y * voxelSize;
+      const wz = c.origin[2] + v.z * voxelSize;
+      if (wx < minWX) minWX = wx; if (wx > maxWX) maxWX = wx;
+      if (wy < minWY) minWY = wy; if (wy > maxWY) maxWY = wy;
+      if (wz < minWZ) minWZ = wz; if (wz > maxWZ) maxWZ = wz;
+      totalVoxels++;
+    }
+  }
+  const refOx = minWX - pad * voxelSize;
+  const refOy = minWY - pad * voxelSize;
+  const refOz = minWZ - pad * voxelSize;
+  const gx = Math.ceil((maxWX - minWX) / voxelSize) + 2 * pad + 1;
+  const gy = Math.ceil((maxWY - minWY) / voxelSize) + 2 * pad + 1;
+  const gz = Math.ceil((maxWZ - minWZ) / voxelSize) + 2 * pad + 1;
+  const gxgy = gx * gy;
+  const N = gx * gy * gz;
+
+  // 2. occupancy + state 配列 (1 = voxel, 2 = exterior, 0 = unvisited interior)
+  const state = new Uint8Array(N);
+  for (const c of chunks) {
+    const ox = Math.round((c.origin[0] - refOx) / voxelSize);
+    const oy = Math.round((c.origin[1] - refOy) / voxelSize);
+    const oz = Math.round((c.origin[2] - refOz) / voxelSize);
+    for (const v of c.voxels) {
+      const x = ox + v.x;
+      const y = oy + v.y;
+      const z = oz + v.z;
+      if (x < 0 || x >= gx || y < 0 || y >= gy || z < 0 || z >= gz) continue;
+      state[z * gxgy + y * gx + x] = 1;
+    }
+  }
+
+  // 3. flood fill (DFS with stack-as-array, faster than BFS in JS)
+  const stack: number[] = [];
+  // seed: bbox 6 境界面の空 cell すべて
+  // (pad >= 1 で boundary cells は必ず空、確実に exterior の起点になる)
+  for (let z = 0; z < gz; z += gz - 1) {
+    for (let y = 0; y < gy; y++) {
+      for (let x = 0; x < gx; x++) {
+        const i = z * gxgy + y * gx + x;
+        if (state[i] === 0) { state[i] = 2; stack.push(i); }
+      }
+    }
+  }
+  for (let y = 0; y < gy; y += gy - 1) {
+    for (let z = 1; z < gz - 1; z++) {
+      for (let x = 0; x < gx; x++) {
+        const i = z * gxgy + y * gx + x;
+        if (state[i] === 0) { state[i] = 2; stack.push(i); }
+      }
+    }
+  }
+  for (let x = 0; x < gx; x += gx - 1) {
+    for (let z = 1; z < gz - 1; z++) {
+      for (let y = 1; y < gy - 1; y++) {
+        const i = z * gxgy + y * gx + x;
+        if (state[i] === 0) { state[i] = 2; stack.push(i); }
+      }
+    }
+  }
+
+  // 内蔵 voxel の隣接 empty cell を追加 exterior seed として stack に push
+  // 閉じた口腔内 cavity を exterior 扱いにし、内蔵 voxel face を可視化
+  let internalSeedCount = 0;
+  if (internalVoxelWorldCenters) {
+    const invVsLocal = 1 / voxelSize;
+    for (const [iwx, iwy, iwz] of internalVoxelWorldCenters) {
+      const cx = Math.round((iwx - refOx) * invVsLocal);
+      const cy = Math.round((iwy - refOy) * invVsLocal);
+      const cz = Math.round((iwz - refOz) * invVsLocal);
+      if (cx < 1 || cx >= gx - 1 || cy < 1 || cy >= gy - 1 || cz < 1 || cz >= gz - 1) continue;
+      const ci = cz * gxgy + cy * gx + cx;
+      // 隣接 6 cell が empty (state=0) なら exterior seed として追加
+      const neighbors = [ci - 1, ci + 1, ci - gx, ci + gx, ci - gxgy, ci + gxgy];
+      for (const ni of neighbors) {
+        if (state[ni] === 0) { state[ni] = 2; stack.push(ni); internalSeedCount++; }
+      }
+    }
+  }
+
+  let exteriorCount = stack.length;
+  while (stack.length) {
+    const i = stack.pop()!;
+    const x = i % gx;
+    const yz = (i / gx) | 0;
+    const y = yz % gy;
+    const z = (yz / gy) | 0;
+    if (x > 0)        { const ni = i - 1;     if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+    if (x < gx - 1)   { const ni = i + 1;     if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+    if (y > 0)        { const ni = i - gx;    if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+    if (y < gy - 1)   { const ni = i + gx;    if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+    if (z > 0)        { const ni = i - gxgy;  if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+    if (z < gz - 1)   { const ni = i + gxgy;  if (state[ni] === 0) { state[ni] = 2; stack.push(ni); exteriorCount++; } }
+  }
+
+  const invVs = 1 / voxelSize;
+  const isExteriorWorldCell = (wx: number, wy: number, wz: number): boolean => {
+    const x = Math.round((wx - refOx) * invVs);
+    const y = Math.round((wy - refOy) * invVs);
+    const z = Math.round((wz - refOz) * invVs);
+    if (x < 0 || x >= gx || y < 0 || y >= gy || z < 0 || z >= gz) return true; // bbox 外 = exterior
+    return state[z * gxgy + y * gx + x] === 2;
+  };
+
+  const ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
+  return {
+    isExteriorWorldCell,
+    stats: { gx, gy, gz, cells: N, voxels: totalVoxels, exteriorCells: exteriorCount, ms, internalSeeds: internalSeedCount },
+  };
+}

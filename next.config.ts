@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // 巨大ライブラリのバレルimportをdeep importに自動変換し、dev compile速度を改善
+  // Babylon系はTurbopackで事前解析が刺さるため除外、Chakraのみ最適化対象とする
+  experimental: {
+    optimizePackageImports: ['@chakra-ui/react'],
+  },
+
   // Webpackの設定をカスタマイズ
   webpack: (config) => {
     // 既存のexperiments設定を保持しつつ、asyncWebAssemblyを有効化

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+/* @import "tailwindcss"; -- 一時無効化（dev compile ハング検証中） */
 
 :root {
   --background: #ffffff;

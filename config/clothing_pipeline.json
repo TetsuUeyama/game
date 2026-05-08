@@ -1,0 +1,68 @@
+{
+  "characters": {
+    "helena": {
+      "blend": "E:/Helena_Douglas_1.10.blend",
+      "body": "Body",
+      "rig": "Helena",
+      "rig_type": "rigify"
+    },
+    "qm": {
+      "blend": "E:/MOdel/要確認モデル/QueenMarika_Rigged_MustardUI.blend",
+      "body": "Queen Marika Body",
+      "rig": "QueenMarika_rig",
+      "rig_type": "arp",
+      "voxel_dir": "public/box5/qm_mustardui"
+    }
+  },
+  "presets": {
+    "fitted_dress":      { "max_depth": 0.20, "max_shift": 2 },
+    "fitted_with_slits": { "max_depth": 0.20, "max_shift": 0 },
+    "billowy_skirt":     { "max_depth": 0.40, "max_shift": 0 },
+    "armor_plate":       { "max_depth": 0.10, "max_shift": 1 }
+  },
+  "clothing_items": {
+    "helena_default_dress": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Default - Dress",
+      "preset": "fitted_dress",
+      "out_prefix": "helena_default_dress"
+    },
+    "helena_witch_corset": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Witch - Corset",
+      "preset": "fitted_with_slits",
+      "out_prefix": "helena_witch_corset"
+    },
+    "helena_witch_skirt": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Witch - Skirt",
+      "preset": "billowy_skirt",
+      "out_prefix": "helena_witch_skirt",
+      "physics_bone_fallback": true
+    },
+    "helena_alluring_cheongsam": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Alluring Mandarin - Cheongsam",
+      "preset": "fitted_dress",
+      "out_prefix": "helena_alluring_cheongsam"
+    },
+    "helena_default_shoes": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Default - Shoes",
+      "preset": "fitted_dress",
+      "out_prefix": "helena_default_shoes"
+    },
+    "helena_default_shinguard": {
+      "source": "helena",
+      "target": "qm",
+      "source_mesh": "Helena Default - Shin Guard",
+      "preset": "armor_plate",
+      "out_prefix": "helena_default_shinguard"
+    }
+  }
+}

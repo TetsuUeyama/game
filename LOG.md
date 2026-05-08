@@ -37,6 +37,9 @@ Mapping：Nearest Face Interpolated
 
 特徴
 一瞬でそれっぽくなる
+
+
+
 精度は低め
 トポロジー依存あり
 ■ ガチ調整：スカルプト＋プロポーショナル編集

@@ -46,7 +46,25 @@ ERODE_THRESHOLD = 5   # 浸食判定に使う最小隣接数 (5 or 6)
 SURFACE_THRESHOLD = 0.9  # Pass 1 で「voxel が面に近い」と判定する距離 (voxel_size 倍数)
                           #   小さい (0.3-0.5) = voxel を貫通する面のみ → 薄い
                           #   大きい (1.5-3.0) = voxel 近傍の面も拾う → 太い (sparse hair 等)
+MULTI_SAMPLE = 1          # Pass 1 で voxel セル内をサンプリングする点数。
+                          #   1 = セル中心 1 点 (既存動作)
+                          #   8 = 2x2x2 セル内サブサンプル
+                          #   27 = 3x3x3 サブサンプル (内股/薄物/サンダル strap 等の漏れ対策)
+                          # サンプル数増えるとフィット精度↑、処理時間 N 倍。
 ARMATURE_NAME = None  # 指定時: そのアーマチュアを使う。未指定: deform bone 数が最多のもの。
+INTERNAL_VG_PATTERNS = []  # 内蔵パーツ判定用 vertex group パターン (fnmatch glob 対応)
+INTERNAL_THRESHOLD = 0.3   # 内蔵 vg 合計 weight がこの値超なら voxel を「内蔵」とマーク
+# 「別パーツ用 material」(eyes/cornea 等)の voxel 近傍にある「skin material」voxel を削除する radius
+# 顔表面の目絵柄を消して、別パーツ (Eyes 球体) のみを表示するため
+SKIP_OVERLAY_RADIUS = 0    # 0 = 機能無効、>0 で球状半径 N voxel
+SKIP_OVERLAY_NEAR = []     # skip 基準とする material 名のリスト (--skip-overlay-near で指定)
+SKIP_OVERLAY_FROM = []     # 削除対象の material 名のリスト (--skip-overlay-from で指定)
+# MustardUI エフェクトベイク: (slot_name, material_name, image_name) のリスト
+# 該当 material の voxel UV から image を sample → <prefix>.<slot>.json 出力
+EFFECT_BAKES = []
+# 「素」BaseColor の override (mat node_tree に素 BaseColor が存在しない or 名前が無名 'Map #N' の場合)
+# {material_name: image_name}
+BASE_IMAGE_OVERRIDES = {}
 i = 0
 while i < len(args):
     a = args[i]
@@ -71,8 +89,39 @@ while i < len(args):
         ERODE_THRESHOLD = int(args[i + 1]); i += 2; continue
     if a == '--surface-threshold' and i + 1 < len(args):
         SURFACE_THRESHOLD = float(args[i + 1]); i += 2; continue
+    if a == '--multi-sample' and i + 1 < len(args):
+        MULTI_SAMPLE = int(args[i + 1])
+        if MULTI_SAMPLE not in (1, 8, 27):
+            print(f"ERROR: --multi-sample must be 1, 8, or 27 (got {MULTI_SAMPLE})"); sys.exit(1)
+        i += 2; continue
     if a == '--armature' and i + 1 < len(args):
         ARMATURE_NAME = args[i + 1]; i += 2; continue
+    if a == '--internal-vg' and i + 1 < len(args):
+        # 内蔵パーツ判定用 vertex group パターン (カンマ区切り、fnmatch glob 対応)
+        # 例: c_lips_*,c_teeth_*,c_jawbone.x,jawbone.x,tongue
+        INTERNAL_VG_PATTERNS.extend([s.strip() for s in args[i + 1].split(',') if s.strip()])
+        i += 2; continue
+    if a == '--internal-threshold' and i + 1 < len(args):
+        INTERNAL_THRESHOLD = float(args[i + 1]); i += 2; continue
+    if a == '--effect-bake' and i + 3 < len(args):
+        # (slot_name, material_name, image_name)
+        EFFECT_BAKES.append((args[i + 1], args[i + 2], args[i + 3]))
+        i += 4; continue
+    if a == '--base-image-override' and i + 2 < len(args):
+        # 素の BaseColor 用 image を明示指定 (find_texture_for_mat で score 比較を bypass)
+        BASE_IMAGE_OVERRIDES[args[i + 1]] = args[i + 2]
+        i += 3; continue
+    if a == '--skip-overlay-near' and i + 1 < len(args):
+        # 「別パーツ」基準 material (例: DarkElfBlader_Eyes) — この voxel の近傍が削除対象
+        SKIP_OVERLAY_NEAR.extend([s.strip() for s in args[i + 1].split(',') if s.strip()])
+        i += 2; continue
+    if a == '--skip-overlay-from' and i + 1 < len(args):
+        # 削除対象 material (例: DarkElfBlader_Head,DarkElfBlader_Body) — 顔表面の絵柄 voxel
+        SKIP_OVERLAY_FROM.extend([s.strip() for s in args[i + 1].split(',') if s.strip()])
+        i += 2; continue
+    if a == '--skip-overlay-radius' and i + 1 < len(args):
+        SKIP_OVERLAY_RADIUS = int(args[i + 1])
+        i += 2; continue
     if a.startswith('--'):
         i += 1; continue
     pos_args.append(a); i += 1
@@ -108,6 +157,8 @@ else:
     if ERODE_PASSES > 0:
         print(f"  erode: {ERODE_PASSES} passes, threshold={ERODE_THRESHOLD}+ neighbors")
     print(f"  surface-threshold: {SURFACE_THRESHOLD} (× voxel_size)")
+    if MULTI_SAMPLE > 1:
+        print(f"  multi-sample: {MULTI_SAMPLE} points per voxel (anti-leak for thin/tight clothing)")
 
 # ========================================================================
 # Blender 準備
@@ -263,6 +314,40 @@ if not target:
     print(f"ERROR: mesh '{MESH_NAME}' not found"); sys.exit(1)
 print(f"\n  Target: {target.name} ({len(target.data.vertices)} verts)")
 
+# ========================================================================
+# MustardUI Body エフェクトを全て 0 に強制
+# (Cracked が non-zero だと Body/Head BaseColor が石化テクスチャに切り替わる等
+# 動的色変化が発生し、ベース color の voxel ベイクに混入する。
+# voxel 化はクリーンな base 状態で行う。)
+# ========================================================================
+_arm_data = bpy.data.armatures.get('rig')
+if _arm_data is None:
+    # rig が見つからない場合は最初の armature data
+    if len(bpy.data.armatures) > 0:
+        _arm_data = next(iter(bpy.data.armatures))
+if _arm_data is not None:
+    # 完全一致リセット対象 (QM スタイル: シンプル名)
+    _EXACT_RESET = {'Tatoos', 'Tattoos', 'Cracked', 'Wet', 'Emission', '放射', 'Blush'}
+    # プレフィックス一致リセット対象 (DarkElfBlader 等: MustardUI プレフィックス付き)
+    # 'MustardUI ' (末尾スペース) で始まる人間読みやすい key を全部 0 リセット
+    # ('MustardUI_CustomProperties' などのアンダースコア系設定 dict は除外)
+    _PREFIX_RESET = ('MustardUI ',)
+    for _effect_key in list(_arm_data.keys()):
+        _matches = (_effect_key in _EXACT_RESET) or any(_effect_key.startswith(p) for p in _PREFIX_RESET)
+        if not _matches:
+            continue
+        try:
+            _old = _arm_data[_effect_key]
+            # 数値 (int/float) のみ 0 リセット (Texture Number 等の整数 enum も 0 にすると Default 崩れる可能性あるが、
+            # ベース色変化を防ぐ目的で一旦リセット。期待動作と異なる場合は voxel 後に手動戻す。)
+            if isinstance(_old, (int, float)):
+                _arm_data[_effect_key] = type(_old)(0)
+                print(f"  Reset MustardUI effect: {_effect_key}: {_old} -> 0")
+        except Exception as _e:
+            print(f"  Failed to reset {_effect_key}: {_e}")
+    # ドライバ更新を反映 (シェーダー側に伝搬)
+    bpy.context.view_layer.update()
+
 # ---- sub-grid モード: 自前 bbox + 小さい voxel_size でローカルグリッドを作る ----
 # 重要: grid_origin (world座標) は共通 bbox に揃えず、メッシュ自身の bbox を使う。
 # ただし voxel_size は body_voxel_size / SCALE_FACTOR とし world スケールは一致。
@@ -358,16 +443,98 @@ def sample_texture(img_name, u, v):
         return (pix[pi], pix[pi+1], pix[pi+2])
     return None
 
+# === Effect texture cache (RGBA、tatoo の alpha マスクなどを保持) ===
+effect_texture_cache = {}  # image_name → (w, h, rgba bytes)
+
+def cache_effect_texture(img_name):
+    """指定名の image を RGBA888 でキャッシュ。完全一致 → 部分一致 → fnmatch の順で検索"""
+    if img_name in effect_texture_cache: return True
+    img = bpy.data.images.get(img_name)
+    if img is None:
+        for i_ in bpy.data.images:
+            if i_.name == img_name or i_.name.startswith(img_name) or img_name.startswith(i_.name):
+                img = i_; break
+    if img is None: return False
+    w, h = img.size
+    if w == 0 or h == 0: return False
+    raw = img.pixels[:]
+    n = w * h
+    rgba = bytearray(n * 4)
+    for i_ in range(n):
+        si = i_ * 4
+        rgba[i_*4]   = max(0, min(255, int(raw[si] * 255)))
+        rgba[i_*4+1] = max(0, min(255, int(raw[si+1] * 255)))
+        rgba[i_*4+2] = max(0, min(255, int(raw[si+2] * 255)))
+        rgba[i_*4+3] = max(0, min(255, int(raw[si+3] * 255)))
+    effect_texture_cache[img_name] = (w, h, bytes(rgba))
+    return True
+
+def sample_effect_texture(img_name, u, v):
+    if img_name not in effect_texture_cache: return None
+    w, h, pix = effect_texture_cache[img_name]
+    px = int(u * w) % w; py = int(v * h) % h
+    pi = (py * w + px) * 4
+    if pi + 3 < len(pix):
+        return (pix[pi], pix[pi+1], pix[pi+2], pix[pi+3])
+    return None
+
 def score_image(name):
     n = name.lower()
-    if 'basecolor' in n or 'base_color' in n or 'diffuse' in n: return 10
-    if 'albedo' in n: return 8
-    if any(k in n for k in ['normal','roughness','metallic','specular','opacity','alpha','sss','ao','ambient']):
+    score = 0
+    # DAZ G8F 命名規則: G8FBase<Part>MapD_<num> = Diffuse、MapB = Bump、MapS = Specular、MapN = Normal
+    if 'basecolor' in n or 'base_color' in n or 'diffuse' in n or 'mapd_' in n or 'map_d_' in n:
+        score = 10
+    elif 'albedo' in n or '_alb' in n or 'alb_' in n:
+        score = 8
+    if any(k in n for k in ['normal','roughness','metallic','specular','opacity','alpha','sss','ao','ambient',
+                              'mapb_','map_b_','mapn_','map_n_','maps_','map_s_',
+                              'nrm','_nm','normalmap','norm.','_rough','_spec','_metal','_ao',
+                              'displ','height','occlusion','emissive_only','bumpmap',
+                              'nmh','_rfr','refraction','reflection']):
         return -10
-    return 0
+    # DAZ Studio 末尾 suffix: <base>n / <base>s / <base>tr (normal/specular/transparency)
+    # 例: Hair_01n / Hair03n / Ribbon01_Tr → diffuse じゃない
+    import re
+    base = re.sub(r'\.(tga|png|jpg|jpeg|bmp|exr|hdr)$', '', n)
+    if base.endswith('n') and len(base) > 2 and (base[-2].isdigit() or base[-2] == '_'):
+        return -10  # *_n / *0n / *1n etc → normal
+    if base.endswith('s') and len(base) > 2 and (base[-2].isdigit() or base[-2] == '_'):
+        return -10  # *_s / *0s etc → specular
+    if base.endswith('tr') and len(base) > 3 and (base[-3].isdigit() or base[-3] == '_'):
+        return -10  # *_tr / *0tr etc → transparency
+    # MustardUI バリアントテクスチャ (Tattoo/Stone/Blush/Wet/Cracked/Emissive/SkinVariant/ColorVariant 等)
+    # を penalize → 「素」の BaseColor を優先選択
+    if any(k in n for k in [
+        # MustardUI エフェクト系
+        'tattoo', 'tatoo', 'stone', 'cracked', 'wet', 'wetter',
+        'blush', 'emission', 'emissive',
+        # 色 variant 系 (Skin Color / Eyes Color / Hair Color / Suit Color 等)
+        '_red', '_white', '_blue', '_dark', '_crimson', '_azure', '_turquoise',
+        '_royal', '_lightskin', '_darkskin', '_pink', '_green', '_yellow',
+    ]):
+        score -= 6
+    return score
 
 def find_texture_for_mat(mat):
     if not mat: return None
+    # Override: 明示指定の image があればそれを返す (score 比較 bypass)
+    if mat.name in BASE_IMAGE_OVERRIDES:
+        target = BASE_IMAGE_OVERRIDES[mat.name]
+        # node_tree 内を検索 (完全一致 → 部分一致)
+        if hasattr(mat, 'node_tree') and mat.node_tree:
+            for nd in mat.node_tree.nodes:
+                if nd.type == 'TEX_IMAGE' and nd.image and nd.image.name == target:
+                    return nd.image
+            for nd in mat.node_tree.nodes:
+                if nd.type == 'TEX_IMAGE' and nd.image and (nd.image.name.startswith(target) or target in nd.image.name):
+                    return nd.image
+        # bpy.data.images 全体で検索
+        img = bpy.data.images.get(target)
+        if img: return img
+        for img in bpy.data.images:
+            if img.name == target or img.name.startswith(target) or target in img.name:
+                return img
+        print(f"  WARN: --base-image-override target {target!r} not found for mat {mat.name!r}")
     best, best_score = None, -999
     if hasattr(mat, 'node_tree') and mat.node_tree:
         for nd in mat.node_tree.nodes:
@@ -469,6 +636,31 @@ for vgi, vgn in enumerate(vg_names):
 
 print(f"  Mapped vertex groups -> bones: {len(vg_idx_to_bone_idx)}/{len(vg_names)}")
 
+# ---- 内蔵パーツ vertex group の解決 (fnmatch glob 対応) ----
+import fnmatch
+internal_vg_idxs = set()
+internal_vg_matched_names = []
+if INTERNAL_VG_PATTERNS:
+    for vgi, vgn in enumerate(vg_names):
+        for pat in INTERNAL_VG_PATTERNS:
+            if fnmatch.fnmatch(vgn, pat) or fnmatch.fnmatch(vgn.lower(), pat.lower()):
+                internal_vg_idxs.add(vgi)
+                internal_vg_matched_names.append(vgn)
+                break
+    print(f"  Internal VG patterns: {INTERNAL_VG_PATTERNS}")
+    print(f"  Internal VG matched: {len(internal_vg_idxs)}")
+    if internal_vg_matched_names and len(internal_vg_matched_names) <= 30:
+        for n in internal_vg_matched_names:
+            print(f"    {n}")
+    print(f"  Internal threshold: {INTERNAL_THRESHOLD}")
+
+# ---- Effect texture pre-cache ----
+if EFFECT_BAKES:
+    print(f"  Effect bakes:")
+    for slot_name, mat_match, img_name in EFFECT_BAKES:
+        ok = cache_effect_texture(img_name)
+        print(f"    [{slot_name}] mat={mat_match!r} image={img_name!r} cached={ok}")
+
 # ========================================================================
 # 穴明き対策: 衣装のように薄いメッシュは ray cast で inside 判定しにくい。
 # まず surface sampling (voxel ごとに BVH.find_nearest で近接判定) して近い voxel を on にする。
@@ -480,6 +672,10 @@ print(f"  Mapped vertex groups -> bones: {len(vg_idx_to_bone_idx)}/{len(vg_names
 # ========================================================================
 result_voxels = {}  # (x,y,z) -> (r, g, b)
 result_weights = {} # (x,y,z) -> [[bone_idx, weight], ...]
+result_internal = {} # (x,y,z) -> True if 内蔵 vg weight 合計 > INTERNAL_THRESHOLD
+result_material = {} # (x,y,z) -> material name (overlay skip 用に各 voxel の所属 material を記録)
+# Effect samples: result_effects[slot_name][(x,y,z)] = (r,g,b,a)
+result_effects = {slot: {} for slot, _, _ in EFFECT_BAKES}
 
 def voxel_center(ix, iy, iz):
     return Vector((
@@ -506,27 +702,41 @@ def compute_color_weight_at(world_pt):
         u = (d1.dot(d1) * d0.dot(d2) - d0.dot(d1) * d1.dot(d2)) * inv
         v = (d0.dot(d0) * d1.dot(d2) - d0.dot(d1) * d0.dot(d2)) * inv
         w = 1.0 - u - v
-    # 色
+    # 色 + UV
     color = None
     mat_idx = face.material_index
     mat_name = None
     if mat_idx < len(target.data.materials) and target.data.materials[mat_idx]:
         mat_name = target.data.materials[mat_idx].name
     mi = mat_info.get(mat_name, {})
-    if mi.get('image') and uv_layer:
+    # UV を常時計算 (effect bake で必要、color sampling でも使う)
+    uu, vv, have_uv = 0.0, 0.0, False
+    if uv_layer:
         uv0 = loops[0][uv_layer].uv
         uv1 = loops[1][uv_layer].uv
         uv2 = loops[2][uv_layer].uv
         uu = w * uv0.x + u * uv1.x + v * uv2.x
         vv = w * uv0.y + u * uv1.y + v * uv2.y
+        have_uv = True
+    if mi.get('image') and have_uv:
         c = sample_texture(mi['image'], uu, vv)
         if c is not None:
             color = c
     if color is None:
         color = mi.get('color', (180, 180, 180))
+    # Effect bake samples (該当 material のみサンプル、結果は (slot, rgba))
+    # alpha == 0 の sample は記録しない (Blush 等で頬以外の voxel に重畳しないように)
+    effect_samples = []
+    if EFFECT_BAKES and have_uv:
+        for slot_name, mat_match, img_name in EFFECT_BAKES:
+            if mat_name == mat_match:
+                ec = sample_effect_texture(img_name, uu, vv)
+                if ec is not None and ec[3] > 0:
+                    effect_samples.append((slot_name, ec))
 
     # Weights: 3 頂点から barycentric 合成
     accum = {}  # bone_idx -> weight
+    internal_w = 0.0  # 内蔵 vg weight 合計
     verts_bary = [(loops[0].vert.index, w), (loops[1].vert.index, u), (loops[2].vert.index, v)]
     for vi, bw in verts_bary:
         if vi >= len(vert_weights_src):
@@ -534,9 +744,10 @@ def compute_color_weight_at(world_pt):
         vw = vert_weights_src[vi]
         for vg_idx, gw in vw.items():
             bi = vg_idx_to_bone_idx.get(vg_idx)
-            if bi is None:
-                continue
-            accum[bi] = accum.get(bi, 0.0) + bw * gw
+            if bi is not None:
+                accum[bi] = accum.get(bi, 0.0) + bw * gw
+            if vg_idx in internal_vg_idxs:
+                internal_w += bw * gw
     # 上位 4 個 + 正規化
     items = sorted(accum.items(), key=lambda x: -x[1])[:4]
     total = sum(w for _, w in items)
@@ -544,10 +755,27 @@ def compute_color_weight_at(world_pt):
         weights = [[bi, round(w / total, 4)] for bi, w in items]
     else:
         weights = []
-    return color, weights
+    return color, weights, internal_w, effect_samples, mat_name
 
 # Pass 1: surface voxels (BVH.find_nearest)
-print(f"  Pass 1: surface sampling (threshold = {SURFACE_THRESHOLD} × voxel_size)...")
+# multi_sample=1: voxel セル中心 1 点のみ (既存動作)
+# multi_sample=8: 2x2x2 オフセット (±0.25 × VOX_SIZE) を試す (薄物/密着の漏れ対策)
+# multi_sample=27: 3x3x3 オフセット (-1/3, 0, +1/3 × VOX_SIZE) を試す
+if MULTI_SAMPLE == 1:
+    sample_offsets = [(0.0, 0.0, 0.0)]
+elif MULTI_SAMPLE == 8:
+    sample_offsets = [(dx, dy, dz)
+                      for dx in (-0.25, 0.25)
+                      for dy in (-0.25, 0.25)
+                      for dz in (-0.25, 0.25)]
+else:  # 27
+    sample_offsets = [(dx, dy, dz)
+                      for dx in (-1/3, 0.0, 1/3)
+                      for dy in (-1/3, 0.0, 1/3)
+                      for dz in (-1/3, 0.0, 1/3)]
+
+print(f"  Pass 1: surface sampling (threshold = {SURFACE_THRESHOLD} × voxel_size, "
+      f"{MULTI_SAMPLE} sample{'s' if MULTI_SAMPLE > 1 else ''}/voxel)...")
 t_p1 = time.time()
 surf_count = 0
 surf_radius = VOX_SIZE * SURFACE_THRESHOLD
@@ -555,12 +783,26 @@ for ix in range(GX):
     for iy in range(GY):
         for iz in range(GZ):
             c = voxel_center(ix, iy, iz)
-            loc, norm, fi, dist = bvh.find_nearest(c, surf_radius)
-            if loc is None: continue
-            color, weights = compute_color_weight_at(c)
+            # multi_sample: いずれかのサンプル点が surface 近傍にあれば voxel ON
+            hit_pt = None
+            for ox, oy, oz in sample_offsets:
+                p = Vector((c.x + ox * VOX_SIZE,
+                            c.y + oy * VOX_SIZE,
+                            c.z + oz * VOX_SIZE))
+                loc, _, _, _ = bvh.find_nearest(p, surf_radius)
+                if loc is not None:
+                    hit_pt = c  # 色/weight はセル中心基準で計算 (一貫性のため)
+                    break
+            if hit_pt is None: continue
+            color, weights, internal_w, effect_samples, mat_name_v = compute_color_weight_at(hit_pt)
             if color is None: continue
             result_voxels[(ix, iy, iz)] = color
             result_weights[(ix, iy, iz)] = weights
+            result_material[(ix, iy, iz)] = mat_name_v
+            if internal_w > INTERNAL_THRESHOLD:
+                result_internal[(ix, iy, iz)] = True
+            for slot_name, ec in effect_samples:
+                result_effects[slot_name][(ix, iy, iz)] = ec
             surf_count += 1
 print(f"    surface: {surf_count} voxels ({time.time()-t_p1:.1f}s)")
 
@@ -598,14 +840,55 @@ else:
                 for iz in range(iz0, iz1 + 1):
                     if (ix, iy, iz) in result_voxels: continue
                     c = voxel_center(ix, iy, iz)
-                    color, weights = compute_color_weight_at(c)
+                    color, weights, internal_w, effect_samples, mat_name_v = compute_color_weight_at(c)
                     if color is None: continue
                     result_voxels[(ix, iy, iz)] = color
                     result_weights[(ix, iy, iz)] = weights
+                    result_material[(ix, iy, iz)] = mat_name_v
+                    if internal_w > INTERNAL_THRESHOLD:
+                        result_internal[(ix, iy, iz)] = True
+                    for slot_name, ec in effect_samples:
+                        result_effects[slot_name][(ix, iy, iz)] = ec
                     interior_count += 1
         if ix % 20 == 0:
             print(f"    column {ix}/{GX} interior so far: {interior_count}")
     print(f"    interior: {interior_count} voxels ({time.time()-t_p2:.1f}s)")
+
+# ========================================================================
+# Skip overlay: 「別パーツ用 material」(eyes 等) voxel の近傍にある「skin material」voxel を削除
+# 用途: 顔表面に描かれた目絵柄を削除して、別途 Eyes mesh / 球体 voxel のみで表現する
+# ========================================================================
+if SKIP_OVERLAY_RADIUS > 0 and SKIP_OVERLAY_NEAR and SKIP_OVERLAY_FROM:
+    print(f"\n  Skip overlay: removing voxels of {SKIP_OVERLAY_FROM} near {SKIP_OVERLAY_NEAR} (radius={SKIP_OVERLAY_RADIUS})")
+    near_set = set(SKIP_OVERLAY_NEAR)
+    from_set = set(SKIP_OVERLAY_FROM)
+    # near material の voxel 座標を集める
+    seed_voxels = [k for k, m in result_material.items() if m in near_set]
+    print(f"    seeds (near material): {len(seed_voxels)} voxels")
+    # 球状近傍 offset を計算
+    r = SKIP_OVERLAY_RADIUS
+    r2 = r * r
+    offsets = []
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            for dz in range(-r, r + 1):
+                if dx*dx + dy*dy + dz*dz <= r2:
+                    offsets.append((dx, dy, dz))
+    # seed 周辺の from material voxel を削除候補に
+    to_remove = set()
+    for (sx, sy, sz) in seed_voxels:
+        for (dx, dy, dz) in offsets:
+            cand = (sx + dx, sy + dy, sz + dz)
+            if cand in result_voxels and result_material.get(cand) in from_set:
+                to_remove.add(cand)
+    print(f"    removing {len(to_remove)} overlay voxels")
+    for k in to_remove:
+        del result_voxels[k]
+        if k in result_weights: del result_weights[k]
+        if k in result_internal: del result_internal[k]
+        if k in result_material: del result_material[k]
+        for d in result_effects.values():
+            d.pop(k, None)
 
 # Erosion pass: 周囲 N 方向以上が solid な voxel を削除する
 if ERODE_PASSES > 0:
@@ -624,6 +907,13 @@ if ERODE_PASSES > 0:
             del result_voxels[k]
             if k in result_weights:
                 del result_weights[k]
+            if k in result_internal:
+                del result_internal[k]
+            if k in result_material:
+                del result_material[k]
+            for slot_dict in result_effects.values():
+                if k in slot_dict:
+                    del slot_dict[k]
         print(f"    pass {ep+1}: removed {len(to_remove)} voxels ({len(result_voxels)} remaining)")
 
 total_voxels = len(result_voxels)
@@ -660,15 +950,19 @@ def write_vox(path, sx, sy, sz, voxels, pal):
     def chunk(tag, data):
         return tag.encode() + struct.pack('<II', len(data), 0) + data
     sd = struct.pack('<III', sx, sy, sz)
-    xd = struct.pack('<I', len(voxels))
+    # XYZI: O(n) join instead of O(n²) bytes concat
+    xd_parts = [struct.pack('<I', len(voxels))]
     for v in voxels:
-        xd += struct.pack('<BBBB', v[0], v[1], v[2], v[3])
-    rd = b''
+        xd_parts.append(struct.pack('<BBBB', v[0], v[1], v[2], v[3]))
+    xd = b''.join(xd_parts)
+    # RGBA palette
+    rd_parts = []
     for i in range(256):
         if i < len(pal):
-            rd += struct.pack('<BBBB', pal[i][0], pal[i][1], pal[i][2], 255)
+            rd_parts.append(struct.pack('<BBBB', pal[i][0], pal[i][1], pal[i][2], 255))
         else:
-            rd += struct.pack('<BBBB', 0, 0, 0, 255)
+            rd_parts.append(struct.pack('<BBBB', 0, 0, 0, 255))
+    rd = b''.join(rd_parts)
     children = chunk('SIZE', sd) + chunk('XYZI', xd) + chunk('RGBA', rd)
     main = b'MAIN' + struct.pack('<II', 0, len(children)) + children
     with open(path, 'wb') as f:
@@ -683,71 +977,77 @@ if not need_split:
     write_vox(vox_path, GX, GY, GZ, vlist, colors_list)
     print(f"  -> {vox_path} ({GX}x{GY}x{GZ}, {len(vlist)} voxels, {len(colors_list)} colors)")
 else:
-    # 最も超過量が大きい軸で分割
-    axes = [('x', GX), ('y', GY), ('z', GZ)]
-    axes.sort(key=lambda a: -a[1])
-    split_axis_name, split_len = axes[0]
-    split_axis = {'x': 0, 'y': 1, 'z': 2}[split_axis_name]
-    n_chunks = (split_len + VOX_MAX - 1) // VOX_MAX
-    print(f"  [split] axis={split_axis_name} length={split_len} → {n_chunks} chunks of ≤{VOX_MAX}")
-    # voxel を chunk index でバケットに分類
-    buckets = [[] for _ in range(n_chunks)]
+    # Multi-axis split: 256超の全軸で分割（vox フォーマットは座標 1byte なので各軸 ≤256）
+    nx_chunks = (GX + VOX_MAX - 1) // VOX_MAX
+    ny_chunks = (GY + VOX_MAX - 1) // VOX_MAX
+    nz_chunks = (GZ + VOX_MAX - 1) // VOX_MAX
+    total_chunks = nx_chunks * ny_chunks * nz_chunks
+    print(f"  [split] x={nx_chunks} y={ny_chunks} z={nz_chunks} → {total_chunks} total chunks")
+
+    # 各 voxel を 3D chunk index にバケット化
+    buckets = {}  # (cx, cy, cz) -> list of voxels (local coords + color idx)
     for v in vlist:  # (x, y, z, ci)
-        axis_v = v[split_axis]
-        ci_chunk = axis_v // VOX_MAX
-        local = list(v)
-        local[split_axis] = axis_v - ci_chunk * VOX_MAX
-        buckets[ci_chunk].append(tuple(local))
+        cx = v[0] // VOX_MAX
+        cy = v[1] // VOX_MAX
+        cz = v[2] // VOX_MAX
+        local = (
+            v[0] - cx * VOX_MAX,
+            v[1] - cy * VOX_MAX,
+            v[2] - cz * VOX_MAX,
+            v[3],
+        )
+        buckets.setdefault((cx, cy, cz), []).append(local)
+
     chunks_meta = []
-    for ci in range(n_chunks):
-        if not buckets[ci]:
-            continue
-        # chunk の local 次元
-        dims = [GX, GY, GZ]
-        if split_axis == 0:
-            local_size = min(VOX_MAX, GX - ci * VOX_MAX)
-            dims = [local_size, GY, GZ]
-        elif split_axis == 1:
-            local_size = min(VOX_MAX, GY - ci * VOX_MAX)
-            dims = [GX, local_size, GZ]
-        else:
-            local_size = min(VOX_MAX, GZ - ci * VOX_MAX)
-            dims = [GX, GY, local_size]
-        chunk_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}_c{ci+1}.vox")
-        write_vox(chunk_path, dims[0], dims[1], dims[2], buckets[ci], colors_list)
-        # chunk の grid_origin をずらす
-        co = [float(ORIGIN.x), float(ORIGIN.y), float(ORIGIN.z)]
-        co[split_axis] += ci * VOX_MAX * VOX_SIZE
-        chunks_meta.append({
-            'vox_file': os.path.basename(chunk_path),
-            'grid_origin': co,
-            'gx': dims[0], 'gy': dims[1], 'gz': dims[2],
-            'voxel_count': len(buckets[ci]),
-        })
-        print(f"  -> {chunk_path} ({dims[0]}x{dims[1]}x{dims[2]}, {len(buckets[ci])} voxels)")
+    chunk_idx = 0
+    for cz in range(nz_chunks):
+        for cy in range(ny_chunks):
+            for cx in range(nx_chunks):
+                key = (cx, cy, cz)
+                if key not in buckets:
+                    continue
+                voxels = buckets[key]
+                local_gx = min(VOX_MAX, GX - cx * VOX_MAX)
+                local_gy = min(VOX_MAX, GY - cy * VOX_MAX)
+                local_gz = min(VOX_MAX, GZ - cz * VOX_MAX)
+                chunk_idx += 1
+                chunk_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}_c{chunk_idx}.vox")
+                write_vox(chunk_path, local_gx, local_gy, local_gz, voxels, colors_list)
+                co = [
+                    float(ORIGIN.x) + cx * VOX_MAX * VOX_SIZE,
+                    float(ORIGIN.y) + cy * VOX_MAX * VOX_SIZE,
+                    float(ORIGIN.z) + cz * VOX_MAX * VOX_SIZE,
+                ]
+                chunks_meta.append({
+                    'vox_file': os.path.basename(chunk_path),
+                    'grid_origin': co,
+                    'gx': local_gx, 'gy': local_gy, 'gz': local_gz,
+                    'voxel_count': len(voxels),
+                })
+                print(f"  -> {chunk_path} ({local_gx}x{local_gy}x{local_gz}, {len(voxels)} voxels)")
+
     # .grid.json に chunks 配列を追加
+    sub_grid_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}.grid.json")
     if SCALE_FACTOR > 1:
-        sub_grid_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}.grid.json")
         # 既存の sub-grid.json を読み込んで chunks を追記
         with open(sub_grid_path) as f:
             gd = json.load(f)
         gd['chunks'] = chunks_meta
-        gd['split_axis'] = split_axis_name
+        gd['split_axes'] = {'nx': nx_chunks, 'ny': ny_chunks, 'nz': nz_chunks}
         with open(sub_grid_path, 'w') as f:
             json.dump(gd, f, indent=1)
-        print(f"  -> {sub_grid_path} (chunks appended)")
+        print(f"  -> {sub_grid_path} (chunks appended, multi-axis)")
     else:
         # 共通グリッドを使うパーツが split を要求した場合は専用 grid.json を作る
-        sub_grid_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}.grid.json")
         with open(sub_grid_path, 'w') as f:
             json.dump({
                 'voxel_size': VOX_SIZE,
                 'grid_origin': [float(ORIGIN.x), float(ORIGIN.y), float(ORIGIN.z)],
                 'gx': GX, 'gy': GY, 'gz': GZ,
                 'chunks': chunks_meta,
-                'split_axis': split_axis_name,
+                'split_axes': {'nx': nx_chunks, 'ny': ny_chunks, 'nz': nz_chunks},
             }, f, indent=1)
-        print(f"  -> {sub_grid_path} (split grid)")
+        print(f"  -> {sub_grid_path} (split grid, multi-axis)")
 
 # ========================================================================
 # weights.json 書き出し
@@ -780,6 +1080,60 @@ weights_obj = {
 with open(weights_path, 'w', encoding='utf-8') as f:
     json.dump(weights_obj, f, ensure_ascii=False, indent=0)
 print(f"  -> {weights_path} ({len(local_bone_names)} unique bones)")
+
+# ========================================================================
+# internal_voxels.json 書き出し (内蔵パーツ判定: 口腔内など)
+# voxel_order と同じ順で internal フラグの voxel index を sparse 出力
+# 表示側の flood fill で「内蔵 voxel に隣接する empty cell を exterior 扱い」
+# として使い、閉じた口腔内の voxel face を可視化する。
+# ========================================================================
+if INTERNAL_VG_PATTERNS:
+    # サブグリッド (full unsplit) 座標で出力。viewer は chunks の voxel idx + chunk_origin_offset
+    # で sub-grid index を計算し、この list と照合する。
+    internal_coords = [list(k) for k in result_internal.keys() if k in result_voxels]
+    internal_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}.internal_voxels.json")
+    internal_obj = {
+        'voxel_size': VOX_SIZE,
+        'grid_origin': [float(ORIGIN.x), float(ORIGIN.y), float(ORIGIN.z)],
+        'gx': GX, 'gy': GY, 'gz': GZ,
+        'internal_vg_patterns': INTERNAL_VG_PATTERNS,
+        'internal_vg_matched': internal_vg_matched_names,
+        'threshold': INTERNAL_THRESHOLD,
+        'voxel_count': len(voxel_order),
+        'internal_count': len(internal_coords),
+        # サブグリッド (full) 座標 [ix, iy, iz]
+        'internal_voxels': internal_coords,
+    }
+    with open(internal_path, 'w', encoding='utf-8') as f:
+        json.dump(internal_obj, f, ensure_ascii=False, indent=0)
+    print(f"  -> {internal_path} ({len(internal_coords)} internal voxels / {len(voxel_order)} total)")
+
+# ========================================================================
+# Effect bake 出力 (per slot)
+# 各 slot の per-voxel rgba を sub-grid 座標で sparse 保存
+# 表示側は <prefix>.<slot>.json を fetch → voxel coord と照合 → 頂点色 lerp
+# ========================================================================
+if EFFECT_BAKES:
+    for slot_name, mat_match, img_name in EFFECT_BAKES:
+        slot_dict = result_effects.get(slot_name, {})
+        # sub-grid (full unsplit) 座標 + rgba
+        samples = [[k[0], k[1], k[2], v[0], v[1], v[2], v[3]] for k, v in slot_dict.items() if k in result_voxels]
+        out_path = os.path.join(OUT_DIR, f"{OUT_PREFIX}.{slot_name}.json")
+        out_obj = {
+            'voxel_size': VOX_SIZE,
+            'grid_origin': [float(ORIGIN.x), float(ORIGIN.y), float(ORIGIN.z)],
+            'gx': GX, 'gy': GY, 'gz': GZ,
+            'slot_name': slot_name,
+            'material': mat_match,
+            'image': img_name,
+            'voxel_count': len(voxel_order),
+            'sample_count': len(samples),
+            # サブグリッド座標 + RGBA (各 0-255): [ix, iy, iz, r, g, b, a]
+            'samples': samples,
+        }
+        with open(out_path, 'w', encoding='utf-8') as f:
+            json.dump(out_obj, f, ensure_ascii=False, indent=0)
+        print(f"  -> {out_path} ({len(samples)} samples / {len(voxel_order)} total voxels)")
 
 # ボーン weight 分布統計
 bone_total = {}
