@@ -50,6 +50,10 @@ BODY_OVERRIDE_PATTERNS = [
     'breast',
 ]
 QM_BODY_NAME = "Queen Marika Body"
+BODY_MESH_NAME = "Helena_Base"
+# 衣装メッシュは表面より法線方向に N メートル外側に配置
+# (ボディと同じ位置だと描画順で体の内側に見えるため)
+OUTFIT_OUTWARD_OFFSET = 0.015
 
 
 def is_head_bone(bn: str) -> bool:
@@ -126,6 +130,12 @@ totals = {'verts': 0, 'head': 0, 'snap': 0, 'no_w': 0}
 for helena in target_meshes:
     mesh = helena.data
 
+    # Body mesh: snap exactly to QM surface (offset=0)
+    # Outfit mesh: snap then push outward along normal so cloth stays
+    #              above body surface (avoids inside-body z-fighting).
+    is_body = (helena.name == BODY_MESH_NAME)
+    offset = 0.0 if is_body else OUTFIT_OUTWARD_OFFSET
+
     # Remove shape keys (DAZ-imported meshes have morphs whose data blocks
     # override v.co edits during depsgraph evaluation)
     if mesh.shape_keys:
@@ -171,15 +181,18 @@ for helena in target_meshes:
         nearest = bvh.find_nearest(p_world)
         if nearest is None or nearest[0] is None:
             continue
-        loc, _normal, _idx, dist = nearest
+        loc, normal, _idx, dist = nearest
+        if offset > 0.0 and normal is not None:
+            loc = loc + normal * offset
         v.co = mesh_world_inv @ loc
         n_snap += 1
         if dist > max_dist: max_dist = dist
         sum_dist += dist
 
     avg_dist = sum_dist / max(1, n_snap)
-    print(f"    [{helena.name}] verts={n_total} head={n_head} snap={n_snap} "
-          f"no_w={n_no_w} avg={avg_dist*1000:.2f}mm max={max_dist*1000:.2f}mm")
+    tag = "body" if is_body else f"outfit+{offset*1000:.0f}mm"
+    print(f"    [{helena.name}] ({tag}) verts={n_total} head={n_head} "
+          f"snap={n_snap} no_w={n_no_w} avg={avg_dist*1000:.2f}mm max={max_dist*1000:.2f}mm")
     totals['verts'] += n_total
     totals['head'] += n_head
     totals['snap'] += n_snap
