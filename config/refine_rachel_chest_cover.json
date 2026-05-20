@@ -1,0 +1,16 @@
+{
+  "_comment": "Refine retargeted chest_cover to match source silhouette in bbox-UV space",
+  "bin_n": 150,
+  "bin_dilate": 1,
+  "cover_max_search": 6,
+  "source": {
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "chest_cover"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "input":  "public/box5/rachel_qm_compare/rachel_qm/chest_cover_bbox_bin.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/chest_cover_bbox_bin.vox"
+  }
+}

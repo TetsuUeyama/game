@@ -46,6 +46,11 @@ if len(args) < 6:
 
 HELENA_BLEND, HELENA_BODY, HELENA_DRESS, QM_BODY, QM_ARMATURE, OUT_BLEND = args[:6]
 MIN_OFFSET = float(args[6]) if len(args) > 6 else 0.005
+# Optional 8th arg: path to a JSON config with "vg_rename" mapping (source bone
+# name → QM bone name). Used to support non-Helena sources (e.g. Rachel which
+# has no DEF- prefix). Entries are merged into SRC_TO_TGT_BONE below; they win
+# over the hardcoded Helena defaults if keys collide.
+EXTRA_VG_RENAME_PATH = args[7] if len(args) > 7 and args[7].strip() else None
 
 print(f"\n=== V16 (Bone-Centric Spherical Mapping) ===")
 print(f"  min_offset={MIN_OFFSET*1000:.1f}mm")
@@ -70,6 +75,18 @@ SRC_TO_TGT_BONE = {
     'DEF-toe.L': 'c_toes_middle1.l', 'DEF-toe.R': 'c_toes_middle1.r',
     'DEF-pelvis.L': 'c_root_bend.x', 'DEF-pelvis.R': 'c_root_bend.x',
 }
+# Merge optional vg_rename config (for non-Helena sources)
+if EXTRA_VG_RENAME_PATH:
+    import json as _json
+    print(f"  loading extra vg_rename from {EXTRA_VG_RENAME_PATH}")
+    try:
+        with open(EXTRA_VG_RENAME_PATH, encoding='utf-8') as _f:
+            _cfg = _json.load(_f)
+        extra = _cfg.get('vg_rename', {})
+        print(f"  merged {len(extra)} vg_rename entries")
+        SRC_TO_TGT_BONE.update(extra)
+    except Exception as _e:
+        print(f"  WARN: could not load extra vg_rename: {_e}")
 
 qm_body_obj = bpy.data.objects.get(QM_BODY)
 qm_arm_obj  = bpy.data.objects.get(QM_ARMATURE)

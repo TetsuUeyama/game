@@ -1,0 +1,19 @@
+{
+  "_comment": "C6: density-based Casual Bra (Rachel original source)",
+  "method": "density",
+  "kernel_radius": 0.018,
+  "density_min_count": 1,
+  "output_dilate": 1,
+  "chunk_size": 256,
+  "tgt_chunk_size": 512,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "casual_bra"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_bra_bbox_bin.vox"
+  }
+}

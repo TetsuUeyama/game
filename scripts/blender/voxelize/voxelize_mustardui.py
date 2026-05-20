@@ -65,6 +65,17 @@ EFFECT_BAKES = []
 # 「素」BaseColor の override (mat node_tree に素 BaseColor が存在しない or 名前が無名 'Map #N' の場合)
 # {material_name: image_name}
 BASE_IMAGE_OVERRIDES = {}
+# Material 単位で固定色を上書き (texture を完全 bypass、フラット 1色)
+# 例: --mat-color "Anna Hair Classic:#3a2418" 等。Hair のように shader 内部で
+# 色を生成する material（_C texture が無い）に対して使う。
+# {material_name: (r, g, b)}  (0-255)
+MAT_COLOR_OVERRIDES = {}
+# Body voxel cell から差し引く outfit .vox ファイルパスのリスト。
+# 衣装が body 表面にかぶせる方式 (overlay) で body を carve out する。
+# 例: body voxelize 時に --subtract-vox blackmottled_top.vox を指定すると、
+# Top voxel が占有する cell の body voxel が削除される。
+# 衣装 voxel (overlay) と body voxel が重なる領域で z-fight / 露出を防ぐ。
+SUBTRACT_VOX_PATHS = []
 i = 0
 while i < len(args):
     a = args[i]
@@ -111,6 +122,25 @@ while i < len(args):
         # 素の BaseColor 用 image を明示指定 (find_texture_for_mat で score 比較を bypass)
         BASE_IMAGE_OVERRIDES[args[i + 1]] = args[i + 2]
         i += 3; continue
+    if a == '--subtract-vox' and i + 1 < len(args):
+        SUBTRACT_VOX_PATHS.append(args[i + 1]); i += 2; continue
+    if a == '--mat-color' and i + 1 < len(args):
+        # "Material Name:#RRGGBB" を parse して MAT_COLOR_OVERRIDES に登録
+        spec = args[i + 1]
+        if ':' in spec:
+            mname, hexcol = spec.rsplit(':', 1)
+            hexcol = hexcol.lstrip('#').strip()
+            if len(hexcol) == 6:
+                try:
+                    r_ = int(hexcol[0:2], 16); g_ = int(hexcol[2:4], 16); b_ = int(hexcol[4:6], 16)
+                    MAT_COLOR_OVERRIDES[mname.strip()] = (r_, g_, b_)
+                except ValueError:
+                    print(f"  WARN: --mat-color invalid hex: {spec}")
+            else:
+                print(f"  WARN: --mat-color hex must be 6 chars: {spec}")
+        else:
+            print(f"  WARN: --mat-color syntax: 'Material Name:#RRGGBB', got: {spec}")
+        i += 2; continue
     if a == '--skip-overlay-near' and i + 1 < len(args):
         # 「別パーツ」基準 material (例: DarkElfBlader_Eyes) — この voxel の近傍が削除対象
         SKIP_OVERLAY_NEAR.extend([s.strip() for s in args[i + 1].split(',') if s.strip()])
@@ -171,6 +201,66 @@ for obj in bpy.context.scene.objects:
         for mod in obj.modifiers:
             if mod.type == 'MASK' and mod.show_viewport:
                 mod.show_viewport = False
+
+# Force-reload any unloaded images so texture sampling can read pixels.
+# Rachel/DAZ blend files often reference external textures whose path isn't
+# resolved on background launch; without reload, image.pixels[] returns black.
+# Also try resolving by basename in sibling directories (handles moved/renamed
+# texture folders, e.g. textures -> textures2.0_4mSURGu/textures).
+import os as _os
+
+def _build_search_paths():
+    paths = []
+    if bpy.data.filepath:
+        blend_dir = _os.path.dirname(bpy.data.filepath)
+        paths += [blend_dir, _os.path.join(blend_dir, 'textures')]
+        try:
+            for d in _os.listdir(blend_dir):
+                full = _os.path.join(blend_dir, d)
+                if _os.path.isdir(full):
+                    paths.append(full)
+                    tex = _os.path.join(full, 'textures')
+                    if _os.path.isdir(tex):
+                        paths.append(tex)
+        except Exception:
+            pass
+    return paths
+
+_search_paths = _build_search_paths()
+_reloaded = 0
+_resolved_by_search = 0
+for _img in bpy.data.images:
+    try:
+        if _img.size[0] == 0 or _img.size[1] == 0:
+            _img.reload()
+            if _img.size[0] > 0 and _img.size[1] > 0:
+                _reloaded += 1
+                continue
+        else:
+            continue
+        # still missing — try to resolve by basename
+        if _img.filepath and _search_paths:
+            _fp = _img.filepath.replace('\\', '/').lstrip('/')  # strip Blender '//' prefix
+            base = _os.path.basename(_fp)
+            if base:
+                for sp in _search_paths:
+                    cand = _os.path.join(sp, base)
+                    if _os.path.isfile(cand):
+                        _img.filepath = cand
+                        try:
+                            _img.reload()
+                            if _img.size[0] > 0 and _img.size[1] > 0:
+                                _resolved_by_search += 1
+                                break
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+_missing = sum(1 for _img in bpy.data.images if _img.size[0] == 0 or _img.size[1] == 0)
+print(f"  Image resolve: reloaded={_reloaded}, by_search={_resolved_by_search}, still_missing={_missing}")
+print(f"  Search paths ({len(_search_paths)}):")
+for sp in _search_paths:
+    print(f"    {sp}")
 
 # ========================================================================
 # Armature 検出 & skeleton.json 書き出し
@@ -424,12 +514,28 @@ def cache_texture(image):
     if w == 0 or h == 0: return
     raw = image.pixels[:]
     n = w * h
+    # Colorspace 補正:
+    # - Non-Color: image.pixels[:] が生値 (典型的に既に sRGB エンコード済) を返す → そのまま 0-255 化
+    # - sRGB:     image.pixels[:] が linear 値を返す → sRGB エンコードして表示用にする
+    cs = image.colorspace_settings.name
+    is_srgb = cs == 'sRGB'
     rgb = bytearray(n * 3)
-    for i in range(n):
-        si = i * 4
-        rgb[i*3]   = max(0, min(255, int(raw[si] * 255)))
-        rgb[i*3+1] = max(0, min(255, int(raw[si+1] * 255)))
-        rgb[i*3+2] = max(0, min(255, int(raw[si+2] * 255)))
+    if is_srgb:
+        # linear -> sRGB encoding (IEC 61966-2-1)
+        def to_srgb(x):
+            if x <= 0.0031308: return 12.92 * x
+            return 1.055 * (x ** (1.0 / 2.4)) - 0.055
+        for i in range(n):
+            si = i * 4
+            rgb[i*3]   = max(0, min(255, int(to_srgb(raw[si]) * 255)))
+            rgb[i*3+1] = max(0, min(255, int(to_srgb(raw[si+1]) * 255)))
+            rgb[i*3+2] = max(0, min(255, int(to_srgb(raw[si+2]) * 255)))
+    else:
+        for i in range(n):
+            si = i * 4
+            rgb[i*3]   = max(0, min(255, int(raw[si] * 255)))
+            rgb[i*3+1] = max(0, min(255, int(raw[si+1] * 255)))
+            rgb[i*3+2] = max(0, min(255, int(raw[si+2] * 255)))
     texture_cache[image.name] = (w, h, bytes(rgb))
     del raw
 
@@ -481,11 +587,31 @@ def sample_effect_texture(img_name, u, v):
 def score_image(name):
     n = name.lower()
     score = 0
+    import re
+    # 拡張子を除去した base 文字列 (suffix 末尾判定用、トレイリング .001 等 dup 番号も除く)
+    base = re.sub(r'\.\d{3,}$', '', n)
+    base = re.sub(r'\.(tga|png|jpg|jpeg|bmp|exr|hdr)$', '', base)
     # DAZ G8F 命名規則: G8FBase<Part>MapD_<num> = Diffuse、MapB = Bump、MapS = Specular、MapN = Normal
     if 'basecolor' in n or 'base_color' in n or 'diffuse' in n or 'mapd_' in n or 'map_d_' in n:
         score = 10
     elif 'albedo' in n or '_alb' in n or 'alb_' in n:
         score = 8
+    # Tekken/UE 命名規則: <name>_C = Color (= BaseColor). 単独 _c suffix を Color として認識。
+    elif base.endswith('_c'):
+        score = 10
+    # DAZ Studio character preset 命名規則: <name>_D = Diffuse (Sydney/Eva/Hinata/Luminus 等)
+    elif base.endswith('_d'):
+        score = 10
+    # Pharah 系のドット区切り命名規則: <name>.D = Diffuse
+    elif base.endswith('.d'):
+        score = 10
+    # Tekken/UE penalty: _RMA = Roughness/Metallic/AO、_OBD = Object Bake Detail、
+    # _TSE = Tessellation/Surface Edge、_AN = Normal、_ID = ID mask、_N = Normal
+    # _ADI = Anisotropic/Direction Information (hair shader 用、色ではない)
+    # _R = Roughness 単独 (Tekken hair texture で散見)
+    if any(base.endswith(suf) for suf in ['_rma', '_obd', '_tse', '_an', '_id', '_emi', '_msk',
+                                            '_adi', '_r']):
+        return -10
     if any(k in n for k in ['normal','roughness','metallic','specular','opacity','alpha','sss','ao','ambient',
                               'mapb_','map_b_','mapn_','map_n_','maps_','map_s_',
                               'nrm','_nm','normalmap','norm.','_rough','_spec','_metal','_ao',
@@ -494,14 +620,15 @@ def score_image(name):
         return -10
     # DAZ Studio 末尾 suffix: <base>n / <base>s / <base>tr (normal/specular/transparency)
     # 例: Hair_01n / Hair03n / Ribbon01_Tr → diffuse じゃない
-    import re
-    base = re.sub(r'\.(tga|png|jpg|jpeg|bmp|exr|hdr)$', '', n)
     if base.endswith('n') and len(base) > 2 and (base[-2].isdigit() or base[-2] == '_'):
         return -10  # *_n / *0n / *1n etc → normal
     if base.endswith('s') and len(base) > 2 and (base[-2].isdigit() or base[-2] == '_'):
         return -10  # *_s / *0s etc → specular
     if base.endswith('tr') and len(base) > 3 and (base[-3].isdigit() or base[-3] == '_'):
         return -10  # *_tr / *0tr etc → transparency
+    # Pharah 系ドット区切り: <name>.B (Bump) / .N (Normal) / .R (Roughness) / .S (Specular) / .TR (Transparency) / .A (Alpha)
+    if any(base.endswith(suf) for suf in ['.b', '.n', '.r', '.s', '.tr', '.a', '.nrm', '.rgh', '.spec']):
+        return -10
     # MustardUI バリアントテクスチャ (Tattoo/Stone/Blush/Wet/Cracked/Emissive/SkinVariant/ColorVariant 等)
     # を penalize → 「素」の BaseColor を優先選択
     if any(k in n for k in [
@@ -553,6 +680,13 @@ for slot in target.material_slots:
     mat = slot.material
     if not mat or mat.name in mat_info: continue
     info = {'image': None, 'color': (180, 180, 180)}
+    # --mat-color 指定があれば最優先 (texture を完全 bypass)
+    if mat.name in MAT_COLOR_OVERRIDES:
+        info['color'] = MAT_COLOR_OVERRIDES[mat.name]
+        info['image'] = None
+        mat_info[mat.name] = info
+        print(f"    Mat '{mat.name}': flat-rgb{info['color']} (--mat-color override)")
+        continue
     img = find_texture_for_mat(mat)
     if img:
         cache_texture(img); info['image'] = img.name
@@ -688,7 +822,7 @@ def compute_color_weight_at(world_pt):
     """最寄り三角形から barycentric で色 + bone weight を計算。"""
     loc, norm, fi, dist = bvh.find_nearest(world_pt, VOX_SIZE * 3)
     if loc is None or fi is None:
-        return None, None
+        return None, None, None, None, None
     face = bm.faces[fi]
     loops = list(face.loops)
     v0, v1, v2 = [l.vert.co for l in loops]
@@ -945,6 +1079,53 @@ cidx = {c: i + 1 for i, c in enumerate(colors_list)}
 # voxel 出力順を決定 (weights.json でも同じ順を使う)
 voxel_order = sorted(result_voxels.keys())
 vlist = [(p[0], p[1], p[2], cidx[quantized[p]]) for p in voxel_order]
+
+# --subtract-vox: 指定された .vox ファイルが占有する cell を vlist から除外。
+# 衣装 overlay 方式で body 表面の z-fight / 露出を防ぐ。
+if SUBTRACT_VOX_PATHS:
+    def _read_vox_cells(path):
+        """.vox ファイルから (x, y, z) cell 集合を読む (XYZI チャンクのみ)"""
+        cells = set()
+        try:
+            with open(path, 'rb') as f:
+                data = f.read()
+        except IOError:
+            print(f"  WARN: subtract-vox not found: {path}")
+            return cells
+        if not data.startswith(b'VOX '):
+            print(f"  WARN: not a .vox file: {path}")
+            return cells
+        # MAIN chunk header (8 bytes magic+version) skip
+        i_ = 8
+        while i_ < len(data) - 8:
+            tag = data[i_:i_+4]
+            size = struct.unpack('<I', data[i_+4:i_+8])[0]
+            children_size = struct.unpack('<I', data[i_+8:i_+12])[0]
+            i_ += 12
+            if tag == b'XYZI':
+                n = struct.unpack('<I', data[i_:i_+4])[0]
+                p = i_ + 4
+                for _k in range(n):
+                    if p + 4 > len(data): break
+                    x = data[p]; y = data[p+1]; z = data[p+2]
+                    cells.add((x, y, z))
+                    p += 4
+                i_ += size
+            else:
+                i_ += size
+            i_ += 0  # children handled in nested calls — but vox files are flat enough
+        return cells
+
+    subtract_set = set()
+    for sp in SUBTRACT_VOX_PATHS:
+        s = _read_vox_cells(sp)
+        subtract_set.update(s)
+        print(f"  --subtract-vox {os.path.basename(sp)}: {len(s)} cells")
+    if subtract_set:
+        before_n = len(vlist)
+        vlist = [v for v in vlist if (v[0], v[1], v[2]) not in subtract_set]
+        print(f"  subtracted {before_n - len(vlist)} body cells covered by outfits "
+              f"({len(vlist)} remaining)")
 
 def write_vox(path, sx, sy, sz, voxels, pal):
     def chunk(tag, data):

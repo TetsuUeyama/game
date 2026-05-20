@@ -1,0 +1,19 @@
+{
+  "_comment": "B2: B1 + voxelize 後の BFS push-out (背中側めり込み補正)",
+  "triangle_subsample": 8,
+  "push_out_inside_body": true,
+  "push_out_max_steps": 5,
+  "push_out_drop_unresolved": true,
+  "dilation_steps": 2,
+  "source": {
+    "mesh_json": "tmp/rachel_casual_thong_mesh.json",
+    "skeleton": "public/box5/rachel_qm_compare/rachel/skeleton.json"
+  },
+  "target": {
+    "skeleton": "public/box5/qm_mustardui/skeleton.json",
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_thong_meshlbs.vox"
+  },
+  "bone_map": "config/transplant_rachel_to_qm.json"
+}

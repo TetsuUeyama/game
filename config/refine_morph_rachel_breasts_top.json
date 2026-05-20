@@ -1,0 +1,14 @@
+{
+  "_comment": "Morphological cleanup for breasts_top: close (fill 1-2 voxel holes) + outlier prune (remove sparse voxels with <2 face neighbors)",
+  "min_face_neighbors": 2,
+  "close_iters": 1,
+  "open_iters": 0,
+  "skin_layer_only": true,
+  "skin_max_distance": 3,
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "input":  "public/box5/rachel_qm_compare/rachel_qm/breasts_top_bbox_bin.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/breasts_top_bbox_bin.vox"
+  }
+}

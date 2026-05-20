@@ -1,0 +1,25 @@
+{
+  "_comment": "F7 for Rachel Gloves L (手 - anatomy cover 不要)",
+  "triangle_subsample": 8,
+  "chunk_size": 128,
+  "scale_offset_by_bbox": false,
+  "output_dilate": 1,
+  "inside_cover": true,
+  "mask_radius": 0.04,
+  "anchor_uvw_tolerance": 0.03,
+  "source": {
+    "mesh_json": "tmp/rachel_gloves_l_mesh.json",
+    "grid": "public/box5/rachel_qm_compare/rachel/grid.json",
+    "body_vox": "public/box5/rachel_qm_compare/rachel/body.vox",
+    "garment_vox": "public/box5/rachel_qm_compare/rachel/gloves_l.vox",
+    "body_weights": "public/box5/rachel_qm_compare/rachel/body.weights.json"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "body_weights": "public/box5/qm_mustardui/body.weights.json",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/gloves_l_bbox_bin.vox"
+  },
+  "final_push_out": true,
+  "final_push_out_max_steps": 5
+}

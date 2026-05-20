@@ -1,0 +1,16 @@
+{
+  "_comment": "E1: Boundary + inside-fill. Source cover→target 投影、surface graph 上で morphological closing (dilate K → erode K) で穴埋め",
+  "cover_max_search": 6,
+  "chunk_size": 256,
+  "closing_iters": 3,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "casual_thong"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_thong_bbox_bin.vox"
+  }
+}

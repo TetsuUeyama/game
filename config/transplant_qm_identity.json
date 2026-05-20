@@ -1,0 +1,4 @@
+{
+  "_comment": "Identity mapping: source=QM body, Phase 2=QM bones at source-scaled length. Empty vg_rename triggers identity in build_phase2_armature_blend.py. Used to voxelize QM body at Rachel/Anna/etc. proportions.",
+  "vg_rename": {}
+}

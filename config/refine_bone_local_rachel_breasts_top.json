@@ -1,0 +1,19 @@
+{
+  "_comment": "Bone-local refinement for breasts_top: keep target voxels in source-covered (bone, bone-local UV) bins",
+  "bin_n": 8,
+  "bin_dilate": 1,
+  "cover_max_search": 6,
+  "rename_map": "config/transplant_rachel_to_qm.json",
+  "source": {
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "breasts_top",
+    "body_weights": "public/box5/rachel_qm_compare/rachel/body.weights.json"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "body_weights": "public/box5/qm_mustardui/body.weights.json",
+    "input":  "public/box5/rachel_qm_compare/rachel_qm/breasts_top_bbox_bin.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/breasts_top_bbox_bin.vox"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "_comment": "A3: bone-cylindrical を捨て body-bbox-relative UV で source surface mask を target に転写 (bone semantics 非依存)",
+  "uv_method": "body-bbox",
+  "uvw_threshold": 0.04,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "casual_thong"
+  },
+  "target": {
+    "skeleton": "public/box5/qm_mustardui/skeleton.json",
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "body_weights": "public/box5/qm_mustardui/body.weights.json",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_thong_surfmask.vox"
+  },
+  "bone_map": "config/transplant_rachel_to_qm.json",
+  "cover_max_search": 6
+}

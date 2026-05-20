@@ -12,8 +12,18 @@ import sys, os, json, subprocess, argparse, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CONFIG_PATH = os.path.join(ROOT, "config/clothing_pipeline.json")
-BLENDER = "/c/Program Files/Blender Foundation/Blender 5.0/blender.exe"
-PYTHON  = "/c/Program Files/Blender Foundation/Blender 5.0/5.0/python/bin/python.exe"
+# Auto-detect Blender executable: try the Windows-native path first, then the
+# Git Bash style (/c/...) for cross-shell compatibility.
+_BLENDER_CANDIDATES = [
+    r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
+    "/c/Program Files/Blender Foundation/Blender 5.0/blender.exe",
+]
+BLENDER = next((p for p in _BLENDER_CANDIDATES if os.path.exists(p)), _BLENDER_CANDIDATES[0])
+_PYTHON_CANDIDATES = [
+    r"C:\Program Files\Blender Foundation\Blender 5.0\5.0\python\bin\python.exe",
+    "/c/Program Files/Blender Foundation/Blender 5.0/5.0/python/bin/python.exe",
+]
+PYTHON = next((p for p in _PYTHON_CANDIDATES if os.path.exists(p)), _PYTHON_CANDIDATES[0])
 
 FIT_SCRIPT      = os.path.join(ROOT, "scripts/blender/fitting/fit_helena_to_qm_v16.py")
 VOXELIZE_SCRIPT = os.path.join(ROOT, "scripts/blender/voxelize/voxelize_mustardui.py")
@@ -58,7 +68,8 @@ def run_item(config, key):
     tgt = config['characters'][item['target']]
     params = resolve_params(config, item)
     out_prefix = item['out_prefix']
-    fitted_blend = f"E:/MOdel/{tgt['rig'].split('_')[0]}_to_{item['source']}_{key}.blend"
+    # Output to F:/ContactFormModel/ (E: drive is full; F: has more room).
+    fitted_blend = f"F:/ContactFormModel/{tgt['rig'].split('_')[0]}_to_{item['source']}_{key}.blend"
     fitted_mesh_name = f"{item['source_mesh']} (fit QM v16)"
 
     log_dir = os.path.join(ROOT, "tmp/fit")
@@ -77,6 +88,11 @@ def run_item(config, key):
         src['blend'], src['body'], item['source_mesh'],
         tgt['body'], tgt['rig'], fitted_blend,
         str(params.get('min_offset', 0.005)),
+        # Optional: extra vg_rename config (for non-Helena sources). v16
+        # reads this as arg 7 (after min_offset) when provided.
+        # If config field is absent or path doesn't exist, fall back to empty
+        # string which v16 treats as "no extra mapping".
+        src.get('vg_rename_config', ''),
         str(params.get('max_depth', 0.20)),
     ]
     if not run("Step 1: Fit (v16 bone-centric)", fit_cmd,

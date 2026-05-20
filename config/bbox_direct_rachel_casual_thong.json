@@ -1,0 +1,19 @@
+{
+  "_comment": "C6: density-based. 各 target body 表面 cell について、bbox-uv 半径内に source 衣装 voxel が存在すれば cover。bin/nearest の collapse 問題を回避",
+  "method": "density",
+  "kernel_radius": 0.018,
+  "density_min_count": 1,
+  "output_dilate": 1,
+  "chunk_size": 256,
+  "tgt_chunk_size": 512,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "casual_thong"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_thong_bbox_bin.vox"
+  }
+}

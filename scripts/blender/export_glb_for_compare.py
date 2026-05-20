@@ -58,7 +58,13 @@ for o in bpy.data.objects:
     o.hide_render = False
     o.hide_set(False)
 
-bpy.ops.object.select_all(action='DESELECT')
+# Deselect everything via direct API (bpy.ops can fail in background mode)
+for o in bpy.data.objects:
+    try:
+        o.select_set(False)
+    except RuntimeError:
+        pass
+
 for o in bpy.data.objects:
     if o.type == 'MESH':
         if matches_any(o.name, PATTERNS):

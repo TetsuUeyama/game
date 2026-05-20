@@ -1,0 +1,17 @@
+{
+  "_comment": "C1: bbox-UV bin transfer. Source 衣装 cover cells を bbox-uv 空間で 100x100x100 bin 化、target body 表面 cell が同 bin にあれば cover として 1 voxel 外側に出力",
+  "bin_n": 150,
+  "bin_dilate": 1,
+  "output_dilate": 2,
+  "cover_max_search": 6,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "casual_thong"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/casual_thong_bbox_bin.vox"
+  }
+}

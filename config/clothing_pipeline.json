@@ -6,8 +6,15 @@
       "rig": "Helena",
       "rig_type": "rigify"
     },
+    "rachel": {
+      "blend": "E:/Rachel_Rework.blend",
+      "body": "Rachel Female",
+      "rig": "Rachel",
+      "rig_type": "rigify",
+      "vg_rename_config": "config/transplant_rachel_to_qm.json"
+    },
     "qm": {
-      "blend": "E:/MOdel/要確認モデル/QueenMarika_Rigged_MustardUI.blend",
+      "blend": "E:/MOdel/QueenMarika_Rigged_MustardUI.blend",
       "body": "Queen Marika Body",
       "rig": "QueenMarika_rig",
       "rig_type": "arp",
@@ -63,6 +70,14 @@
       "source_mesh": "Helena Default - Shin Guard",
       "preset": "armor_plate",
       "out_prefix": "helena_default_shinguard"
+    },
+
+    "rachel_suit": {
+      "source": "rachel",
+      "target": "qm",
+      "source_mesh": "Suit Mesh",
+      "preset": "fitted_dress",
+      "out_prefix": "rachel_suit"
     }
   }
 }

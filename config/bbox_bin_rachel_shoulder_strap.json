@@ -1,0 +1,17 @@
+{
+  "_comment": "C1 bbox-UV bin transfer for shoulder_strap, color-preserving",
+  "bin_n": 150,
+  "bin_dilate": 1,
+  "output_dilate": 2,
+  "cover_max_search": 6,
+  "source": {
+    "name": "rachel",
+    "voxel_dir": "public/box5/rachel_qm_compare/rachel",
+    "garment": "shoulder_strap"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/shoulder_strap_bbox_bin.vox"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "_comment": "F7 logic applied to Rachel Breasts Top (with nipple cover)",
+  "triangle_subsample": 8,
+  "chunk_size": 128,
+  "scale_offset_by_bbox": false,
+  "output_dilate": 1,
+  "inside_cover": true,
+  "include_src_anatomy_bones": [
+    "nipple",
+    "areola"
+  ],
+  "mask_radius": 0.02,
+  "source": {
+    "mesh_json": "tmp/rachel_breasts_top_mesh.json",
+    "grid": "public/box5/rachel_qm_compare/rachel/grid.json",
+    "body_vox": "public/box5/rachel_qm_compare/rachel/body.vox",
+    "garment_vox": "public/box5/rachel_qm_compare/rachel/breasts_top.vox",
+    "body_weights": "public/box5/rachel_qm_compare/rachel/body.weights.json"
+  },
+  "target": {
+    "grid": "public/box5/qm_mustardui/grid.json",
+    "body_vox": "public/box5/qm_mustardui/body.vox",
+    "output": "public/box5/rachel_qm_compare/rachel_qm/breasts_top_bbox_bin.vox"
+  },
+  "final_push_out": true,
+  "final_push_out_max_steps": 5
+}

@@ -242,12 +242,12 @@ for mesh_obj, arm_mods in mesh_targets:
     # does NOT update those data blocks, and depsgraph evaluation uses the
     # shape-key data (not mesh.vertices), silently discarding our edits.
     if mesh.shape_keys:
-        bpy.context.view_layer.objects.active = mesh_obj
         try:
+            bpy.context.view_layer.objects.active = mesh_obj
             mesh_obj.select_set(True)
-        except RuntimeError:
-            pass
-        bpy.ops.object.shape_key_remove(all=True)
+            bpy.ops.object.shape_key_remove(all=True)
+        except RuntimeError as e:
+            print(f"  WARN: {mesh_obj.name} shape-key removal skipped ({e})")
 
     # Map vgroup index -> retarget transform (only those whose name we can map)
     vg_idx_to_T = {}
@@ -370,6 +370,6 @@ out_dir = os.path.dirname(OUT_BLEND_ABS)
 if out_dir and not os.path.exists(out_dir):
     os.makedirs(out_dir, exist_ok=True)
 print(f"\n[7] Save -> {OUT_BLEND_ABS}")
-bpy.ops.wm.save_as_mainfile(filepath=OUT_BLEND_ABS)
+bpy.ops.wm.save_as_mainfile(filepath=OUT_BLEND_ABS, compress=True)
 print(f"  saved.")
 print(f"\n=== DONE ===")

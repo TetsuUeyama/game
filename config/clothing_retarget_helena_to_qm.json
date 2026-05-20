@@ -1,6 +1,13 @@
 {
   "_comment": "Helena (Helena_Final_Public.blend rig) → QM (QueenMarika ARP rig) bone retarget mapping. 全 outfit 対応版。",
 
+  "_phase2_note": "phase2_length_scale: Helena の pectoral / pelvis は QM の breast / c_root_bend.x より広い領域を覆うため source 長そのまま使うと巨大化する。視覚調整のため QM 長 × scale で固定。",
+  "phase2_length_scale": {
+    "breast_l":       1.2,
+    "breast_r":       1.2,
+    "c_root_bend.x":  1.3
+  },
+
   "landmarks": [
     ["DEF-spine",          "c_spine_01_bend.x"],
     ["DEF-spine-1",        "c_spine_02_bend.x"],
