@@ -8,7 +8,7 @@ import {
 } from '@babylonjs/core';
 import { parseVox, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 
-const BASE = '/box5/nyotengu_native';
+const BASE = '/api/box5/nyotengu_native';
 
 interface OutfitDef {
   key: string;

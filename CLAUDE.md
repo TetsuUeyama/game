@@ -174,9 +174,13 @@ src/character-move/
 - 過去 memory の `project_cloth_first_v6_design.md` / `feedback_cloth_first_evaluation.md` 系
 - 試行版ボクセル (qm_mustardui 配下の v2/v16/v18/_cf/_arap 等 suffix を持つもの)
 
-**QM 体形フィット (shrinkwrap_helena_to_qm_body) は 2026-05-21 に物理削除済み**。各キャラの body 形状は LBS retarget (transplant_qm_armature_to_helena) 後の状態をそのまま voxelize する。
+**QM 体形フィット (shrinkwrap_helena_to_qm_body) は 2026-05-21 に物理削除済み**。
 
-**残す資産: ボクセル化ロジック (`scripts/blender/voxelize/voxelize_mustardui.py`) と LBS retarget (`scripts/blender/fitting/transplant_qm_armature_to_helena.py`)**
+**さらに 2026-05-21 確定: transplant も `--no-lbs` フラグ必須**。`--no-lbs` 無しの transplant は LBS retarget で各 vertex を `T = M_qm_bone @ M_src_bone^-1` で変換し source rest 空間 → QM rest 空間へ移動するため、ボディが QM プロポーションへ変形する。これも除去したい挙動なので、新キャラ voxelize でも常に `--no-lbs` を付ける。
+
+結果: source rest 位置のメッシュ + QM ボーン名 + QM rig 親子付け の状態で voxelize される。メッシュ形状はソースキャラ完全保持、bone weight は QM ボーン名で参照可能、skeleton.json は QM rest pose で出力 (mesh と bone の位置が不一致だが、`/qm-mustardui-preview` の静的 voxel 表示には影響なし)。
+
+**残す資産: ボクセル化ロジック (`scripts/blender/voxelize/voxelize_mustardui.py`) と LBS retarget (`scripts/blender/fitting/transplant_qm_armature_to_helena.py`、ただし `--no-lbs` で呼ぶ)**
 
 ### 最終目標 (2026-05-14 ユーザー訂正)
 

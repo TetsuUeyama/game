@@ -13,7 +13,7 @@ const HELENA_ADJUSTED = 'F:\\ContactFormModel\\Helena_Douglas_adjusted.blend';
 const QM_OUT          = 'F:\\ContactFormModel\\Helena_Douglas_QM.blend';
 
 const RETARGET_CONFIG = 'config/clothing_retarget_helena_douglas_to_qm.json';
-const VOXEL_OUT_DIR   = 'public/box5/helena_douglas_compare/helena_qm';
+const VOXEL_OUT_DIR   = 'C:/Users/user/developsecond/game-assets/vox-model/box5/helena_douglas_compare/helena_qm';
 
 function runBlender(blendPath: string, pyScript: string, pyArgs: string[]): Promise<string> {
   return new Promise((resolve, reject) => {

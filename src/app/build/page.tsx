@@ -170,29 +170,29 @@ interface SourceConfig {
 const SOURCE_MODELS: Record<string, SourceConfig> = {
   rachel: {
     label: 'Rachel',
-    sourcePath: '/box5/rachel_qm_compare/rachel/skeleton.json',
-    qmAtSourcePath: '/box5/build/rachel/qm_at_source.skeleton.json',
-    phase2VoxelDir: '/box5/rachel_phase2',
+    sourcePath: '/api/box5/rachel_qm_compare/rachel/skeleton.json',
+    qmAtSourcePath: '/api/box5/build/rachel/qm_at_source.skeleton.json',
+    phase2VoxelDir: '/api/box5/rachel_phase2',
     phase2VoxelPrefix: 'rachel_body',
   },
   anna: {
     label: 'Anna',
-    sourcePath: '/box5/anna_qm_compare/anna/skeleton.json',
-    qmAtSourcePath: '/box5/build/anna/qm_at_source.skeleton.json',
+    sourcePath: '/api/box5/anna_qm_compare/anna/skeleton.json',
+    qmAtSourcePath: '/api/box5/build/anna/qm_at_source.skeleton.json',
   },
   helena: {
     label: 'Helena (Final)',
-    sourcePath: '/box5/helena_qm_compare/helena/skeleton.json',
-    qmAtSourcePath: '/box5/build/helena/qm_at_source.skeleton.json',
+    sourcePath: '/api/box5/helena_qm_compare/helena/skeleton.json',
+    qmAtSourcePath: '/api/box5/build/helena/qm_at_source.skeleton.json',
   },
   helena_douglas: {
     label: 'Helena Douglas',
-    sourcePath: '/box5/helena_douglas_compare/helena/skeleton.json',
-    qmAtSourcePath: '/box5/build/helena_douglas/qm_at_source.skeleton.json',
+    sourcePath: '/api/box5/helena_douglas_compare/helena/skeleton.json',
+    qmAtSourcePath: '/api/box5/build/helena_douglas/qm_at_source.skeleton.json',
   },
 };
 const DEFAULT_MODEL = 'rachel';
-const QM_PATH = '/box5/qm_mustardui/skeleton.json';
+const QM_PATH = '/api/box5/qm_mustardui/skeleton.json';
 
 // 4 panels: QM canonical, source, Phase 2 bones, Phase 2 voxelized body.
 type PanelKey = 'qm_canonical' | 'source_bones' | 'qm_at_source_bones' | 'qm_at_source_voxel';
@@ -283,9 +283,9 @@ const PROBE_BONES: ProbeBoneSpec[] = [
   { qmBone: 'neck.x',           subBones: [], sourceBoneOf: { helena_douglas: 'DEF-spine.004' } },
   { qmBone: 'head.x',           subBones: [], sourceBoneOf: { helena_douglas: 'DEF-spine.006' } },
 ];
-const QM_REGION_DIR = '/box5/build/qm_bone_regions';
+const QM_REGION_DIR = '/api/box5/build/qm_bone_regions';
 function sourceRegionDir(modelKey: string): string {
-  return `/box5/build/${modelKey}/source_bone_regions`;
+  return `/api/box5/build/${modelKey}/source_bone_regions`;
 }
 interface BoneRegion {
   bone: string;
@@ -1027,7 +1027,7 @@ export default function BuildPage() {
         borderTop: '1px solid #333', fontSize: 10, color: '#888',
       }}>
         2 panels: source skeleton (left) and Phase 2 output (QM @ source proportions, right).
-        Phase 2 data: <code>public/box5/build/{modelKey}/qm_at_source.skeleton.json</code>.
+        Phase 2 data: <code>game-assets/vox-model/box5/build/{modelKey}/qm_at_source.skeleton.json</code>.
       </div>
     </div>
   );

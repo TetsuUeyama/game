@@ -92,3 +92,15 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Voxel model data — served externally from C:\Users\user\developsecond\game-assets via /api/box5 (and /api/vox).
+# This project is voxel-generation-only; model data must NOT live in the repo.
+/public/box2/
+/public/box5/
+/public/demo/
+/public/templates/
+
+# Voxelize run artifacts / junk
+bash.exe.stackdump
+*.stackdump
+/tmp/

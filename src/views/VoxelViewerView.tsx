@@ -619,7 +619,7 @@ function VoxelViewerPage() {
         try {
           const t0 = performance.now();
           const cb = `?v=${Date.now()}`;
-          const baseUrl = '/box5/qm_mustardui';
+          const baseUrl = '/api/box5/qm_mustardui';
           const gridResp = await fetch(`${baseUrl}/grid.json${cb}`);
           const commonGrid = gridResp.ok ? await gridResp.json() as QMPartGrid : undefined;
 

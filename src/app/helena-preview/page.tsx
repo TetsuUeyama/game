@@ -9,7 +9,7 @@ import {
 import { parseVox, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import { buildExteriorOracle } from '@/lib/vox-mesh';
 
-const BASE = '/box5/helena_final';
+const BASE = '/api/box5/helena_final';
 
 interface Grid {
   voxel_size: number;
@@ -832,7 +832,7 @@ export default function HelenaPreviewPage() {
             Helena (DAZ G8F + DOA Outfits) Preview
           </span>
           <span style={{ fontSize: 11, color: '#888', marginLeft: 12 }}>
-            public/box5/helena_final/
+            game-assets/vox-model/box5/helena_final/
           </span>
           {grid && (
             <span style={{ fontSize: 10, color: '#666', marginLeft: 12 }}>
@@ -1067,7 +1067,7 @@ export default function HelenaPreviewPage() {
 
         <div style={{ marginTop: 20, padding: 8, fontSize: 10,
                       background: 'rgba(0,0,0,0.3)', borderRadius: 4, color: '#888' }}>
-          Files under <b>public/box5/helena_final/</b>.<br/>
+          Files under <b>game-assets/vox-model/box5/helena_final/</b>.<br/>
           Reload (Ctrl+Shift+R) after adding new parts.
         </div>
       </div>

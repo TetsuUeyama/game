@@ -297,10 +297,15 @@ export function buildExteriorOracle(
   }
 
   const invVs = 1 / voxelSize;
+  // [fix] world coordinate を cell index に変換する際、呼び出し側が cell center
+  //       (corner + 0.5*vs) を渡してくると `Math.round((N+0.5))` が N+1 に切り上がる
+  //       off-by-one。Math.floor なら center (N+0.5) も corner (N) もどちらも cell N に
+  //       マップされる。FP 誤差で隠れる場合と顕在化する場合があり、後者で body が
+  //       透けて見える原因になっていた。
   const isExteriorWorldCell = (wx: number, wy: number, wz: number): boolean => {
-    const x = Math.round((wx - refOx) * invVs);
-    const y = Math.round((wy - refOy) * invVs);
-    const z = Math.round((wz - refOz) * invVs);
+    const x = Math.floor((wx - refOx) * invVs);
+    const y = Math.floor((wy - refOy) * invVs);
+    const z = Math.floor((wz - refOz) * invVs);
     if (x < 0 || x >= gx || y < 0 || y >= gy || z < 0 || z >= gz) return true; // bbox 外 = exterior
     return state[z * gxgy + y * gx + x] === 2;
   };

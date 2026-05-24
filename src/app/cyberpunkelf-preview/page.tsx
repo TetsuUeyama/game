@@ -9,7 +9,7 @@ import {
 import { parseVox, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 import { buildExteriorOracle } from '@/lib/vox-mesh';
 
-const BASE = '/box5/cyberpunkelf_arp';
+const BASE = '/api/box5/cyberpunkelf_arp';
 
 interface Grid {
   voxel_size: number;
@@ -844,7 +844,7 @@ export default function CyberpunkElfPreviewPage() {
             CyberpunkElf (ARP MustardUI) Preview
           </span>
           <span style={{ fontSize: 11, color: '#888', marginLeft: 12 }}>
-            public/box5/cyberpunkelf_arp/
+            game-assets/vox-model/box5/cyberpunkelf_arp/
           </span>
           {grid && (
             <span style={{ fontSize: 10, color: '#666', marginLeft: 12 }}>
@@ -1079,7 +1079,7 @@ export default function CyberpunkElfPreviewPage() {
 
         <div style={{ marginTop: 20, padding: 8, fontSize: 10,
                       background: 'rgba(0,0,0,0.3)', borderRadius: 4, color: '#888' }}>
-          Files under <b>public/box5/cyberpunkelf_arp/</b>.<br/>
+          Files under <b>game-assets/vox-model/box5/cyberpunkelf_arp/</b>.<br/>
           Reload (Ctrl+Shift+R) after adding new parts.
         </div>
       </div>

@@ -8,14 +8,14 @@ import {
 } from '@babylonjs/core';
 import { parseVox, FACE_DIRS, FACE_VERTS, FACE_NORMALS } from '@/lib/vox-parser';
 
-const OUTFIT_SOURCE = '/box5/helena_douglas_compare/helena_qm';
+const OUTFIT_SOURCE = '/api/box5/helena_douglas_compare/helena_qm';
 
 const PANELS = [
-  { key: 'qm',        label: 'QM (QueenMarika)',     base: '/box5/helena_qm_compare/qm',
+  { key: 'qm',        label: 'QM (QueenMarika)',     base: '/api/box5/helena_qm_compare/qm',
     accent: '#fc8', showOutfits: true },
-  { key: 'helena',    label: 'Helena Douglas (orig)', base: '/box5/helena_douglas_compare/helena',
+  { key: 'helena',    label: 'Helena Douglas (orig)', base: '/api/box5/helena_douglas_compare/helena',
     accent: '#fa8', showOutfits: false },
-  { key: 'helena_qm', label: 'Helena Douglas + QM',   base: '/box5/helena_douglas_compare/helena_qm',
+  { key: 'helena_qm', label: 'Helena Douglas + QM',   base: '/api/box5/helena_douglas_compare/helena_qm',
     accent: '#8cf', showOutfits: true },
 ] as const;
 

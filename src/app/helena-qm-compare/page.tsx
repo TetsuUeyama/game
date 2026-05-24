@@ -201,7 +201,7 @@ const ANNA_OUTFITS: OutfitDef[] = [
 const MODELS: Record<string, ModelConfig> = {
   helena: {
     label: 'Helena',
-    base: '/box5/helena_qm_compare',
+    base: '/api/box5/helena_qm_compare',
     originalFolder: 'helena',
     transplantedFolder: 'helena_qm',
     originalAccent: '#fa8',
@@ -210,7 +210,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   anna: {
     label: 'Anna',
-    base: '/box5/anna_qm_compare',
+    base: '/api/box5/anna_qm_compare',
     originalFolder: 'anna',
     transplantedFolder: 'anna_qm',
     originalAccent: '#fc6',
@@ -219,7 +219,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   rachel: {
     label: 'Rachel',
-    base: '/box5/rachel_qm_compare',
+    base: '/api/box5/rachel_qm_compare',
     originalFolder: 'rachel',
     transplantedFolder: 'rachel_qm',
     originalAccent: '#fda',
@@ -228,7 +228,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   vaultgirl: {
     label: 'Vaultgirl',
-    base: '/box5/vaultgirl_qm_compare',
+    base: '/api/box5/vaultgirl_qm_compare',
     originalFolder: 'vaultgirl',
     transplantedFolder: 'vaultgirl_qm',
     originalAccent: '#ec8',
@@ -237,7 +237,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   nyotengu: {
     label: 'Nyotengu',
-    base: '/box5/nyotengu_qm_compare',
+    base: '/api/box5/nyotengu_qm_compare',
     originalFolder: 'nyotengu',
     transplantedFolder: 'nyotengu_qm',
     originalAccent: '#fda',
@@ -246,7 +246,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   blackwidow: {
     label: 'BlackWidow',
-    base: '/box5/blackwidow_qm_compare',
+    base: '/api/box5/blackwidow_qm_compare',
     originalFolder: 'blackwidow',
     transplantedFolder: 'blackwidow_qm',
     originalAccent: '#e88',
@@ -255,7 +255,7 @@ const MODELS: Record<string, ModelConfig> = {
   },
   pharah: {
     label: 'Pharah',
-    base: '/box5/pharah_qm_compare',
+    base: '/api/box5/pharah_qm_compare',
     originalFolder: 'pharah',
     transplantedFolder: 'pharah_qm',
     originalAccent: '#fc8',
@@ -773,5 +773,8 @@ export default function HelenaQmComparePage() {
 
   );
 }
+
+
+
 
 

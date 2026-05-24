@@ -47,7 +47,7 @@ const CHARACTERS: CharacterDef[] = [
   {
     id: 'qm',
     label: 'QM MustardUI',
-    base: '/box5/qm_mustardui',
+    base: '/api/box5/qm_mustardui',
     xOffset: -1.4,
     parts: [
       { key: 'body', label: 'Body' }, { key: 'hair', label: 'Hair' },
@@ -95,7 +95,7 @@ const CHARACTERS: CharacterDef[] = [
   {
     id: 'de',
     label: 'DarkElfBlader',
-    base: '/box5/darkelfblader',
+    base: '/api/box5/darkelfblader',
     xOffset: 0,
     parts: [
       { key: 'body', label: 'Body' }, { key: 'hair', label: 'Hair' },
@@ -123,7 +123,7 @@ const CHARACTERS: CharacterDef[] = [
   {
     id: 'helena',
     label: 'Helena Douglas',
-    base: '/box5/helena',
+    base: '/api/box5/helena',
     xOffset: 1.4,
     parts: [
       { key: 'body', label: 'Body' },
@@ -137,7 +137,7 @@ const CHARACTERS: CharacterDef[] = [
   {
     id: 'helena_qmrest',
     label: 'Helena (QM rest pose, overlay)',
-    base: '/box5/helena_qmrest',
+    base: '/api/box5/helena_qmrest',
     xOffset: -1.4,  // overlap QM
     parts: [
       { key: 'body', label: 'Body (QMRest)' },
