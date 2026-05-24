@@ -99,6 +99,8 @@ Thumbs.db
 /public/box5/
 /public/demo/
 /public/templates/
+# Blender generation outputs/intermediates (huge .blend) — never commit
+/output/
 
 # Voxelize run artifacts / junk
 bash.exe.stackdump
